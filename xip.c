@@ -227,9 +227,6 @@ ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
 	pos = *ppos;
 	count = len;
 
-	/* We can write back this queue in page reclaim */
-	current->backing_dev_info = mapping->backing_dev_info;
-
 	ret = generic_write_checks(filp, &pos, &count, S_ISBLK(inode->i_mode));
 	if (ret || count == 0)
 		goto out_backing;
@@ -269,7 +266,7 @@ ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
 	ret = file_remove_suid(filp);
 	if (ret) {
 		pmfs_abort_transaction(sb, trans);
-		goto out_backing;
+		goto out;
 	}
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	pmfs_update_time(inode, pi);
@@ -301,8 +298,6 @@ ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
 
 	pmfs_commit_transaction(sb, trans);
 	ret = written;
-out_backing:
-	current->backing_dev_info = NULL;
 out:
 	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);

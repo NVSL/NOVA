@@ -638,8 +638,6 @@ extern const struct inode_operations pmfs_special_inode_operations;
 /* symlink.c */
 extern const struct inode_operations pmfs_symlink_inode_operations;
 
-extern struct backing_dev_info pmfs_backing_dev_info;
-
 int pmfs_check_integrity(struct super_block *sb,
 	struct pmfs_super_block *super);
 void *pmfs_ioremap(struct super_block *sb, phys_addr_t phys_addr,

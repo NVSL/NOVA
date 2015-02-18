@@ -25,11 +25,6 @@
 #include "pmfs.h"
 #include "xip.h"
 
-struct backing_dev_info pmfs_backing_dev_info __read_mostly = {
-	.ra_pages	= 0,                          /* No readahead */
-	.capabilities	= BDI_CAP_NO_ACCT_AND_WRITEBACK,
-};
-
 unsigned int blk_type_to_shift[PMFS_BLOCK_TYPE_MAX] = {12, 21, 30};
 uint32_t blk_type_to_size[PMFS_BLOCK_TYPE_MAX] = {0x1000, 0x200000, 0x40000000};
 
@@ -857,7 +852,6 @@ static int pmfs_read_inode(struct inode *inode, struct pmfs_inode *pi)
 
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	inode->i_mapping->a_ops = &pmfs_aops_xip;
-	inode->i_mapping->backing_dev_info = &pmfs_backing_dev_info;
 
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFREG:

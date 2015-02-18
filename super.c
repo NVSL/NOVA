@@ -1183,18 +1183,12 @@ static int __init init_pmfs_fs(void)
 	if (rc)
 		goto out2;
 
-	rc = bdi_init(&pmfs_backing_dev_info);
+	rc = register_filesystem(&pmfs_fs_type);
 	if (rc)
 		goto out3;
 
-	rc = register_filesystem(&pmfs_fs_type);
-	if (rc)
-		goto out4;
-
 	return 0;
 
-out4:
-	bdi_destroy(&pmfs_backing_dev_info);
 out3:
 	destroy_inodecache();
 out2:
@@ -1207,7 +1201,6 @@ out1:
 static void __exit exit_pmfs_fs(void)
 {
 	unregister_filesystem(&pmfs_fs_type);
-	bdi_destroy(&pmfs_backing_dev_info);
 	destroy_inodecache();
 	destroy_blocknode_cache();
 	destroy_transaction_cache();
