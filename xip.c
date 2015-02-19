@@ -250,7 +250,7 @@ ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
 		ret = pmfs_file_write_fast(sb, inode, pi, buf, count, pos,
 			ppos, block);
 		PMFS_END_TIMING(xip_write_fast_t, xip_write_fast_time);
-		goto out_backing;
+		goto out;
 	}
 	max_logentries = num_blocks / MAX_PTRS_PER_LENTRY + 2;
 	if (max_logentries > MAX_METABLOCK_LENTRIES)
@@ -259,7 +259,7 @@ ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
 	trans = pmfs_new_transaction(sb, MAX_INODE_LENTRIES + max_logentries);
 	if (IS_ERR(trans)) {
 		ret = PTR_ERR(trans);
-		goto out_backing;
+		goto out;
 	}
 	pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
 
