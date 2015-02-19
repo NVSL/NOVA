@@ -20,6 +20,8 @@
 #include <linux/types.h>
 #include <linux/magic.h>
 
+#define	PMFS_SUPER_MAGIC	0xEFFC
+
 /*
  * The PMFS filesystem constants/structures
  */

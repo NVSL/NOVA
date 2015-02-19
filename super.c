@@ -119,6 +119,7 @@ void *pmfs_ioremap(struct super_block *sb, phys_addr_t phys_addr, ssize_t size)
 	if (!retval)
 		goto fail;
 
+#if 0
 	if (protect) {
 		if (hugeioremap)
 			retval = ioremap_hpage_cache_ro(phys_addr, size);
@@ -130,6 +131,10 @@ void *pmfs_ioremap(struct super_block *sb, phys_addr_t phys_addr, ssize_t size)
 		else
 			retval = ioremap_cache(phys_addr, size);
 	}
+#endif
+
+	//FIXME: No mpage or ro support
+	retval = ioremap_cache(phys_addr, size);
 
 fail:
 	return (void __force *)retval;
