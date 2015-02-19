@@ -10,7 +10,7 @@ const char *Timingstring[TIMING_NUM] =
 	"logging",
 };
 
-u64 Timingstats[TIMING_NUM];
+unsigned long long Timingstats[TIMING_NUM];
 u64 Countstats[TIMING_NUM];
 
 void pmfs_print_timing_stats(void)

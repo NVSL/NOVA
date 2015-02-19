@@ -115,7 +115,7 @@ enum timing_category {
 };
 
 extern const char *Timingstring[TIMING_NUM];
-extern u64 Timingstats[TIMING_NUM];
+extern unsigned long long Timingstats[TIMING_NUM];
 extern u64 Countstats[TIMING_NUM];
 
 extern int measure_timing;
@@ -130,7 +130,7 @@ typedef struct timespec timing_t;
 		timing_t end; \
 		getrawmonotonic(&end); \
 		Timingstats[name] += \
-			(end.tv_sec - start.tv_sec) * 1e9 + \
+			(end.tv_sec - start.tv_sec) * 1000000000 + \
 			(end.tv_nsec - start.tv_nsec); \
 	} \
 	Countstats[name]++; \

@@ -18,6 +18,8 @@
 #include <linux/mount.h>
 #include "pmfs.h"
 
+#define	FS_PMFS_FSYNC	0xBCD0000E
+
 struct sync_range
 {
 	off_t	offset;
@@ -26,7 +28,8 @@ struct sync_range
 
 long pmfs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-	struct inode *inode = filp->f_dentry->d_inode;
+	struct address_space *mapping = filp->f_mapping;
+	struct inode    *inode = mapping->host;
 	struct pmfs_inode *pi;
 	struct super_block *sb = inode->i_sb;
 	unsigned int flags;

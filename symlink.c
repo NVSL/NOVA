@@ -14,6 +14,7 @@
  */
 
 #include <linux/fs.h>
+#include <linux/namei.h>
 #include "pmfs.h"
 
 int pmfs_block_symlink(struct inode *inode, const char *symname, int len)
@@ -47,7 +48,7 @@ static int pmfs_readlink(struct dentry *dentry, char __user *buffer, int buflen)
 
 	block = pmfs_find_data_block(inode, 0);
 	blockp = pmfs_get_block(sb, block);
-	return vfs_readlink(dentry, buffer, buflen, blockp);
+	return readlink_copy(buffer, buflen, blockp);
 }
 
 static void *pmfs_follow_link(struct dentry *dentry, struct nameidata *nd)
@@ -55,13 +56,12 @@ static void *pmfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
 	off_t block;
-	int status;
 	char *blockp;
 
 	block = pmfs_find_data_block(inode, 0);
 	blockp = pmfs_get_block(sb, block);
-	status = vfs_follow_link(nd, blockp);
-	return ERR_PTR(status);
+	nd_set_link(nd, blockp);
+	return NULL;
 }
 
 const struct inode_operations pmfs_symlink_inode_operations = {
