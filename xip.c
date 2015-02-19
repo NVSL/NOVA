@@ -19,6 +19,8 @@
 #include "pmfs.h"
 #include "xip.h"
 
+#define VM_XIP_HUGETLB	0x00000200
+
 /*
  * Wrappers. We need to use the rcu read lock to avoid
  * concurrent truncate operation. No problem for write because we held
@@ -31,9 +33,9 @@ ssize_t pmfs_xip_file_read(struct file *filp, char __user *buf,
 	timing_t xip_read_time;
 
 	PMFS_START_TIMING(xip_read_t, xip_read_time);
-	rcu_read_lock();
-	res = xip_file_read(filp, buf, len, ppos);
-	rcu_read_unlock();
+//	rcu_read_lock();
+	res = new_sync_read(filp, buf, len, ppos);
+//	rcu_read_unlock();
 	PMFS_END_TIMING(xip_read_t, xip_read_time);
 	return res;
 }
@@ -229,7 +231,7 @@ ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
 
 	ret = generic_write_checks(filp, &pos, &count, S_ISBLK(inode->i_mode));
 	if (ret || count == 0)
-		goto out_backing;
+		goto out;
 
 	pi = pmfs_get_inode(sb, inode->i_ino);
 
@@ -521,6 +523,52 @@ use_4K_mappings:
 	return PAGE_SIZE;
 }
 
+pte_t *pte_offset_pagesz(struct mm_struct *mm, unsigned long addr,
+						unsigned long *sz)
+{
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd = NULL;
+
+	pgd = pgd_offset(mm, addr);
+	if (!pgd_present(*pgd)) {
+		*sz = PGDIR_SIZE;
+		return (pte_t *)pgd;
+	}
+
+	pud = pud_offset(pgd, addr);
+	if (pud_none(*pud) || pud_large(*pud)) {
+		*sz = PUD_SIZE;
+		return (pte_t *)pud;
+	}
+	pmd = pmd_offset(pud, addr);
+	//if (pmd_none(*pmd) || pmd_large(*pmd)) {
+	*sz = PMD_SIZE;
+	return (pte_t *)pmd;
+}
+
+pte_t *pte_alloc_pagesz(struct mm_struct *mm, unsigned long addr,
+						unsigned long sz)
+{
+	pgd_t *pgd;
+	pud_t *pud;
+	pte_t *pte = NULL;
+
+	pgd = pgd_offset(mm, addr);
+	pud = pud_alloc(mm, pgd, addr);
+	if (pud) {
+		if (sz == PUD_SIZE) {
+			pte = (pte_t *)pud;
+		} else {
+			BUG_ON(sz != PMD_SIZE);
+			pte = (pte_t *) pmd_alloc(mm, pud, addr);
+		}
+	}
+	BUG_ON(pte && !pte_none(*pte) && !pte_huge(*pte));
+
+	return pte;
+}
+
 static inline pte_t *pmfs_xip_hugetlb_pte_offset(struct mm_struct *mm,
 						  unsigned long	addr,
 						  unsigned long *sz)
@@ -664,7 +712,7 @@ int pmfs_xip_file_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	unsigned long block_sz;
 
-	BUG_ON(!file->f_mapping->a_ops->get_xip_mem);
+//	BUG_ON(!file->f_mapping->a_ops->get_xip_mem);
 
 	file_accessed(file);
 

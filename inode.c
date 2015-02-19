@@ -1559,6 +1559,7 @@ void pmfs_set_inode_flags(struct inode *inode, struct pmfs_inode *pi)
 		inode->i_flags |= S_DIRSYNC;
 	if (!pi->i_xattr)
 		inode_has_no_xattr(inode);
+	inode->i_flags |= S_DAX;
 }
 
 void pmfs_get_inode_flags(struct inode *inode, struct pmfs_inode *pi)
@@ -1629,7 +1630,6 @@ err:
 }
 
 const struct address_space_operations pmfs_aops_xip = {
-//	.get_xip_mem		= pmfs_get_xip_mem,
 	.direct_IO		= pmfs_direct_IO,
 	/*.xip_mem_protect	= pmfs_xip_mem_protect,*/
 };
