@@ -19,6 +19,109 @@
 #include "pmfs.h"
 #include "xip.h"
 
+static ssize_t
+do_xip_mapping_read(struct address_space *mapping,
+		    struct file_ra_state *_ra,
+		    struct file *filp,
+		    char __user *buf,
+		    size_t len,
+		    loff_t *ppos)
+{
+	struct inode *inode = mapping->host;
+	pgoff_t index, end_index;
+	unsigned long offset;
+	loff_t isize, pos;
+	size_t copied = 0, error = 0;
+
+	pos = *ppos;
+	index = pos >> PAGE_CACHE_SHIFT;
+	offset = pos & ~PAGE_CACHE_MASK;
+
+	isize = i_size_read(inode);
+	if (!isize)
+		goto out;
+
+	end_index = (isize - 1) >> PAGE_CACHE_SHIFT;
+	do {
+		unsigned long nr, left;
+		void *xip_mem;
+		unsigned long xip_pfn;
+		int zero = 0;
+
+		/* nr is the maximum number of bytes to copy from this page */
+		nr = PAGE_CACHE_SIZE;
+		if (index >= end_index) {
+			if (index > end_index)
+				goto out;
+			nr = ((isize - 1) & ~PAGE_CACHE_MASK) + 1;
+			if (nr <= offset) {
+				goto out;
+			}
+		}
+		nr = nr - offset;
+		if (nr > len - copied)
+			nr = len - copied;
+
+		error = pmfs_get_xip_mem(mapping, index, 0,
+					&xip_mem, &xip_pfn);
+		if (unlikely(error)) {
+			if (error == -ENODATA) {
+				/* sparse */
+				zero = 1;
+			} else
+				goto out;
+		}
+
+		/* If users can be writing to this page using arbitrary
+		 * virtual addresses, take care about potential aliasing
+		 * before reading the page on the kernel side.
+		 */
+		if (mapping_writably_mapped(mapping))
+			/* address based flush */ ;
+
+		/*
+		 * Ok, we have the mem, so now we can copy it to user space...
+		 *
+		 * The actor routine returns how many bytes were actually used..
+		 * NOTE! This may not be the same as how much of a user buffer
+		 * we filled up (we may be padding etc), so we can only update
+		 * "pos" here (the actor routine has to update the user buffer
+		 * pointers and the remaining count).
+		 */
+		if (!zero)
+			left = __copy_to_user(buf+copied, xip_mem+offset, nr);
+		else
+			left = __clear_user(buf + copied, nr);
+
+		if (left) {
+			error = -EFAULT;
+			goto out;
+		}
+
+		copied += (nr - left);
+		offset += (nr - left);
+		index += offset >> PAGE_CACHE_SHIFT;
+		offset &= ~PAGE_CACHE_MASK;
+	} while (copied < len);
+
+out:
+	*ppos = pos + copied;
+	if (filp)
+		file_accessed(filp);
+
+	return (copied ? copied : error);
+}
+
+ssize_t
+xip_file_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
+{
+	if (!access_ok(VERIFY_WRITE, buf, len))
+		return -EFAULT;
+
+	return do_xip_mapping_read(filp->f_mapping, &filp->f_ra, filp,
+			    buf, len, ppos);
+}
+
 /*
  * Wrappers. We need to use the rcu read lock to avoid
  * concurrent truncate operation. No problem for write because we held
@@ -32,7 +135,7 @@ ssize_t pmfs_xip_file_read(struct file *filp, char __user *buf,
 
 	PMFS_START_TIMING(xip_read_t, xip_read_time);
 //	rcu_read_lock();
-	res = new_sync_read(filp, buf, len, ppos);
+	res = xip_file_read(filp, buf, len, ppos);
 //	rcu_read_unlock();
 	PMFS_END_TIMING(xip_read_t, xip_read_time);
 	return res;
