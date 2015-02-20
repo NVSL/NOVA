@@ -19,8 +19,6 @@
 #include "pmfs.h"
 #include "xip.h"
 
-#define VM_XIP_HUGETLB	0x00000200
-
 /*
  * Wrappers. We need to use the rcu read lock to avoid
  * concurrent truncate operation. No problem for write because we held
@@ -521,52 +519,6 @@ use_4K_mappings:
 			 vma->vm_start, vma->vm_end, pgoff, addr);
 
 	return PAGE_SIZE;
-}
-
-pte_t *pte_offset_pagesz(struct mm_struct *mm, unsigned long addr,
-						unsigned long *sz)
-{
-	pgd_t *pgd;
-	pud_t *pud;
-	pmd_t *pmd = NULL;
-
-	pgd = pgd_offset(mm, addr);
-	if (!pgd_present(*pgd)) {
-		*sz = PGDIR_SIZE;
-		return (pte_t *)pgd;
-	}
-
-	pud = pud_offset(pgd, addr);
-	if (pud_none(*pud) || pud_large(*pud)) {
-		*sz = PUD_SIZE;
-		return (pte_t *)pud;
-	}
-	pmd = pmd_offset(pud, addr);
-	//if (pmd_none(*pmd) || pmd_large(*pmd)) {
-	*sz = PMD_SIZE;
-	return (pte_t *)pmd;
-}
-
-pte_t *pte_alloc_pagesz(struct mm_struct *mm, unsigned long addr,
-						unsigned long sz)
-{
-	pgd_t *pgd;
-	pud_t *pud;
-	pte_t *pte = NULL;
-
-	pgd = pgd_offset(mm, addr);
-	pud = pud_alloc(mm, pgd, addr);
-	if (pud) {
-		if (sz == PUD_SIZE) {
-			pte = (pte_t *)pud;
-		} else {
-			BUG_ON(sz != PMD_SIZE);
-			pte = (pte_t *) pmd_alloc(mm, pud, addr);
-		}
-	}
-	BUG_ON(pte && !pte_none(*pte) && !pte_huge(*pte));
-
-	return pte;
 }
 
 static inline pte_t *pmfs_xip_hugetlb_pte_offset(struct mm_struct *mm,
