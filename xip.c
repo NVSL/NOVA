@@ -454,6 +454,8 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 		} else {
 			/* Copy from original block */
 			pmfs_copy_partial_block(sb, block, offset, kmem, false);
+//			pmfs_dbg("start block: %llu, offset %lu\n",
+//					block, offset);
 		}
 	}
 
@@ -470,6 +472,8 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 			/* Copy from original block */
 			pmfs_copy_partial_block(sb, block, eblk_offset,
 					kmem, true);
+//			pmfs_dbg("end block: %llu, offset %lu\n",
+//					block, eblk_offset);
 		}
 	}
 }
@@ -560,12 +564,16 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 
 	pos += written;
 	*ppos = pos;
+
+	/* FIXME: Grab i_mutex */
+	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	if (pos > i_size_read(inode)) {
 		i_size_write(inode, pos);
 		pmfs_update_isize(inode, pi);
 	}
 
 	ret = written;
+//	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
 out:
 	sb_end_write(inode->i_sb);
 	PMFS_END_TIMING(cow_write_t, cow_write_time);

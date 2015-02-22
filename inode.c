@@ -682,6 +682,8 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 						&hint);
 				pmfs_dbg_verbose("Free block %d @ %lu\n",
 							i, blocknr);
+				//FIXME: garbage collection
+				pi->i_blocks--;
 			}
 			node[i] = cpu_to_le64(pmfs_get_block_off(sb,
 					alloc_blocknr + i - first_index,
@@ -908,6 +910,7 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 			__pmfs_free_block(sb, blocknr, pi->i_blk_type,
 						&hint);
 			pmfs_dbg("Free root block @ %lu\n", blocknr);
+			pi->i_blocks--;
 			root = cpu_to_le64(pmfs_get_block_off(sb, alloc_blocknr,
 					   pi->i_blk_type));
 			pmfs_memunlock_inode(sb, pi);
