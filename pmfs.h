@@ -111,6 +111,7 @@ enum timing_category {
 	memcpy_r_t,
 	memcpy_w_t,
 	logging_t,
+	new_blocks_t,
 	TIMING_NUM,
 };
 

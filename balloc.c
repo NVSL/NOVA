@@ -163,11 +163,13 @@ int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned long next_block_low;
 	unsigned long new_block_low;
 	unsigned long new_block_high;
+	timing_t alloc_time;
 
 	num_blocks = num * pmfs_get_numblocks(btype);
 	if (num_blocks == 0)
 		return -EINVAL;
 
+	PMFS_START_TIMING(new_blocks_t, alloc_time);
 	mutex_lock(&sbi->s_lock);
 
 	list_for_each_entry(i, head, link) {
@@ -260,6 +262,7 @@ int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 		__pmfs_free_blocknode(free_blocknode);
 
 	if (found == 0) {
+		PMFS_END_TIMING(new_blocks_t, alloc_time);
 		return -ENOSPC;
 	}
 
@@ -278,6 +281,7 @@ int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	}
 	*blocknr = new_block_low;
 
+	PMFS_END_TIMING(new_blocks_t, alloc_time);
 	return errval;
 }
 
