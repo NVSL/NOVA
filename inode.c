@@ -37,7 +37,7 @@ static int pmfs_new_data_block(struct super_block *sb, struct pmfs_inode *pi,
 {
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
 
-	int errval = pmfs_new_block(sb, blocknr, pi->i_blk_type, zero);
+	int errval = pmfs_new_blocks(sb, blocknr, 1, pi->i_blk_type, zero);
 
 	if (!errval) {
 		pmfs_memunlock_inode(sb, pi);
@@ -524,7 +524,8 @@ static int pmfs_increase_btree_height(struct super_block *sb,
 	pmfs_dbg_verbose("increasing tree height %x:%x\n", height, new_height);
 	while (height < new_height) {
 		/* allocate the meta block */
-		errval = pmfs_new_block(sb, &blocknr, PMFS_BLOCK_TYPE_4K, 1);
+		errval = pmfs_new_blocks(sb, &blocknr, 1,
+						PMFS_BLOCK_TYPE_4K, 1);
 		if (errval) {
 			pmfs_err(sb, "failed to increase btree height\n");
 			break;
@@ -605,7 +606,7 @@ static int recursive_alloc_blocks(pmfs_transaction_t *trans,
 		} else {
 			if (node[i] == 0) {
 				/* allocate the meta block */
-				errval = pmfs_new_block(sb, &blocknr,
+				errval = pmfs_new_blocks(sb, &blocknr, 1,
 						PMFS_BLOCK_TYPE_4K, 1);
 				if (errval) {
 					pmfs_dbg_verbose("alloc meta blk"

@@ -148,8 +148,8 @@ void pmfs_free_block(struct super_block *sb, unsigned long blocknr,
 	mutex_unlock(&sbi->s_lock);
 }
 
-int pmfs_new_block(struct super_block *sb, unsigned long *blocknr,
-	unsigned short btype, int zero)
+int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
+		unsigned int num, unsigned short btype, int zero)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct list_head *head = &(sbi->block_inuse_head);
@@ -164,7 +164,9 @@ int pmfs_new_block(struct super_block *sb, unsigned long *blocknr,
 	unsigned long new_block_low;
 	unsigned long new_block_high;
 
-	num_blocks = pmfs_get_numblocks(btype);
+	num_blocks = num * pmfs_get_numblocks(btype);
+	if (num_blocks == 0)
+		return -EINVAL;
 
 	mutex_lock(&sbi->s_lock);
 

@@ -152,8 +152,8 @@ extern void pmfs_free_block(struct super_block *sb, unsigned long blocknr,
 	unsigned short btype);
 extern void __pmfs_free_block(struct super_block *sb, unsigned long blocknr,
 	unsigned short btype, struct pmfs_blocknode **start_hint);
-extern int pmfs_new_block(struct super_block *sb, unsigned long *blocknr,
-	unsigned short btype, int zero);
+extern int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
+	unsigned int num, unsigned short btype, int zero);
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
 
 /* dir.c */
