@@ -680,10 +680,13 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 						pi->i_blk_type);
 				__pmfs_free_block(sb, blocknr, pi->i_blk_type,
 						&hint);
+				pmfs_dbg("Free block %d @ %lu\n", i, blocknr);
 			}
 			node[i] = cpu_to_le64(pmfs_get_block_off(sb,
 					alloc_blocknr + i - first_index,
 					pi->i_blk_type));
+			pmfs_dbg("Assign block %d to %lu\n", i, 
+					alloc_blocknr + i - first_index);
 
 		} else {
 			if (node[i] == 0) {
@@ -841,9 +844,11 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 	first_blocknr = file_blocknr >> blk_shift;
 	last_blocknr = (file_blocknr + num - 1) >> blk_shift;
 
-	pmfs_dbg_verbose("assign_blocks height %d file_blocknr %lx num %x, "
-		   "first blocknr 0x%lx, last_blocknr 0x%lx\n",
-		   pi->height, file_blocknr, num, first_blocknr, last_blocknr);
+	pmfs_dbg("assign_blocks height %d file_blocknr %lx "
+			"alloc_blocknr %lu, num %x, root %llu, "
+			"first blocknr 0x%lx, last_blocknr 0x%lx\n",
+			pi->height, file_blocknr, alloc_blocknr, num,
+			pi->root, first_blocknr, last_blocknr);
 
 	height = pi->height;
 
@@ -869,14 +874,9 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 	if (!pi->root) {
 		if (height == 0) {
 			__le64 root;
-			errval = pmfs_new_data_block(sb, pi, &blocknr, zero);
-			if (errval) {
-				pmfs_dbg_verbose("[%s:%d] failed: alloc data"
-					" block\n", __func__, __LINE__);
-				goto fail;
-			}
-			root = cpu_to_le64(pmfs_get_block_off(sb, blocknr,
+			root = cpu_to_le64(pmfs_get_block_off(sb, alloc_blocknr,
 					   pi->i_blk_type));
+			pmfs_dbg("Set root @%lu\n", root);
 			pmfs_memunlock_inode(sb, pi);
 			pi->root = root;
 			pi->height = height;
@@ -895,9 +895,27 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 				goto fail;
 		}
 	} else {
-		/* Go forward only if the height of the tree is non-zero. */
-		if (height == 0)
+		if (height == 0) {
+			/* With cow we need to re-assign the root */
+			__le64 root;
+			struct pmfs_blocknode *hint = NULL;
+			unsigned long blocknr;
+
+			blocknr = pmfs_get_blocknr(sb,
+						le64_to_cpu(pi->root),
+						pi->i_blk_type);
+			__pmfs_free_block(sb, blocknr, pi->i_blk_type,
+						&hint);
+			pmfs_dbg("Free root block @ %lu\n", blocknr);
+			root = cpu_to_le64(pmfs_get_block_off(sb, alloc_blocknr,
+					   pi->i_blk_type));
+			pmfs_memunlock_inode(sb, pi);
+			pi->root = root;
+			pi->height = height;
+			pmfs_memlock_inode(sb, pi);
+			pmfs_dbg("Set root @%lu\n", root);
 			return 0;
+		}
 
 		if (height > pi->height) {
 			errval = pmfs_increase_btree_height(sb, pi, height);

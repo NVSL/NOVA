@@ -471,6 +471,7 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 
 	/* don't zero-out the allocated blocks */
 	retval = pmfs_new_blocks(sb, &blocknr, num_blocks, pi->i_blk_type, 1);
+	pmfs_dbg("%s: alloc %lu blocks @ %lu\n", __func__, num_blocks, blocknr);
 
 	if (!retval) {
 		pmfs_memunlock_inode(sb, pi);
