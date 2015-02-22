@@ -18,12 +18,17 @@
 #include <linux/mount.h>
 #include "pmfs.h"
 
-#define	FS_PMFS_FSYNC	0xBCD0000E
-
 struct sync_range
 {
 	off_t	offset;
 	size_t	length;
+};
+
+struct write_request
+{
+	char*	buf;
+	loff_t	offset;
+	size_t	len;
 };
 
 long pmfs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
@@ -141,6 +146,14 @@ setversion_out:
 	}
 	case PMFS_CLEAR_STATS: {
 		pmfs_clear_stats();
+		return 0;
+	}
+	case PMFS_COW_WRITE: {
+		struct write_request request;
+		copy_from_user(&request, (void *)arg,
+					sizeof(struct write_request));
+		pmfs_cow_file_write(filp, request.buf, request.len,
+					&request.offset);
 		return 0;
 	}
 	default:
