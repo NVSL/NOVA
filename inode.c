@@ -680,12 +680,13 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 						pi->i_blk_type);
 				__pmfs_free_block(sb, blocknr, pi->i_blk_type,
 						&hint);
-				pmfs_dbg("Free block %d @ %lu\n", i, blocknr);
+				pmfs_dbg_verbose("Free block %d @ %lu\n",
+							i, blocknr);
 			}
 			node[i] = cpu_to_le64(pmfs_get_block_off(sb,
 					alloc_blocknr + i - first_index,
 					pi->i_blk_type));
-			pmfs_dbg("Assign block %d to %lu\n", i, 
+			pmfs_dbg_verbose("Assign block %d to %lu\n", i, 
 					alloc_blocknr + i - first_index);
 
 		} else {

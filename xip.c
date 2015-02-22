@@ -79,6 +79,7 @@ do_xip_mapping_read(struct address_space *mapping,
 		if (mapping_writably_mapped(mapping))
 			/* address based flush */ ;
 
+//		pmfs_dbg("Read: %p\n", xip_mem);
 		/*
 		 * Ok, we have the mem, so now we can copy it to user space...
 		 *
@@ -408,8 +409,73 @@ out:
 	return ret;
 }
 
+static inline void pmfs_copy_partial_block(struct super_block *sb,
+	u64 blocknr, size_t offset, void* kmem, bool is_end_blk)
+{
+	void *ptr;
+
+	ptr = pmfs_get_block(sb, blocknr);
+	if (ptr != NULL) {
+		if (is_end_blk)
+			memcpy(kmem + offset, ptr + offset,
+				sb->s_blocksize - offset);
+		else 
+			memcpy(kmem, ptr, offset);
+	}
+}
+
+/* 
+ * Fill the new start/end block from original blocks.
+ * Do nothing if fully covered; copy if original blocks present;
+ * Fill zero otherwise.
+ */
+static void pmfs_handle_head_tail_blocks(struct super_block *sb,
+	struct pmfs_inode *pi, struct inode *inode, loff_t pos, size_t count,
+	void *kmem)
+{
+	size_t offset, eblk_offset;
+	unsigned long start_blk, end_blk, num_blocks;
+	u64 block;
+
+	offset = pos & (sb->s_blocksize - 1);
+	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
+	/* offset in the actual block size block */
+	offset = pos & (pmfs_inode_blk_size(pi) - 1);
+	start_blk = pos >> sb->s_blocksize_bits;
+	end_blk = start_blk + num_blocks - 1;
+
+	/* We avoid zeroing the alloc'd range, which is going to be overwritten
+	 * by this system call anyway */
+	if (offset != 0) {
+		block = pmfs_find_data_block(inode, start_blk);
+		if (block == 0) {
+			/* Fill zero */
+		    	memset(kmem, 0, offset);
+		} else {
+			/* Copy from original block */
+			pmfs_copy_partial_block(sb, block, offset, kmem, false);
+		}
+	}
+
+	kmem = (void *)((char *)kmem +
+			((num_blocks - 1) << sb->s_blocksize_bits));
+	eblk_offset = (pos + count) & (pmfs_inode_blk_size(pi) - 1);
+	if (eblk_offset != 0) {
+		block = pmfs_find_data_block(inode, end_blk);
+		if (block == 0) {
+			/* Fill zero */
+		    	memset(kmem + eblk_offset, 0,
+				sb->s_blocksize - eblk_offset);
+		} else {
+			/* Copy from original block */
+			pmfs_copy_partial_block(sb, block, eblk_offset,
+					kmem, true);
+		}
+	}
+}
+
 ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
-          size_t len, loff_t *ppos)
+	size_t len, loff_t *ppos)
 {
 	struct address_space *mapping = filp->f_mapping;
 	struct inode    *inode = mapping->host;
@@ -417,12 +483,12 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	struct pmfs_inode *pi;
 	ssize_t     written = 0;
 	loff_t pos;
-	bool new_sblk = false, new_eblk = false;
-	size_t count, offset, eblk_offset, ret;
-	unsigned long start_blk, end_blk, num_blocks;
+	size_t count, offset, copied, ret;
+	unsigned long start_blk, num_blocks;
 	unsigned long blocknr = 0;
 	unsigned int data_bits;
 	int retval;
+	void* kmem;
 	timing_t cow_write_time;
 
 	PMFS_START_TIMING(cow_write_t, cow_write_time);
@@ -448,7 +514,6 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	/* offset in the actual block size block */
 	offset = pos & (pmfs_inode_blk_size(pi) - 1);
 	start_blk = pos >> sb->s_blocksize_bits;
-	end_blk = start_blk + num_blocks - 1;
 
 	ret = file_remove_suid(filp);
 	if (ret) {
@@ -457,20 +522,10 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	pmfs_update_time(inode, pi);
 
-	/* We avoid zeroing the alloc'd range, which is going to be overwritten
-	 * by this system call anyway */
-	if (offset != 0) {
-		if (pmfs_find_data_block(inode, start_blk) == 0)
-		    new_sblk = true;
-	}
-
-	eblk_offset = (pos + count) & (pmfs_inode_blk_size(pi) - 1);
-	if ((eblk_offset != 0) &&
-			(pmfs_find_data_block(inode, end_blk) == 0))
-		new_eblk = true;
+	mutex_unlock(&inode->i_mutex);
 
 	/* don't zero-out the allocated blocks */
-	retval = pmfs_new_blocks(sb, &blocknr, num_blocks, pi->i_blk_type, 1);
+	retval = pmfs_new_blocks(sb, &blocknr, num_blocks, pi->i_blk_type, 0);
 	pmfs_dbg("%s: alloc %lu blocks @ %lu\n", __func__, num_blocks, blocknr);
 
 	if (!retval) {
@@ -484,22 +539,34 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 		ret = retval;
 		goto out;
 	}
+
+	kmem = pmfs_get_block(inode->i_sb, pmfs_get_block_off(sb, blocknr,
+							pi->i_blk_type));
+
+	pmfs_handle_head_tail_blocks(sb, pi, inode, pos, count, kmem);
+
+	/* Now copy from user buf */
+//	pmfs_dbg("Write: %p\n", kmem);
+	copied = count -
+		__copy_from_user_inatomic_nocache(kmem + offset, buf, count);
+
 	pmfs_assign_blocks(NULL, inode, start_blk, blocknr, num_blocks, false);
 
-	/* now zero out the edge blocks which will be partially written */
-	pmfs_clear_edge_blk(sb, pi, new_sblk, start_blk, offset, false);
-	pmfs_clear_edge_blk(sb, pi, new_eblk, end_blk, eblk_offset, true);
-
-//	written = __pmfs_xip_file_write(mapping, buf, count, pos, ppos);
-	written = count;
+	written = copied;
 	if (written < 0 || written != count)
 		pmfs_dbg_verbose("write incomplete/failed: written %ld len %ld"
 			" pos %llx start_blk %lx num_blocks %lx\n",
 			written, count, pos, start_blk, num_blocks);
 
+	pos += written;
+	*ppos = pos;
+	if (pos > i_size_read(inode)) {
+		i_size_write(inode, pos);
+		pmfs_update_isize(inode, pi);
+	}
+
 	ret = written;
 out:
-	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
 	PMFS_END_TIMING(cow_write_t, cow_write_time);
 	return ret;
@@ -659,6 +726,7 @@ int pmfs_get_xip_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 			block, pgoff, create, *pfn);
 		return rc;
 	}
+//	pmfs_dbg("Get block %lu\n", block);
 
 	*kmem = pmfs_get_block(inode->i_sb, block);
 	*pfn = pmfs_get_pfn(inode->i_sb, block);
