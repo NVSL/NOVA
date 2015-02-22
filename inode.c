@@ -659,7 +659,6 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 	int i, errval;
 	unsigned int meta_bits = META_BLK_SHIFT, node_bits;
 	__le64 *node;
-	bool journal_saved = 0;
 	unsigned long blocknr, first_blk, last_blk;
 	unsigned int first_index, last_index;
 	unsigned int flush_bytes;
@@ -698,12 +697,6 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 				}
 				/* save the meta-data into the journal before
 				 * modifying */
-				if (new_node == 0 && journal_saved == 0) {
-					int le_size = (last_index - i + 1) << 3;
-					pmfs_add_logentry(sb, trans, &node[i],
-						le_size, LE_DATA);
-					journal_saved = 1;
-				}
 				pmfs_memunlock_block(sb, node);
 				node[i] = cpu_to_le64(pmfs_get_block_off(sb,
 					    blocknr, PMFS_BLOCK_TYPE_4K));

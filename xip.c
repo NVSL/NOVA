@@ -408,6 +408,101 @@ out:
 	return ret;
 }
 
+ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
+          size_t len, loff_t *ppos)
+{
+	struct address_space *mapping = filp->f_mapping;
+	struct inode    *inode = mapping->host;
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi;
+	ssize_t     written = 0;
+	loff_t pos;
+	bool new_sblk = false, new_eblk = false;
+	size_t count, offset, eblk_offset, ret;
+	unsigned long start_blk, end_blk, num_blocks;
+	unsigned long blocknr = 0;
+	unsigned int data_bits;
+	int retval;
+	timing_t xip_write_time;
+
+	PMFS_START_TIMING(xip_write_t, xip_write_time);
+
+	sb_start_write(inode->i_sb);
+	mutex_lock(&inode->i_mutex);
+
+	if (!access_ok(VERIFY_READ, buf, len)) {
+		ret = -EFAULT;
+		goto out;
+	}
+	pos = *ppos;
+	count = len;
+
+	ret = generic_write_checks(filp, &pos, &count, S_ISBLK(inode->i_mode));
+	if (ret || count == 0)
+		goto out;
+
+	pi = pmfs_get_inode(sb, inode->i_ino);
+
+	offset = pos & (sb->s_blocksize - 1);
+	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
+	/* offset in the actual block size block */
+	offset = pos & (pmfs_inode_blk_size(pi) - 1);
+	start_blk = pos >> sb->s_blocksize_bits;
+	end_blk = start_blk + num_blocks - 1;
+
+	ret = file_remove_suid(filp);
+	if (ret) {
+		goto out;
+	}
+	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
+	pmfs_update_time(inode, pi);
+
+	/* We avoid zeroing the alloc'd range, which is going to be overwritten
+	 * by this system call anyway */
+	if (offset != 0) {
+		if (pmfs_find_data_block(inode, start_blk) == 0)
+		    new_sblk = true;
+	}
+
+	eblk_offset = (pos + count) & (pmfs_inode_blk_size(pi) - 1);
+	if ((eblk_offset != 0) &&
+			(pmfs_find_data_block(inode, end_blk) == 0))
+		new_eblk = true;
+
+	/* don't zero-out the allocated blocks */
+	retval = pmfs_new_blocks(sb, &blocknr, num_blocks, pi->i_blk_type, 1);
+
+	if (!retval) {
+		pmfs_memunlock_inode(sb, pi);
+		data_bits = blk_type_to_shift[pi->i_blk_type];
+		le64_add_cpu(&pi->i_blocks,
+			(num_blocks << (data_bits - sb->s_blocksize_bits)));
+		pmfs_memlock_inode(sb, pi);
+	} else {
+		pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__, retval);
+		goto out;
+	}
+	pmfs_assign_blocks(NULL, inode, start_blk, blocknr, num_blocks, false);
+
+	/* now zero out the edge blocks which will be partially written */
+	pmfs_clear_edge_blk(sb, pi, new_sblk, start_blk, offset, false);
+	pmfs_clear_edge_blk(sb, pi, new_eblk, end_blk, eblk_offset, true);
+
+//	written = __pmfs_xip_file_write(mapping, buf, count, pos, ppos);
+	written = count;
+	if (written < 0 || written != count)
+		pmfs_dbg_verbose("write incomplete/failed: written %ld len %ld"
+			" pos %llx start_blk %lx num_blocks %lx\n",
+			written, count, pos, start_blk, num_blocks);
+
+	ret = written;
+out:
+	mutex_unlock(&inode->i_mutex);
+	sb_end_write(inode->i_sb);
+	PMFS_END_TIMING(xip_write_t, xip_write_time);
+	return ret;
+}
+
 /* OOM err return with xip file fault handlers doesn't mean anything.
  * It would just cause the OS to go an unnecessary killing spree !
  */
