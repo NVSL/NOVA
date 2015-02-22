@@ -651,6 +651,96 @@ fail:
 	return errval;
 }
 
+static int recursive_assign_blocks(pmfs_transaction_t *trans,
+	struct super_block *sb, struct pmfs_inode *pi, __le64 block,
+	u32 height, unsigned long first_blocknr, unsigned long last_blocknr,
+	unsigned long alloc_blocknr, bool new_node, bool zero)
+{
+	int i, errval;
+	unsigned int meta_bits = META_BLK_SHIFT, node_bits;
+	__le64 *node;
+	bool journal_saved = 0;
+	unsigned long blocknr, first_blk, last_blk;
+	unsigned int first_index, last_index;
+	unsigned int flush_bytes;
+	struct pmfs_blocknode *hint = NULL;
+	unsigned long internal_blocknr;
+
+	node = pmfs_get_block(sb, le64_to_cpu(block));
+
+	node_bits = (height - 1) * meta_bits;
+
+	first_index = first_blocknr >> node_bits;
+	last_index = last_blocknr >> node_bits;
+
+	for (i = first_index; i <= last_index; i++) {
+		if (height == 1) {
+			if (node[i]) {
+				blocknr = pmfs_get_blocknr(sb,
+						le64_to_cpu(node[i]),
+						pi->i_blk_type);
+				__pmfs_free_block(sb, blocknr, pi->i_blk_type,
+						&hint);
+			}
+			node[i] = cpu_to_le64(pmfs_get_block_off(sb,
+					alloc_blocknr + i - first_index,
+					pi->i_blk_type));
+
+		} else {
+			if (node[i] == 0) {
+				/* allocate the meta block */
+				errval = pmfs_new_blocks(sb, &blocknr, 1,
+						PMFS_BLOCK_TYPE_4K, 1);
+				if (errval) {
+					pmfs_dbg_verbose("alloc meta blk"
+						" failed\n");
+					goto fail;
+				}
+				/* save the meta-data into the journal before
+				 * modifying */
+				if (new_node == 0 && journal_saved == 0) {
+					int le_size = (last_index - i + 1) << 3;
+					pmfs_add_logentry(sb, trans, &node[i],
+						le_size, LE_DATA);
+					journal_saved = 1;
+				}
+				pmfs_memunlock_block(sb, node);
+				node[i] = cpu_to_le64(pmfs_get_block_off(sb,
+					    blocknr, PMFS_BLOCK_TYPE_4K));
+				pmfs_memlock_block(sb, node);
+				new_node = 1;
+			}
+
+			first_blk = (i == first_index) ? (first_blocknr &
+				((1 << node_bits) - 1)) : 0;
+
+			last_blk = (i == last_index) ? (last_blocknr &
+				((1 << node_bits) - 1)) : (1 << node_bits) - 1;
+
+			if (i == first_index)
+				internal_blocknr = alloc_blocknr;
+			else
+				internal_blocknr = alloc_blocknr
+					+ ((i - first_index) << node_bits)
+					- first_blocknr;
+			errval = recursive_assign_blocks(trans, sb, pi,
+				node[i], height - 1, first_blk, last_blk,
+				internal_blocknr, new_node, zero);
+			if (errval < 0)
+				goto fail;
+		}
+	}
+	if (new_node || trans == NULL) {
+		/* if the changes were not logged, flush the cachelines we may
+		 * have modified */
+		flush_bytes = (last_index - first_index + 1) * sizeof(node[0]);
+		pmfs_flush_buffer(&node[first_index], flush_bytes, false);
+	}
+	errval = 0;
+fail:
+	return errval;
+}
+
 int __pmfs_alloc_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 	struct pmfs_inode *pi, unsigned long file_blocknr, unsigned int num,
 	bool zero)
@@ -742,6 +832,99 @@ fail:
 	return errval;
 }
 
+int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
+	struct pmfs_inode *pi, unsigned long file_blocknr,
+	unsigned long alloc_blocknr, unsigned int num, bool zero)
+{
+	int errval;
+	unsigned long max_blocks;
+	unsigned int height;
+	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
+	unsigned int blk_shift, meta_bits = META_BLK_SHIFT;
+	unsigned long blocknr, first_blocknr, last_blocknr, total_blocks;
+	/* convert the 4K blocks into the actual blocks the inode is using */
+	blk_shift = data_bits - sb->s_blocksize_bits;
+
+	first_blocknr = file_blocknr >> blk_shift;
+	last_blocknr = (file_blocknr + num - 1) >> blk_shift;
+
+	pmfs_dbg_verbose("assign_blocks height %d file_blocknr %lx num %x, "
+		   "first blocknr 0x%lx, last_blocknr 0x%lx\n",
+		   pi->height, file_blocknr, num, first_blocknr, last_blocknr);
+
+	height = pi->height;
+
+	blk_shift = height * meta_bits;
+
+	max_blocks = 0x1UL << blk_shift;
+
+	if (last_blocknr > max_blocks - 1) {
+		/* B-tree height increases as a result of this allocation */
+		total_blocks = last_blocknr >> blk_shift;
+		while (total_blocks > 0) {
+			total_blocks = total_blocks >> meta_bits;
+			height++;
+		}
+		if (height > 3) {
+			pmfs_dbg("[%s:%d] Max file size. Cant grow the file\n",
+				__func__, __LINE__);
+			errval = -ENOSPC;
+			goto fail;
+		}
+	}
+
+	if (!pi->root) {
+		if (height == 0) {
+			__le64 root;
+			errval = pmfs_new_data_block(sb, pi, &blocknr, zero);
+			if (errval) {
+				pmfs_dbg_verbose("[%s:%d] failed: alloc data"
+					" block\n", __func__, __LINE__);
+				goto fail;
+			}
+			root = cpu_to_le64(pmfs_get_block_off(sb, blocknr,
+					   pi->i_blk_type));
+			pmfs_memunlock_inode(sb, pi);
+			pi->root = root;
+			pi->height = height;
+			pmfs_memlock_inode(sb, pi);
+		} else {
+			errval = pmfs_increase_btree_height(sb, pi, height);
+			if (errval) {
+				pmfs_dbg_verbose("[%s:%d] failed: inc btree"
+					" height\n", __func__, __LINE__);
+				goto fail;
+			}
+			errval = recursive_assign_blocks(trans, sb, pi,
+					pi->root, pi->height, first_blocknr,
+					last_blocknr, alloc_blocknr, 1, zero);
+			if (errval < 0)
+				goto fail;
+		}
+	} else {
+		/* Go forward only if the height of the tree is non-zero. */
+		if (height == 0)
+			return 0;
+
+		if (height > pi->height) {
+			errval = pmfs_increase_btree_height(sb, pi, height);
+			if (errval) {
+				pmfs_dbg_verbose("Err: inc height %x:%x tot %lx"
+					"\n", pi->height, height, total_blocks);
+				goto fail;
+			}
+		}
+		errval = recursive_assign_blocks(trans, sb, pi, pi->root,
+				height,	first_blocknr, last_blocknr,
+				alloc_blocknr, 0, zero);
+		if (errval < 0)
+			goto fail;
+	}
+	return 0;
+fail:
+	return errval;
+}
+
 /*
  * Allocate num data blocks for inode, starting at given file-relative
  * block number.
@@ -755,6 +938,23 @@ inline int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
 
 	errval = __pmfs_alloc_blocks(trans, sb, pi, file_blocknr, num, zero);
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
+
+	return errval;
+}
+
+/*
+ * Assign inode to point to the blocks start from alloc_blocknr.
+ */
+inline int pmfs_assign_blocks(pmfs_transaction_t *trans, struct inode *inode,
+		unsigned long file_blocknr, unsigned long alloc_blocknr,
+		unsigned int num, bool zero)
+{
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	int errval;
+
+	errval = __pmfs_assign_blocks(trans, sb, pi, file_blocknr,
+					alloc_blocknr, num, zero);
 
 	return errval;
 }
