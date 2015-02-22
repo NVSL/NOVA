@@ -354,9 +354,6 @@ struct pmfs_sb_info {
 	/* truncate list related structures */
 	struct list_head s_truncate;
 	struct mutex s_truncate_lock;
-
-	/* cache structure */
-	struct pmfs_cache_info *cache_info;
 };
 
 static inline struct pmfs_sb_info *PMFS_SB(struct super_block *sb)
@@ -671,15 +668,6 @@ int pmfs_search_dirblock(u8 *blk_base, struct inode *dir, struct qstr *child,
 			  unsigned long offset,
 			  struct pmfs_direntry **res_dir,
 			  struct pmfs_direntry **prev_dir);
-
-/* cache.c */
-struct pmfs_cache_info {
-	struct block_device *bs_bdev;
-	struct request_queue *backing_store_rqueue;
-};
-
-int pmfs_cache_init(struct pmfs_sb_info *sbi, char* backing_dev_path);
-void pmfs_cache_exit(struct pmfs_sb_info *sbi);
 
 /* xip.c */
 ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,

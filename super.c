@@ -217,11 +217,8 @@ static int pmfs_parse_options(char *options, struct pmfs_sb_info *sbi,
 			       bool remount)
 {
 	char *p, *rest;
-	char *bs_path_name;
-	size_t size;
 	substring_t args[MAX_OPT_ARGS];
 	int option;
-	int ret;
 
 	if (!options)
 		return 0;
@@ -338,18 +335,6 @@ static int pmfs_parse_options(char *options, struct pmfs_sb_info *sbi,
 			if (match_int(&args[0], &option))
 				goto bad_val;
 			pmfs_dbgmask = option;
-			break;
-		case Opt_bs:
-			/* get backing dev path name */
-			size = args[0].to - args[0].from;
-			bs_path_name = kzalloc(size + 1, GFP_KERNEL);
-			if (!bs_path_name)
-				break;
-			memcpy(bs_path_name, args[0].from, size);
-			bs_path_name[size] = '\0';
-			if ((ret = pmfs_cache_init(sbi, bs_path_name)) != 0)
-				pmfs_info("PMFS cache init failed %d\n", ret);
-			kfree(bs_path_name);
 			break;
 		default: {
 			goto bad_opt;
@@ -969,8 +954,6 @@ static void pmfs_put_super(struct super_block *sb)
 	}
 	sb->s_fs_info = NULL;
 	pmfs_dbgmask = 0;
-	if (sbi->cache_info)
-		pmfs_cache_exit(sbi);
 	kfree(sbi);
 }
 
