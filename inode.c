@@ -837,7 +837,7 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 	unsigned int height;
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
 	unsigned int blk_shift, meta_bits = META_BLK_SHIFT;
-	unsigned long blocknr, first_blocknr, last_blocknr, total_blocks;
+	unsigned long first_blocknr, last_blocknr, total_blocks;
 	/* convert the 4K blocks into the actual blocks the inode is using */
 	blk_shift = data_bits - sb->s_blocksize_bits;
 
@@ -876,7 +876,7 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 			__le64 root;
 			root = cpu_to_le64(pmfs_get_block_off(sb, alloc_blocknr,
 					   pi->i_blk_type));
-			pmfs_dbg("Set root @%lu\n", root);
+			pmfs_dbg("Set root @%llu\n", root);
 			pmfs_memunlock_inode(sb, pi);
 			pi->root = root;
 			pi->height = height;
@@ -913,7 +913,7 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 			pi->root = root;
 			pi->height = height;
 			pmfs_memlock_inode(sb, pi);
-			pmfs_dbg("Set root @%lu\n", root);
+			pmfs_dbg("Set root @%llu\n", root);
 			return 0;
 		}
 
