@@ -9,6 +9,7 @@ const char *Timingstring[TIMING_NUM] =
 	"memcpy_write",
 	"logging",
 	"new_blocks",
+	"cow_write",
 };
 
 unsigned long long Timingstats[TIMING_NUM];

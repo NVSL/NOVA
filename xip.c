@@ -423,9 +423,9 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	unsigned long blocknr = 0;
 	unsigned int data_bits;
 	int retval;
-	timing_t xip_write_time;
+	timing_t cow_write_time;
 
-	PMFS_START_TIMING(xip_write_t, xip_write_time);
+	PMFS_START_TIMING(cow_write_t, cow_write_time);
 
 	sb_start_write(inode->i_sb);
 	mutex_lock(&inode->i_mutex);
@@ -480,6 +480,7 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 		pmfs_memlock_inode(sb, pi);
 	} else {
 		pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__, retval);
+		ret = retval;
 		goto out;
 	}
 	pmfs_assign_blocks(NULL, inode, start_blk, blocknr, num_blocks, false);
@@ -499,7 +500,7 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 out:
 	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
-	PMFS_END_TIMING(xip_write_t, xip_write_time);
+	PMFS_END_TIMING(cow_write_t, cow_write_time);
 	return ret;
 }
 
