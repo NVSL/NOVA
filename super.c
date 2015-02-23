@@ -807,6 +807,7 @@ setup_sb:
 
 	clear_opt(sbi->s_mount_opt, MOUNTING);
 	retval = 0;
+	pmfs_dbg("Size: %lu\n", sizeof(struct pmfs_inode_entry));
 	return retval;
 out:
 	if (sbi->virt_addr) {

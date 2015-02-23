@@ -145,6 +145,14 @@ typedef struct timespec timing_t;
 	Countstats[name]++; \
 	}
 
+/* Inode entry in th log */
+struct	pmfs_inode_entry {
+	loff_t	offset;
+	size_t	size;
+	u64	block;	/* find_data_block */
+	u64	flags;
+};
+
 /* Function Prototypes */
 extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
 
