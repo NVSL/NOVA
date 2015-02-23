@@ -565,15 +565,19 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	pos += written;
 	*ppos = pos;
 
-	/* FIXME: Grab i_mutex */
+	mutex_lock(&inode->i_mutex);
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
-	if (pos > i_size_read(inode)) {
+	if (pos > inode->i_size) {
 		i_size_write(inode, pos);
 		pmfs_update_isize(inode, pi);
 	}
 
 	ret = written;
 //	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
+
+	pmfs_append_inode_entry(sb, pi, inode, blocknr, start_blk, num_blocks);
+	mutex_unlock(&inode->i_mutex);
+
 out:
 	sb_end_write(inode->i_sb);
 	PMFS_END_TIMING(cow_write_t, cow_write_time);

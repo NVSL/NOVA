@@ -145,13 +145,28 @@ typedef struct timespec timing_t;
 	Countstats[name]++; \
 	}
 
+/* ======================= Inode log ========================= */
 /* Inode entry in th log */
 struct	pmfs_inode_entry {
 	loff_t	offset;
 	size_t	size;
-	u64	block;	/* find_data_block */
+	u64	block;	/* ret of find_data_block */
 	u64	flags;
 };
+
+struct	pmfs_inode_page_tail {
+	u64	padding[3];
+	u64	next_page;
+};
+
+/* Fit in PAGE_SIZE */
+struct	pmfs_inode_log_page {
+	struct pmfs_inode_entry entries[127];
+	struct pmfs_inode_page_tail page_tail;
+};
+
+#define	LAST_ENTRY	4064
+#define	INODE_ENTRY_VALID	0x1
 
 /* Function Prototypes */
 extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
@@ -644,6 +659,9 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync);
 
 /* inode.c */
 extern const struct address_space_operations pmfs_aops_xip;
+int pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
+	struct inode *inode, unsigned long blocknr, unsigned long start_blk,
+	unsigned long num_blocks);
 
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);

@@ -117,6 +117,9 @@ struct pmfs_inode {
 	__le32	i_generation;       /* File version (for NFS) */
 	__le32	i_atime;            /* Access time */
 
+	__le64	log_tail;
+	__le64	log_head;
+
 	struct {
 		__le32 rdev;    /* major/minor # */
 	} dev;              /* device inode */
