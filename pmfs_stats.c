@@ -63,15 +63,23 @@ void pmfs_print_inode_log(struct file *filp)
 		goto out;
 
 	curr = pi->log_head;
+	pmfs_dbg("Pi %lu: log head @ %llu, tail @ %llu\n", inode->i_ino,
+			curr, pi->log_tail);
 	while (curr != pi->log_tail) {
-		struct pmfs_inode_entry *entry = pmfs_get_block(sb, curr);
-		pmfs_dbg("entry @ %llu: offset %llu, size %lu, block %llu, "
-			"flags %llu\n",
-			(curr & (PAGE_SIZE - 1)) / entry_size,
-			entry->offset, entry->size, entry->block, entry->flags);
 		if ((curr & (PAGE_SIZE - 1)) == LAST_ENTRY) {
-			curr = ((struct pmfs_inode_page_tail *)entry)->next_page;
+			struct pmfs_inode_page_tail *tail =
+					pmfs_get_block(sb, curr);
+			pmfs_dbg("Log tail. Next page @ block %llu\n",
+					tail->next_page);
+			curr = tail->next_page;
 		} else {
+			struct pmfs_inode_entry *entry =
+					pmfs_get_block(sb, curr);
+			pmfs_dbg("entry @ %llu: offset %llu, size %lu, "
+				"block %llu, flags %llu\n",
+				(curr & (PAGE_SIZE - 1)) / entry_size,
+				entry->offset, entry->size, entry->block,
+				entry->flags);
 			curr += entry_size;
 		}
 	}
