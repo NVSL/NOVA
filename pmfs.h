@@ -105,6 +105,7 @@ extern unsigned int pmfs_dbgmask;
 #define	PMFS_PRINT_TIMING	0xBCD00010
 #define	PMFS_CLEAR_STATS	0xBCD00011
 #define	PMFS_COW_WRITE		0xBCD00012
+#define	PMFS_PRINT_LOG		0xBCD00013
 
 
 extern unsigned int blk_type_to_shift[PMFS_BLOCK_TYPE_MAX];
@@ -702,5 +703,6 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 /* pmfs_stats.c */
 void pmfs_print_timing_stats(void);
 void pmfs_clear_stats(void);
+void pmfs_print_inode_log(struct file *filp);
 
 #endif /* __PMFS_H */
