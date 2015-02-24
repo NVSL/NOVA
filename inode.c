@@ -1872,13 +1872,15 @@ int pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 		/* Allocate a new inode log page */
 		unsigned long new_inode_blocknr;
 		u64 new_block;
-		/* Alloc data block in NVMM */
+		/* Log block resides in NVMM */
 		errval = pmfs_new_data_blocks(sb, &new_inode_blocknr, 1,
 						PMFS_BLOCK_TYPE_4K, 1);
 		if (errval) {
 			pmfs_err(sb, "ERROR: no inode log page available\n");
 			return -ENOSPC;
 		}
+		pmfs_dbg_verbose("Alloc %u log blocks %lu\n", 1,
+						new_inode_blocknr);
 		new_block = pmfs_get_block_off(sb, new_inode_blocknr,
 						PMFS_BLOCK_TYPE_4K);
 
