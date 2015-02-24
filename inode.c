@@ -1117,6 +1117,8 @@ static void pmfs_update_inode(struct inode *inode, struct pmfs_inode *pi)
 	pmfs_memlock_inode(inode->i_sb, pi);
 }
 
+static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi);
+
 /*
  * NOTE! When we get the inode, we're the only people
  * that have access to it, and as such there are no
@@ -1157,6 +1159,7 @@ static int pmfs_free_inode(struct inode *inode)
 	pi->i_xattr = 0; */
 	pi->i_size = 0;
 	pi->i_dtime = cpu_to_le32(get_seconds());
+	pmfs_free_inode_log(sb, pi);
 	pmfs_memlock_inode(sb, pi);
 
 	pmfs_commit_transaction(sb, trans);
@@ -1220,6 +1223,7 @@ void pmfs_evict_inode(struct inode *inode)
 	unsigned int height, btype;
 	int err = 0;
 
+	pmfs_dbg_verbose("%s: %lu\n", __func__, inode->i_ino);
 	if (!inode->i_nlink && !is_bad_inode(inode)) {
 		if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
 			S_ISLNK(inode->i_mode)))
@@ -1897,6 +1901,31 @@ int pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 
 	pi->log_tail = curr_p + sizeof(struct pmfs_inode_entry);
 	return 0;
+}
+
+static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
+{
+	struct pmfs_inode_log_page *curr_page;
+	u64 curr_block;
+	unsigned long blocknr;
+	u32 btype = pi->i_blk_type;
+	struct pmfs_blocknode *start_hint = NULL;
+
+	if (pi->log_head == 0 || pi->log_tail == 0)
+		return;
+
+	curr_block = pi->log_head;
+	while (curr_block) {
+		curr_page = (struct pmfs_inode_log_page *)pmfs_get_block(sb,
+							curr_block);
+		blocknr = pmfs_get_blocknr(sb, le64_to_cpu(curr_block),
+				    btype);
+		pmfs_dbg_verbose("%s: free page %llu\n", __func__, curr_block);
+		curr_block = curr_page->page_tail.next_page;
+		__pmfs_free_block(sb, blocknr, btype, &start_hint);
+	}
+
+	pi->log_head = pi->log_tail = 0;
 }
 
 const struct address_space_operations pmfs_aops_xip = {
