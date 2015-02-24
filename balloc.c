@@ -171,7 +171,7 @@ void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,
 	mutex_unlock(&sbi->s_lock);
 }
 
-int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
+int pmfs_new_meta_blocks(struct super_block *sb, unsigned long *blocknr,
 		unsigned int num, unsigned short btype, int zero)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
@@ -192,7 +192,144 @@ int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	if (num_blocks == 0)
 		return -EINVAL;
 
-	PMFS_START_TIMING(new_blocks_t, alloc_time);
+	PMFS_START_TIMING(new_meta_blocks_t, alloc_time);
+	mutex_lock(&sbi->s_lock);
+
+	list_for_each_entry(i, head, link) {
+		if (i->link.next == head) {
+			next_i = NULL;
+			next_block_low = sbi->block_end;
+		} else {
+			next_i = list_entry(i->link.next, typeof(*i), link);
+			next_block_low = next_i->block_low;
+		}
+
+		new_block_low = (i->block_high + num_blocks) & ~(num_blocks - 1);
+		new_block_high = new_block_low + num_blocks - 1;
+
+		if (new_block_high >= next_block_low) {
+			/* Does not fit - skip to next blocknode */
+			continue;
+		}
+
+		if ((new_block_low == (i->block_high + 1)) &&
+			(new_block_high == (next_block_low - 1)))
+		{
+			/* Fill the gap completely */
+			if (next_i) {
+				i->block_high = next_i->block_high;
+				list_del(&next_i->link);
+				free_blocknode = next_i;
+				sbi->num_blocknode_allocated--;
+			} else {
+				i->block_high = new_block_high;
+			}
+			found = 1;
+			break;
+		}
+
+		if ((new_block_low == (i->block_high + 1)) &&
+			(new_block_high < (next_block_low - 1))) {
+			/* Aligns to left */
+			i->block_high = new_block_high;
+			found = 1;
+			break;
+		}
+
+		if ((new_block_low > (i->block_high + 1)) &&
+			(new_block_high == (next_block_low - 1))) {
+			/* Aligns to right */
+			if (next_i) {
+				/* right node exist */
+				next_i->block_low = new_block_low;
+			} else {
+				/* right node does NOT exist */
+				curr_node = pmfs_alloc_blocknode(sb);
+				PMFS_ASSERT(curr_node);
+				if (curr_node == NULL) {
+					errval = -ENOSPC;
+					break;
+				}
+				curr_node->block_low = new_block_low;
+				curr_node->block_high = new_block_high;
+				list_add(&curr_node->link, &i->link);
+			}
+			found = 1;
+			break;
+		}
+
+		if ((new_block_low > (i->block_high + 1)) &&
+			(new_block_high < (next_block_low - 1))) {
+			/* Aligns somewhere in the middle */
+			curr_node = pmfs_alloc_blocknode(sb);
+			PMFS_ASSERT(curr_node);
+			if (curr_node == NULL) {
+				errval = -ENOSPC;
+				break;
+			}
+			curr_node->block_low = new_block_low;
+			curr_node->block_high = new_block_high;
+			list_add(&curr_node->link, &i->link);
+			found = 1;
+			break;
+		}
+	}
+
+	if (found == 1) {
+		sbi->num_free_blocks -= num_blocks;
+	}
+
+	mutex_unlock(&sbi->s_lock);
+
+	if (free_blocknode)
+		__pmfs_free_blocknode(free_blocknode);
+
+	if (found == 0) {
+		PMFS_END_TIMING(new_meta_blocks_t, alloc_time);
+		return -ENOSPC;
+	}
+
+	if (zero) {
+		size_t size;
+		bp = pmfs_get_block(sb, pmfs_get_block_off(sb, new_block_low, btype));
+		pmfs_memunlock_block(sb, bp); //TBDTBD: Need to fix this
+		if (btype == PMFS_BLOCK_TYPE_4K)
+			size = 0x1 << 12;
+		else if (btype == PMFS_BLOCK_TYPE_2M)
+			size = 0x1 << 21;
+		else
+			size = 0x1 << 30;
+		memset_nt(bp, 0, size);
+		pmfs_memlock_block(sb, bp);
+	}
+	*blocknr = new_block_low;
+
+	PMFS_END_TIMING(new_meta_blocks_t, alloc_time);
+	return errval;
+}
+
+int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
+		unsigned int num, unsigned short btype, int zero)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct list_head *head = &(sbi->block_inuse_head);
+	struct pmfs_blocknode *i, *next_i;
+	struct pmfs_blocknode *free_blocknode= NULL;
+	void *bp;
+	unsigned long num_blocks = 0;
+	struct pmfs_blocknode *curr_node;
+	int errval = 0;
+	bool found = 0;
+	unsigned long next_block_low;
+	unsigned long new_block_low;
+	unsigned long new_block_high;
+	timing_t alloc_time;
+
+	num_blocks = num * pmfs_get_numblocks(btype);
+	if (num_blocks == 0)
+		return -EINVAL;
+
+	PMFS_START_TIMING(new_data_blocks_t, alloc_time);
 	mutex_lock(&sbi->s_lock);
 
 	list_for_each_entry(i, head, link) {
@@ -285,7 +422,7 @@ int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 		__pmfs_free_blocknode(free_blocknode);
 
 	if (found == 0) {
-		PMFS_END_TIMING(new_blocks_t, alloc_time);
+		PMFS_END_TIMING(new_data_blocks_t, alloc_time);
 		return -ENOSPC;
 	}
 
@@ -304,7 +441,7 @@ int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	}
 	*blocknr = new_block_low;
 
-	PMFS_END_TIMING(new_blocks_t, alloc_time);
+	PMFS_END_TIMING(new_data_blocks_t, alloc_time);
 	return errval;
 }
 

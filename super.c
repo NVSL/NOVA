@@ -472,7 +472,7 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	pmfs_flush_buffer(super, PMFS_SB_SIZE, false);
 	pmfs_flush_buffer((char *)super + PMFS_SB_SIZE, sizeof(*super), false);
 
-	pmfs_new_blocks(sb, &blocknr, 1, PMFS_BLOCK_TYPE_4K, 1);
+	pmfs_new_data_blocks(sb, &blocknr, 1, PMFS_BLOCK_TYPE_4K, 1);
 
 	root_i = pmfs_get_inode(sb, PMFS_ROOT_INO);
 

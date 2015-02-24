@@ -8,7 +8,8 @@ const char *Timingstring[TIMING_NUM] =
 	"memcpy_read",
 	"memcpy_write",
 	"logging",
-	"new_blocks",
+	"new_meta_blocks",
+	"new_data_blocks",
 	"cow_write",
 };
 

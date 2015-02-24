@@ -119,7 +119,8 @@ enum timing_category {
 	memcpy_r_t,
 	memcpy_w_t,
 	logging_t,
-	new_blocks_t,
+	new_meta_blocks_t,
+	new_data_blocks_t,
 	cow_write_t,
 	TIMING_NUM,
 };
@@ -191,7 +192,9 @@ extern void __pmfs_free_data_block(struct super_block *sb,
 extern void __pmfs_free_log_block(struct super_block *sb,
 	unsigned long blocknr,
 	unsigned short btype, struct pmfs_blocknode **start_hint);
-extern int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
+extern int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
+	unsigned int num, unsigned short btype, int zero);
+extern int pmfs_new_meta_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned int num, unsigned short btype, int zero);
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
 
