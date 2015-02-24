@@ -266,7 +266,7 @@ static int recursive_truncate_blocks(struct super_block *sb, __le64 block,
 			/* Freeing the data block */
 			blocknr = pmfs_get_blocknr(sb, le64_to_cpu(node[i]),
 				    btype);
-			__pmfs_free_block(sb, blocknr, btype, &start_hint);
+			__pmfs_free_data_block(sb, blocknr, btype, &start_hint);
 			freed++;
 		}
 		mutex_unlock(&sbi->s_lock);
@@ -287,7 +287,8 @@ static int recursive_truncate_blocks(struct super_block *sb, __le64 block,
 				/* Freeing the meta-data block */
 				blocknr = pmfs_get_blocknr(sb, le64_to_cpu(
 					    node[i]), PMFS_BLOCK_TYPE_4K);
-				pmfs_free_block(sb, blocknr,PMFS_BLOCK_TYPE_4K);
+				pmfs_free_meta_block(sb, blocknr,
+							PMFS_BLOCK_TYPE_4K);
 			} else {
 				if (i == first_index)
 				    start++;
@@ -327,7 +328,7 @@ unsigned int pmfs_free_inode_subtree(struct super_block *sb,
 	if (height == 0) {
 		first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
 			btype);
-		pmfs_free_block(sb, first_blocknr, btype);
+		pmfs_free_data_block(sb, first_blocknr, btype);
 		freed = 1;
 	} else {
 		first_blocknr = 0;
@@ -337,7 +338,7 @@ unsigned int pmfs_free_inode_subtree(struct super_block *sb,
 		BUG_ON(!mpty);
 		first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
 			PMFS_BLOCK_TYPE_4K);
-		pmfs_free_block(sb, first_blocknr,PMFS_BLOCK_TYPE_4K);
+		pmfs_free_meta_block(sb, first_blocknr,PMFS_BLOCK_TYPE_4K);
 	}
 	return freed;
 }
@@ -371,7 +372,7 @@ static void pmfs_decrease_btree_height(struct super_block *sb,
 		blocknr = pmfs_get_blocknr(sb, le64_to_cpu(newroot),
 			PMFS_BLOCK_TYPE_4K);
 		newroot = root[0];
-		pmfs_free_block(sb, blocknr, PMFS_BLOCK_TYPE_4K);
+		pmfs_free_meta_block(sb, blocknr, PMFS_BLOCK_TYPE_4K);
 		height--;
 	}
 update_root_and_height:
@@ -470,7 +471,7 @@ static void __pmfs_truncate_blocks(struct inode *inode, loff_t start,
 	if (pi->height == 0) {
 		first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
 			pi->i_blk_type);
-		pmfs_free_block(sb, first_blocknr, pi->i_blk_type);
+		pmfs_free_data_block(sb, first_blocknr, pi->i_blk_type);
 		root = 0;
 		freed = 1;
 	} else {
@@ -479,7 +480,8 @@ static void __pmfs_truncate_blocks(struct inode *inode, loff_t start,
 		if (mpty) {
 			first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
 				PMFS_BLOCK_TYPE_4K);
-			pmfs_free_block(sb, first_blocknr, PMFS_BLOCK_TYPE_4K);
+			pmfs_free_meta_block(sb, first_blocknr,
+						PMFS_BLOCK_TYPE_4K);
 			root = 0;
 		}
 	}
@@ -662,8 +664,8 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 	unsigned long blocknr, first_blk, last_blk;
 	unsigned int first_index, last_index;
 	unsigned int flush_bytes;
-	struct pmfs_blocknode *hint = NULL;
 	unsigned long internal_blocknr;
+//	struct pmfs_blocknode *hint = NULL;
 
 	node = pmfs_get_block(sb, le64_to_cpu(block));
 
@@ -678,8 +680,8 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 				blocknr = pmfs_get_blocknr(sb,
 						le64_to_cpu(node[i]),
 						pi->i_blk_type);
-				__pmfs_free_block(sb, blocknr, pi->i_blk_type,
-						&hint);
+				pmfs_free_data_block(sb, blocknr,
+						pi->i_blk_type);
 				pmfs_dbg_verbose("Free block %d @ %lu\n",
 							i, blocknr);
 				//FIXME: garbage collection
@@ -901,14 +903,12 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 		if (height == 0) {
 			/* With cow we need to re-assign the root */
 			__le64 root;
-			struct pmfs_blocknode *hint = NULL;
 			unsigned long blocknr;
 
 			blocknr = pmfs_get_blocknr(sb,
 						le64_to_cpu(pi->root),
 						pi->i_blk_type);
-			__pmfs_free_block(sb, blocknr, pi->i_blk_type,
-						&hint);
+			pmfs_free_data_block(sb, blocknr, pi->i_blk_type);
 			pmfs_dbg("Free root block @ %lu\n", blocknr);
 			pi->i_blocks--;
 			root = cpu_to_le64(pmfs_get_block_off(sb, alloc_blocknr,
@@ -1905,6 +1905,7 @@ int pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 
 static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 {
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode_log_page *curr_page;
 	u64 curr_block;
 	unsigned long blocknr;
@@ -1915,6 +1916,7 @@ static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 		return;
 
 	curr_block = pi->log_head;
+	mutex_lock(&sbi->s_lock);
 	while (curr_block) {
 		curr_page = (struct pmfs_inode_log_page *)pmfs_get_block(sb,
 							curr_block);
@@ -1922,8 +1924,9 @@ static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 				    btype);
 		pmfs_dbg_verbose("%s: free page %llu\n", __func__, curr_block);
 		curr_block = curr_page->page_tail.next_page;
-		__pmfs_free_block(sb, blocknr, btype, &start_hint);
+		__pmfs_free_log_block(sb, blocknr, btype, &start_hint);
 	}
+	mutex_unlock(&sbi->s_lock);
 
 	pi->log_head = pi->log_tail = 0;
 }

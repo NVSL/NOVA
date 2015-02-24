@@ -181,9 +181,15 @@ extern struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb);
 extern void pmfs_free_blocknode(struct super_block *sb, struct pmfs_blocknode *bnode);
 extern void pmfs_init_blockmap(struct super_block *sb,
 		unsigned long init_used_size);
-extern void pmfs_free_block(struct super_block *sb, unsigned long blocknr,
+extern void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,
 	unsigned short btype);
-extern void __pmfs_free_block(struct super_block *sb, unsigned long blocknr,
+extern void pmfs_free_meta_block(struct super_block *sb, unsigned long blocknr,
+	unsigned short btype);
+extern void __pmfs_free_data_block(struct super_block *sb,
+	unsigned long blocknr,
+	unsigned short btype, struct pmfs_blocknode **start_hint);
+extern void __pmfs_free_log_block(struct super_block *sb,
+	unsigned long blocknr,
 	unsigned short btype, struct pmfs_blocknode **start_hint);
 extern int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned int num, unsigned short btype, int zero);

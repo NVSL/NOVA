@@ -139,7 +139,30 @@ block_found:
 		__pmfs_free_blocknode(free_blocknode);
 }
 
-void pmfs_free_block(struct super_block *sb, unsigned long blocknr,
+inline void __pmfs_free_data_block(struct super_block *sb,
+	unsigned long blocknr, unsigned short btype,
+	struct pmfs_blocknode **start_hint)
+{
+	__pmfs_free_block(sb, blocknr, btype, start_hint);
+}
+
+inline void __pmfs_free_log_block(struct super_block *sb,
+	unsigned long blocknr, unsigned short btype,
+	struct pmfs_blocknode **start_hint)
+{
+	__pmfs_free_block(sb, blocknr, btype, start_hint);
+}
+
+void pmfs_free_meta_block(struct super_block *sb, unsigned long blocknr,
+		      unsigned short btype)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	mutex_lock(&sbi->s_lock);
+	__pmfs_free_block(sb, blocknr, btype, NULL);
+	mutex_unlock(&sbi->s_lock);
+}
+
+void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,
 		      unsigned short btype)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
