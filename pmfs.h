@@ -184,8 +184,7 @@ extern void pmfs_init_blockmap(struct super_block *sb,
 		unsigned long init_used_size);
 extern void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,
 	unsigned short btype);
-extern void pmfs_free_meta_block(struct super_block *sb, unsigned long blocknr,
-	unsigned short btype);
+extern void pmfs_free_meta_block(struct super_block *sb, unsigned long blocknr);
 extern void __pmfs_free_data_block(struct super_block *sb,
 	unsigned long blocknr,
 	unsigned short btype, struct pmfs_blocknode **start_hint);
@@ -195,7 +194,7 @@ extern void __pmfs_free_log_block(struct super_block *sb,
 extern int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned int num, unsigned short btype, int zero);
 extern int pmfs_new_meta_blocks(struct super_block *sb, unsigned long *blocknr,
-	unsigned int num, unsigned short btype, int zero);
+	unsigned int num, int zero);
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
 
 /* dir.c */
@@ -539,7 +538,7 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 	bp = le64_to_cpu(pi->root);
 
 	while (height > 0) {
-		level_ptr = pmfs_get_block(sb, bp);
+		level_ptr = (__le64 *)bp;
 		bit_shift = (height - 1) * META_BLK_SHIFT;
 		idx = blocknr >> bit_shift;
 		bp = le64_to_cpu(level_ptr[idx]);
