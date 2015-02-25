@@ -155,26 +155,32 @@ extern unsigned long free_steps;
 
 /* ======================= Inode log ========================= */
 /* Inode entry in th log */
+
+#define	INVALID_MASK	4095
+#define	BLOCK_OFF(p)	((p) & ~INVALID_MASK)
+#define	GET_INVALID(p)	((p) & INVALID_MASK)
+
 struct	pmfs_inode_entry {
-	loff_t	offset;
-	size_t	size;
-	u64	block;	/* ret of find_data_block */
-	u64	flags;
+	u32	pgoff;
+	u32	num_pages;
+	/* ret of find_data_block, last 12 bits are invalid count */
+	u64	block;
 };
 
 struct	pmfs_inode_page_tail {
-	u64	padding[3];
+	u64	padding;
 	u64	next_page;
 };
 
+#define	ENTRIES_PER_PAGE	255
+
 /* Fit in PAGE_SIZE */
 struct	pmfs_inode_log_page {
-	struct pmfs_inode_entry entries[127];
+	struct pmfs_inode_entry entries[ENTRIES_PER_PAGE];
 	struct pmfs_inode_page_tail page_tail;
 };
 
-#define	LAST_ENTRY	4064
-#define	INODE_ENTRY_VALID	0x1
+#define	LAST_ENTRY	4080
 
 /* Function Prototypes */
 extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);

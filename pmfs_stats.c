@@ -110,11 +110,12 @@ void pmfs_print_inode_log(struct file *filp)
 		} else {
 			struct pmfs_inode_entry *entry =
 					pmfs_get_block(sb, curr);
-			pmfs_dbg("entry @ %llu: offset %llu, size %lu, "
-				"block %llu, flags %llu\n",
+			pmfs_dbg("entry @ %llu: offset %u, size %u, "
+				"block 0x%llx, invalid count %llu\n",
 				(curr & (PAGE_SIZE - 1)) / entry_size,
-				entry->offset, entry->size, entry->block,
-				entry->flags);
+				entry->pgoff, entry->num_pages,
+				BLOCK_OFF(entry->block),
+				GET_INVALID(entry->block));
 			curr += entry_size;
 		}
 	}
@@ -144,7 +145,8 @@ void pmfs_print_inode_log_blocknode(struct file *filp)
 	pmfs_dbg("Pi %lu: log head @ %llu, tail @ %llu\n", inode->i_ino,
 			curr >> PAGE_SHIFT, pi->log_tail >> PAGE_SHIFT);
 	do {
-		tail = pmfs_get_block(sb, curr + entry_size * 127);
+		tail = pmfs_get_block(sb, curr +
+					entry_size * ENTRIES_PER_PAGE);
 		pmfs_dbg("log block @ %llu\n", curr >> PAGE_SHIFT);
 		curr = tail->next_page;
 		count++;

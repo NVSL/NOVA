@@ -1867,10 +1867,10 @@ int pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	}
 
 	entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, curr_p);
-	entry->offset = offset;
-	entry->size = num_blocks << sb->s_blocksize_bits;
+	entry->pgoff = start_blk;
+	entry->num_pages = num_blocks;
 	entry->block = block;
-	entry->flags = INODE_ENTRY_VALID;
+	/* entry->invalid is set to 0 */
 
 	pmfs_flush_buffer(entry, sizeof(struct pmfs_inode_entry), 1);
 
