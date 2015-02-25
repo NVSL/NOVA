@@ -935,9 +935,12 @@ inline int pmfs_assign_blocks(pmfs_transaction_t *trans, struct inode *inode,
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
 	int errval;
+	timing_t assign_time;
 
+	PMFS_START_TIMING(assign_t, assign_time);
 	errval = __pmfs_assign_blocks(trans, sb, pi, file_blocknr,
 					alloc_blocknr, num, zero);
+	PMFS_END_TIMING(assign_t, assign_time);
 
 	return errval;
 }
@@ -1793,6 +1796,7 @@ static ssize_t pmfs_direct_IO(int rw, struct kiocb *iocb,
 		return err;
 	}
 
+	pmfs_dbg_verbose("%s\n", __func__);
 	iv = iter->iov;
 	for (seg = 0; seg < nr_segs; seg++) {
 		if (rw == READ)

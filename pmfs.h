@@ -122,6 +122,8 @@ enum timing_category {
 	new_meta_blocks_t,
 	new_data_blocks_t,
 	cow_write_t,
+	assign_t,
+	free_data_t,
 	TIMING_NUM,
 };
 

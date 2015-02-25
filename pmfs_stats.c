@@ -11,6 +11,8 @@ const char *Timingstring[TIMING_NUM] =
 	"new_meta_blocks",
 	"new_data_blocks",
 	"cow_write",
+	"assign_blocks",
+	"free_data_blocks",
 };
 
 unsigned long long Timingstats[TIMING_NUM];

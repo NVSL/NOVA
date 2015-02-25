@@ -526,12 +526,11 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	pmfs_update_time(inode, pi);
 
-	mutex_unlock(&inode->i_mutex);
-
 	/* don't zero-out the allocated blocks */
 	retval = pmfs_new_data_blocks(sb, &blocknr, num_blocks,
 					pi->i_blk_type, 0);
-	pmfs_dbg("%s: alloc %lu blocks @ %lu\n", __func__, num_blocks, blocknr);
+	pmfs_dbg_verbose("%s: alloc %lu blocks @ %lu\n", __func__, num_blocks,
+								blocknr);
 
 	if (!retval) {
 		pmfs_memunlock_inode(sb, pi);
@@ -540,7 +539,8 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 			(num_blocks << (data_bits - sb->s_blocksize_bits)));
 		pmfs_memlock_inode(sb, pi);
 	} else {
-		pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__, retval);
+		pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__,
+								retval);
 		ret = retval;
 		goto out;
 	}
@@ -551,7 +551,7 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	pmfs_handle_head_tail_blocks(sb, pi, inode, pos, count, kmem);
 
 	/* Now copy from user buf */
-//	pmfs_dbg("Write: %p\n", kmem);
+	pmfs_dbg_verbose("Write: %p\n", kmem);
 	copied = count -
 		__copy_from_user_inatomic_nocache(kmem + offset, buf, count);
 
@@ -566,7 +566,6 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	pos += written;
 	*ppos = pos;
 
-	mutex_lock(&inode->i_mutex);
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	if (pos > inode->i_size) {
 		i_size_write(inode, pos);
@@ -577,9 +576,9 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 //	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
 
 	pmfs_append_inode_entry(sb, pi, inode, blocknr, start_blk, num_blocks);
-	mutex_unlock(&inode->i_mutex);
 
 out:
+	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
 	PMFS_END_TIMING(cow_write_t, cow_write_time);
 	return ret;

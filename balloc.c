@@ -52,7 +52,8 @@ static struct pmfs_blocknode *pmfs_next_blocknode(struct pmfs_blocknode *i,
 /* Caller must hold the super_block lock.  If start_hint is provided, it is
  * only valid until the caller releases the super_block lock. */
 void __pmfs_free_block(struct super_block *sb, unsigned long blocknr,
-		      unsigned short btype, struct pmfs_blocknode **start_hint)
+		unsigned short btype, struct pmfs_blocknode **start_hint,
+		int log_block)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct list_head *head = &(sbi->block_inuse_head);
@@ -131,7 +132,10 @@ void __pmfs_free_block(struct super_block *sb, unsigned long blocknr,
 		}
 	}
 
-	pmfs_error_mng(sb, "Unable to free block %ld\n", blocknr);
+	if (log_block)
+		pmfs_error_mng(sb, "Unable to free log block %ld\n", blocknr);
+	else
+		pmfs_error_mng(sb, "Unable to free data block %ld\n", blocknr);
 
 block_found:
 
@@ -144,7 +148,7 @@ inline void __pmfs_free_data_block(struct super_block *sb,
 	struct pmfs_blocknode **start_hint)
 {
 	pmfs_dbg_verbose("Free data block %lu\n", blocknr);
-	__pmfs_free_block(sb, blocknr, btype, start_hint);
+	__pmfs_free_block(sb, blocknr, btype, start_hint, 0);
 }
 
 inline void __pmfs_free_log_block(struct super_block *sb,
@@ -152,11 +156,12 @@ inline void __pmfs_free_log_block(struct super_block *sb,
 	struct pmfs_blocknode **start_hint)
 {
 	pmfs_dbg_verbose("Free log block %lu\n", blocknr);
-	__pmfs_free_block(sb, blocknr, btype, start_hint);
+	__pmfs_free_block(sb, blocknr, btype, start_hint, 1);
 }
 
 void pmfs_free_meta_block(struct super_block *sb, unsigned long page_addr)
 {
+	pmfs_dbg_verbose("Free meta block %lu\n", page_addr);
 	free_page(page_addr);
 }
 
@@ -164,10 +169,14 @@ void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,
 		      unsigned short btype)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	timing_t free_time;
+
 	pmfs_dbg_verbose("Free data block %lu\n", blocknr);
+	PMFS_START_TIMING(free_data_t, free_time);
 	mutex_lock(&sbi->s_lock);
-	__pmfs_free_block(sb, blocknr, btype, NULL);
+	__pmfs_free_block(sb, blocknr, btype, NULL, 0);
 	mutex_unlock(&sbi->s_lock);
+	PMFS_END_TIMING(free_data_t, free_time);
 }
 
 int pmfs_new_meta_blocks(struct super_block *sb, unsigned long *blocknr,
