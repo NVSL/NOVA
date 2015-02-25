@@ -714,8 +714,8 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
           size_t len, loff_t *ppos);
 
 /* pmfs_stats.c */
-void pmfs_print_timing_stats(void);
-void pmfs_clear_stats(void);
+void pmfs_print_timing_stats(struct file *filp);
+void pmfs_clear_stats(struct file *filp);
 void pmfs_print_inode_log(struct file *filp);
 
 #endif /* __PMFS_H */

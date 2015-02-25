@@ -20,7 +20,35 @@ u64 Countstats[TIMING_NUM];
 unsigned long alloc_steps;
 unsigned long free_steps;
 
-void pmfs_print_timing_stats(void)
+void pmfs_print_blocknode_list(struct file *filp)
+{
+	struct address_space *mapping = filp->f_mapping;
+	struct inode    *inode = mapping->host;
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct list_head *head = &(sbi->block_inuse_head);
+	struct pmfs_blocknode *i;
+	unsigned long count = 0;
+
+	printk("=========== PMFS blocknode stats ===========\n");
+	mutex_lock(&sbi->s_lock);
+	list_for_each_entry(i, head, link) {
+		count++;
+		pmfs_dbg_verbose("node low %lu, high %lu, size %lu\n",
+			i->block_low, i->block_high,
+			i->block_high - i->block_low + 1);
+	}
+	mutex_unlock(&sbi->s_lock);
+	printk("All: %lu nodes\n", count);
+	printk("alloc %llu, alloc steps %lu, average %llu\n",
+		Countstats[7], alloc_steps,
+		Countstats[7] ? alloc_steps / Countstats[7] : 0);
+	printk("free %llu, free steps %lu, average %llu\n",
+		Countstats[10],free_steps,
+		Countstats[10] ? free_steps / Countstats[10] : 0);
+}
+
+void pmfs_print_timing_stats(struct file *filp)
 {
 	int i;
 
@@ -39,15 +67,11 @@ void pmfs_print_timing_stats(void)
 				Countstats[i]);
 		}
 	}
-	printk("alloc %llu, alloc steps %lu, average %llu\n",
-		Countstats[7], alloc_steps,
-		Countstats[7] ? alloc_steps / Countstats[7] : 0);
-	printk("free %llu, free steps %lu, average %llu\n",
-		Countstats[10],free_steps,
-		Countstats[10] ? free_steps / Countstats[10] : 0);
+
+	pmfs_print_blocknode_list(filp);
 }
 
-void pmfs_clear_stats(void)
+void pmfs_clear_stats(struct file *filp)
 {
 	int i;
 
