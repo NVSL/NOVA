@@ -105,16 +105,16 @@ void pmfs_print_inode_log(struct file *filp)
 			struct pmfs_inode_page_tail *tail =
 					pmfs_get_block(sb, curr);
 			pmfs_dbg("Log tail. Next page @ block %llu\n",
-					tail->next_page);
+					tail->next_page >> PAGE_SHIFT);
 			curr = tail->next_page;
 		} else {
 			struct pmfs_inode_entry *entry =
 					pmfs_get_block(sb, curr);
 			pmfs_dbg("entry @ %llu: offset %u, size %u, "
-				"block 0x%llx, invalid count %llu\n",
+				"blocknr %llu, invalid count %llu\n",
 				(curr & (PAGE_SIZE - 1)) / entry_size,
 				entry->pgoff, entry->num_pages,
-				BLOCK_OFF(entry->block),
+				entry->block >> PAGE_SHIFT,
 				GET_INVALID(entry->block));
 			curr += entry_size;
 		}
