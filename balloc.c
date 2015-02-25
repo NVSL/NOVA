@@ -63,6 +63,7 @@ void __pmfs_free_block(struct super_block *sb, unsigned long blocknr,
 	struct pmfs_blocknode *i;
 	struct pmfs_blocknode *free_blocknode= NULL;
 	struct pmfs_blocknode *curr_node;
+	unsigned long step = 0;
 
 	num_blocks = pmfs_get_numblocks(btype);
 	new_block_low = blocknr;
@@ -77,7 +78,7 @@ void __pmfs_free_block(struct super_block *sb, unsigned long blocknr,
 		i = list_first_entry(head, typeof(*i), link);
 
 	list_for_each_entry_from(i, head, link) {
-
+		step++;
 		if (new_block_low > i->block_high) {
 			/* skip to next blocknode */
 			continue;
@@ -141,6 +142,7 @@ block_found:
 
 	if (free_blocknode)
 		__pmfs_free_blocknode(free_blocknode);
+	free_steps += step;
 }
 
 inline void __pmfs_free_data_block(struct super_block *sb,
@@ -220,6 +222,7 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned long new_block_low;
 	unsigned long new_block_high;
 	timing_t alloc_time;
+	unsigned long step = 0;
 
 	num_blocks = num * pmfs_get_numblocks(btype);
 	if (num_blocks == 0)
@@ -229,6 +232,7 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	mutex_lock(&sbi->s_lock);
 
 	list_for_each_entry(i, head, link) {
+		step++;
 		if (i->link.next == head) {
 			next_i = NULL;
 			next_block_low = sbi->block_end;
@@ -237,7 +241,8 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 			next_block_low = next_i->block_low;
 		}
 
-		new_block_low = (i->block_high + num_blocks) & ~(num_blocks - 1);
+//		new_block_low = (i->block_high + num_blocks) & ~(num_blocks - 1);
+		new_block_low = i->block_high + 1;
 		new_block_high = new_block_low + num_blocks - 1;
 
 		if (new_block_high >= next_block_low) {
@@ -319,6 +324,7 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 
 	if (found == 0) {
 		PMFS_END_TIMING(new_data_blocks_t, alloc_time);
+		alloc_steps += step;
 		return -ENOSPC;
 	}
 
@@ -339,6 +345,7 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 
 	pmfs_dbg_verbose("Alloc %u data blocks %lu\n", num, *blocknr);
 	PMFS_END_TIMING(new_data_blocks_t, alloc_time);
+	alloc_steps += step;
 	return errval;
 }
 

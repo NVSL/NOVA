@@ -17,6 +17,8 @@ const char *Timingstring[TIMING_NUM] =
 
 unsigned long long Timingstats[TIMING_NUM];
 u64 Countstats[TIMING_NUM];
+unsigned long alloc_steps;
+unsigned long free_steps;
 
 void pmfs_print_timing_stats(void)
 {
@@ -37,6 +39,12 @@ void pmfs_print_timing_stats(void)
 				Countstats[i]);
 		}
 	}
+	printk("alloc %llu, alloc steps %lu, average %llu\n",
+		Countstats[7], alloc_steps,
+		Countstats[7] ? alloc_steps / Countstats[7] : 0);
+	printk("free %llu, free steps %lu, average %llu\n",
+		Countstats[10],free_steps,
+		Countstats[10] ? free_steps / Countstats[10] : 0);
 }
 
 void pmfs_clear_stats(void)

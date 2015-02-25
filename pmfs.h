@@ -149,6 +149,9 @@ typedef struct timespec timing_t;
 	Countstats[name]++; \
 	}
 
+extern unsigned long alloc_steps;
+extern unsigned long free_steps;
+
 /* ======================= Inode log ========================= */
 /* Inode entry in th log */
 struct	pmfs_inode_entry {
