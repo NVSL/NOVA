@@ -122,3 +122,35 @@ void pmfs_print_inode_log(struct file *filp)
 out:
 	mutex_unlock(&inode->i_mutex);
 }
+
+void pmfs_print_inode_log_blocknode(struct file *filp)
+{
+	struct address_space *mapping = filp->f_mapping;
+	struct inode    *inode = mapping->host;
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi;
+	struct pmfs_inode_page_tail *tail;
+	size_t entry_size = sizeof(struct pmfs_inode_entry);
+	u64 curr;
+	unsigned long count = 0;
+
+	mutex_lock(&inode->i_mutex);
+	pi = pmfs_get_inode(sb, inode->i_ino);
+
+	if (pi->log_tail == 0)
+		goto out;
+
+	curr = pi->log_head;
+	pmfs_dbg("Pi %lu: log head @ %llu, tail @ %llu\n", inode->i_ino,
+			curr >> PAGE_SHIFT, pi->log_tail >> PAGE_SHIFT);
+	do {
+		tail = pmfs_get_block(sb, curr + entry_size * 127);
+		pmfs_dbg("log block @ %llu\n", curr >> PAGE_SHIFT);
+		curr = tail->next_page;
+		count++;
+	} while ((curr >> PAGE_SHIFT) != (pi->log_tail >> PAGE_SHIFT));
+
+out:
+	mutex_unlock(&inode->i_mutex);
+	pmfs_dbg("All %lu pages\n", count);
+}

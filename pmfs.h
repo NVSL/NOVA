@@ -101,11 +101,12 @@ extern unsigned int pmfs_dbgmask;
 #define INODES_PER_BLOCK(bt) (1 << (blk_type_to_shift[bt] - PMFS_INODE_BITS))
 
 /* IOCTLs */
-#define	FS_PMFS_FSYNC	0xBCD0000E
-#define	PMFS_PRINT_TIMING	0xBCD00010
-#define	PMFS_CLEAR_STATS	0xBCD00011
-#define	PMFS_COW_WRITE		0xBCD00012
-#define	PMFS_PRINT_LOG		0xBCD00013
+#define	FS_PMFS_FSYNC			0xBCD0000E
+#define	PMFS_PRINT_TIMING		0xBCD00010
+#define	PMFS_CLEAR_STATS		0xBCD00011
+#define	PMFS_COW_WRITE			0xBCD00012
+#define	PMFS_PRINT_LOG			0xBCD00013
+#define	PMFS_PRINT_LOG_BLOCKNODE	0xBCD00014
 
 
 extern unsigned int blk_type_to_shift[PMFS_BLOCK_TYPE_MAX];
@@ -717,5 +718,6 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 void pmfs_print_timing_stats(struct file *filp);
 void pmfs_clear_stats(struct file *filp);
 void pmfs_print_inode_log(struct file *filp);
+void pmfs_print_inode_log_blocknode(struct file *filp);
 
 #endif /* __PMFS_H */

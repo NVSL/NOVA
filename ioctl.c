@@ -160,6 +160,10 @@ setversion_out:
 		pmfs_print_inode_log(filp);
 		return 0;
 	}
+	case PMFS_PRINT_LOG_BLOCKNODE: {
+		pmfs_print_inode_log_blocknode(filp);
+		return 0;
+	}
 	default:
 		return -ENOTTY;
 	}
