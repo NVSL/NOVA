@@ -150,6 +150,8 @@ void pmfs_print_inode_log_blocknode(struct file *filp)
 		pmfs_dbg("log block @ %llu\n", curr >> PAGE_SHIFT);
 		curr = tail->next_page;
 		count++;
+		if ((curr >> PAGE_SHIFT) == 0)
+			break;
 	} while ((curr >> PAGE_SHIFT) != (pi->log_tail >> PAGE_SHIFT));
 
 out:

@@ -627,14 +627,15 @@ fail:
 static int recursive_assign_blocks(pmfs_transaction_t *trans,
 	struct super_block *sb, struct pmfs_inode *pi, __le64 block,
 	u32 height, unsigned long first_blocknr, unsigned long last_blocknr,
-	unsigned long alloc_blocknr, bool new_node, bool zero)
+	u64 curr_entry, bool new_node, unsigned long start_pgoff, bool zero)
 {
 	int i, errval;
 	unsigned int meta_bits = META_BLK_SHIFT, node_bits;
 	__le64 *node;
 	unsigned long blocknr, first_blk, last_blk;
+	unsigned long entry_off;
 	unsigned int first_index, last_index;
-	unsigned long internal_blocknr;
+	struct pmfs_inode_entry *entry;
 //	unsigned int flush_bytes;
 //	struct pmfs_blocknode *hint = NULL;
 
@@ -648,21 +649,31 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 	for (i = first_index; i <= last_index; i++) {
 		if (height == 1) {
 			if (node[i]) {
-				blocknr = pmfs_get_blocknr(sb,
-						le64_to_cpu(node[i]),
-						pi->i_blk_type);
+				entry = pmfs_get_block(sb, node[i]);
+				blocknr = entry->block >> PAGE_SHIFT;
+				if (entry->pgoff > start_pgoff + i ||
+					entry->pgoff + entry->num_pages
+						<= start_pgoff + i) {
+					pmfs_err(sb, "Entry ERROR: start pgoff "
+						"%lu, %lu, entry pgoff %lu, "
+						"num %lu\n", start_pgoff, i,
+						entry->pgoff, entry->num_pages);
+					BUG();
+				}
+				entry_off = start_pgoff + i - entry->pgoff;
+				blocknr += entry_off;
+				if (GET_INVALID(entry->block) < 4000)
+					entry->block++;
 				pmfs_free_data_block(sb, blocknr,
 						pi->i_blk_type);
-				pmfs_dbg_verbose("Free block %d @ %lu\n",
-							i, blocknr);
+				pmfs_dbg_verbose("Free block %d @ %lu, entry off "
+					"%lu\n", i, blocknr, entry_off);
 				//FIXME: garbage collection
 				pi->i_blocks--;
 			}
-			node[i] = cpu_to_le64(pmfs_get_block_off(sb,
-					alloc_blocknr + i - first_index,
-					pi->i_blk_type));
-			pmfs_dbg_verbose("Assign block %d to %lu\n", i, 
-					alloc_blocknr + i - first_index);
+			node[i] = cpu_to_le64(curr_entry);
+			pmfs_dbg_verbose("Assign block %d to %llu\n", i, 
+							curr_entry);
 
 		} else {
 			if (node[i] == 0) {
@@ -684,15 +695,10 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 			last_blk = (i == last_index) ? (last_blocknr &
 				((1 << node_bits) - 1)) : (1 << node_bits) - 1;
 
-			if (i == first_index)
-				internal_blocknr = alloc_blocknr;
-			else
-				internal_blocknr = alloc_blocknr
-					+ ((i - first_index) << node_bits)
-					- first_blocknr;
+			start_pgoff += (i << node_bits);
 			errval = recursive_assign_blocks(trans, sb, pi,
 				node[i], height - 1, first_blk, last_blk,
-				internal_blocknr, new_node, zero);
+				curr_entry, new_node, start_pgoff, zero);
 			if (errval < 0)
 				goto fail;
 		}
@@ -802,8 +808,8 @@ fail:
 }
 
 int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
-	struct pmfs_inode *pi, unsigned long file_blocknr,
-	unsigned long alloc_blocknr, unsigned int num, bool zero)
+	struct pmfs_inode *pi, unsigned long file_blocknr, unsigned int num,
+	u64 curr_entry, bool zero)
 {
 	int errval;
 	unsigned long max_blocks;
@@ -818,9 +824,9 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 	last_blocknr = (file_blocknr + num - 1) >> blk_shift;
 
 	pmfs_dbg_verbose("assign_blocks height %d file_blocknr %lx "
-			"alloc_blocknr %lu, num %x, root %llu, "
+			"inode entry %llu, num %x, root %llu, "
 			"first blocknr 0x%lx, last_blocknr 0x%lx\n",
-			pi->height, file_blocknr, alloc_blocknr, num,
+			pi->height, file_blocknr, curr_entry, num,
 			pi->root, first_blocknr, last_blocknr);
 
 	height = pi->height;
@@ -847,8 +853,7 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 	if (!pi->root) {
 		if (height == 0) {
 			__le64 root;
-			root = cpu_to_le64(pmfs_get_block_off(sb, alloc_blocknr,
-					   pi->i_blk_type));
+			root = cpu_to_le64(curr_entry);
 			pmfs_dbg_verbose("Set root @%llu\n", root);
 			pmfs_memunlock_inode(sb, pi);
 			pi->root = root;
@@ -863,7 +868,7 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 			}
 			errval = recursive_assign_blocks(trans, sb, pi,
 					pi->root, pi->height, first_blocknr,
-					last_blocknr, alloc_blocknr, 1, zero);
+					last_blocknr, curr_entry, 1, 0, zero);
 			if (errval < 0)
 				goto fail;
 		}
@@ -872,15 +877,17 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 			/* With cow we need to re-assign the root */
 			__le64 root;
 			unsigned long blocknr;
+			struct pmfs_inode_entry *entry;
 
-			blocknr = pmfs_get_blocknr(sb,
-						le64_to_cpu(pi->root),
+			entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, pi->root);
+			blocknr = pmfs_get_blocknr(sb, entry->block,
 						pi->i_blk_type);
+			if (GET_INVALID(entry->block) < 4000)
+				entry->block++;
 			pmfs_free_data_block(sb, blocknr, pi->i_blk_type);
 			pmfs_dbg_verbose("Free root block @ %lu\n", blocknr);
 			pi->i_blocks--;
-			root = cpu_to_le64(pmfs_get_block_off(sb, alloc_blocknr,
-					   pi->i_blk_type));
+			root = cpu_to_le64(curr_entry);
 			pmfs_memunlock_inode(sb, pi);
 			pi->root = root;
 			pi->height = height;
@@ -899,7 +906,7 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 		}
 		errval = recursive_assign_blocks(trans, sb, pi, pi->root,
 				height,	first_blocknr, last_blocknr,
-				alloc_blocknr, 0, zero);
+				curr_entry, 0, 0, zero);
 		if (errval < 0)
 			goto fail;
 	}
@@ -929,8 +936,8 @@ inline int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
  * Assign inode to point to the blocks start from alloc_blocknr.
  */
 inline int pmfs_assign_blocks(pmfs_transaction_t *trans, struct inode *inode,
-		unsigned long file_blocknr, unsigned long alloc_blocknr,
-		unsigned int num, bool zero)
+		unsigned long file_blocknr, unsigned int num, u64 curr_entry,
+		bool zero)
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
@@ -939,7 +946,7 @@ inline int pmfs_assign_blocks(pmfs_transaction_t *trans, struct inode *inode,
 
 	PMFS_START_TIMING(assign_t, assign_time);
 	errval = __pmfs_assign_blocks(trans, sb, pi, file_blocknr,
-					alloc_blocknr, num, zero);
+					num, curr_entry, zero);
 	PMFS_END_TIMING(assign_t, assign_time);
 
 	return errval;
@@ -1826,7 +1833,7 @@ err:
  * FIXME: Must hold inode->i_mutex. Convert it to lock-free.
  * blocknr and start_blk are pgoff.
  */ 
-int pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
+u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, unsigned long blocknr, unsigned long start_blk,
 	unsigned long num_blocks)
 {
@@ -1849,7 +1856,7 @@ int pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 						PMFS_BLOCK_TYPE_4K, 1);
 		if (errval) {
 			pmfs_err(sb, "ERROR: no inode log page available\n");
-			return -ENOSPC;
+				return 0;
 		}
 		pmfs_dbg_verbose("Alloc %u log blocks %lu\n", 1,
 						new_inode_blocknr);
@@ -1874,8 +1881,7 @@ int pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 
 	pmfs_flush_buffer(entry, sizeof(struct pmfs_inode_entry), 1);
 
-	pi->log_tail = curr_p + sizeof(struct pmfs_inode_entry);
-	return 0;
+	return curr_p;
 }
 
 static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)

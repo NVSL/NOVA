@@ -228,8 +228,8 @@ extern int pmfs_init_inode_table(struct super_block *sb);
 extern int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
 		unsigned long file_blocknr, unsigned int num, bool zero);
 extern int pmfs_assign_blocks(pmfs_transaction_t *trans, struct inode *inode,
-		unsigned long file_blocknr, unsigned long alloc_blocknr,
-		unsigned int num, bool zero);
+		unsigned long file_blocknr, unsigned int num, u64 curr_entry,
+		bool zero);
 extern u64 pmfs_find_data_block(struct inode *inode,
 	unsigned long file_blocknr);
 int pmfs_set_blocksize_hint(struct super_block *sb, struct pmfs_inode *pi,
@@ -680,7 +680,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync);
 
 /* inode.c */
 extern const struct address_space_operations pmfs_aops_xip;
-int pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
+u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, unsigned long blocknr, unsigned long start_blk,
 	unsigned long num_blocks);
 

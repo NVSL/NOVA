@@ -493,6 +493,7 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	unsigned int data_bits;
 	int retval;
 	void* kmem;
+	u64 curr_entry;
 	timing_t cow_write_time;
 
 	PMFS_START_TIMING(cow_write_t, cow_write_time);
@@ -555,7 +556,16 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	copied = count -
 		__copy_from_user_inatomic_nocache(kmem + offset, buf, count);
 
-	pmfs_assign_blocks(NULL, inode, start_blk, blocknr, num_blocks, false);
+	curr_entry = pmfs_append_inode_entry(sb, pi, inode, blocknr, start_blk,
+						num_blocks);
+	if (curr_entry == 0) {
+		pmfs_err(sb, "ERROR: append inode entry failed\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
+	pmfs_assign_blocks(NULL, inode, start_blk, num_blocks,
+						curr_entry, false);
 
 	written = copied;
 	if (written < 0 || written != count)
@@ -575,8 +585,8 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	ret = written;
 //	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
 
-	pmfs_append_inode_entry(sb, pi, inode, blocknr, start_blk, num_blocks);
-
+	//FIXME: Possible contention here
+	pi->log_tail = curr_entry + sizeof(struct pmfs_inode_entry);
 out:
 	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
