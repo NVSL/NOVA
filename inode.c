@@ -1908,6 +1908,60 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 	return 0;
 }
 
+inline u64 next_log_page(struct super_block *sb, u64 curr_p)
+{
+	return ((struct pmfs_inode_page_tail *)
+			pmfs_get_block(sb, curr_p))->next_page;
+}
+
+inline bool is_last_entry(u64 curr_p)
+{
+	return ENTRY_LOC(curr_p) == LAST_ENTRY;
+}
+
+/*
+ * Copy alive log entries to the new log,
+ * merge entries if possible
+ */
+int pmfs_inode_log_gabbage_collection(struct super_block *sb,
+	struct pmfs_inode *pi, u64 new_block, unsigned long num_pages)
+{
+	struct pmfs_inode_entry *curr_entry, *new_entry;
+	u64 old_head, new_head;
+	struct pmfs_inode_log_page *last_page;
+	size_t entry_size = sizeof(struct pmfs_inode_entry);
+
+	old_head = pi->log_head;
+	new_head = new_block;
+	last_page = (struct pmfs_inode_log_page *)
+		pmfs_get_block(sb, new_block + ((num_pages - 1) << PAGE_SHIFT));
+
+	while (old_head != pi->log_tail) {
+		if (is_last_entry(old_head))
+			old_head = next_log_page(sb, old_head);
+		if (is_last_entry(new_head))
+			new_head = next_log_page(sb, new_head);
+
+		if (old_head == pi->log_tail)
+			break;
+
+		curr_entry = pmfs_get_block(sb, old_head);
+		if (curr_entry->num_pages == GET_INVALID(curr_entry->block)) {
+			goto update;
+		}
+		new_entry = pmfs_get_block(sb, new_head);
+		memcpy(new_entry, curr_entry, entry_size);
+update:
+		old_head += entry_size;
+		new_head += entry_size;
+	}
+
+	last_page->page_tail.next_page = pi->log_head;
+	pmfs_flush_buffer(pmfs_get_block(sb, new_block),
+				num_pages * PAGE_SIZE, 1);
+	return 0;
+}
+
 /*
  * Append a pmfs_inode_entry to the current pmfs_inode_log_page.
  * FIXME: Must hold inode->i_mutex. Convert it to lock-free.
@@ -1928,8 +1982,8 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	block = pmfs_get_block_off(sb, blocknr, pi->i_blk_type);
 
 	curr_p = pi->log_tail;
-	if (curr_p == 0 || ((curr_p & (PAGE_SIZE - 1)) == LAST_ENTRY && 
-			((struct pmfs_inode_page_tail *)pmfs_get_block(sb, curr_p))->next_page == 0)) {
+	if (curr_p == 0 || (is_last_entry(curr_p) &&
+				next_log_page(sb, curr_p) == 0)) {
 		/* Allocate new inode log page */
 		u64 new_block;
 

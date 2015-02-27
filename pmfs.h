@@ -161,6 +161,8 @@ extern unsigned long free_steps;
 #define	BLOCK_OFF(p)	((p) & ~INVALID_MASK)
 #define	GET_INVALID(p)	((p) & INVALID_MASK)
 
+#define	ENTRY_LOC(p)	((p) & INVALID_MASK)
+
 struct	pmfs_inode_entry {
 	u32	pgoff;
 	u32	num_pages;
