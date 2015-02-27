@@ -654,10 +654,11 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 				if (entry->pgoff > start_pgoff + i ||
 					entry->pgoff + entry->num_pages
 						<= start_pgoff + i) {
-					pmfs_err(sb, "Entry ERROR: start pgoff "
-						"%lu, %lu, entry pgoff %lu, "
+					pmfs_err(sb, "Entry ERROR: start pgoff"
+						" %lu, %lu, entry pgoff %lu, "
 						"num %lu\n", start_pgoff, i,
-						entry->pgoff, entry->num_pages);
+						entry->pgoff,
+						entry->num_pages);
 					BUG();
 				}
 				entry_off = start_pgoff + i - entry->pgoff;
@@ -666,8 +667,9 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 					entry->block++;
 				pmfs_free_data_block(sb, blocknr,
 						pi->i_blk_type);
-				pmfs_dbg_verbose("Free block %d @ %lu, entry off "
-					"%lu\n", i, blocknr, entry_off);
+				pmfs_dbg_verbose("Free block %d @ %lu, "
+					"entry off %lu\n", i, blocknr,
+					entry_off);
 				//FIXME: garbage collection
 				pi->i_blocks--;
 			}
@@ -792,8 +794,9 @@ int __pmfs_alloc_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 		if (height > pi->height) {
 			errval = pmfs_increase_btree_height(sb, pi, height);
 			if (errval) {
-				pmfs_dbg_verbose("Err: inc height %x:%x tot %lx"
-					"\n", pi->height, height, total_blocks);
+				pmfs_dbg_verbose("Err: inc height %x:%x tot "
+					"%lx\n", pi->height, height,
+					total_blocks);
 				goto fail;
 			}
 		}
@@ -879,7 +882,8 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 			unsigned long blocknr;
 			struct pmfs_inode_entry *entry;
 
-			entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, pi->root);
+			entry = (struct pmfs_inode_entry *)pmfs_get_block(sb,
+								pi->root);
 			blocknr = pmfs_get_blocknr(sb, entry->block,
 						pi->i_blk_type);
 			if (GET_INVALID(entry->block) < 4000)

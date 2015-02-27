@@ -67,6 +67,7 @@ extern unsigned int pmfs_dbgmask;
 
 #define pmfs_dbg_verbose(s, args ...)		 \
 	((pmfs_dbgmask & PMFS_DBGMASK_VERBOSE) ? pmfs_dbg(s, ##args) : 0)
+//#define pmfs_dbg_verbose(s, args ...)	pmfs_dbg(s, ##args)
 #define pmfs_dbg_trans(s, args ...)		 \
 	((pmfs_dbgmask & PMFS_DBGMASK_TRANSACTION) ? pmfs_dbg(s, ##args) : 0)
 
@@ -230,6 +231,9 @@ extern int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
 extern int pmfs_assign_blocks(pmfs_transaction_t *trans, struct inode *inode,
 		unsigned long file_blocknr, unsigned int num, u64 curr_entry,
 		bool zero);
+int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
+	struct pmfs_inode *pi, unsigned long file_blocknr, unsigned int num,
+	u64 curr_entry, bool zero);
 extern u64 pmfs_find_data_block(struct inode *inode,
 	unsigned long file_blocknr);
 int pmfs_set_blocksize_hint(struct super_block *sb, struct pmfs_inode *pi,
@@ -538,7 +542,7 @@ static inline void memset_nt(void *dest, uint32_t dword, size_t length)
 		: "=D"(dummy1), "=d" (dummy2) : "D" (dest), "a" (qword), "d" (length) : "memory", "rcx");
 }
 
-static inline u64 __pmfs_find_data_block(struct super_block *sb,
+static inline u64 __pmfs_find_inode(struct super_block *sb,
 		struct pmfs_inode *pi, unsigned long blocknr)
 {
 	__le64 *level_ptr;
@@ -560,6 +564,46 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 		height--;
 	}
 	return bp;
+}
+
+static inline u64 __pmfs_find_data_block(struct super_block *sb,
+		struct pmfs_inode *pi, unsigned long blocknr)
+{
+	__le64 *level_ptr;
+	u64 bp = 0;
+	u32 height, bit_shift;
+	unsigned int idx;
+	unsigned long req_block = blocknr;
+	struct pmfs_inode_entry *entry;
+
+	height = pi->height;
+	bp = le64_to_cpu(pi->root);
+	if (bp == 0)
+		return 0;
+
+	while (height > 0) {
+		level_ptr = (__le64 *)bp;
+		bit_shift = (height - 1) * META_BLK_SHIFT;
+		idx = blocknr >> bit_shift;
+		bp = le64_to_cpu(level_ptr[idx]);
+		if (bp == 0)
+			return 0;
+		blocknr = blocknr & ((1 << bit_shift) - 1);
+		height--;
+	}
+	entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, bp);
+	pmfs_dbg_verbose("%s: %lu, entry pgoff %u, num %u, blocknr %llu\n",
+		__func__, req_block, entry->pgoff, entry->num_pages,
+		entry->block >> PAGE_SHIFT);
+	if (req_block < entry->pgoff ||
+			 req_block - entry->pgoff >= entry->num_pages) {
+		pmfs_err(sb, "%s ERROR: %lu, entry pgoff %u, num %u, blocknr "
+			"%llu\n", __func__, req_block, entry->pgoff,
+			entry->num_pages, entry->block >> PAGE_SHIFT);
+		return 0;
+	}
+	return BLOCK_OFF(entry->block +
+			((req_block - entry->pgoff) << PAGE_SHIFT));
 }
 
 static inline unsigned int pmfs_inode_blk_shift (struct pmfs_inode *pi)
@@ -585,7 +629,7 @@ static inline struct pmfs_inode *pmfs_get_inode(struct super_block *sb,
 		return NULL;
 
 	block = ino >> pmfs_inode_blk_shift(inode_table);
-	bp = __pmfs_find_data_block(sb, inode_table, block);
+	bp = __pmfs_find_inode(sb, inode_table, block);
 
 	if (bp == 0)
 		return NULL;

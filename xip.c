@@ -436,6 +436,7 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	size_t offset, eblk_offset;
 	unsigned long start_blk, end_blk, num_blocks;
 	u64 block;
+	unsigned long file_end_blk;
 
 	offset = pos & (sb->s_blocksize - 1);
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
@@ -444,26 +445,39 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	start_blk = pos >> sb->s_blocksize_bits;
 	end_blk = start_blk + num_blocks - 1;
 
+	file_end_blk = inode->i_size >> PAGE_SHIFT;
+	if (start_blk > file_end_blk)
+		return;
+
+	pmfs_dbg_verbose("%s: %lu blocks\n", __func__, num_blocks);
 	/* We avoid zeroing the alloc'd range, which is going to be overwritten
 	 * by this system call anyway */
+	pmfs_dbg_verbose("%s: start offset %lu start blk %lu %p\n", __func__,
+				offset, start_blk, kmem);
 	if (offset != 0) {
-		block = pmfs_find_data_block(inode, start_blk);
+		block = __pmfs_find_data_block(sb, pi, start_blk);
+		pmfs_dbg_verbose("%s: head block %llu\n", __func__, block);
 		if (block == 0) {
 			/* Fill zero */
 		    	memset(kmem, 0, offset);
 		} else {
 			/* Copy from original block */
-			pmfs_copy_partial_block(sb, block, offset, kmem, false);
-//			pmfs_dbg("start block: %llu, offset %lu\n",
-//					block, offset);
+			pmfs_copy_partial_block(sb, block, offset,
+							kmem, false);
 		}
 	}
+
+	if (end_blk > file_end_blk)
+		return;
 
 	kmem = (void *)((char *)kmem +
 			((num_blocks - 1) << sb->s_blocksize_bits));
 	eblk_offset = (pos + count) & (pmfs_inode_blk_size(pi) - 1);
+	pmfs_dbg_verbose("%s: end offset %lu, end blk %lu %p\n", __func__,
+				eblk_offset, end_blk, kmem);
 	if (eblk_offset != 0) {
-		block = pmfs_find_data_block(inode, end_blk);
+		block = __pmfs_find_data_block(sb, pi, end_blk);
+		pmfs_dbg_verbose("%s: tail block %llu\n", __func__, block);
 		if (block == 0) {
 			/* Fill zero */
 		    	memset(kmem + eblk_offset, 0,
@@ -472,8 +486,6 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 			/* Copy from original block */
 			pmfs_copy_partial_block(sb, block, eblk_offset,
 					kmem, true);
-//			pmfs_dbg("end block: %llu, offset %lu\n",
-//					block, eblk_offset);
 		}
 	}
 }
