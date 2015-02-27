@@ -1923,6 +1923,7 @@ inline bool is_last_entry(u64 curr_p)
  * Copy alive log entries to the new log,
  * merge entries if possible
  */
+#if 0
 int pmfs_inode_log_gabbage_collection(struct super_block *sb,
 	struct pmfs_inode *pi, u64 new_block, unsigned long num_pages)
 {
@@ -1959,6 +1960,76 @@ update:
 	last_page->page_tail.next_page = pi->log_head;
 	pmfs_flush_buffer(pmfs_get_block(sb, new_block),
 				num_pages * PAGE_SIZE, 1);
+	return 0;
+}
+#endif
+
+static bool curr_page_invalid(struct super_block *sb, struct pmfs_inode *pi,
+	struct pmfs_inode_log_page *curr_page)
+{
+	struct pmfs_inode_entry *entry;
+	int i;
+
+	for (i = 0; i < ENTRIES_PER_PAGE; i++) {
+		entry = &curr_page->entries[i];
+		if (entry->num_pages != GET_INVALID(entry->block))
+			return false;
+	}
+
+	return true;
+}
+
+static void free_curr_page(struct super_block *sb, struct pmfs_inode *pi,
+	struct pmfs_inode_log_page *curr_page,
+	struct pmfs_inode_log_page *last_page, u64 curr_head)
+{
+	unsigned short btype = pi->i_blk_type;
+
+	last_page->page_tail.next_page = curr_page->page_tail.next_page;
+	pmfs_flush_buffer(&last_page->page_tail.next_page, CACHELINE_SIZE, 1);
+	pmfs_free_data_block(sb, pmfs_get_blocknr(sb, curr_head, btype), btype);
+}
+
+int pmfs_inode_log_garbage_collection(struct super_block *sb,
+	struct pmfs_inode *pi, u64 new_block, unsigned long num_pages)
+{
+	u64 curr_head, next_head;
+	int new_head = 0;
+	struct pmfs_inode_log_page *last_page = NULL;
+	struct pmfs_inode_log_page *curr_page = NULL;
+
+	curr_head = pi->log_head;
+
+	while (1) {
+		if (curr_head <= pi->log_tail &&
+				pi->log_tail - curr_head <= PAGE_SIZE)
+			break;
+
+		curr_page = (struct pmfs_inode_log_page *)
+					pmfs_get_block(sb, curr_head);
+		next_head = curr_page->page_tail.next_page;
+		if (curr_page_invalid(sb, pi, curr_page)) {
+			free_curr_page(sb, pi, curr_page, last_page,
+					curr_head);
+		} else {
+			if (new_head == 0) {
+				pi->log_head = cpu_to_le64(curr_page);
+				pmfs_flush_buffer(&pi->log_head,
+							CACHELINE_SIZE, 1);
+				new_head = 1;
+			}
+			last_page = curr_page;
+		}
+
+		curr_head = next_head;
+		if (curr_head == 0)
+			break;
+	}
+
+	if (last_page)
+		last_page->page_tail.next_page = new_block;
+	pi->log_tail = new_block;
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 	return 0;
 }
 
@@ -2005,8 +2076,8 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 				pmfs_err(sb, "ERROR: no inode log page available\n");
 				return 0;
 			}
-//			pmfs_inode_log_garbage_collection(sb, pi, new_block,
-//						num_pages); 
+			pmfs_inode_log_garbage_collection(sb, pi, new_block,
+						num_pages); 
 
 			/* Atomic switch to new log */
 //			pmfs_switch_to_new_log(sb, pi, new_block, num_pages);
