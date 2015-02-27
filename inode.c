@@ -240,7 +240,8 @@ static inline bool is_empty_meta_block(__le64 *node, unsigned int start_idx,
  */
 static int recursive_truncate_blocks(struct super_block *sb, __le64 block,
 	u32 height, u32 btype, unsigned long first_blocknr,
-	unsigned long last_blocknr, bool *meta_empty)
+	unsigned long last_blocknr, unsigned long start_pgoff,
+	bool *meta_empty)
 {
 	unsigned long blocknr, first_blk, last_blk, page_addr;
 	unsigned int node_bits, first_index, last_index, i;
@@ -249,6 +250,8 @@ static int recursive_truncate_blocks(struct super_block *sb, __le64 block,
 	int start, end;
 	bool mpty, all_range_freed = true;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	unsigned long entry_off, pgoff;
+	struct pmfs_inode_entry *entry;
 
 	node = (__le64 *)block;
 
@@ -264,9 +267,27 @@ static int recursive_truncate_blocks(struct super_block *sb, __le64 block,
 			if (unlikely(!node[i]))
 				continue;
 			/* Freeing the data block */
-			blocknr = pmfs_get_blocknr(sb, le64_to_cpu(node[i]),
-				    btype);
-			__pmfs_free_data_block(sb, blocknr, btype, &start_hint);
+			entry = pmfs_get_block(sb, node[i]);
+			blocknr = entry->block >> PAGE_SHIFT;
+			if (entry->pgoff > start_pgoff + i ||
+				entry->pgoff + entry->num_pages
+					<= start_pgoff + i) {
+				pmfs_err(sb, "Entry ERROR: start pgoff"
+					" %lu, %lu, entry pgoff %lu, "
+					"num %lu\n", start_pgoff, i,
+					entry->pgoff,
+					entry->num_pages);
+				BUG();
+			}
+			entry_off = start_pgoff + i - entry->pgoff;
+			blocknr += entry_off;
+			if (GET_INVALID(entry->block) < 4000)
+				entry->block++;
+			__pmfs_free_data_block(sb, blocknr, btype,
+						&start_hint);
+			pmfs_dbg_verbose("Free block %d @ %lu, "
+					"entry off %lu\n", i, blocknr,
+					entry_off);
 			freed++;
 		}
 		mutex_unlock(&sbi->s_lock);
@@ -280,8 +301,10 @@ static int recursive_truncate_blocks(struct super_block *sb, __le64 block,
 			last_blk = (i == last_index) ? (last_blocknr &
 				((1 << node_bits) - 1)) : (1 << node_bits) - 1;
 
+			pgoff = start_pgoff + (i << node_bits);
 			freed += recursive_truncate_blocks(sb, node[i],
-				height - 1, btype, first_blk, last_blk, &mpty);
+				height - 1, btype, first_blk, last_blk,
+				pgoff, &mpty);
 			/* cond_resched(); */
 			if (mpty) {
 				/* Freeing the meta-data block */
@@ -324,15 +347,19 @@ unsigned int pmfs_free_inode_subtree(struct super_block *sb,
 		return 0;
 
 	if (height == 0) {
-		first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
-			btype);
+		struct pmfs_inode_entry *entry;
+
+		entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, root);
+		first_blocknr = pmfs_get_blocknr(sb, entry->block, btype);
+		if (GET_INVALID(entry->block) < 4000)
+			entry->block++;
 		pmfs_free_data_block(sb, first_blocknr, btype);
 		freed = 1;
 	} else {
 		first_blocknr = 0;
 
 		freed = recursive_truncate_blocks(sb, root, height, btype,
-			first_blocknr, last_blocknr, &mpty);
+			first_blocknr, last_blocknr, 0, &mpty);
 		BUG_ON(!mpty);
 		first_blocknr = root;
 		pmfs_free_meta_block(sb, first_blocknr);
@@ -465,14 +492,19 @@ static void __pmfs_truncate_blocks(struct inode *inode, loff_t start,
 	root = pi->root;
 
 	if (pi->height == 0) {
-		first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
-			pi->i_blk_type);
+		struct pmfs_inode_entry *entry;
+
+		entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, root);
+		first_blocknr = pmfs_get_blocknr(sb, entry->block,
+				pi->i_blk_type);
+		if (GET_INVALID(entry->block) < 4000)
+			entry->block++;
 		pmfs_free_data_block(sb, first_blocknr, pi->i_blk_type);
 		root = 0;
 		freed = 1;
 	} else {
 		freed = recursive_truncate_blocks(sb, root, pi->height,
-			pi->i_blk_type, first_blocknr, last_blocknr, &mpty);
+			pi->i_blk_type, first_blocknr, last_blocknr, 0, &mpty);
 		if (mpty) {
 			first_blocknr = root;
 			pmfs_free_meta_block(sb, first_blocknr);
@@ -633,7 +665,7 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 	unsigned int meta_bits = META_BLK_SHIFT, node_bits;
 	__le64 *node;
 	unsigned long blocknr, first_blk, last_blk;
-	unsigned long entry_off;
+	unsigned long entry_off, pgoff;
 	unsigned int first_index, last_index;
 	struct pmfs_inode_entry *entry;
 //	unsigned int flush_bytes;
@@ -697,10 +729,10 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 			last_blk = (i == last_index) ? (last_blocknr &
 				((1 << node_bits) - 1)) : (1 << node_bits) - 1;
 
-			start_pgoff += (i << node_bits);
+			pgoff = start_pgoff + (i << node_bits);
 			errval = recursive_assign_blocks(trans, sb, pi,
 				node[i], height - 1, first_blk, last_blk,
-				curr_entry, new_node, start_pgoff, zero);
+				curr_entry, new_node, pgoff, zero);
 			if (errval < 0)
 				goto fail;
 		}
