@@ -1401,6 +1401,9 @@ retry:
 	pi->i_flags = pmfs_mask_flags(mode, diri->i_flags);
 	pi->height = 0;
 	pi->i_dtime = 0;
+	pi->log_head = 0;
+	pi->log_tail = 0;
+	pi->log_pages = 0;
 	pmfs_memlock_inode(sb, pi);
 
 	sbi->s_free_inodes_count -= 1;
@@ -1899,13 +1902,15 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 		new_block = pmfs_get_block_off(sb, new_inode_blocknr,
 						PMFS_BLOCK_TYPE_4K);
 
-		if (curr_p == 0)
+		if (curr_p == 0) {
 			pi->log_head = new_block;
-		else
+			pi->log_pages = 1;
+		} else {
 			((struct pmfs_inode_page_tail *)
 				pmfs_get_block(sb, curr_p))->next_page =
-						 		new_block; 
-
+						new_block;
+			pi->log_pages *= 2;
+		}
 		curr_p = new_block;
 	}
 
@@ -1946,6 +1951,7 @@ static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 	mutex_unlock(&sbi->s_lock);
 
 	pi->log_head = pi->log_tail = 0;
+	pi->log_pages = 0;
 }
 
 const struct address_space_operations pmfs_aops_xip = {

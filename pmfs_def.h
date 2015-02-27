@@ -119,6 +119,7 @@ struct pmfs_inode {
 
 	__le64	log_tail;
 	__le64	log_head;
+	__le32	log_pages;
 
 	struct {
 		__le32 rdev;    /* major/minor # */
