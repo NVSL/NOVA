@@ -1867,6 +1867,47 @@ err:
 	return err;
 }
 
+/* Log block resides in NVMM */
+int pmfs_allocate_inode_log_pages(struct super_block *sb,
+	struct pmfs_inode *pi, unsigned long num_pages,
+	u64 *new_block)
+{
+	unsigned long new_inode_blocknr;
+	unsigned long next_blocknr;
+	u64 curr_block;
+	struct pmfs_inode_log_page *curr_page;
+	int errval;
+	int i;
+
+	errval = pmfs_new_data_blocks(sb, &new_inode_blocknr, num_pages,
+						PMFS_BLOCK_TYPE_4K, 1);
+
+	if (errval) {
+		pmfs_err(sb, "ERROR: no inode log page available\n");
+		return errval;
+	}
+	pmfs_dbg_verbose("Alloc %lu log blocks %lu\n", num_pages,
+						new_inode_blocknr);
+
+	/* Coalesce the pages */
+	next_blocknr = new_inode_blocknr + 1;
+	curr_block = pmfs_get_block_off(sb, new_inode_blocknr,
+						PMFS_BLOCK_TYPE_4K);
+	curr_page = (struct pmfs_inode_log_page *)
+				pmfs_get_block(sb, curr_block);
+	for (i = 0; i < num_pages - 1; i++) {
+		curr_page->page_tail.next_page =
+			pmfs_get_block_off(sb, next_blocknr, PMFS_BLOCK_TYPE_4K);
+		curr_page++;
+		next_blocknr++;
+	}
+
+	*new_block = pmfs_get_block_off(sb, new_inode_blocknr,
+						PMFS_BLOCK_TYPE_4K);
+
+	return 0;
+}
+
 /*
  * Append a pmfs_inode_entry to the current pmfs_inode_log_page.
  * FIXME: Must hold inode->i_mutex. Convert it to lock-free.
@@ -1876,42 +1917,47 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, unsigned long blocknr, unsigned long start_blk,
 	unsigned long num_blocks)
 {
+	struct pmfs_inode_entry *entry;
 	loff_t offset;
 	u64 block;
 	u64 curr_p;
-	struct pmfs_inode_entry *entry;
+	unsigned long num_pages;
 	int errval;
 
 	offset = start_blk << sb->s_blocksize_bits;
 	block = pmfs_get_block_off(sb, blocknr, pi->i_blk_type);
 
 	curr_p = pi->log_tail;
-	if (curr_p == 0 || (curr_p & (PAGE_SIZE - 1)) == LAST_ENTRY) {
-		/* Allocate a new inode log page */
-		unsigned long new_inode_blocknr;
+	if (curr_p == 0 || ((curr_p & (PAGE_SIZE - 1)) == LAST_ENTRY && 
+			((struct pmfs_inode_page_tail *)pmfs_get_block(sb, curr_p))->next_page == 0)) {
+		/* Allocate new inode log page */
 		u64 new_block;
-		/* Log block resides in NVMM */
-		errval = pmfs_new_data_blocks(sb, &new_inode_blocknr, 1,
-						PMFS_BLOCK_TYPE_4K, 1);
-		if (errval) {
-			pmfs_err(sb, "ERROR: no inode log page available\n");
-				return 0;
-		}
-		pmfs_dbg_verbose("Alloc %u log blocks %lu\n", 1,
-						new_inode_blocknr);
-		new_block = pmfs_get_block_off(sb, new_inode_blocknr,
-						PMFS_BLOCK_TYPE_4K);
 
 		if (curr_p == 0) {
+			errval = pmfs_allocate_inode_log_pages(sb, pi,
+						1, &new_block);
+			if (errval) {
+				pmfs_err(sb, "ERROR: no inode log page available\n");
+				return 0;
+			}
 			pi->log_head = new_block;
 			pi->log_pages = 1;
+			curr_p = new_block;
 		} else {
-			((struct pmfs_inode_page_tail *)
-				pmfs_get_block(sb, curr_p))->next_page =
-						new_block;
-			pi->log_pages *= 2;
+			num_pages = pi->log_pages;
+			errval = pmfs_allocate_inode_log_pages(sb, pi,
+						num_pages, &new_block);
+			if (errval) {
+				pmfs_err(sb, "ERROR: no inode log page available\n");
+				return 0;
+			}
+//			pmfs_inode_log_garbage_collection(sb, pi, new_block,
+//						num_pages); 
+
+			/* Atomic switch to new log */
+//			pmfs_switch_to_new_log(sb, pi, new_block, num_pages);
+			curr_p = pi->log_tail;
 		}
-		curr_p = new_block;
 	}
 
 	entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, curr_p);
