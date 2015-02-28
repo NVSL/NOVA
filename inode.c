@@ -1993,43 +1993,67 @@ static void free_curr_page(struct super_block *sb, struct pmfs_inode *pi,
 int pmfs_inode_log_garbage_collection(struct super_block *sb,
 	struct pmfs_inode *pi, u64 new_block, unsigned long num_pages)
 {
-	u64 curr_head, next_head;
-	int new_head = 0;
+	u64 curr, next, possible_head = 0;
+	int found_head = 0;
 	struct pmfs_inode_log_page *last_page = NULL;
 	struct pmfs_inode_log_page *curr_page = NULL;
+	int first_need_free = 0;
+	unsigned short btype = pi->i_blk_type;
 
-	curr_head = pi->log_head;
+	curr = pi->log_head;
 
 	while (1) {
-		if (curr_head <= pi->log_tail &&
-				pi->log_tail - curr_head <= PAGE_SIZE)
+		if (curr << PAGE_SHIFT == pi->log_tail << PAGE_SHIFT) {
+			/* Don't recycle tail page */
+			if (found_head == 0)
+				possible_head = cpu_to_le64(curr);
 			break;
+		}
 
 		curr_page = (struct pmfs_inode_log_page *)
-					pmfs_get_block(sb, curr_head);
-		next_head = curr_page->page_tail.next_page;
+					pmfs_get_block(sb, curr);
+		next = curr_page->page_tail.next_page;
 		if (curr_page_invalid(sb, pi, curr_page)) {
-			free_curr_page(sb, pi, curr_page, last_page,
-					curr_head);
+			if (curr == pi->log_head) {
+				/* Free first page later */
+				first_need_free = 1;
+				last_page = curr_page;
+			} else {
+				pmfs_dbg_verbose("Free log block %llu\n",
+						curr >> PAGE_SHIFT);
+				free_curr_page(sb, pi, curr_page, last_page,
+						curr);
+			}
 		} else {
-			if (new_head == 0) {
-				pi->log_head = cpu_to_le64(curr_page);
-				pmfs_flush_buffer(&pi->log_head,
-							CACHELINE_SIZE, 1);
-				new_head = 1;
+			if (found_head == 0) {
+				possible_head = cpu_to_le64(curr);
+				found_head = 1;
 			}
 			last_page = curr_page;
 		}
 
-		curr_head = next_head;
-		if (curr_head == 0)
+		curr = next;
+		if (curr == 0)
 			break;
 	}
 
-	if (last_page)
-		last_page->page_tail.next_page = new_block;
+	curr = pi->log_tail;
+	((struct pmfs_inode_page_tail *)
+		pmfs_get_block(sb, curr))->next_page = new_block;
+
+	curr = pi->log_head;
+
+	pi->log_head = possible_head;
 	pi->log_tail = new_block;
+	pi->log_pages += num_pages;
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+
+	if (first_need_free) {
+		pmfs_dbg_verbose("Free log head block %llu\n",
+					curr >> PAGE_SHIFT);
+		pmfs_free_data_block(sb, pmfs_get_blocknr(sb, curr, btype),
+					btype);
+	}
 	return 0;
 }
 
@@ -2068,6 +2092,7 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 			}
 			pi->log_head = new_block;
 			pi->log_pages = 1;
+			pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 		} else {
 			num_pages = pi->log_pages >= 256 ? 256 : pi->log_pages;
 			pmfs_dbg_verbose("Before append log pages:\n");
@@ -2077,22 +2102,18 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 			pmfs_dbg_verbose("Link block %llu to block %llu\n",
 						curr_p >> PAGE_SHIFT,
 						new_block >> PAGE_SHIFT);
-			((struct pmfs_inode_page_tail *)
-				pmfs_get_block(sb, curr_p))->next_page
-				= new_block;
 			if (errval) {
 				pmfs_err(sb, "ERROR: no inode log page "
 						"available\n");
 				return 0;
 			}
-//			pmfs_inode_log_garbage_collection(sb, pi, new_block,
-//						num_pages);
+			pmfs_inode_log_garbage_collection(sb, pi, new_block,
+						num_pages);
 
 			pmfs_dbg_verbose("After append log pages:\n");
 //			pmfs_print_inode_log_page(sb, inode);
 			/* Atomic switch to new log */
 //			pmfs_switch_to_new_log(sb, pi, new_block, num_pages);
-			pi->log_pages += num_pages;
 		}
 		curr_p = new_block;
 	}
