@@ -123,6 +123,7 @@ void pmfs_print_inode_log_page(struct super_block *sb, struct inode *inode)
 	struct pmfs_inode *pi;
 	struct pmfs_inode_log_page *curr_page;
 	u64 curr, next;
+	int count = 1;
 
 	pi = pmfs_get_inode(sb, inode->i_ino);
 	if (pi->log_tail == 0)
@@ -139,7 +140,9 @@ void pmfs_print_inode_log_page(struct super_block *sb, struct inode *inode)
 		curr = next;
 		curr_page = (struct pmfs_inode_log_page *)
 			pmfs_get_block(sb, curr);
+		count++;
 	}
+	pmfs_dbg("Pi %lu: log has %d pages\n", inode->i_ino, count);
 }
 
 void pmfs_print_inode_log_blocknode(struct super_block *sb,
