@@ -338,7 +338,7 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 			size = 0x1 << 21;
 		else
 			size = 0x1 << 30;
-		memset_nt(bp, 0, size);
+		memset_nt(bp, 0, size * num);
 		pmfs_memlock_block(sb, bp);
 	}
 	*blocknr = new_block_low;
