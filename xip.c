@@ -467,7 +467,7 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 		}
 	}
 
-	if (end_blk > file_end_blk)
+	if (pos + count >= inode->i_size)
 		return;
 
 	kmem = (void *)((char *)kmem +
@@ -538,6 +538,9 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	}
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	pmfs_update_time(inode, pi);
+
+	pmfs_dbg_verbose("%s: block %lu, offset %lu, count %lu\n", __func__,
+				start_blk, offset, count);
 
 	/* don't zero-out the allocated blocks */
 	retval = pmfs_new_data_blocks(sb, &blocknr, num_blocks,

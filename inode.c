@@ -2125,6 +2125,8 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	entry->pgoff = start_blk;
 	entry->num_pages = num_blocks;
 	entry->block = block;
+	pmfs_dbg_verbose("entry @ %llu: pgoff %lu, num %lu, block %llu\n",
+			curr_p, start_blk, num_blocks, block >> PAGE_SHIFT);
 	/* entry->invalid is set to 0 */
 
 	pmfs_flush_buffer(entry, sizeof(struct pmfs_inode_entry), 1);
