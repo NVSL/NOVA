@@ -118,6 +118,30 @@ out:
 	mutex_unlock(&inode->i_mutex);
 }
 
+void pmfs_print_inode_log_page(struct super_block *sb, struct inode *inode)
+{
+	struct pmfs_inode *pi;
+	struct pmfs_inode_log_page *curr_page;
+	u64 curr, next;
+
+	pi = pmfs_get_inode(sb, inode->i_ino);
+	if (pi->log_tail == 0)
+		return;
+
+	curr = pi->log_head;
+	pmfs_dbg("Pi %lu: log head block @ %llu, tail @ block %llu, %llu\n",
+			inode->i_ino, curr >> PAGE_SHIFT,
+			pi->log_tail >> PAGE_SHIFT, pi->log_tail);
+	curr_page = (struct pmfs_inode_log_page *)pmfs_get_block(sb, curr);
+	while ((next = curr_page->page_tail.next_page) != 0) {
+		pmfs_dbg("Current page %llu, next page %llu\n",
+			curr >> PAGE_SHIFT, next >> PAGE_SHIFT);
+		curr = next;
+		curr_page = (struct pmfs_inode_log_page *)
+			pmfs_get_block(sb, curr);
+	}
+}
+
 void pmfs_print_inode_log_blocknode(struct super_block *sb,
 		struct inode *inode)
 {
