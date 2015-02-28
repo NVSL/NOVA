@@ -157,11 +157,11 @@ setversion_out:
 		return 0;
 	}
 	case PMFS_PRINT_LOG: {
-		pmfs_print_inode_log(filp);
+		pmfs_print_inode_log(sb, inode);
 		return 0;
 	}
 	case PMFS_PRINT_LOG_BLOCKNODE: {
-		pmfs_print_inode_log_blocknode(filp);
+		pmfs_print_inode_log_blocknode(sb, inode);
 		return 0;
 	}
 	default:

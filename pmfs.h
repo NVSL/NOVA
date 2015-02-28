@@ -769,7 +769,7 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 /* pmfs_stats.c */
 void pmfs_print_timing_stats(struct file *filp);
 void pmfs_clear_stats(struct file *filp);
-void pmfs_print_inode_log(struct file *filp);
-void pmfs_print_inode_log_blocknode(struct file *filp);
+void pmfs_print_inode_log(struct super_block *sb, struct inode *inode);
+void pmfs_print_inode_log_blocknode(struct super_block *sb, struct inode *inode);
 
 #endif /* __PMFS_H */
