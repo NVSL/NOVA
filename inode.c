@@ -2062,28 +2062,43 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 			errval = pmfs_allocate_inode_log_pages(sb, pi,
 						1, &new_block);
 			if (errval) {
-				pmfs_err(sb, "ERROR: no inode log page available\n");
+				pmfs_err(sb, "ERROR: no inode log page "
+						"available\n");
 				return 0;
 			}
 			pi->log_head = new_block;
 			pi->log_pages = 1;
-			curr_p = new_block;
 		} else {
-			num_pages = pi->log_pages;
+			num_pages = pi->log_pages >= 256 ? 256 : pi->log_pages;
+			pmfs_dbg_verbose("Before append log pages:\n");
+//			pmfs_print_inode_log_page(sb, inode);
 			errval = pmfs_allocate_inode_log_pages(sb, pi,
 						num_pages, &new_block);
+			pmfs_dbg_verbose("Link block %llu to block %llu\n",
+						curr_p >> PAGE_SHIFT,
+						new_block >> PAGE_SHIFT);
+			((struct pmfs_inode_page_tail *)
+				pmfs_get_block(sb, curr_p))->next_page
+				= new_block;
 			if (errval) {
-				pmfs_err(sb, "ERROR: no inode log page available\n");
+				pmfs_err(sb, "ERROR: no inode log page "
+						"available\n");
 				return 0;
 			}
-			pmfs_inode_log_garbage_collection(sb, pi, new_block,
-						num_pages); 
+//			pmfs_inode_log_garbage_collection(sb, pi, new_block,
+//						num_pages);
 
+			pmfs_dbg_verbose("After append log pages:\n");
+//			pmfs_print_inode_log_page(sb, inode);
 			/* Atomic switch to new log */
 //			pmfs_switch_to_new_log(sb, pi, new_block, num_pages);
-			curr_p = pi->log_tail;
+			pi->log_pages += num_pages;
 		}
+		curr_p = new_block;
 	}
+
+	if (is_last_entry(curr_p))
+		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, curr_p);
 	entry->pgoff = start_blk;
