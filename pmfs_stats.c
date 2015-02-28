@@ -20,11 +20,8 @@ u64 Countstats[TIMING_NUM];
 unsigned long alloc_steps;
 unsigned long free_steps;
 
-void pmfs_print_blocknode_list(struct file *filp)
+void pmfs_print_blocknode_list(struct super_block *sb)
 {
-	struct address_space *mapping = filp->f_mapping;
-	struct inode    *inode = mapping->host;
-	struct super_block *sb = inode->i_sb;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct list_head *head = &(sbi->block_inuse_head);
 	struct pmfs_blocknode *i;
@@ -48,7 +45,7 @@ void pmfs_print_blocknode_list(struct file *filp)
 		Countstats[10] ? free_steps / Countstats[10] : 0);
 }
 
-void pmfs_print_timing_stats(struct file *filp)
+void pmfs_print_timing_stats(struct super_block *sb)
 {
 	int i;
 
@@ -68,10 +65,10 @@ void pmfs_print_timing_stats(struct file *filp)
 		}
 	}
 
-	pmfs_print_blocknode_list(filp);
+	pmfs_print_blocknode_list(sb);
 }
 
-void pmfs_clear_stats(struct file *filp)
+void pmfs_clear_stats(void)
 {
 	int i;
 

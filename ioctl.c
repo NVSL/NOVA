@@ -141,11 +141,11 @@ setversion_out:
 		return 0;
 	}
 	case PMFS_PRINT_TIMING: {
-		pmfs_print_timing_stats(filp);
+		pmfs_print_timing_stats(sb);
 		return 0;
 	}
 	case PMFS_CLEAR_STATS: {
-		pmfs_clear_stats(filp);
+		pmfs_clear_stats();
 		return 0;
 	}
 	case PMFS_COW_WRITE: {
