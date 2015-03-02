@@ -14,6 +14,7 @@ const char *Timingstring[TIMING_NUM] =
 	"cow_write",
 	"assign_blocks",
 	"free_data_blocks",
+	"malloc_test",
 };
 
 unsigned long long Timingstats[TIMING_NUM];

@@ -31,6 +31,57 @@ struct write_request
 	size_t	len;
 };
 
+#define	ZERO	1
+#define	NORMAL	2
+#define	VMALLOC	3
+
+struct malloc_request
+{
+	int	category;
+	int	size;
+};
+
+void pmfs_malloc_test(struct super_block *sb, int category, int size)
+{
+	timing_t malloc_time;
+	int i;
+	unsigned long *addr = kmalloc(1000 * sizeof(unsigned long),
+					GFP_KERNEL); 
+
+	PMFS_START_TIMING(malloc_test_t, malloc_time);
+	for (i = 0; i < 1000; i++) {
+		switch(category) {
+		case 1:
+			addr[i] = get_zeroed_page(GFP_KERNEL);
+			break;
+		case 2:
+			addr[i] = __get_free_page(GFP_KERNEL);
+			break;
+		case 3:
+			addr[i] = (unsigned long)vmalloc(4096);
+			break;
+		default:
+			break;
+		}
+	}
+	PMFS_END_TIMING(malloc_test_t, malloc_time);
+
+	for (i = 0; i < 1000; i++) {
+		switch(category) {
+		case 1:
+		case 2:
+			free_page(addr[i]);
+			break;
+		case 3:
+			vfree((void *)addr[i]);
+			break;
+		default:
+			break;
+		}
+	}
+	kfree(addr);
+}
+
 long pmfs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	struct address_space *mapping = filp->f_mapping;
@@ -166,6 +217,13 @@ setversion_out:
 	}
 	case PMFS_PRINT_LOG_BLOCKNODE: {
 		pmfs_print_inode_log_blocknode(sb, inode);
+		return 0;
+	}
+	case PMFS_MALLOC_TEST: {
+		struct malloc_request request;
+		copy_from_user(&request, (void *)arg,
+					sizeof(struct malloc_request));
+		pmfs_malloc_test(sb, request.category, request.size);
 		return 0;
 	}
 	default:

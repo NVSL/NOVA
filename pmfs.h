@@ -109,6 +109,7 @@ extern unsigned int pmfs_dbgmask;
 #define	PMFS_PRINT_LOG			0xBCD00013
 #define	PMFS_PRINT_LOG_BLOCKNODE	0xBCD00014
 #define	PMFS_PRINT_LOG_PAGE		0xBCD00015
+#define	PMFS_MALLOC_TEST		0xBCD00016
 
 
 extern unsigned int blk_type_to_shift[PMFS_BLOCK_TYPE_MAX];
@@ -128,6 +129,7 @@ enum timing_category {
 	cow_write_t,
 	assign_t,
 	free_data_t,
+	malloc_test_t,
 	TIMING_NUM,
 };
 
