@@ -99,7 +99,9 @@ void *pmfs_ioremap(struct super_block *sb, phys_addr_t phys_addr, ssize_t size)
 {
 	void __iomem *retval;
 	int protect, hugeioremap;
+	timing_t remap_time;
 
+	PMFS_START_TIMING(ioremap_t, remap_time);
 	if (sb) {
 		protect = pmfs_is_wprotected(sb);
 		hugeioremap = pmfs_has_huge_ioremap(sb);
@@ -137,6 +139,7 @@ void *pmfs_ioremap(struct super_block *sb, phys_addr_t phys_addr, ssize_t size)
 	retval = ioremap_cache(phys_addr, size);
 
 fail:
+	PMFS_END_TIMING(ioremap_t, remap_time);
 	return (void __force *)retval;
 }
 
