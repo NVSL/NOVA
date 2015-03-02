@@ -40,11 +40,13 @@ void pmfs_print_blocknode_list(struct super_block *sb)
 	mutex_unlock(&sbi->s_lock);
 	printk("All: %lu nodes\n", count);
 	printk("alloc %llu, alloc steps %lu, average %llu\n",
-		Countstats[7], alloc_steps,
-		Countstats[7] ? alloc_steps / Countstats[7] : 0);
+		Countstats[new_data_blocks_t], alloc_steps,
+		Countstats[new_data_blocks_t] ?
+			alloc_steps / Countstats[new_data_blocks_t] : 0);
 	printk("free %llu, free steps %lu, average %llu\n",
-		Countstats[10],free_steps,
-		Countstats[10] ? free_steps / Countstats[10] : 0);
+		Countstats[free_data_t],free_steps,
+		Countstats[free_data_t] ?
+			free_steps / Countstats[free_data_t] : 0);
 }
 
 void pmfs_print_timing_stats(struct super_block *sb)
