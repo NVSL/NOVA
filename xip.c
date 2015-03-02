@@ -506,6 +506,9 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	int retval;
 	void* kmem;
 	u64 curr_entry;
+	size_t bytes;
+	int i;
+	long status = 0;
 	timing_t cow_write_time;
 
 	PMFS_START_TIMING(cow_write_t, cow_write_time);
@@ -529,8 +532,6 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	offset = pos & (sb->s_blocksize - 1);
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
 	/* offset in the actual block size block */
-	offset = pos & (pmfs_inode_blk_size(pi) - 1);
-	start_blk = pos >> sb->s_blocksize_bits;
 
 	ret = file_remove_suid(filp);
 	if (ret) {
@@ -539,57 +540,80 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	pmfs_update_time(inode, pi);
 
-	pmfs_dbg_verbose("%s: block %lu, offset %lu, count %lu\n", __func__,
-				start_blk, offset, count);
+	pmfs_dbg_verbose("%s: block %llu, offset %lu, count %lu\n", __func__,
+				pos >> sb->s_blocksize_bits, offset, count);
 
-	/* don't zero-out the allocated blocks */
-	retval = pmfs_new_data_blocks(sb, &blocknr, num_blocks,
-					pi->i_blk_type, 0);
-	pmfs_dbg_verbose("%s: alloc %lu blocks @ %lu\n", __func__, num_blocks,
+	for (i = 0; i < num_blocks; i++) {
+		offset = pos & (pmfs_inode_blk_size(pi) - 1);
+		start_blk = pos >> sb->s_blocksize_bits;
+		bytes = sb->s_blocksize - offset;
+		if (bytes > count)
+			bytes = count;
+
+		/* don't zero-out the allocated blocks */
+		retval = pmfs_new_data_blocks(sb, &blocknr, 1,
+						pi->i_blk_type, 0);
+		pmfs_dbg_verbose("%s: alloc %d blocks @ %lu\n", __func__, 1,
 								blocknr);
 
-	if (!retval) {
-		pmfs_memunlock_inode(sb, pi);
-		data_bits = blk_type_to_shift[pi->i_blk_type];
-		le64_add_cpu(&pi->i_blocks,
-			(num_blocks << (data_bits - sb->s_blocksize_bits)));
-		pmfs_memlock_inode(sb, pi);
-	} else {
-		pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__,
+		if (retval) {
+			pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__,
 								retval);
-		ret = retval;
-		goto out;
-	}
+			ret = retval;
+			goto out;
+		}
 
-	kmem = pmfs_get_block(inode->i_sb, pmfs_get_block_off(sb, blocknr,
-							pi->i_blk_type));
+		kmem = pmfs_get_block(inode->i_sb,
+			pmfs_get_block_off(sb, blocknr,	pi->i_blk_type));
 
-	pmfs_handle_head_tail_blocks(sb, pi, inode, pos, count, kmem);
+		if (offset || bytes != sb->s_blocksize)
+			pmfs_handle_head_tail_blocks(sb, pi, inode, pos, bytes,
+								kmem);
 
-	/* Now copy from user buf */
-	pmfs_dbg_verbose("Write: %p\n", kmem);
-	copied = count -
-		__copy_from_user_inatomic_nocache(kmem + offset, buf, count);
+		/* Now copy from user buf */
+//		pmfs_dbg("Write: %p\n", kmem);
+		copied = bytes -
+			__copy_from_user_inatomic_nocache(kmem + offset,
+								buf, bytes);
 
-	curr_entry = pmfs_append_inode_entry(sb, pi, inode, blocknr, start_blk,
-						num_blocks);
-	if (curr_entry == 0) {
-		pmfs_err(sb, "ERROR: append inode entry failed\n");
-		ret = -EINVAL;
-		goto out;
-	}
+		curr_entry = pmfs_append_inode_entry(sb, pi, inode,
+						blocknr, start_blk, 1);
+		if (curr_entry == 0) {
+			pmfs_err(sb, "ERROR: append inode entry failed\n");
+			ret = -EINVAL;
+			goto out;
+		}
 
-	pmfs_assign_blocks(NULL, inode, start_blk, num_blocks,
+		pmfs_assign_blocks(NULL, inode, start_blk, 1,
 						curr_entry, false);
 
-	written = copied;
-	if (written < 0 || written != count)
-		pmfs_dbg_verbose("write incomplete/failed: written %ld len %ld"
-			" pos %llx start_blk %lx num_blocks %lx\n",
-			written, count, pos, start_blk, num_blocks);
+		if (written < 0 || written != count)
+			pmfs_dbg_verbose("write incomplete/failed: written %ld len %ld"
+				" pos %llx start_blk %lx num_blocks %lx\n",
+				written, count, pos, start_blk, num_blocks);
 
-	pos += written;
+		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
+		if (copied > 0) {
+			written += copied;
+			pos += copied;
+			buf += copied;
+			count -= copied;
+		}
+		if (unlikely(copied != bytes))
+			if (status >= 0)
+				status = -EFAULT;
+		if (status < 0)
+			break;
+		//FIXME: Possible contention here
+		pi->log_tail = curr_entry + sizeof(struct pmfs_inode_entry);
+	}
+
 	*ppos = pos;
+	pmfs_memunlock_inode(sb, pi);
+	data_bits = blk_type_to_shift[pi->i_blk_type];
+	le64_add_cpu(&pi->i_blocks,
+			(num_blocks << (data_bits - sb->s_blocksize_bits)));
+	pmfs_memlock_inode(sb, pi);
 
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	if (pos > inode->i_size) {
@@ -601,7 +625,7 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 //	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
 
 	//FIXME: Possible contention here
-	pi->log_tail = curr_entry + sizeof(struct pmfs_inode_entry);
+//	pi->log_tail = curr_entry + sizeof(struct pmfs_inode_entry);
 out:
 	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
