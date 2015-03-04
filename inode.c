@@ -81,6 +81,39 @@ u64 pmfs_find_data_block(struct inode *inode, unsigned long file_blocknr)
 	return bp + (blk_offset << sb->s_blocksize_bits);
 }
 
+/*
+ * find the offset to the block represented by the given inode's file
+ * relative block number.
+ * This is for dir entries.
+ */
+u64 pmfs_find_inode(struct inode *inode, unsigned long file_blocknr)
+{
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	u32 blk_shift;
+	unsigned long blk_offset, blocknr = file_blocknr;
+	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
+	unsigned int meta_bits = META_BLK_SHIFT;
+	u64 bp;
+
+	/* convert the 4K blocks into the actual blocks the inode is using */
+	blk_shift = data_bits - sb->s_blocksize_bits;
+	blk_offset = file_blocknr & ((1 << blk_shift) - 1);
+	blocknr = file_blocknr >> blk_shift;
+
+	if (blocknr >= (1UL << (pi->height * meta_bits)))
+		return 0;
+
+	bp = __pmfs_find_inode(sb, pi, blocknr);
+	pmfs_dbg1("find_inode %lx, %x %llx blk_p %p blk_shift %x"
+		" blk_offset %lx\n", file_blocknr, pi->height, bp,
+		pmfs_get_block(sb, bp), blk_shift, blk_offset);
+
+	if (bp == 0)
+		return 0;
+	return bp + (blk_offset << sb->s_blocksize_bits);
+}
+
 /* recursive_find_region: recursively search the btree to find hole or data
  * in the specified range
  * Input:

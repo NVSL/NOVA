@@ -242,6 +242,8 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 	u64 curr_entry, bool zero);
 extern u64 pmfs_find_data_block(struct inode *inode,
 	unsigned long file_blocknr);
+extern u64 pmfs_find_inode(struct inode *inode,
+	unsigned long file_blocknr);
 int pmfs_set_blocksize_hint(struct super_block *sb, struct pmfs_inode *pi,
 		loff_t new_size);
 void pmfs_setsize(struct inode *inode, loff_t newsize);
