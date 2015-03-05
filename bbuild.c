@@ -71,7 +71,7 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 		if (index == 0) {
 			/* Find and get new data block */
 			blocknr = i >> 8; /* 256 Entries in a block */
-			bp = __pmfs_find_data_block(sb, pi, blocknr);
+			bp = __pmfs_find_inode(sb, pi, blocknr);
 			p = pmfs_get_block(sb, bp);
 		}
 		PMFS_ASSERT(p);
@@ -116,11 +116,7 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 	/* Clearing the datablock inode */
 	pmfs_clear_datablock_inode(sb);
 
-	if (pi->log_head)
-		pmfs_free_file_inode_subtree(sb, root, height, btype,
-						last_blocknr);
-	else
-		pmfs_free_dir_inode_subtree(sb, root, height, btype,
+	pmfs_free_dir_inode_subtree(sb, root, height, btype,
 						last_blocknr);
 
 	return true;
@@ -186,7 +182,7 @@ void pmfs_save_blocknode_mappings(struct super_block *sb)
 		blocknr = k >> 8;
 		if (j == 0) {
 			/* Find, get and unlock new data block */
-			bp = __pmfs_find_data_block(sb, pi, blocknr);
+			bp = __pmfs_find_inode(sb, pi, blocknr);
 			p = pmfs_get_block(sb, bp); 
 			pmfs_memunlock_block(sb, p);
 		}

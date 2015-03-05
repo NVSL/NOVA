@@ -948,7 +948,7 @@ static void pmfs_put_super(struct super_block *sb)
 
 	/* It's unmount time, so unmap the pmfs memory */
 	if (sbi->virt_addr) {
-//		pmfs_save_blocknode_mappings(sb);
+		pmfs_save_blocknode_mappings(sb);
 		pmfs_journal_uninit(sb);
 		pmfs_iounmap(sbi->virt_addr, size, pmfs_is_wprotected(sb));
 		sbi->virt_addr = NULL;
