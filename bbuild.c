@@ -116,7 +116,12 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 	/* Clearing the datablock inode */
 	pmfs_clear_datablock_inode(sb);
 
-	pmfs_free_inode_subtree(sb, root, height, btype, last_blocknr);
+	if (pi->log_head)
+		pmfs_free_file_inode_subtree(sb, root, height, btype,
+						last_blocknr);
+	else
+		pmfs_free_dir_inode_subtree(sb, root, height, btype,
+						last_blocknr);
 
 	return true;
 }

@@ -137,6 +137,7 @@ void __pmfs_free_block(struct super_block *sb, unsigned long blocknr,
 		pmfs_error_mng(sb, "Unable to free log block %ld\n", blocknr);
 	else
 		pmfs_error_mng(sb, "Unable to free data block %ld\n", blocknr);
+	dump_stack();
 
 block_found:
 

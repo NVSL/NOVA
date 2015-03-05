@@ -369,7 +369,122 @@ static int recursive_truncate_blocks(struct super_block *sb, __le64 block,
 	return freed;
 }
 
-unsigned int pmfs_free_inode_subtree(struct super_block *sb,
+/* recursive_truncate_dir_blocks: recursively deallocate a range of blocks from
+ * first_blocknr to last_blocknr in the inode's btree.
+ * Input:
+ * block: points to the root of the b-tree where the blocks need to be allocated
+ * height: height of the btree
+ * first_blocknr: first block in the specified range
+ * last_blocknr: last_blocknr in the specified range
+ * end: last byte offset of the range
+ * For dir entries.
+ */
+static int recursive_truncate_dir_blocks(struct super_block *sb, __le64 block,
+	u32 height, u32 btype, unsigned long first_blocknr,
+	unsigned long last_blocknr, bool *meta_empty)
+{
+	unsigned long blocknr, first_blk, last_blk;
+	unsigned int node_bits, first_index, last_index, i;
+	__le64 *node;
+	unsigned int freed = 0, bzero;
+	int start, end;
+	bool mpty, all_range_freed = true;
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+
+	node = pmfs_get_block(sb, le64_to_cpu(block));
+
+	node_bits = (height - 1) * META_BLK_SHIFT;
+
+	start = first_index = first_blocknr >> node_bits;
+	end = last_index = last_blocknr >> node_bits;
+
+	if (height == 1) {
+		struct pmfs_blocknode *start_hint = NULL;
+		mutex_lock(&sbi->s_lock);
+		for (i = first_index; i <= last_index; i++) {
+			if (unlikely(!node[i]))
+				continue;
+			/* Freeing the data block */
+			blocknr = pmfs_get_blocknr(sb, le64_to_cpu(node[i]),
+				    btype);
+			__pmfs_free_block(sb, blocknr, btype, &start_hint, 0);
+			freed++;
+		}
+		mutex_unlock(&sbi->s_lock);
+	} else {
+		for (i = first_index; i <= last_index; i++) {
+			if (unlikely(!node[i]))
+				continue;
+			first_blk = (i == first_index) ? (first_blocknr &
+				((1 << node_bits) - 1)) : 0;
+
+			last_blk = (i == last_index) ? (last_blocknr &
+				((1 << node_bits) - 1)) : (1 << node_bits) - 1;
+
+			freed += recursive_truncate_dir_blocks(sb, node[i],
+				height - 1, btype, first_blk, last_blk, &mpty);
+			/* cond_resched(); */
+			if (mpty) {
+				/* Freeing the meta-data block */
+				/* Dir files are using NVMM meta blocks */
+				blocknr = pmfs_get_blocknr(sb, le64_to_cpu(
+					    node[i]), PMFS_BLOCK_TYPE_4K);
+				pmfs_free_data_block(sb, blocknr,PMFS_BLOCK_TYPE_4K);
+			} else {
+				if (i == first_index)
+				    start++;
+				else if (i == last_index)
+				    end--;
+				all_range_freed = false;
+			}
+		}
+	}
+	if (all_range_freed &&
+		is_empty_meta_block(node, first_index, last_index)) {
+		*meta_empty = true;
+	} else {
+		/* Zero-out the freed range if the meta-block in not empty */
+		if (start <= end) {
+			bzero = (end - start + 1) * sizeof(u64);
+			pmfs_memunlock_block(sb, node);
+			memset(&node[start], 0, bzero);
+			pmfs_memlock_block(sb, node);
+			pmfs_flush_buffer(&node[start], bzero, false);
+		}
+		*meta_empty = false;
+	}
+	return freed;
+}
+
+unsigned int pmfs_free_dir_inode_subtree(struct super_block *sb,
+		__le64 root, u32 height, u32 btype, unsigned long last_blocknr)
+{
+	unsigned long first_blocknr;
+	unsigned int freed;
+	bool mpty;
+
+	if (!root)
+		return 0;
+
+	if (height == 0) {
+		first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
+			btype);
+		pmfs_free_data_block(sb, first_blocknr, btype);
+		freed = 1;
+	} else {
+		first_blocknr = 0;
+
+		freed = recursive_truncate_dir_blocks(sb, root, height, btype,
+			first_blocknr, last_blocknr, &mpty);
+		BUG_ON(!mpty);
+		first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
+			PMFS_BLOCK_TYPE_4K);
+		pmfs_free_data_block(sb, first_blocknr, PMFS_BLOCK_TYPE_4K);
+	}
+	return freed;
+}
+
+unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
 		__le64 root, u32 height, u32 btype, unsigned long last_blocknr)
 {
 	unsigned long first_blocknr;
@@ -1302,7 +1417,20 @@ void pmfs_evict_inode(struct inode *inode)
 		pi = NULL; /* we no longer own the pmfs_inode */
 
 		/* then free the blocks from the inode's b-tree */
-		pmfs_free_inode_subtree(sb, root, height, btype, last_blocknr);
+		switch (inode->i_mode & S_IFMT) {
+		case S_IFREG:
+			pmfs_free_file_inode_subtree(sb, root, height, btype,
+							last_blocknr);
+			break;
+		case S_IFDIR:
+		case S_IFLNK:
+			pmfs_free_dir_inode_subtree(sb, root, height, btype,
+							last_blocknr);
+			break;
+		default:
+			pmfs_dbg("%s: unknown\n", __func__);
+			break;
+		}
 		inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
 		inode->i_size = 0;
 	}

@@ -201,6 +201,9 @@ extern struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb);
 extern void pmfs_free_blocknode(struct super_block *sb, struct pmfs_blocknode *bnode);
 extern void pmfs_init_blockmap(struct super_block *sb,
 		unsigned long init_used_size);
+void __pmfs_free_block(struct super_block *sb, unsigned long blocknr,
+		unsigned short btype, struct pmfs_blocknode **start_hint,
+		int log_block);
 extern void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,
 	unsigned short btype);
 extern void pmfs_free_meta_block(struct super_block *sb, unsigned long blocknr);
@@ -226,7 +229,9 @@ extern int pmfs_remove_entry(pmfs_transaction_t *trans,
 extern struct dentry *pmfs_get_parent(struct dentry *child);
 
 /* inode.c */
-extern unsigned int pmfs_free_inode_subtree(struct super_block *sb,
+extern unsigned int pmfs_free_dir_inode_subtree(struct super_block *sb,
+		__le64 root, u32 height, u32 btype, unsigned long last_blocknr);
+extern unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
 		__le64 root, u32 height, u32 btype, unsigned long last_blocknr);
 extern int __pmfs_alloc_blocks(pmfs_transaction_t *trans,
 		struct super_block *sb, struct pmfs_inode *pi,
