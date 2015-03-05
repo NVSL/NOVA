@@ -32,7 +32,8 @@
 #define LOGENTRY_SIZE  CACHELINE_SIZE
 #define LESIZE_SHIFT   CLINE_SHIFT
 
-#define MAX_INODE_LENTRIES (2)
+/* FIXME: Limit inode size to 96 bytes */
+#define MAX_INODE_LENTRIES (3)
 #define MAX_SB_LENTRIES (2)
 /* 1 le for dir entry and 1 le for potentially allocating a new dir block */
 #define MAX_DIRENTRY_LENTRIES   (2)

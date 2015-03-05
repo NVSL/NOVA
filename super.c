@@ -661,6 +661,7 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	BUILD_BUG_ON(sizeof(struct pmfs_super_block) > PMFS_SB_SIZE);
 	BUILD_BUG_ON(sizeof(struct pmfs_inode) > PMFS_INODE_SIZE);
 	BUILD_BUG_ON(sizeof(struct pmfs_inode_log_page) != PAGE_SIZE);
+	pmfs_info("Inode size %lu\n", sizeof(struct pmfs_inode));
 
 	sbi = kzalloc(sizeof(struct pmfs_sb_info), GFP_KERNEL);
 	if (!sbi)

@@ -1800,6 +1800,7 @@ int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 	BUG_ON(pmfs_current_transaction());
 	/* multiple fields are modified. Use a transaction for atomicity */
 	trans = pmfs_new_transaction(sb, MAX_INODE_LENTRIES);
+	pmfs_dbg_verbose("%s: trans id %u\n", __func__, trans->transaction_id);
 	if (IS_ERR(trans))
 		return PTR_ERR(trans);
 	pmfs_add_logentry(sb, trans, pi, sizeof(*pi), LE_DATA);
