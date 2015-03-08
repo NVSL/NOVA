@@ -505,6 +505,7 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 			if (mpty) {
 				/* Freeing the meta-data block */
 				page_addr = node[i];
+				freed++;
 				pmfs_free_meta_block(sb, page_addr);
 			} else {
 				if (i == first_index)
@@ -611,6 +612,7 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 	BUG_ON(!mpty);
 	first_blocknr = root;
 	pmfs_free_meta_block(sb, first_blocknr);
+	freed++;
 	pi->root = 0;
 
 	return freed;
@@ -2430,6 +2432,48 @@ static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 
 	pi->log_head = pi->log_tail = 0;
 	pi->log_pages = 0;
+}
+
+/* When fs is umount, free all dram pages */
+void pmfs_free_dram_pages(struct super_block *sb)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct pmfs_inode *pi;
+	unsigned long last_blocknr;
+	unsigned int freed;
+	int i;
+
+	mutex_lock(&sbi->inode_table_mutex);
+	for (i = PMFS_FREE_INODE_HINT_START; i <= sbi->s_max_inode; i++) {
+		pi = pmfs_get_inode(sb, i << PMFS_INODE_BITS);
+
+		if (pi->root == 0 || pi->height == 0)
+			continue;
+
+		if ((pi->i_mode & S_IFMT) != S_IFREG)
+			continue;
+
+		if (pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL)) {
+			last_blocknr = (1UL << (pi->height * META_BLK_SHIFT))
+			    - 1;
+		} else {
+			if (likely(pi->i_size))
+				last_blocknr = (pi->i_size - 1) >>
+					pmfs_inode_blk_shift(pi);
+			else
+				last_blocknr = 0;
+			last_blocknr = pmfs_sparse_last_blocknr(pi->height,
+				last_blocknr);
+		}
+		pmfs_dbg_verbose("%s: inode %u, height %u, root 0x%llx\n",
+				__func__, i, pi->height, pi->root);
+		freed = pmfs_free_file_meta_blocks(sb, pi, last_blocknr);
+		pmfs_dbg_verbose("%s after: inode %u, height %u, root 0x%llx, "
+				"freed %u\n", __func__, i, pi->height,
+				pi->root, freed);
+	}
+
+	mutex_unlock(&sbi->inode_table_mutex);
 }
 
 const struct address_space_operations pmfs_aops_xip = {
