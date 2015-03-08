@@ -486,6 +486,7 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 	end = last_index = last_blocknr >> node_bits;
 
 	if (height == 1) {
+		*meta_empty = true;
 		return freed;
 	} else {
 		for (i = first_index; i <= last_index; i++) {
