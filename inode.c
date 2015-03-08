@@ -456,6 +456,82 @@ static int recursive_truncate_dir_blocks(struct super_block *sb, __le64 block,
 	return freed;
 }
 
+/* recursive_truncate_meta_blocks: recursively deallocate meta blocks from
+ * first_blocknr to last_blocknr in the inode's btree.
+ * Input:
+ * block: points to the root of the b-tree where the blocks need to be allocated
+ * height: height of the btree
+ * first_blocknr: first block in the specified range
+ * last_blocknr: last_blocknr in the specified range
+ * end: last byte offset of the range
+ */
+static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
+	u32 height, u32 btype, unsigned long first_blocknr,
+	unsigned long last_blocknr, unsigned long start_pgoff,
+	bool *meta_empty)
+{
+	unsigned long first_blk, last_blk, page_addr;
+	unsigned int node_bits, first_index, last_index, i;
+	__le64 *node;
+	unsigned int freed = 0, bzero;
+	int start, end;
+	bool mpty, all_range_freed = true;
+	unsigned long pgoff;
+
+	node = (__le64 *)block;
+
+	node_bits = (height - 1) * META_BLK_SHIFT;
+
+	start = first_index = first_blocknr >> node_bits;
+	end = last_index = last_blocknr >> node_bits;
+
+	if (height == 1) {
+		return freed;
+	} else {
+		for (i = first_index; i <= last_index; i++) {
+			if (unlikely(!node[i]))
+				continue;
+			first_blk = (i == first_index) ? (first_blocknr &
+				((1 << node_bits) - 1)) : 0;
+
+			last_blk = (i == last_index) ? (last_blocknr &
+				((1 << node_bits) - 1)) : (1 << node_bits) - 1;
+
+			pgoff = start_pgoff + (i << node_bits);
+			freed += recursive_truncate_meta_blocks(sb, node[i],
+				height - 1, btype, first_blk, last_blk,
+				pgoff, &mpty);
+			/* cond_resched(); */
+			if (mpty) {
+				/* Freeing the meta-data block */
+				page_addr = node[i];
+				pmfs_free_meta_block(sb, page_addr);
+			} else {
+				if (i == first_index)
+				    start++;
+				else if (i == last_index)
+				    end--;
+				all_range_freed = false;
+			}
+		}
+	}
+	if (all_range_freed &&
+		is_empty_meta_block(node, first_index, last_index)) {
+		*meta_empty = true;
+	} else {
+		/* Zero-out the freed range if the meta-block in not empty */
+		if (start <= end) {
+			bzero = (end - start + 1) * sizeof(u64);
+			pmfs_memunlock_block(sb, node);
+			memset(&node[start], 0, bzero);
+			pmfs_memlock_block(sb, node);
+			pmfs_flush_buffer(&node[start], bzero, false);
+		}
+		*meta_empty = false;
+	}
+	return freed;
+}
+
 unsigned int pmfs_free_dir_inode_subtree(struct super_block *sb,
 		__le64 root, u32 height, u32 btype, unsigned long last_blocknr)
 {
@@ -512,6 +588,31 @@ unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
 		first_blocknr = root;
 		pmfs_free_meta_block(sb, first_blocknr);
 	}
+	return freed;
+}
+
+unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
+		struct pmfs_inode *pi, unsigned long last_blocknr)
+{
+	unsigned long first_blocknr;
+	unsigned int freed;
+	bool mpty;
+	__le64 root = pi->root;
+	u32 height = pi->height;
+	u32 btype = pi->i_blk_type;
+
+	if (!root || height == 0)
+		return 0;
+
+	first_blocknr = 0;
+
+	freed = recursive_truncate_meta_blocks(sb, root, height, btype,
+			first_blocknr, last_blocknr, 0, &mpty);
+	BUG_ON(!mpty);
+	first_blocknr = root;
+	pmfs_free_meta_block(sb, first_blocknr);
+	pi->root = 0;
+
 	return freed;
 }
 
