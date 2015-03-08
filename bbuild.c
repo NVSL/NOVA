@@ -224,6 +224,7 @@ void pmfs_save_blocknode_mappings(struct super_block *sb)
 	super->s_free_inodes_count = cpu_to_le32(sbi->s_free_inodes_count);
 	super->s_inodes_used_count = cpu_to_le32(sbi->s_inodes_used_count);
 	super->s_free_inode_hint = cpu_to_le32(sbi->s_free_inode_hint);
+	super->s_max_inode = cpu_to_le32(sbi->s_max_inode);
 
 	pmfs_memlock_range(sb, &super->s_wtime, PMFS_FAST_MOUNT_FIELD_SIZE);
 	/* commit the transaction */

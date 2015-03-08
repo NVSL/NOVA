@@ -400,6 +400,7 @@ struct pmfs_sb_info {
 	unsigned int	s_free_inodes_count;    /* free inodes count */
 	unsigned int	s_inodes_used_count;
 	unsigned int	s_free_inode_hint;
+	unsigned int	s_max_inode;
 
 	unsigned long num_blocknode_allocated;
 

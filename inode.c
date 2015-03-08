@@ -1292,6 +1292,9 @@ int pmfs_init_inode_table(struct super_block *sb)
 	sbi->s_free_inodes_count =
 		(sbi->s_inodes_count - PMFS_FREE_INODE_HINT_START);
 	sbi->s_free_inode_hint = (PMFS_FREE_INODE_HINT_START);
+	sbi->s_max_inode = PMFS_FREE_INODE_HINT_START;
+	pmfs_dbg_verbose("%s %u %u\n", __func__, sbi->s_inodes_count,
+				sbi->s_free_inodes_count);
 
 	return 0;
 }
@@ -1674,6 +1677,9 @@ retry:
 		sbi->s_free_inode_hint = (i + 1);
 	else
 		sbi->s_free_inode_hint = (PMFS_FREE_INODE_HINT_START);
+
+	if (i > sbi->s_max_inode)
+		sbi->s_max_inode = i;
 
 	mutex_unlock(&sbi->inode_table_mutex);
 
