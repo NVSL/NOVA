@@ -103,6 +103,7 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 	sbi->s_free_inodes_count = le32_to_cpu(super->s_free_inodes_count);
 	sbi->s_inodes_used_count = le32_to_cpu(super->s_inodes_used_count);
 	sbi->s_free_inode_hint = le32_to_cpu(super->s_free_inode_hint);
+	sbi->s_max_inode = le32_to_cpu(super->s_max_inode);
 
 	pmfs_init_blockmap_from_inode(sb);
 

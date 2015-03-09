@@ -742,6 +742,8 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, unsigned long blocknr, unsigned long start_blk,
 	unsigned long num_blocks);
 void pmfs_free_dram_pages(struct super_block *sb);
+int pmfs_rebuild_inode_tree(struct super_block *sb, struct inode *inode,
+	struct pmfs_inode *pi);
 
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);

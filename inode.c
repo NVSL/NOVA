@@ -2451,7 +2451,7 @@ void pmfs_free_dram_pages(struct super_block *sb)
 		if (pi->root == 0 || pi->height == 0)
 			continue;
 
-		if ((pi->i_mode & S_IFMT) != S_IFREG)
+		if (!(S_ISREG(pi->i_mode)))
 			continue;
 
 		if (pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL)) {
@@ -2475,6 +2475,39 @@ void pmfs_free_dram_pages(struct super_block *sb)
 	}
 
 	mutex_unlock(&sbi->inode_table_mutex);
+}
+
+int pmfs_rebuild_inode_tree(struct super_block *sb, struct inode *inode,
+			struct pmfs_inode *pi)
+{
+	struct pmfs_inode_entry *entry;
+	u64 curr_p = pi->log_head;
+
+	pmfs_dbg_verbose("Rebuild inode %lu tree\n", inode->i_ino);
+	/*
+	 * We will regenerate the tree during blocks assignment.
+	 * Set height to 0.
+	 */
+	pi->height = 0;
+	while (curr_p != pi->log_tail) {
+		if (curr_p == 0) {
+			pmfs_err(sb, "log is NULL!\n");
+			BUG();
+		}
+
+		entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, curr_p);
+
+		if (entry->num_pages != GET_INVALID(entry->block)) {
+			pmfs_assign_blocks(NULL, inode, entry->pgoff,
+					entry->num_pages, curr_p, false);
+		}
+
+		curr_p += sizeof(struct pmfs_inode_entry);
+		if (is_last_entry(curr_p))
+			curr_p = next_log_page(sb, curr_p);
+	}
+
+	return 0;
 }
 
 const struct address_space_operations pmfs_aops_xip = {

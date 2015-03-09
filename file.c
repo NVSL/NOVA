@@ -259,6 +259,21 @@ static int pmfs_flush(struct file *file, fl_owner_t id)
 	return ret;
 }
 
+/* Rebuild the tree when open the file */
+static int pmfs_open(struct inode *inode, struct file *filp)
+{
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi;
+
+	mutex_lock(&inode->i_mutex);
+	pi = pmfs_get_inode(sb, inode->i_ino);
+	if (pi->root == 0 && pi->height > 0 && S_ISREG(inode->i_mode))
+		pmfs_rebuild_inode_tree(sb, inode, pi);
+	mutex_unlock(&inode->i_mutex);
+
+	return generic_file_open(inode, filp);
+}
+
 static unsigned long
 pmfs_get_unmapped_area(struct file *file, unsigned long addr,
 			unsigned long len, unsigned long pgoff,
@@ -321,7 +336,7 @@ const struct file_operations pmfs_xip_file_operations = {
 	.read_iter		= generic_file_read_iter,
 	.write_iter		= generic_file_write_iter,
 	.mmap			= pmfs_xip_file_mmap,
-	.open			= generic_file_open,
+	.open			= pmfs_open,
 	.fsync			= pmfs_fsync,
 	.flush			= pmfs_flush,
 	.get_unmapped_area	= pmfs_get_unmapped_area,
