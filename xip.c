@@ -490,8 +490,8 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	}
 }
 
-ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
-	size_t len, loff_t *ppos)
+static ssize_t pmfs_cow_file_write_single_alloc(struct file *filp,
+	const char __user *buf,	size_t len, loff_t *ppos)
 {
 	struct address_space *mapping = filp->f_mapping;
 	struct inode    *inode = mapping->host;
@@ -631,6 +631,136 @@ out:
 	sb_end_write(inode->i_sb);
 	PMFS_END_TIMING(cow_write_t, cow_write_time);
 	return ret;
+}
+
+static ssize_t pmfs_cow_file_write_contiguous_alloc(struct file *filp,
+	const char __user *buf,	size_t len, loff_t *ppos)
+{
+	struct address_space *mapping = filp->f_mapping;
+	struct inode    *inode = mapping->host;
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi;
+	ssize_t     written = 0;
+	loff_t pos;
+	size_t count, offset, copied, ret;
+	unsigned long start_blk, num_blocks;
+	unsigned long blocknr = 0;
+	unsigned int data_bits;
+	int retval;
+	void* kmem;
+	u64 curr_entry;
+	timing_t cow_write_time;
+
+	PMFS_START_TIMING(cow_write_t, cow_write_time);
+
+	sb_start_write(inode->i_sb);
+	mutex_lock(&inode->i_mutex);
+
+	if (!access_ok(VERIFY_READ, buf, len)) {
+		ret = -EFAULT;
+		goto out;
+	}
+	pos = *ppos;
+	count = len;
+
+	ret = generic_write_checks(filp, &pos, &count, S_ISBLK(inode->i_mode));
+	if (ret || count == 0)
+		goto out;
+
+	pi = pmfs_get_inode(sb, inode->i_ino);
+
+	offset = pos & (sb->s_blocksize - 1);
+	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
+	/* offset in the actual block size block */
+	offset = pos & (pmfs_inode_blk_size(pi) - 1);
+	start_blk = pos >> sb->s_blocksize_bits;
+
+	ret = file_remove_suid(filp);
+	if (ret) {
+		goto out;
+	}
+	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
+	pmfs_update_time(inode, pi);
+
+	pmfs_dbg_verbose("%s: block %lu, offset %lu, count %lu\n", __func__,
+				start_blk, offset, count);
+
+	/* don't zero-out the allocated blocks */
+	retval = pmfs_new_data_blocks(sb, &blocknr, num_blocks,
+					pi->i_blk_type, 0);
+	pmfs_dbg_verbose("%s: alloc %lu blocks @ %lu\n", __func__, num_blocks,
+								blocknr);
+
+	if (!retval) {
+		pmfs_memunlock_inode(sb, pi);
+		data_bits = blk_type_to_shift[pi->i_blk_type];
+		le64_add_cpu(&pi->i_blocks,
+			(num_blocks << (data_bits - sb->s_blocksize_bits)));
+		pmfs_memlock_inode(sb, pi);
+	} else {
+		pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__,
+								retval);
+		ret = retval;
+		goto out;
+	}
+
+	kmem = pmfs_get_block(inode->i_sb, pmfs_get_block_off(sb, blocknr,
+							pi->i_blk_type));
+
+	pmfs_handle_head_tail_blocks(sb, pi, inode, pos, count, kmem);
+
+	/* Now copy from user buf */
+	pmfs_dbg_verbose("Write: %p\n", kmem);
+	copied = count -
+		__copy_from_user_inatomic_nocache(kmem + offset, buf, count);
+
+	curr_entry = pmfs_append_inode_entry(sb, pi, inode, blocknr, start_blk,
+						num_blocks);
+	if (curr_entry == 0) {
+		pmfs_err(sb, "ERROR: append inode entry failed\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
+	pmfs_assign_blocks(NULL, inode, start_blk, num_blocks,
+						curr_entry, false);
+
+	written = copied;
+	if (written < 0 || written != count)
+		pmfs_dbg_verbose("write incomplete/failed: written %ld len %ld"
+			" pos %llx start_blk %lx num_blocks %lx\n",
+			written, count, pos, start_blk, num_blocks);
+
+	pos += written;
+	*ppos = pos;
+
+	inode->i_blocks = le64_to_cpu(pi->i_blocks);
+	if (pos > inode->i_size) {
+		i_size_write(inode, pos);
+		pmfs_update_isize(inode, pi);
+	}
+
+	ret = written;
+//	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
+
+	//FIXME: Possible contention here
+	pi->log_tail = curr_entry + sizeof(struct pmfs_inode_entry);
+out:
+	mutex_unlock(&inode->i_mutex);
+	sb_end_write(inode->i_sb);
+	PMFS_END_TIMING(cow_write_t, cow_write_time);
+	return ret;
+}
+
+ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
+	size_t len, loff_t *ppos)
+{
+	if (contiguous_allocation)
+		return pmfs_cow_file_write_contiguous_alloc(filp, buf,
+			len, ppos);
+	else
+		return pmfs_cow_file_write_single_alloc(filp, buf,
+			len, ppos);
 }
 
 /* OOM err return with xip file fault handlers doesn't mean anything.

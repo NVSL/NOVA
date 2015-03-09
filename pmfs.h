@@ -138,6 +138,7 @@ extern unsigned long long Timingstats[TIMING_NUM];
 extern u64 Countstats[TIMING_NUM];
 
 extern int measure_timing;
+extern int contiguous_allocation;
 
 typedef struct timespec timing_t;
 
