@@ -262,7 +262,7 @@ static inline bool is_empty_meta_block(__le64 *node, unsigned int start_idx,
 	return true;
 }
 
-/* recursive_truncate_blocks: recursively deallocate a range of blocks from
+/* recursive_truncate_file_blocks: recursively deallocate a range of blocks from
  * first_blocknr to last_blocknr in the inode's btree.
  * Input:
  * block: points to the root of the b-tree where the blocks need to be allocated
@@ -271,7 +271,7 @@ static inline bool is_empty_meta_block(__le64 *node, unsigned int start_idx,
  * last_blocknr: last_blocknr in the specified range
  * end: last byte offset of the range
  */
-static int recursive_truncate_blocks(struct super_block *sb, __le64 block,
+static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 	u32 height, u32 btype, unsigned long first_blocknr,
 	unsigned long last_blocknr, unsigned long start_pgoff,
 	bool *meta_empty)
@@ -335,7 +335,7 @@ static int recursive_truncate_blocks(struct super_block *sb, __le64 block,
 				((1 << node_bits) - 1)) : (1 << node_bits) - 1;
 
 			pgoff = start_pgoff + (i << node_bits);
-			freed += recursive_truncate_blocks(sb, node[i],
+			freed += recursive_truncate_file_blocks(sb, node[i],
 				height - 1, btype, first_blk, last_blk,
 				pgoff, &mpty);
 			/* cond_resched(); */
@@ -584,7 +584,7 @@ unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
 	} else {
 		first_blocknr = 0;
 
-		freed = recursive_truncate_blocks(sb, root, height, btype,
+		freed = recursive_truncate_file_blocks(sb, root, height, btype,
 			first_blocknr, last_blocknr, 0, &mpty);
 		BUG_ON(!mpty);
 		first_blocknr = root;
@@ -619,7 +619,7 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 	return freed;
 }
 
-static void pmfs_decrease_btree_height(struct super_block *sb,
+static void pmfs_decrease_file_btree_height(struct super_block *sb,
 	struct pmfs_inode *pi, unsigned long newsize, __le64 newroot)
 {
 	unsigned int height = pi->height, new_height = 0;
@@ -648,6 +648,51 @@ static void pmfs_decrease_btree_height(struct super_block *sb,
 		page_addr = newroot;
 		newroot = root[0];
 		pmfs_free_meta_block(sb, page_addr);
+		height--;
+	}
+update_root_and_height:
+	/* pi->height and pi->root need to be atomically updated. use
+	 * cmpxchg16 here. The following is dependent on a specific layout of
+	 * inode fields */
+	*(u64 *)b = *(u64 *)pi;
+	/* pi->height is at offset 2 from pi */
+	b[2] = (u8)new_height;
+	/* TODO: the following function assumes cmpxchg16b instruction writes
+	 * 16 bytes atomically. Confirm if it is really true. */
+	cmpxchg_double_local((u64 *)pi, &pi->root, *(u64 *)pi, pi->root,
+		*(u64 *)b, newroot);
+}
+
+static void pmfs_decrease_dir_btree_height(struct super_block *sb,
+	struct pmfs_inode *pi, unsigned long newsize, __le64 newroot)
+{
+	unsigned int height = pi->height, new_height = 0;
+	unsigned long blocknr, last_blocknr;
+	__le64 *root;
+	char b[8];
+
+	if (pi->i_blocks == 0 || newsize == 0) {
+		/* root must be NULL */
+		BUG_ON(newroot != 0);
+		goto update_root_and_height;
+	}
+
+	last_blocknr = ((newsize + pmfs_inode_blk_size(pi) - 1) >>
+		pmfs_inode_blk_shift(pi)) - 1;
+	while (last_blocknr > 0) {
+		last_blocknr = last_blocknr >> META_BLK_SHIFT;
+		new_height++;
+	}
+	if (height == new_height)
+		return;
+	pmfs_dbg_verbose("reducing tree height %x->%x\n", height, new_height);
+	while (height > new_height) {
+		/* freeing the meta block */
+		root = pmfs_get_block(sb, le64_to_cpu(newroot));
+		blocknr = pmfs_get_blocknr(sb, le64_to_cpu(newroot),
+			PMFS_BLOCK_TYPE_4K);
+		newroot = root[0];
+		pmfs_free_data_block(sb, blocknr, PMFS_BLOCK_TYPE_4K);
 		height--;
 	}
 update_root_and_height:
@@ -707,7 +752,7 @@ static inline unsigned long pmfs_sparse_last_blocknr(unsigned int height,
 /*
  * Free data blocks from inode in the range start <=> end
  */
-static void __pmfs_truncate_blocks(struct inode *inode, loff_t start,
+static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 				    loff_t end)
 {
 	struct super_block *sb = inode->i_sb;
@@ -755,7 +800,7 @@ static void __pmfs_truncate_blocks(struct inode *inode, loff_t start,
 		root = 0;
 		freed = 1;
 	} else {
-		freed = recursive_truncate_blocks(sb, root, pi->height,
+		freed = recursive_truncate_file_blocks(sb, root, pi->height,
 			pi->i_blk_type, first_blocknr, last_blocknr, 0, &mpty);
 		if (mpty) {
 			first_blocknr = root;
@@ -776,7 +821,89 @@ static void __pmfs_truncate_blocks(struct inode *inode, loff_t start,
 	pi->i_blocks = cpu_to_le64(inode->i_blocks);
 	pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
 	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-	pmfs_decrease_btree_height(sb, pi, start, root);
+	pmfs_decrease_file_btree_height(sb, pi, start, root);
+	/* Check for the flag EOFBLOCKS is still valid after the set size */
+	check_eof_blocks(sb, pi, inode->i_size);
+	pmfs_memlock_inode(sb, pi);
+	/* now flush the inode's first cacheline which was modified */
+	pmfs_flush_buffer(pi, 1, false);
+	return;
+end_truncate_blocks:
+	/* we still need to update ctime and mtime */
+	pmfs_memunlock_inode(sb, pi);
+	pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	pmfs_memlock_inode(sb, pi);
+	pmfs_flush_buffer(pi, 1, false);
+}
+
+static void __pmfs_truncate_dir_blocks(struct inode *inode, loff_t start,
+				    loff_t end)
+{
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	unsigned long first_blocknr, last_blocknr;
+	__le64 root;
+	unsigned int freed = 0;
+	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
+	unsigned int meta_bits = META_BLK_SHIFT;
+	bool mpty;
+
+	inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
+
+	if (!pi->root)
+		goto end_truncate_blocks;
+
+	pmfs_dbg_verbose("truncate: pi %p iblocks %llx %llx %llx %x %llx\n", pi,
+			 pi->i_blocks, start, end, pi->height, pi->i_size);
+
+	first_blocknr = (start + (1UL << data_bits) - 1) >> data_bits;
+
+	if (pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL)) {
+		last_blocknr = (1UL << (pi->height * meta_bits)) - 1;
+	} else {
+		if (end == 0)
+			goto end_truncate_blocks;
+		last_blocknr = (end - 1) >> data_bits;
+		last_blocknr = pmfs_sparse_last_blocknr(pi->height,
+			last_blocknr);
+	}
+
+	if (first_blocknr > last_blocknr)
+		goto end_truncate_blocks;
+	root = pi->root;
+
+	if (pi->height == 0) {
+		first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
+			pi->i_blk_type);
+		pmfs_free_data_block(sb, first_blocknr, pi->i_blk_type);
+		root = 0;
+		freed = 1;
+	} else {
+		freed = recursive_truncate_dir_blocks(sb, root, pi->height,
+			pi->i_blk_type, first_blocknr, last_blocknr, &mpty);
+		if (mpty) {
+			first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
+				PMFS_BLOCK_TYPE_4K);
+			pmfs_free_data_block(sb, first_blocknr,
+					PMFS_BLOCK_TYPE_4K);
+			root = 0;
+		}
+	}
+	/* if we are called during mount, a power/system failure had happened.
+	 * Don't trust inode->i_blocks; recalculate it by rescanning the inode
+	 */
+	if (pmfs_is_mounting(sb))
+		inode->i_blocks = pmfs_inode_count_iblocks(sb, pi, root);
+	else
+		inode->i_blocks -= (freed * (1 << (data_bits -
+				sb->s_blocksize_bits)));
+
+	pmfs_memunlock_inode(sb, pi);
+	pi->i_blocks = cpu_to_le64(inode->i_blocks);
+	pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	pmfs_decrease_dir_btree_height(sb, pi, start, root);
 	/* Check for the flag EOFBLOCKS is still valid after the set size */
 	check_eof_blocks(sb, pi, inode->i_size);
 	pmfs_memlock_inode(sb, pi);
@@ -823,6 +950,39 @@ static int pmfs_increase_btree_height(struct super_block *sb,
 	return errval;
 }
 
+static int pmfs_increase_dir_btree_height(struct super_block *sb,
+		struct pmfs_inode *pi, u32 new_height)
+{
+	u32 height = pi->height;
+	__le64 *root, prev_root = pi->root;
+	unsigned long blocknr;
+	int errval = 0;
+
+	pmfs_dbg_verbose("increasing tree height %x:%x\n", height, new_height);
+	while (height < new_height) {
+		/* allocate the meta block */
+		errval = pmfs_new_data_blocks(sb, &blocknr, 1,
+				PMFS_BLOCK_TYPE_4K, 1);
+		if (errval) {
+			pmfs_err(sb, "failed to increase btree height\n");
+			break;
+		}
+		blocknr = pmfs_get_block_off(sb, blocknr, PMFS_BLOCK_TYPE_4K);
+		root = pmfs_get_block(sb, blocknr);
+		pmfs_memunlock_block(sb, root);
+		root[0] = prev_root;
+		pmfs_memlock_block(sb, root);
+		pmfs_flush_buffer(root, sizeof(*root), false);
+		prev_root = cpu_to_le64(blocknr);
+		height++;
+	}
+	pmfs_memunlock_inode(sb, pi);
+	pi->root = prev_root;
+	pi->height = height;
+	pmfs_memlock_inode(sb, pi);
+	return errval;
+}
+
 /* recursive_alloc_blocks: recursively allocate a range of blocks from
  * first_blocknr to last_blocknr in the inode's btree.
  * Input:
@@ -842,9 +1002,9 @@ static int recursive_alloc_blocks(pmfs_transaction_t *trans,
 	__le64 *node;
 	unsigned long blocknr, first_blk, last_blk;
 	unsigned int first_index, last_index;
-//	unsigned int flush_bytes;
+	unsigned int flush_bytes;
 
-	node = (__le64 *)block;
+	node = pmfs_get_block(sb, le64_to_cpu(block));
 
 	node_bits = (height - 1) * meta_bits;
 
@@ -872,14 +1032,16 @@ static int recursive_alloc_blocks(pmfs_transaction_t *trans,
 		} else {
 			if (node[i] == 0) {
 				/* allocate the meta block */
-				errval = pmfs_new_meta_blocks(sb,
-							&blocknr, 1, 1);
+				/* Comply with PMFS design, allocate in NVMM */
+				errval = pmfs_new_data_blocks(sb, &blocknr, 1,
+					PMFS_BLOCK_TYPE_4K, 1);
 				if (errval) {
 					pmfs_dbg_verbose("alloc meta blk"
 						" failed\n");
 					goto fail;
 				}
-				node[i] = blocknr;
+				node[i] = cpu_to_le64(pmfs_get_block_off(sb,
+						blocknr, PMFS_BLOCK_TYPE_4K));
 				new_node = 1;
 			}
 
@@ -895,14 +1057,12 @@ static int recursive_alloc_blocks(pmfs_transaction_t *trans,
 				goto fail;
 		}
 	}
-#if 0
 	if (new_node || trans == NULL) {
 		/* if the changes were not logged, flush the cachelines we may
 	 	* have modified */
 		flush_bytes = (last_index - first_index + 1) * sizeof(node[0]);
 		pmfs_flush_buffer(&node[first_index], flush_bytes, false);
 	}
-#endif
 	errval = 0;
 fail:
 	return errval;
@@ -1059,7 +1219,8 @@ int __pmfs_alloc_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 			pi->height = height;
 			pmfs_memlock_inode(sb, pi);
 		} else {
-			errval = pmfs_increase_btree_height(sb, pi, height);
+			errval = pmfs_increase_dir_btree_height(sb, pi,
+								height);
 			if (errval) {
 				pmfs_dbg_verbose("[%s:%d] failed: inc btree"
 					" height\n", __func__, __LINE__);
@@ -1076,7 +1237,8 @@ int __pmfs_alloc_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 			return 0;
 
 		if (height > pi->height) {
-			errval = pmfs_increase_btree_height(sb, pi, height);
+			errval = pmfs_increase_dir_btree_height(sb, pi,
+								height);
 			if (errval) {
 				pmfs_dbg_verbose("Err: inc height %x:%x tot "
 					"%lx\n", pi->height, height,
@@ -1930,7 +2092,10 @@ void pmfs_setsize(struct inode *inode, loff_t newsize)
 	 * before truncating it. Also we need to munmap the truncated range
 	 * from application address space, if mmapped. */
 	/* synchronize_rcu(); */
-	__pmfs_truncate_blocks(inode, newsize, oldsize);
+	if (S_ISREG(inode->i_mode))
+		__pmfs_truncate_file_blocks(inode, newsize, oldsize);
+	else
+		__pmfs_truncate_dir_blocks(inode, newsize, oldsize);
 	/* No need to make the b-tree persistent here if we are called from
 	 * within a transaction, because the transaction will provide a
 	 * subsequent persistent barrier */

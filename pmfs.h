@@ -569,7 +569,7 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 	bp = le64_to_cpu(pi->root);
 
 	while (height > 0) {
-		level_ptr = (__le64 *)bp;
+		level_ptr = pmfs_get_block(sb, bp);
 		bit_shift = (height - 1) * META_BLK_SHIFT;
 		idx = blocknr >> bit_shift;
 		bp = le64_to_cpu(level_ptr[idx]);
