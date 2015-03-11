@@ -89,10 +89,9 @@ void pmfs_print_inode_log(struct super_block *sb, struct inode *inode)
 	size_t entry_size = sizeof(struct pmfs_inode_entry);
 	u64 curr;
 
-	mutex_lock(&inode->i_mutex);
 	pi = pmfs_get_inode(sb, inode->i_ino);
 	if (pi->log_tail == 0)
-		goto out;
+		return;
 
 	curr = pi->log_head;
 	pmfs_dbg("Pi %lu: log head block @ %llu, tail @ block %llu, %llu\n",
@@ -117,9 +116,6 @@ void pmfs_print_inode_log(struct super_block *sb, struct inode *inode)
 			curr += entry_size;
 		}
 	}
-
-out:
-	mutex_unlock(&inode->i_mutex);
 }
 
 void pmfs_print_inode_log_page(struct super_block *sb, struct inode *inode)
@@ -158,7 +154,6 @@ void pmfs_print_inode_log_blocknode(struct super_block *sb,
 	u64 curr;
 	unsigned long count = 0;
 
-	mutex_lock(&inode->i_mutex);
 	pi = pmfs_get_inode(sb, inode->i_ino);
 
 	if (pi->log_tail == 0)
@@ -178,6 +173,5 @@ void pmfs_print_inode_log_blocknode(struct super_block *sb,
 	} while ((curr >> PAGE_SHIFT) != (pi->log_tail >> PAGE_SHIFT));
 
 out:
-	mutex_unlock(&inode->i_mutex);
 	pmfs_dbg("All %lu pages\n", count);
 }
