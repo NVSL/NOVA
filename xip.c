@@ -503,11 +503,10 @@ static ssize_t pmfs_cow_file_write_single_alloc(struct file *filp,
 	unsigned long start_blk, num_blocks;
 	unsigned long blocknr = 0;
 	unsigned int data_bits;
-	int retval;
+	int allocated;
 	void* kmem;
 	u64 curr_entry;
 	size_t bytes;
-	int i;
 	long status = 0;
 	timing_t cow_write_time;
 
@@ -543,30 +542,31 @@ static ssize_t pmfs_cow_file_write_single_alloc(struct file *filp,
 	pmfs_dbg_verbose("%s: block %llu, offset %lu, count %lu\n", __func__,
 				pos >> sb->s_blocksize_bits, offset, count);
 
-	for (i = 0; i < num_blocks; i++) {
+	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
-		bytes = sb->s_blocksize - offset;
-		if (bytes > count)
-			bytes = count;
 
 		/* don't zero-out the allocated blocks */
-		retval = pmfs_new_data_blocks(sb, &blocknr, 1,
+		allocated = pmfs_new_data_blocks(sb, &blocknr, num_blocks,
 						pi->i_blk_type, 0);
 		pmfs_dbg_verbose("%s: alloc %d blocks @ %lu\n", __func__, 1,
 								blocknr);
 
-		if (retval != 1) {
+		if (allocated <= 0) {
 			pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__,
-								retval);
-			ret = retval;
+								allocated);
+			ret = allocated;
 			goto out;
 		}
+
+		bytes = sb->s_blocksize * allocated - offset;
+		if (bytes > count)
+			bytes = count;
 
 		kmem = pmfs_get_block(inode->i_sb,
 			pmfs_get_block_off(sb, blocknr,	pi->i_blk_type));
 
-		if (offset || bytes != sb->s_blocksize)
+		if (offset || ((offset + bytes) & (PAGE_SIZE - 1)) != 0)
 			pmfs_handle_head_tail_blocks(sb, pi, inode, pos, bytes,
 								kmem);
 
@@ -577,20 +577,15 @@ static ssize_t pmfs_cow_file_write_single_alloc(struct file *filp,
 								buf, bytes);
 
 		curr_entry = pmfs_append_inode_entry(sb, pi, inode,
-						blocknr, start_blk, 1);
+						blocknr, start_blk, allocated);
 		if (curr_entry == 0) {
 			pmfs_err(sb, "ERROR: append inode entry failed\n");
 			ret = -EINVAL;
 			goto out;
 		}
 
-		pmfs_assign_blocks(NULL, inode, start_blk, 1,
+		pmfs_assign_blocks(NULL, inode, start_blk, allocated,
 						curr_entry, false);
-
-		if (written < 0 || written != count)
-			pmfs_dbg_verbose("write incomplete/failed: written %ld len %ld"
-				" pos %llx start_blk %lx num_blocks %lx\n",
-				written, count, pos, start_blk, num_blocks);
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {
@@ -598,6 +593,7 @@ static ssize_t pmfs_cow_file_write_single_alloc(struct file *filp,
 			pos += copied;
 			buf += copied;
 			count -= copied;
+			num_blocks -= allocated;
 		}
 		if (unlikely(copied != bytes))
 			if (status >= 0)

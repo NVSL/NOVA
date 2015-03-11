@@ -226,7 +226,9 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	timing_t alloc_time;
 	unsigned long step = 0;
 
-	num_blocks = num * pmfs_get_numblocks(btype);
+	/* FIXME: disregard btype by now */
+//	num_blocks = num * pmfs_get_numblocks(btype);
+	num_blocks = num;
 	if (num_blocks == 0)
 		return -EINVAL;
 
@@ -248,8 +250,18 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 		new_block_high = new_block_low + num_blocks - 1;
 
 		if (new_block_high >= next_block_low) {
-			/* Does not fit - skip to next blocknode */
-			continue;
+			/* Allocate the hole */
+			if (next_i) {
+				i->block_high = next_i->block_high;
+				list_del(&next_i->link);
+				free_blocknode = next_i;
+				sbi->num_blocknode_allocated--;
+			} else {
+				i->block_high = new_block_high;
+			}
+			found = 1;
+			num_blocks = next_block_low - new_block_low;
+			break;
 		}
 
 		if ((new_block_low == (i->block_high + 1)) &&
@@ -340,7 +352,8 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 			size = 0x1 << 21;
 		else
 			size = 0x1 << 30;
-		memset_nt(bp, 0, size * num);
+//		memset_nt(bp, 0, size * num);
+		memset_nt(bp, 0, PAGE_SIZE * num_blocks);
 		pmfs_memlock_block(sb, bp);
 	}
 	*blocknr = new_block_low;
@@ -348,7 +361,7 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	pmfs_dbg_verbose("Alloc %u data blocks %lu\n", num, *blocknr);
 	PMFS_END_TIMING(new_data_blocks_t, alloc_time);
 	alloc_steps += step;
-	return num;
+	return num_blocks;
 }
 
 unsigned long pmfs_count_free_blocks(struct super_block *sb)
