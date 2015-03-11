@@ -510,6 +510,7 @@ static ssize_t pmfs_cow_file_write_single_alloc(struct file *filp,
 	size_t bytes;
 	long status = 0;
 	timing_t cow_write_time;
+	unsigned long step = 0;
 
 	PMFS_START_TIMING(cow_write_t, cow_write_time);
 
@@ -561,6 +562,7 @@ static ssize_t pmfs_cow_file_write_single_alloc(struct file *filp,
 			goto out;
 		}
 
+		step++;
 		bytes = sb->s_blocksize * allocated - offset;
 		if (bytes > count)
 			bytes = count;
@@ -620,6 +622,7 @@ static ssize_t pmfs_cow_file_write_single_alloc(struct file *filp,
 	}
 
 	ret = written;
+	write_breaks += step;
 //	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
 
 	//FIXME: Possible contention here
@@ -739,6 +742,7 @@ static ssize_t pmfs_cow_file_write_contiguous_alloc(struct file *filp,
 	}
 
 	ret = written;
+	write_breaks++;
 //	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
 
 	//FIXME: Possible contention here

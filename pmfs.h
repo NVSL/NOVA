@@ -158,6 +158,7 @@ typedef struct timespec timing_t;
 
 extern unsigned long alloc_steps;
 extern unsigned long free_steps;
+extern unsigned long write_breaks;
 
 /* ======================= Inode log ========================= */
 /* Inode entry in th log */

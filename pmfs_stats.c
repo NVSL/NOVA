@@ -21,6 +21,7 @@ unsigned long long Timingstats[TIMING_NUM];
 u64 Countstats[TIMING_NUM];
 unsigned long alloc_steps;
 unsigned long free_steps;
+unsigned long write_breaks;
 
 void pmfs_print_blocknode_list(struct super_block *sb)
 {
@@ -44,9 +45,13 @@ void pmfs_print_blocknode_list(struct super_block *sb)
 		Countstats[new_data_blocks_t] ?
 			alloc_steps / Countstats[new_data_blocks_t] : 0);
 	printk("free %llu, free steps %lu, average %llu\n",
-		Countstats[free_data_t],free_steps,
+		Countstats[free_data_t], free_steps,
 		Countstats[free_data_t] ?
 			free_steps / Countstats[free_data_t] : 0);
+	printk("write %llu, write breaks %lu, average %llu\n",
+		Countstats[cow_write_t], write_breaks,
+		Countstats[cow_write_t] ?
+			write_breaks / Countstats[cow_write_t] : 0);
 }
 
 void pmfs_print_timing_stats(struct super_block *sb)
