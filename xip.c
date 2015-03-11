@@ -501,6 +501,7 @@ static ssize_t pmfs_cow_file_write_single_alloc(struct file *filp,
 	loff_t pos;
 	size_t count, offset, copied, ret;
 	unsigned long start_blk, num_blocks;
+	unsigned long total_blocks;
 	unsigned long blocknr = 0;
 	unsigned int data_bits;
 	int allocated;
@@ -530,6 +531,7 @@ static ssize_t pmfs_cow_file_write_single_alloc(struct file *filp,
 
 	offset = pos & (sb->s_blocksize - 1);
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
+	total_blocks = num_blocks;
 	/* offset in the actual block size block */
 
 	ret = file_remove_suid(filp);
@@ -608,7 +610,7 @@ static ssize_t pmfs_cow_file_write_single_alloc(struct file *filp,
 	pmfs_memunlock_inode(sb, pi);
 	data_bits = blk_type_to_shift[pi->i_blk_type];
 	le64_add_cpu(&pi->i_blocks,
-			(num_blocks << (data_bits - sb->s_blocksize_bits)));
+			(total_blocks << (data_bits - sb->s_blocksize_bits)));
 	pmfs_memlock_inode(sb, pi);
 
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
