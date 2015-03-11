@@ -207,6 +207,7 @@ int pmfs_new_meta_blocks(struct super_block *sb, unsigned long *blocknr,
 	return 0;
 }
 
+/* Return how many blocks allocated */
 int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 		unsigned int num, unsigned short btype, int zero)
 {
@@ -347,7 +348,7 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	pmfs_dbg_verbose("Alloc %u data blocks %lu\n", num, *blocknr);
 	PMFS_END_TIMING(new_data_blocks_t, alloc_time);
 	alloc_steps += step;
-	return errval;
+	return num;
 }
 
 unsigned long pmfs_count_free_blocks(struct super_block *sb)

@@ -556,7 +556,7 @@ static ssize_t pmfs_cow_file_write_single_alloc(struct file *filp,
 		pmfs_dbg_verbose("%s: alloc %d blocks @ %lu\n", __func__, 1,
 								blocknr);
 
-		if (retval) {
+		if (retval != 1) {
 			pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__,
 								retval);
 			ret = retval;
@@ -691,7 +691,7 @@ static ssize_t pmfs_cow_file_write_contiguous_alloc(struct file *filp,
 	pmfs_dbg_verbose("%s: alloc %lu blocks @ %lu\n", __func__, num_blocks,
 								blocknr);
 
-	if (!retval) {
+	if (retval == num_blocks) {
 		pmfs_memunlock_inode(sb, pi);
 		data_bits = blk_type_to_shift[pi->i_blk_type];
 		le64_add_cpu(&pi->i_blocks,

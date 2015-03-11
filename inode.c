@@ -39,11 +39,12 @@ static int pmfs_new_data_block(struct super_block *sb, struct pmfs_inode *pi,
 
 	int errval = pmfs_new_data_blocks(sb, blocknr, 1, pi->i_blk_type, zero);
 
-	if (!errval) {
+	if (errval == 1) {
 		pmfs_memunlock_inode(sb, pi);
 		le64_add_cpu(&pi->i_blocks,
 			(1 << (data_bits - sb->s_blocksize_bits)));
 		pmfs_memlock_inode(sb, pi);
+		errval = 0;
 	}
 
 	return errval;
@@ -963,7 +964,7 @@ static int pmfs_increase_dir_btree_height(struct super_block *sb,
 		/* allocate the meta block */
 		errval = pmfs_new_data_blocks(sb, &blocknr, 1,
 				PMFS_BLOCK_TYPE_4K, 1);
-		if (errval) {
+		if (errval != 1) {
 			pmfs_err(sb, "failed to increase btree height\n");
 			break;
 		}
@@ -1035,7 +1036,7 @@ static int recursive_alloc_blocks(pmfs_transaction_t *trans,
 				/* Comply with PMFS design, allocate in NVMM */
 				errval = pmfs_new_data_blocks(sb, &blocknr, 1,
 					PMFS_BLOCK_TYPE_4K, 1);
-				if (errval) {
+				if (errval != 1) {
 					pmfs_dbg_verbose("alloc meta blk"
 						" failed\n");
 					goto fail;
@@ -2319,7 +2320,7 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 	errval = pmfs_new_data_blocks(sb, &new_inode_blocknr, num_pages,
 						PMFS_BLOCK_TYPE_4K, 1);
 
-	if (errval) {
+	if (errval != num_pages) {
 		pmfs_err(sb, "ERROR: no inode log page available\n");
 		return errval;
 	}
