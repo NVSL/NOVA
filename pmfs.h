@@ -242,10 +242,7 @@ extern int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
 		unsigned long file_blocknr, unsigned int num, bool zero);
 extern int pmfs_assign_blocks(pmfs_transaction_t *trans, struct inode *inode,
 		unsigned long file_blocknr, unsigned int num, u64 curr_entry,
-		bool zero);
-int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
-	struct pmfs_inode *pi, unsigned long file_blocknr, unsigned int num,
-	u64 curr_entry, bool zero);
+		bool zero, bool free);
 extern u64 pmfs_find_data_block(struct inode *inode,
 	unsigned long file_blocknr);
 extern u64 pmfs_find_inode(struct inode *inode,

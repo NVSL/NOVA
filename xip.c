@@ -587,7 +587,7 @@ static ssize_t pmfs_cow_file_write_single_alloc(struct file *filp,
 		}
 
 		pmfs_assign_blocks(NULL, inode, start_blk, allocated,
-						curr_entry, false);
+						curr_entry, false, true);
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {
@@ -721,7 +721,7 @@ static ssize_t pmfs_cow_file_write_contiguous_alloc(struct file *filp,
 	}
 
 	pmfs_assign_blocks(NULL, inode, start_blk, num_blocks,
-						curr_entry, false);
+						curr_entry, false, true);
 
 	written = copied;
 	if (written < 0 || written != count)
