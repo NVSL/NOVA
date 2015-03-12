@@ -1709,13 +1709,7 @@ void pmfs_evict_inode(struct inode *inode)
 				last_blocknr);
 		}
 
-		/* first free the inode */
-		err = pmfs_free_inode(inode);
-		if (err)
-			goto out;
-		pi = NULL; /* we no longer own the pmfs_inode */
-
-		/* then free the blocks from the inode's b-tree */
+		/* We need the log to free the blocks from the b-tree */
 		switch (inode->i_mode & S_IFMT) {
 		case S_IFREG:
 			pmfs_free_file_inode_subtree(sb, root, height, btype,
@@ -1730,6 +1724,13 @@ void pmfs_evict_inode(struct inode *inode)
 			pmfs_dbg("%s: unknown\n", __func__);
 			break;
 		}
+
+		/* Then we can free the inode */
+		err = pmfs_free_inode(inode);
+		if (err)
+			goto out;
+		pi = NULL; /* we no longer own the pmfs_inode */
+
 		inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
 		inode->i_size = 0;
 	}
