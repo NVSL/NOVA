@@ -83,6 +83,29 @@ u64 pmfs_find_data_block(struct inode *inode, unsigned long file_blocknr)
 }
 
 /*
+ * find the inode entry represented by the given inode's file
+ * relative block number.
+ */
+struct pmfs_inode_entry *pmfs_get_entry(struct super_block *sb,
+		struct pmfs_inode *pi, unsigned long file_blocknr)
+{
+	u32 blk_shift;
+	unsigned long blk_offset, blocknr = file_blocknr;
+	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
+	unsigned int meta_bits = META_BLK_SHIFT;
+
+	/* convert the 4K blocks into the actual blocks the inode is using */
+	blk_shift = data_bits - sb->s_blocksize_bits;
+	blk_offset = file_blocknr & ((1 << blk_shift) - 1);
+	blocknr = file_blocknr >> blk_shift;
+
+	if (blocknr >= (1UL << (pi->height * meta_bits)))
+		return NULL;
+
+	return __pmfs_get_entry(sb, pi, blocknr);
+}
+
+/*
  * find the offset to the block represented by the given inode's file
  * relative block number.
  * This is for dir entries.

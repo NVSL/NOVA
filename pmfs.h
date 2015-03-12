@@ -619,6 +619,45 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 			((req_block - entry->pgoff) << PAGE_SHIFT));
 }
 
+static inline struct pmfs_inode_entry *__pmfs_get_entry(struct super_block *sb,
+		struct pmfs_inode *pi, unsigned long blocknr)
+{
+	__le64 *level_ptr;
+	u64 bp = 0;
+	u32 height, bit_shift;
+	unsigned int idx;
+	unsigned long req_block = blocknr;
+	struct pmfs_inode_entry *entry;
+
+	height = pi->height;
+	bp = le64_to_cpu(pi->root);
+	if (bp == 0)
+		return NULL;
+
+	while (height > 0) {
+		level_ptr = (__le64 *)bp;
+		bit_shift = (height - 1) * META_BLK_SHIFT;
+		idx = blocknr >> bit_shift;
+		bp = le64_to_cpu(level_ptr[idx]);
+		if (bp == 0)
+			return 0;
+		blocknr = blocknr & ((1 << bit_shift) - 1);
+		height--;
+	}
+	entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, bp);
+	pmfs_dbg_verbose("%s: %lu, entry pgoff %u, num %u, blocknr %llu\n",
+		__func__, req_block, entry->pgoff, entry->num_pages,
+		entry->block >> PAGE_SHIFT);
+	if (req_block < entry->pgoff ||
+			 req_block - entry->pgoff >= entry->num_pages) {
+		pmfs_err(sb, "%s ERROR: %lu, entry pgoff %u, num %u, blocknr "
+			"%llu\n", __func__, req_block, entry->pgoff,
+			entry->num_pages, entry->block >> PAGE_SHIFT);
+		return NULL;
+	}
+	return entry;
+}
+
 static inline unsigned int pmfs_inode_blk_shift (struct pmfs_inode *pi)
 {
 	return blk_type_to_shift[pi->i_blk_type];
@@ -743,6 +782,8 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 void pmfs_free_dram_pages(struct super_block *sb);
 int pmfs_rebuild_inode_tree(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode *pi);
+struct pmfs_inode_entry *pmfs_get_entry(struct super_block *sb,
+		struct pmfs_inode *pi, unsigned long file_blocknr);
 
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);

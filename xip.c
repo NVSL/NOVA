@@ -28,6 +28,9 @@ do_xip_mapping_read(struct address_space *mapping,
 		    loff_t *ppos)
 {
 	struct inode *inode = mapping->host;
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode_entry *entry;
 	pgoff_t index, end_index;
 	unsigned long offset;
 	loff_t isize, pos;
@@ -46,11 +49,10 @@ do_xip_mapping_read(struct address_space *mapping,
 	do {
 		unsigned long nr, left;
 		void *xip_mem;
-		unsigned long xip_pfn;
+//		unsigned long xip_pfn;
 		int zero = 0;
 
 		/* nr is the maximum number of bytes to copy from this page */
-		nr = PAGE_CACHE_SIZE;
 		if (index >= end_index) {
 			if (index > end_index)
 				goto out;
@@ -59,10 +61,28 @@ do_xip_mapping_read(struct address_space *mapping,
 				goto out;
 			}
 		}
+
+		entry = pmfs_get_entry(sb, pi, index);
+		if (unlikely(entry == NULL)) {
+			nr = PAGE_SIZE;
+			zero = 1;
+			goto memcpy;
+		}
+
+		if (GET_INVALID(entry->block) == 0) {
+			nr = (entry->num_pages - (index - entry->pgoff))
+				* PAGE_SIZE;
+		} else {
+			nr = PAGE_SIZE;
+		}
 		nr = nr - offset;
 		if (nr > len - copied)
 			nr = len - copied;
 
+		xip_mem = pmfs_get_block(sb, BLOCK_OFF(entry->block +
+			((index - entry->pgoff) << PAGE_SHIFT)));
+
+#if 0
 		error = pmfs_get_xip_mem(mapping, index, 0,
 					&xip_mem, &xip_pfn);
 		if (unlikely(error)) {
@@ -72,7 +92,7 @@ do_xip_mapping_read(struct address_space *mapping,
 			} else
 				goto out;
 		}
-
+#endif
 		/* If users can be writing to this page using arbitrary
 		 * virtual addresses, take care about potential aliasing
 		 * before reading the page on the kernel side.
@@ -90,9 +110,11 @@ do_xip_mapping_read(struct address_space *mapping,
 		 * "pos" here (the actor routine has to update the user buffer
 		 * pointers and the remaining count).
 		 */
+memcpy:
 		PMFS_START_TIMING(memcpy_r_t, memcpy_time);
 		if (!zero)
-			left = __copy_to_user(buf+copied, xip_mem+offset, nr);
+			left = __copy_to_user(buf + copied,
+						xip_mem + offset, nr);
 		else
 			left = __clear_user(buf + copied, nr);
 		PMFS_END_TIMING(memcpy_r_t, memcpy_time);
