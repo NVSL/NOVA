@@ -4,6 +4,7 @@ const char *Timingstring[TIMING_NUM] =
 {
 	"ioremap",
 	"xip_read",
+	"cow_write",
 	"xip_write",
 	"xip_write_fast",
 	"memcpy_read",
@@ -11,7 +12,6 @@ const char *Timingstring[TIMING_NUM] =
 	"logging",
 	"new_meta_blocks",
 	"new_data_blocks",
-	"cow_write",
 	"assign_blocks",
 	"free_data_blocks",
 	"malloc_test",

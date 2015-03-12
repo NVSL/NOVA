@@ -32,6 +32,7 @@ do_xip_mapping_read(struct address_space *mapping,
 	unsigned long offset;
 	loff_t isize, pos;
 	size_t copied = 0, error = 0;
+	timing_t memcpy_time;
 
 	pos = *ppos;
 	index = pos >> PAGE_CACHE_SHIFT;
@@ -89,10 +90,12 @@ do_xip_mapping_read(struct address_space *mapping,
 		 * "pos" here (the actor routine has to update the user buffer
 		 * pointers and the remaining count).
 		 */
+		PMFS_START_TIMING(memcpy_r_t, memcpy_time);
 		if (!zero)
 			left = __copy_to_user(buf+copied, xip_mem+offset, nr);
 		else
 			left = __clear_user(buf + copied, nr);
+		PMFS_END_TIMING(memcpy_r_t, memcpy_time);
 
 		if (left) {
 			error = -EFAULT;
@@ -509,7 +512,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	u64 curr_entry;
 	size_t bytes;
 	long status = 0;
-	timing_t cow_write_time;
+	timing_t cow_write_time, memcpy_time;
 	unsigned long step = 0;
 
 	PMFS_START_TIMING(cow_write_t, cow_write_time);
@@ -576,9 +579,11 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 
 		/* Now copy from user buf */
 //		pmfs_dbg("Write: %p\n", kmem);
+		PMFS_START_TIMING(memcpy_w_t, memcpy_time);
 		copied = bytes -
 			__copy_from_user_inatomic_nocache(kmem + offset,
 								buf, bytes);
+		PMFS_END_TIMING(memcpy_w_t, memcpy_time);
 
 		curr_entry = pmfs_append_inode_entry(sb, pi, inode,
 						blocknr, start_blk, allocated);

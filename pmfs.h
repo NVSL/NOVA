@@ -119,6 +119,7 @@ extern unsigned int blk_type_to_size[PMFS_BLOCK_TYPE_MAX];
 enum timing_category {
 	ioremap_t,
 	xip_read_t,
+	cow_write_t,
 	xip_write_t,
 	xip_write_fast_t,
 	memcpy_r_t,
@@ -126,7 +127,6 @@ enum timing_category {
 	logging_t,
 	new_meta_blocks_t,
 	new_data_blocks_t,
-	cow_write_t,
 	assign_t,
 	free_data_t,
 	malloc_test_t,
