@@ -490,7 +490,7 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	}
 }
 
-static ssize_t pmfs_cow_file_write_single_alloc(struct file *filp,
+ssize_t pmfs_cow_file_write(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos)
 {
 	struct address_space *mapping = filp->f_mapping;
@@ -634,6 +634,7 @@ out:
 	return ret;
 }
 
+#if 0
 static ssize_t pmfs_cow_file_write_contiguous_alloc(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos)
 {
@@ -764,6 +765,7 @@ ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
 		return pmfs_cow_file_write_single_alloc(filp, buf,
 			len, ppos);
 }
+#endif
 
 /* OOM err return with xip file fault handlers doesn't mean anything.
  * It would just cause the OS to go an unnecessary killing spree !
