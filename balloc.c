@@ -208,7 +208,6 @@ int pmfs_new_meta_blocks(struct super_block *sb, unsigned long *blocknr,
 }
 
 /* Return how many blocks allocated */
-/* FIXME: For superpage we may return less than required */
 int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 		unsigned int num, unsigned short btype, int zero)
 {
@@ -249,7 +248,11 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 		new_block_high = new_block_low + num_blocks - 1;
 
 		if (new_block_high >= next_block_low) {
-			/* Allocate the hole */
+			/* Superpage allocation must succeed */
+			if (btype > 0)
+				continue;
+
+			/* Otherwise, allocate the hole */
 			if (next_i) {
 				i->block_high = next_i->block_high;
 				list_del(&next_i->link);
