@@ -208,6 +208,7 @@ int pmfs_new_meta_blocks(struct super_block *sb, unsigned long *blocknr,
 }
 
 /* Return how many blocks allocated */
+/* FIXME: For superpage we may return less than required */
 int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 		unsigned int num, unsigned short btype, int zero)
 {
@@ -226,9 +227,7 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	timing_t alloc_time;
 	unsigned long step = 0;
 
-	/* FIXME: disregard btype by now */
-//	num_blocks = num * pmfs_get_numblocks(btype);
-	num_blocks = num;
+	num_blocks = num * pmfs_get_numblocks(btype);
 	if (num_blocks == 0)
 		return -EINVAL;
 
@@ -361,7 +360,7 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	pmfs_dbg_verbose("Alloc %u data blocks %lu\n", num, *blocknr);
 	PMFS_END_TIMING(new_data_blocks_t, alloc_time);
 	alloc_steps += step;
-	return num_blocks;
+	return num_blocks / pmfs_get_numblocks(btype);
 }
 
 unsigned long pmfs_count_free_blocks(struct super_block *sb)
