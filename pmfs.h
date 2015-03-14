@@ -125,6 +125,7 @@ enum timing_category {
 	memcpy_r_t,
 	memcpy_w_t,
 	logging_t,
+	append_entry_t,
 	new_meta_blocks_t,
 	new_data_blocks_t,
 	assign_t,

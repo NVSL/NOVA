@@ -10,6 +10,7 @@ const char *Timingstring[TIMING_NUM] =
 	"memcpy_read",
 	"memcpy_write",
 	"logging",
+	"append_inode_entry",
 	"new_meta_blocks",
 	"new_data_blocks",
 	"assign_blocks",

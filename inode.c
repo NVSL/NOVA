@@ -2547,7 +2547,9 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	u64 curr_p;
 	unsigned long num_pages;
 	int allocated;
+	timing_t append_time;
 
+	PMFS_START_TIMING(append_entry_t, append_time);
 	offset = start_blk << sb->s_blocksize_bits;
 	block = pmfs_get_block_off(sb, blocknr, pi->i_blk_type);
 
@@ -2563,7 +2565,8 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 			if (allocated != 1) {
 				pmfs_err(sb, "ERROR: no inode log page "
 						"available\n");
-				return 0;
+				curr_p = 0;
+				goto out;
 			}
 			pi->log_head = new_block;
 			pi->log_pages = 1;
@@ -2580,7 +2583,8 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 			if (allocated <= 0) {
 				pmfs_err(sb, "ERROR: no inode log page "
 						"available\n");
-				return 0;
+				curr_p = 0;
+				goto out;
 			}
 			pmfs_inode_log_garbage_collection(sb, pi, new_block,
 						allocated);
@@ -2605,7 +2609,8 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	/* entry->invalid is set to 0 */
 
 	pmfs_flush_buffer(entry, sizeof(struct pmfs_inode_entry), 1);
-
+out:
+	PMFS_END_TIMING(append_entry_t, append_time);
 	return curr_p;
 }
 
