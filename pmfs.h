@@ -129,6 +129,8 @@ enum timing_category {
 	new_data_blocks_t,
 	assign_t,
 	free_data_t,
+	free_meta_t,
+	evict_inode_t,
 	malloc_test_t,
 	TIMING_NUM,
 };

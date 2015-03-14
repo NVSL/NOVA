@@ -1682,8 +1682,10 @@ void pmfs_evict_inode(struct inode *inode)
 	__le64 root;
 	unsigned long last_blocknr;
 	unsigned int height, btype;
+	timing_t evict_time;
 	int err = 0;
 
+	PMFS_START_TIMING(evict_inode_t, evict_time);
 	pmfs_dbg_verbose("%s: %lu\n", __func__, inode->i_ino);
 	if (!inode->i_nlink && !is_bad_inode(inode)) {
 		if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
@@ -1742,6 +1744,7 @@ out:
 	truncate_inode_pages(&inode->i_data, 0);
 
 	clear_inode(inode);
+	PMFS_END_TIMING(evict_inode_t, evict_time);
 }
 
 static int pmfs_increase_inode_table_size(struct super_block *sb)

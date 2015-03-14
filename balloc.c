@@ -164,8 +164,12 @@ inline void __pmfs_free_log_block(struct super_block *sb,
 
 void pmfs_free_meta_block(struct super_block *sb, unsigned long page_addr)
 {
+	timing_t free_time;
+
+	PMFS_START_TIMING(free_meta_t, free_time);
 	pmfs_dbg_verbose("Free meta block %lu\n", page_addr);
 	free_page(page_addr);
+	PMFS_END_TIMING(free_meta_t, free_time);
 }
 
 void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,

@@ -14,6 +14,8 @@ const char *Timingstring[TIMING_NUM] =
 	"new_data_blocks",
 	"assign_blocks",
 	"free_data_blocks",
+	"free_meta_blocks",
+	"evict_inode",
 	"malloc_test",
 };
 
