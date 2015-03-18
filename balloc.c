@@ -49,6 +49,19 @@ static struct pmfs_blocknode *pmfs_next_blocknode(struct pmfs_blocknode *i,
 	return list_first_entry(&i->link, typeof(*i), link);
 }
 
+static inline void pmfs_free_dram_page(unsigned long page_addr)
+{
+	free_page(page_addr);
+}
+
+static unsigned long pmfs_alloc_dram_page(struct super_block *sb, int zero)
+{
+	if (zero == 1)
+		return get_zeroed_page(GFP_KERNEL);
+	else
+		return __get_free_page(GFP_KERNEL);
+}
+
 /* Caller must hold the super_block lock.  If start_hint is provided, it is
  * only valid until the caller releases the super_block lock. */
 void __pmfs_free_block(struct super_block *sb, unsigned long blocknr,
@@ -168,7 +181,7 @@ void pmfs_free_meta_block(struct super_block *sb, unsigned long page_addr)
 
 	PMFS_START_TIMING(free_meta_t, free_time);
 	pmfs_dbg_verbose("Free meta block %lu\n", page_addr);
-	free_page(page_addr);
+	pmfs_free_dram_page(page_addr);
 	PMFS_END_TIMING(free_meta_t, free_time);
 }
 
@@ -189,24 +202,20 @@ void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,
 int pmfs_new_meta_blocks(struct super_block *sb, unsigned long *blocknr,
 		unsigned int num, int zero)
 {
-	unsigned long retval;
+	unsigned long page_addr;
 	timing_t alloc_time;
 
 	if (num != 1)
 		return -EINVAL;
 
 	PMFS_START_TIMING(new_meta_blocks_t, alloc_time);
-	if (zero == 1)
-		retval = get_zeroed_page(GFP_KERNEL);
-	else
-		retval = __get_free_page(GFP_KERNEL);
-
-	if (retval == 0) {
+	page_addr = pmfs_alloc_dram_page(sb, zero);
+	if (page_addr == 0) {
 		PMFS_END_TIMING(new_meta_blocks_t, alloc_time);
 		return -EINVAL;
 	}
 
-	*blocknr = retval;
+	*blocknr = page_addr;
 	PMFS_END_TIMING(new_meta_blocks_t, alloc_time);
 	return 0;
 }
