@@ -88,7 +88,8 @@ u64 pmfs_find_data_block(struct inode *inode, unsigned long file_blocknr,
  * relative block number.
  */
 struct pmfs_inode_entry *pmfs_get_entry(struct super_block *sb,
-		struct pmfs_inode *pi, unsigned long file_blocknr)
+		struct pmfs_inode *pi, unsigned long file_blocknr,
+		unsigned long *dram_address)
 {
 	u32 blk_shift;
 	unsigned long blk_offset, blocknr = file_blocknr;
@@ -103,7 +104,7 @@ struct pmfs_inode_entry *pmfs_get_entry(struct super_block *sb,
 	if (blocknr >= (1UL << (pi->height * meta_bits)))
 		return NULL;
 
-	return __pmfs_get_entry(sb, pi, blocknr);
+	return __pmfs_get_entry(sb, pi, blocknr, dram_address);
 }
 
 /*

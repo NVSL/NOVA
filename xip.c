@@ -51,6 +51,7 @@ do_xip_mapping_read(struct address_space *mapping,
 		void *xip_mem;
 //		unsigned long xip_pfn;
 		int zero = 0;
+		unsigned long dram_address = 0;
 
 		/* nr is the maximum number of bytes to copy from this page */
 		if (index >= end_index) {
@@ -62,7 +63,13 @@ do_xip_mapping_read(struct address_space *mapping,
 			}
 		}
 
-		entry = pmfs_get_entry(sb, pi, index);
+		entry = pmfs_get_entry(sb, pi, index, &dram_address);
+		if (dram_address) {
+			nr = PAGE_SIZE;
+			xip_mem = (void *)dram_address;
+			goto memcpy;
+		}
+
 		if (unlikely(entry == NULL)) {
 			nr = PAGE_SIZE;
 			zero = 1;

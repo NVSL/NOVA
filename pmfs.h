@@ -632,7 +632,8 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 }
 
 static inline struct pmfs_inode_entry *__pmfs_get_entry(struct super_block *sb,
-		struct pmfs_inode *pi, unsigned long blocknr)
+		struct pmfs_inode *pi, unsigned long blocknr,
+		unsigned long *dram_address)
 {
 	__le64 *level_ptr;
 	u64 bp = 0;
@@ -656,6 +657,12 @@ static inline struct pmfs_inode_entry *__pmfs_get_entry(struct super_block *sb,
 		blocknr = blocknr & ((1 << bit_shift) - 1);
 		height--;
 	}
+
+	if (IS_DRAM_ADDR(bp)) {
+		*dram_address = bp;
+		return 0;
+	}
+
 	entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, bp);
 	pmfs_dbg_verbose("%s: %lu, entry pgoff %u, num %u, blocknr %llu\n",
 		__func__, req_block, entry->pgoff, entry->num_pages,
@@ -795,7 +802,8 @@ void pmfs_free_dram_pages(struct super_block *sb);
 int pmfs_rebuild_inode_tree(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode *pi);
 struct pmfs_inode_entry *pmfs_get_entry(struct super_block *sb,
-		struct pmfs_inode *pi, unsigned long file_blocknr);
+		struct pmfs_inode *pi, unsigned long file_blocknr,
+		unsigned long *dram_address);
 
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);
