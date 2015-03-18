@@ -248,7 +248,7 @@ extern int pmfs_assign_blocks(pmfs_transaction_t *trans, struct inode *inode,
 		unsigned long file_blocknr, unsigned int num, u64 curr_entry,
 		bool zero, bool free);
 extern u64 pmfs_find_data_block(struct inode *inode,
-	unsigned long file_blocknr);
+		unsigned long file_blocknr, int *dram_addr);
 extern u64 pmfs_find_inode(struct inode *inode,
 	unsigned long file_blocknr);
 int pmfs_set_blocksize_hint(struct super_block *sb, struct pmfs_inode *pi,
@@ -582,8 +582,11 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 	return bp;
 }
 
+#define	DRAM_BIT	0x1UL
+#define	IS_DRAM_ADDR(p)	((p) & (DRAM_BIT))
+
 static inline u64 __pmfs_find_data_block(struct super_block *sb,
-		struct pmfs_inode *pi, unsigned long blocknr)
+		struct pmfs_inode *pi, unsigned long blocknr, int *dram_addr)
 {
 	__le64 *level_ptr;
 	u64 bp = 0;
@@ -607,6 +610,12 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 		blocknr = blocknr & ((1 << bit_shift) - 1);
 		height--;
 	}
+
+	if (IS_DRAM_ADDR(bp)) {
+		*dram_addr = 1;
+		return bp;
+	}
+
 	entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, bp);
 	pmfs_dbg_verbose("%s: %lu, entry pgoff %u, num %u, blocknr %llu\n",
 		__func__, req_block, entry->pgoff, entry->num_pages,

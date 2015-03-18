@@ -54,7 +54,8 @@ static int pmfs_new_data_block(struct super_block *sb, struct pmfs_inode *pi,
  * find the offset to the block represented by the given inode's file
  * relative block number.
  */
-u64 pmfs_find_data_block(struct inode *inode, unsigned long file_blocknr)
+u64 pmfs_find_data_block(struct inode *inode, unsigned long file_blocknr,
+		int *dram)
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
@@ -72,7 +73,7 @@ u64 pmfs_find_data_block(struct inode *inode, unsigned long file_blocknr)
 	if (blocknr >= (1UL << (pi->height * meta_bits)))
 		return 0;
 
-	bp = __pmfs_find_data_block(sb, pi, blocknr);
+	bp = __pmfs_find_data_block(sb, pi, blocknr, dram);
 	pmfs_dbg1("find_data_block %lx, %x %llx blk_p %p blk_shift %x"
 		" blk_offset %lx\n", file_blocknr, pi->height, bp,
 		pmfs_get_block(sb, bp), blk_shift, blk_offset);
@@ -1982,6 +1983,7 @@ static void pmfs_block_truncate_page(struct inode *inode, loff_t newsize)
 	unsigned long blocknr, length;
 	u64 blockoff;
 	char *bp;
+	int dram = 0;
 
 	/* Block boundary or extending ? */
 	if (!offset || newsize > inode->i_size)
@@ -1990,19 +1992,23 @@ static void pmfs_block_truncate_page(struct inode *inode, loff_t newsize)
 	length = sb->s_blocksize - offset;
 	blocknr = newsize >> sb->s_blocksize_bits;
 
-	blockoff = pmfs_find_data_block(inode, blocknr);
+	blockoff = pmfs_find_data_block(inode, blocknr, &dram);
 
 	/* Hole ? */
 	if (!blockoff)
 		return;
 
-	bp = pmfs_get_block(sb, blockoff);
+	if (dram)
+		bp = (char *)blockoff;
+	else
+		bp = pmfs_get_block(sb, blockoff);
 	if (!bp)
 		return;
 	pmfs_memunlock_block(sb, bp);
 	memset(bp + offset, 0, length);
 	pmfs_memlock_block(sb, bp);
-	pmfs_flush_buffer(bp + offset, length, false);
+	if (dram)
+		pmfs_flush_buffer(bp + offset, length, false);
 }
 
 void pmfs_truncate_del(struct inode *inode)

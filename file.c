@@ -218,6 +218,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		pgoff_t pgoff;
 		loff_t offset;
 		unsigned long nr_flush_bytes;
+		int dram = 0;
 
 		pgoff = start >> PAGE_CACHE_SHIFT;
 		offset = start & ~PAGE_CACHE_MASK;
@@ -226,9 +227,11 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		if (nr_flush_bytes > (end - start))
 			nr_flush_bytes = end - start;
 
-		block = pmfs_find_data_block(inode, (sector_t)pgoff);
-
-		if (block) {
+		block = pmfs_find_data_block(inode, (sector_t)pgoff, &dram);
+		if (dram && block) {
+			xip_mem = (void *)block;
+			/* FIXME: copy to NVMM */
+		} else if (block) {
 			xip_mem = pmfs_get_block(inode->i_sb, block);
 			/* flush the range */
 			pmfs_flush_buffer(xip_mem + offset, nr_flush_bytes, 0);
