@@ -577,8 +577,8 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		/* don't zero-out the allocated blocks */
 		allocated = pmfs_new_data_blocks(sb, &blocknr, num_blocks,
 						pi->i_blk_type, 0);
-		pmfs_dbg_verbose("%s: alloc %d blocks @ %lu\n", __func__, 1,
-								blocknr);
+		pmfs_dbg_verbose("%s: alloc %d blocks @ %lu\n", __func__,
+						allocated, blocknr);
 
 		if (allocated <= 0) {
 			pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__,
@@ -654,6 +654,135 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 
 	//FIXME: Possible contention here
 //	pi->log_tail = curr_entry + sizeof(struct pmfs_inode_entry);
+out:
+	mutex_unlock(&inode->i_mutex);
+	sb_end_write(inode->i_sb);
+	PMFS_END_TIMING(cow_write_t, cow_write_time);
+	return ret;
+}
+
+ssize_t pmfs_page_cache_file_write(struct file *filp,
+	const char __user *buf,	size_t len, loff_t *ppos)
+{
+	struct address_space *mapping = filp->f_mapping;
+	struct inode    *inode = mapping->host;
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi;
+	ssize_t     written = 0;
+	loff_t pos;
+	size_t count, offset, copied, ret;
+	unsigned long start_blk, num_blocks;
+	unsigned long total_blocks;
+	unsigned long page_addr = 0;
+	unsigned int data_bits;
+	int allocated;
+	void* kmem;
+	size_t bytes;
+	long status = 0;
+	timing_t cow_write_time, memcpy_time;
+	unsigned long step = 0;
+
+	PMFS_START_TIMING(cow_write_t, cow_write_time);
+
+	sb_start_write(inode->i_sb);
+	mutex_lock(&inode->i_mutex);
+
+	if (!access_ok(VERIFY_READ, buf, len)) {
+		ret = -EFAULT;
+		goto out;
+	}
+	pos = *ppos;
+	count = len;
+
+	ret = generic_write_checks(filp, &pos, &count, S_ISBLK(inode->i_mode));
+	if (ret || count == 0)
+		goto out;
+
+	pi = pmfs_get_inode(sb, inode->i_ino);
+
+	offset = pos & (sb->s_blocksize - 1);
+	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
+	total_blocks = num_blocks;
+	/* offset in the actual block size block */
+
+	ret = file_remove_suid(filp);
+	if (ret) {
+		goto out;
+	}
+	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
+	pmfs_update_time(inode, pi);
+
+	pmfs_dbg_verbose("%s: block %llu, offset %lu, count %lu\n", __func__,
+				pos >> sb->s_blocksize_bits, offset, count);
+
+	while (num_blocks > 0) {
+		offset = pos & (pmfs_inode_blk_size(pi) - 1);
+		start_blk = pos >> sb->s_blocksize_bits;
+
+		/* don't zero-out the allocated blocks */
+		allocated = pmfs_find_alloc_dram_pages(sb, &page_addr,
+					1, pi->i_blk_type, 0);
+		pmfs_dbg_verbose("%s: alloc %d dram pages @ %lu\n", __func__,
+					allocated, page_addr);
+
+		if (allocated <= 0) {
+			pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__,
+								allocated);
+			ret = allocated;
+			goto out;
+		}
+
+		step++;
+		bytes = sb->s_blocksize * allocated - offset;
+		if (bytes > count)
+			bytes = count;
+
+		kmem = (void *)page_addr;
+
+		if (offset || ((offset + bytes) & (PAGE_SIZE - 1)) != 0)
+			pmfs_handle_head_tail_blocks(sb, pi, inode, pos, bytes,
+								kmem);
+
+		/* Now copy from user buf */
+//		pmfs_dbg("Write: %p\n", kmem);
+		PMFS_START_TIMING(memcpy_w_t, memcpy_time);
+		copied = bytes -
+			__copy_from_user_inatomic_nocache(kmem + offset,
+								buf, bytes);
+		PMFS_END_TIMING(memcpy_w_t, memcpy_time);
+
+		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
+		if (copied > 0) {
+			written += copied;
+			pos += copied;
+			buf += copied;
+			count -= copied;
+			num_blocks -= allocated;
+		}
+		if (unlikely(copied != bytes))
+			if (status >= 0)
+				status = -EFAULT;
+		if (status < 0)
+			break;
+	}
+
+	*ppos = pos;
+	pmfs_memunlock_inode(sb, pi);
+	data_bits = blk_type_to_shift[pi->i_blk_type];
+	le64_add_cpu(&pi->i_blocks,
+			(total_blocks << (data_bits - sb->s_blocksize_bits)));
+	pmfs_memlock_inode(sb, pi);
+
+	inode->i_blocks = le64_to_cpu(pi->i_blocks);
+	if (pos > inode->i_size) {
+		i_size_write(inode, pos);
+		pmfs_update_isize(inode, pi);
+	}
+
+	ret = written;
+	write_breaks += step;
+//	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
+
 out:
 	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
