@@ -661,6 +661,13 @@ out:
 	return ret;
 }
 
+int pmfs_find_alloc_dram_pages(struct super_block *sb, struct pmfs_inode *pi,
+	unsigned long start_blk, unsigned long *page_addr,
+	unsigned long num_pages, int zero)
+{
+	return 0;
+}
+
 ssize_t pmfs_page_cache_file_write(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos)
 {
@@ -720,8 +727,8 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		start_blk = pos >> sb->s_blocksize_bits;
 
 		/* don't zero-out the allocated blocks */
-		allocated = pmfs_find_alloc_dram_pages(sb, &page_addr,
-					1, pi->i_blk_type, 0);
+		allocated = pmfs_find_alloc_dram_pages(sb, pi, start_blk,
+					&page_addr, 1, 0);
 		pmfs_dbg_verbose("%s: alloc %d dram pages @ %lu\n", __func__,
 					allocated, page_addr);
 
