@@ -2000,7 +2000,7 @@ static void pmfs_block_truncate_page(struct inode *inode, loff_t newsize)
 		return;
 
 	if (dram)
-		bp = (char *)blockoff;
+		bp = (char *)DRAM_ADDR(blockoff);
 	else
 		bp = pmfs_get_block(sb, blockoff);
 	if (!bp)

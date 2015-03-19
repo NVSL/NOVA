@@ -229,7 +229,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
 		block = pmfs_find_data_block(inode, (sector_t)pgoff, &dram);
 		if (dram && block) {
-			xip_mem = (void *)block;
+			xip_mem = (void *)DRAM_ADDR(block);
 			/* FIXME: copy to NVMM */
 		} else if (block) {
 			xip_mem = pmfs_get_block(inode->i_sb, block);

@@ -66,7 +66,7 @@ do_xip_mapping_read(struct address_space *mapping,
 		entry = pmfs_get_entry(sb, pi, index, &dram_address);
 		if (dram_address) {
 			nr = PAGE_SIZE;
-			xip_mem = (void *)dram_address;
+			xip_mem = (void *)DRAM_ADDR(dram_address);
 			goto memcpy;
 		}
 
@@ -323,7 +323,7 @@ static inline void pmfs_clear_edge_blk (struct super_block *sb, struct
 			sb->s_blocksize_bits);
 		bp = __pmfs_find_data_block(sb, pi, blknr, &dram);
 		if (dram)
-			ptr = (void *)bp;
+			ptr = (void *)DRAM_ADDR(bp);
 		else
 			ptr = pmfs_get_block(sb, bp);
 		if (ptr != NULL) {
@@ -458,7 +458,7 @@ static inline void pmfs_copy_partial_block(struct super_block *sb,
 	void *ptr;
 
 	if (dram)
-		ptr = (void *)blocknr;
+		ptr = (void *)DRAM_ADDR(blocknr);
 	else
 		ptr = pmfs_get_block(sb, blocknr);
 	if (ptr != NULL) {
@@ -693,7 +693,7 @@ int pmfs_find_alloc_dram_pages(struct super_block *sb, struct inode *inode,
 
 	block = pmfs_find_data_block(inode, start_blk, &dram);
 	if (dram) {
-		*page_addr = (unsigned long)block;
+		*page_addr = (unsigned long)DRAM_ADDR(block);
 		return 1;
 	}
 
