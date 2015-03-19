@@ -34,6 +34,8 @@ struct write_request
 #define	ZERO	1
 #define	NORMAL	2
 #define	VMALLOC	3
+#define	KMALLOC	4
+#define	KZALLOC	5
 
 struct malloc_request
 {
@@ -51,29 +53,41 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 	PMFS_START_TIMING(malloc_test_t, malloc_time);
 	for (i = 0; i < 1000; i++) {
 		switch(category) {
-		case 1:
+		case ZERO:
 			addr[i] = get_zeroed_page(GFP_KERNEL);
 			break;
-		case 2:
+		case NORMAL:
 			addr[i] = __get_free_page(GFP_KERNEL);
 			break;
-		case 3:
-			addr[i] = (unsigned long)vmalloc(4096);
+		case VMALLOC:
+			addr[i] = (unsigned long)vmalloc(PAGE_SIZE);
+			break;
+		case KMALLOC:
+			addr[i] = (unsigned long)kmalloc(PAGE_SIZE, GFP_KERNEL);
+			break;
+		case KZALLOC:
+			addr[i] = (unsigned long)kzalloc(PAGE_SIZE, GFP_KERNEL);
 			break;
 		default:
 			break;
 		}
+		if (addr[i] == 0 || addr[i] != DRAM_ADDR(addr[i]))
+			pmfs_dbg("Error: page %d addr 0x%lx\n", i, addr[i]);
 	}
 	PMFS_END_TIMING(malloc_test_t, malloc_time);
 
 	for (i = 0; i < 1000; i++) {
 		switch(category) {
-		case 1:
-		case 2:
+		case ZERO:
+		case NORMAL:
 			free_page(addr[i]);
 			break;
-		case 3:
+		case VMALLOC:
 			vfree((void *)addr[i]);
+			break;
+		case KMALLOC:
+		case KZALLOC:
+			kfree((void *)addr[i]);
 			break;
 		default:
 			break;
