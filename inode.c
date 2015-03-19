@@ -669,7 +669,7 @@ static void pmfs_decrease_file_btree_height(struct super_block *sb,
 	pmfs_dbg_verbose("reducing tree height %x->%x\n", height, new_height);
 	while (height > new_height) {
 		/* freeing the meta block */
-		root = (__le64 *)newroot;
+		root = (__le64 *)DRAM_ADDR(newroot);
 		page_addr = newroot;
 		newroot = root[0];
 		pmfs_free_meta_block(sb, page_addr);
