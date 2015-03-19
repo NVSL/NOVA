@@ -51,15 +51,46 @@ static struct pmfs_blocknode *pmfs_next_blocknode(struct pmfs_blocknode *i,
 
 static inline void pmfs_free_dram_page(unsigned long page_addr)
 {
-	free_page(page_addr);
+	if ((page_addr & DRAM_BIT) == 0) {
+		pmfs_dbg("Error: free a non-DRAM page? 0x%lx", page_addr);
+		dump_stack();
+	}
+
+	if (page_addr & KMALLOC_BIT)
+		kfree((void *)DRAM_ADDR(page_addr));
+	else
+		free_page(DRAM_ADDR(page_addr));
 }
 
 static unsigned long pmfs_alloc_dram_page(struct super_block *sb, int zero)
 {
+	unsigned long addr = 0;
+
+	/* kmalloc is faster than get_free_page */
 	if (zero == 1)
-		return get_zeroed_page(GFP_KERNEL);
+		addr = (unsigned long)kzalloc(PAGE_SIZE, GFP_KERNEL);
 	else
-		return __get_free_page(GFP_KERNEL);
+		addr = (unsigned long)kmalloc(PAGE_SIZE, GFP_KERNEL);
+
+	if (addr && addr == DRAM_ADDR(addr)) {
+		addr |= DRAM_BIT | KMALLOC_BIT;
+		return addr;
+	}
+
+	/* Needs to align to PAGE_SIZE */
+	if (addr)
+		kfree((void *)addr);
+
+	if (zero == 1)
+		addr = get_zeroed_page(GFP_KERNEL);
+	else
+		addr = __get_free_page(GFP_KERNEL);
+
+	if (addr == 0 || addr != DRAM_ADDR(addr))
+		BUG();
+
+	addr |= DRAM_BIT | GETPAGE_BIT;
+	return addr;
 }
 
 /* Caller must hold the super_block lock.  If start_hint is provided, it is

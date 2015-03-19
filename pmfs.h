@@ -583,6 +583,8 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 }
 
 #define	DRAM_BIT	0x1UL
+#define	KMALLOC_BIT	0x2UL
+#define	GETPAGE_BIT	0x4UL
 #define	IS_DRAM_ADDR(p)	((p) & (DRAM_BIT))
 #define	DRAM_ADDR(p)	((p) & (PAGE_MASK))
 
@@ -602,7 +604,7 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 		return 0;
 
 	while (height > 0) {
-		level_ptr = (__le64 *)bp;
+		level_ptr = (__le64 *)DRAM_ADDR(bp);
 		bit_shift = (height - 1) * META_BLK_SHIFT;
 		idx = blocknr >> bit_shift;
 		bp = le64_to_cpu(level_ptr[idx]);
@@ -649,7 +651,7 @@ static inline struct pmfs_inode_entry *__pmfs_get_entry(struct super_block *sb,
 		return NULL;
 
 	while (height > 0) {
-		level_ptr = (__le64 *)bp;
+		level_ptr = (__le64 *)DRAM_ADDR(bp);
 		bit_shift = (height - 1) * META_BLK_SHIFT;
 		idx = blocknr >> bit_shift;
 		bp = le64_to_cpu(level_ptr[idx]);

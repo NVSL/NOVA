@@ -361,9 +361,9 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 				((1 << node_bits) - 1)) : (1 << node_bits) - 1;
 
 			pgoff = start_pgoff + (i << node_bits);
-			freed += recursive_truncate_file_blocks(sb, node[i],
-				height - 1, btype, first_blk, last_blk,
-				pgoff, &mpty);
+			freed += recursive_truncate_file_blocks(sb,
+				DRAM_ADDR(node[i]), height - 1, btype,
+				first_blk, last_blk, pgoff, &mpty);
 			/* cond_resched(); */
 			if (mpty) {
 				/* Freeing the meta-data block */
@@ -525,9 +525,9 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 				((1 << node_bits) - 1)) : (1 << node_bits) - 1;
 
 			pgoff = start_pgoff + (i << node_bits);
-			freed += recursive_truncate_meta_blocks(sb, node[i],
-				height - 1, btype, first_blk, last_blk,
-				pgoff, &mpty);
+			freed += recursive_truncate_meta_blocks(sb,
+				DRAM_ADDR(node[i]), height - 1, btype,
+				first_blk, last_blk, pgoff, &mpty);
 			/* cond_resched(); */
 			if (mpty) {
 				/* Freeing the meta-data block */
@@ -553,7 +553,6 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 			pmfs_memunlock_block(sb, node);
 			memset(&node[start], 0, bzero);
 			pmfs_memlock_block(sb, node);
-			pmfs_flush_buffer(&node[start], bzero, false);
 		}
 		*meta_empty = false;
 	}
@@ -610,8 +609,8 @@ unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
 	} else {
 		first_blocknr = 0;
 
-		freed = recursive_truncate_file_blocks(sb, root, height, btype,
-			first_blocknr, last_blocknr, 0, &mpty);
+		freed = recursive_truncate_file_blocks(sb, DRAM_ADDR(root),
+			height, btype, first_blocknr, last_blocknr, 0, &mpty);
 		BUG_ON(!mpty);
 		first_blocknr = root;
 		pmfs_free_meta_block(sb, first_blocknr);
@@ -634,8 +633,8 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 
 	first_blocknr = 0;
 
-	freed = recursive_truncate_meta_blocks(sb, root, height, btype,
-			first_blocknr, last_blocknr, 0, &mpty);
+	freed = recursive_truncate_meta_blocks(sb, DRAM_ADDR(root),
+			height, btype, first_blocknr, last_blocknr, 0, &mpty);
 	BUG_ON(!mpty);
 	first_blocknr = root;
 	pmfs_free_meta_block(sb, first_blocknr);
@@ -826,8 +825,9 @@ static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 		root = 0;
 		freed = 1;
 	} else {
-		freed = recursive_truncate_file_blocks(sb, root, pi->height,
-			pi->i_blk_type, first_blocknr, last_blocknr, 0, &mpty);
+		freed = recursive_truncate_file_blocks(sb, DRAM_ADDR(root),
+			pi->height, pi->i_blk_type, first_blocknr,
+			last_blocknr, 0, &mpty);
 		if (mpty) {
 			first_blocknr = root;
 			pmfs_free_meta_block(sb, first_blocknr);
@@ -962,7 +962,7 @@ static int pmfs_increase_btree_height(struct super_block *sb,
 			pmfs_err(sb, "failed to increase btree height\n");
 			break;
 		}
-		root = (__le64 *)page_addr;
+		root = (__le64 *)DRAM_ADDR(page_addr);
 		root[0] = prev_root;
 		prev_root = page_addr;
 		height++;
@@ -1147,7 +1147,6 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 			node[i] = cpu_to_le64(curr_entry);
 			pmfs_dbg_verbose("Assign block %d to %llu\n", i, 
 							curr_entry);
-
 		} else {
 			if (node[i] == 0) {
 				/* allocate the meta block */
@@ -1170,8 +1169,9 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 
 			pgoff = start_pgoff + (i << node_bits);
 			errval = recursive_assign_blocks(trans, sb, pi,
-				node[i], height - 1, first_blk, last_blk,
-				curr_entry, new_node, pgoff, zero, free);
+				DRAM_ADDR(node[i]), height - 1, first_blk,
+				last_blk, curr_entry, new_node, pgoff, zero,
+				free);
 			if (errval < 0)
 				goto fail;
 		}
@@ -1343,9 +1343,9 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 				goto fail;
 			}
 			errval = recursive_assign_blocks(trans, sb, pi,
-					pi->root, pi->height, first_blocknr,
-					last_blocknr, curr_entry, 1, 0, zero,
-					free);
+					DRAM_ADDR(pi->root), pi->height,
+					first_blocknr, last_blocknr,
+					curr_entry, 1, 0, zero,	free);
 			if (errval < 0)
 				goto fail;
 		}
@@ -1386,9 +1386,9 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 				goto fail;
 			}
 		}
-		errval = recursive_assign_blocks(trans, sb, pi, pi->root,
-				height,	first_blocknr, last_blocknr,
-				curr_entry, 0, 0, zero, free);
+		errval = recursive_assign_blocks(trans, sb, pi,
+				DRAM_ADDR(pi->root), height, first_blocknr,
+				last_blocknr, curr_entry, 0, 0, zero, free);
 		if (errval < 0)
 			goto fail;
 	}
