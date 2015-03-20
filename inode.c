@@ -351,6 +351,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 						"entry off %lu\n", i, blocknr,
 						entry_off);
 			}
+			node[i] = 0;
 			freed++;
 		}
 		mutex_unlock(&sbi->s_lock);
@@ -382,8 +383,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 			}
 		}
 	}
-	if (all_range_freed &&
-		is_empty_meta_block(node, first_index, last_index)) {
+	if (all_range_freed) {
 		*meta_empty = true;
 	} else {
 		/* Zero-out the freed range if the meta-block in not empty */
@@ -522,6 +522,7 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 			/* Freeing the page cache block */
 			if (IS_DRAM_ADDR(node[i])) {
 				pmfs_free_dram_page(node[i]);
+				node[i] = 0;
 				freed++;
 			}
 		}
@@ -556,8 +557,7 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 			}
 		}
 	}
-	if (all_range_freed &&
-		is_empty_meta_block(node, first_index, last_index)) {
+	if (all_range_freed) {
 		*meta_empty = true;
 	} else {
 		/* Zero-out the freed range if the meta-block in not empty */
