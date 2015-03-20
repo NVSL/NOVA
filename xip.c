@@ -67,6 +67,8 @@ do_xip_mapping_read(struct address_space *mapping,
 		if (dram_address) {
 			nr = PAGE_SIZE;
 			xip_mem = (void *)DRAM_ADDR(dram_address);
+			pmfs_dbg_verbose("%s: memory @ 0x%lx\n", __func__,
+					(unsigned long)xip_mem);
 			goto memcpy;
 		}
 
@@ -82,9 +84,6 @@ do_xip_mapping_read(struct address_space *mapping,
 		} else {
 			nr = PAGE_SIZE;
 		}
-		nr = nr - offset;
-		if (nr > len - copied)
-			nr = len - copied;
 
 		xip_mem = pmfs_get_block(sb, BLOCK_OFF(entry->block +
 			((index - entry->pgoff) << PAGE_SHIFT)));
@@ -118,6 +117,10 @@ do_xip_mapping_read(struct address_space *mapping,
 		 * pointers and the remaining count).
 		 */
 memcpy:
+		nr = nr - offset;
+		if (nr > len - copied)
+			nr = len - copied;
+
 		PMFS_START_TIMING(memcpy_r_t, memcpy_time);
 		if (!zero)
 			left = __copy_to_user(buf + copied,
@@ -340,8 +343,8 @@ static inline void pmfs_clear_edge_blk (struct super_block *sb, struct
 	}
 }
 
-ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
-          size_t len, loff_t *ppos)
+ssize_t pmfs_xip_file_write_deprecated(struct file *filp,
+		const char __user *buf, size_t len, loff_t *ppos)
 {
 	struct address_space *mapping = filp->f_mapping;
 	struct inode    *inode = mapping->host;
@@ -686,18 +689,30 @@ out:
 
 int pmfs_find_alloc_dram_pages(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode *pi, unsigned long start_blk,
-	unsigned long *page_addr, unsigned long num_pages, int zero)
+	unsigned long *page_addr, int *existed, unsigned long num_pages,
+	int zero)
 {
 	u64 block;
 	int dram = 0;
 
 	block = pmfs_find_data_block(inode, start_blk, &dram);
 	if (dram) {
-		*page_addr = (unsigned long)DRAM_ADDR(block);
+		*page_addr = (unsigned long)block;
 		return 1;
 	}
 
-	return 0;
+	if (block) {
+		/* The NVMM block is there. Need to handle partial writes. */
+		*existed = 1;
+	}
+
+	block = pmfs_alloc_dram_page(sb, 0);
+	if (block == 0)
+		return 0;
+
+//	pmfs_assign_blocks(NULL, inode, start_blk, 1, block, false, false);
+	*page_addr = block;
+	return 1;
 }
 
 ssize_t pmfs_page_cache_file_write(struct file *filp,
@@ -714,7 +729,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	unsigned long total_blocks;
 	unsigned long page_addr = 0;
 	unsigned int data_bits;
-	int allocated;
+	int allocated, existed = 0;
 	void* kmem;
 	size_t bytes;
 	long status = 0;
@@ -757,11 +772,13 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
+		page_addr = 0;
+		existed = 0;
 
 		/* don't zero-out the allocated blocks */
 		allocated = pmfs_find_alloc_dram_pages(sb, inode, pi,
-					start_blk, &page_addr, 1, 0);
-		pmfs_dbg_verbose("%s: alloc %d dram pages @ %lu\n", __func__,
+					start_blk, &page_addr, &existed, 1, 0);
+		pmfs_dbg_verbose("%s: alloc %d dram pages @ 0x%lx\n", __func__,
 					allocated, page_addr);
 
 		if (allocated <= 0) {
@@ -776,9 +793,10 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		if (bytes > count)
 			bytes = count;
 
-		kmem = (void *)page_addr;
+		kmem = (void *)DRAM_ADDR(page_addr);
 
-		if (offset || ((offset + bytes) & (PAGE_SIZE - 1)) != 0)
+		if (existed && (offset ||
+				((offset + bytes) & (PAGE_SIZE - 1)) != 0))
 			pmfs_handle_head_tail_blocks(sb, pi, inode, pos, bytes,
 								kmem);
 
@@ -789,6 +807,9 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 			__copy_from_user_inatomic_nocache(kmem + offset,
 								buf, bytes);
 		PMFS_END_TIMING(memcpy_w_t, memcpy_time);
+
+		pmfs_assign_blocks(NULL, inode, start_blk, allocated, page_addr,
+				false, false);
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {
@@ -949,18 +970,16 @@ out:
 	PMFS_END_TIMING(cow_write_t, cow_write_time);
 	return ret;
 }
+#endif
 
-ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
+ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos)
 {
-	if (contiguous_allocation)
-		return pmfs_cow_file_write_contiguous_alloc(filp, buf,
-			len, ppos);
+	if (filp->f_mode & O_DIRECT)
+		return pmfs_cow_file_write(filp, buf, len, ppos);
 	else
-		return pmfs_cow_file_write_single_alloc(filp, buf,
-			len, ppos);
+		return pmfs_page_cache_file_write(filp, buf, len, ppos);
 }
-#endif
 
 /* OOM err return with xip file fault handlers doesn't mean anything.
  * It would just cause the OS to go an unnecessary killing spree !

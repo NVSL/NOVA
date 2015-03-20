@@ -49,7 +49,7 @@ static struct pmfs_blocknode *pmfs_next_blocknode(struct pmfs_blocknode *i,
 	return list_first_entry(&i->link, typeof(*i), link);
 }
 
-static inline void pmfs_free_dram_page(unsigned long page_addr)
+void pmfs_free_dram_page(unsigned long page_addr)
 {
 	if ((page_addr & DRAM_BIT) == 0) {
 		pmfs_dbg("Error: free a non-DRAM page? 0x%lx", page_addr);
@@ -62,7 +62,7 @@ static inline void pmfs_free_dram_page(unsigned long page_addr)
 		free_page(DRAM_ADDR(page_addr));
 }
 
-static unsigned long pmfs_alloc_dram_page(struct super_block *sb, int zero)
+unsigned long pmfs_alloc_dram_page(struct super_block *sb, int zero)
 {
 	unsigned long addr = 0;
 
