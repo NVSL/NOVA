@@ -710,7 +710,6 @@ int pmfs_find_alloc_dram_pages(struct super_block *sb, struct inode *inode,
 	if (block == 0)
 		return 0;
 
-//	pmfs_assign_blocks(NULL, inode, start_blk, 1, block, false, false);
 	*page_addr = block;
 	return 1;
 }
@@ -808,6 +807,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 								buf, bytes);
 		PMFS_END_TIMING(memcpy_w_t, memcpy_time);
 
+		page_addr |= DIRTY_BIT;
 		pmfs_assign_blocks(NULL, inode, start_blk, allocated, page_addr,
 				false, false);
 

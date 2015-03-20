@@ -587,7 +587,9 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 #define	DRAM_BIT	0x1UL
 #define	KMALLOC_BIT	0x2UL
 #define	GETPAGE_BIT	0x4UL
+#define	DIRTY_BIT	0x8UL
 #define	IS_DRAM_ADDR(p)	((p) & (DRAM_BIT))
+#define	IS_DIRTY(p)	((p) & (DIRTY_BIT))
 #define	DRAM_ADDR(p)	((p) & (PAGE_MASK))
 
 static inline u64 __pmfs_find_data_block(struct super_block *sb,
