@@ -326,27 +326,31 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 			if (unlikely(!node[i]))
 				continue;
 			/* Freeing the data block */
-			entry = pmfs_get_block(sb, node[i]);
-			blocknr = entry->block >> PAGE_SHIFT;
-			if (entry->pgoff > start_pgoff + i ||
-				entry->pgoff + entry->num_pages
-					<= start_pgoff + i) {
-				pmfs_err(sb, "Entry ERROR: start pgoff"
-					" %lu, %lu, entry pgoff %lu, "
-					"num %lu\n", start_pgoff, i,
-					entry->pgoff,
-					entry->num_pages);
-				BUG();
+			if (IS_DRAM_ADDR(node[i]))
+				pmfs_free_dram_page(node[i]);
+			else {
+				entry = pmfs_get_block(sb, node[i]);
+				blocknr = entry->block >> PAGE_SHIFT;
+				if (entry->pgoff > start_pgoff + i ||
+					entry->pgoff + entry->num_pages
+						<= start_pgoff + i) {
+					pmfs_err(sb, "Entry ERROR: start pgoff"
+						" %lu, %lu, entry pgoff %lu, "
+						"num %lu\n", start_pgoff, i,
+						entry->pgoff,
+						entry->num_pages);
+					BUG();
+				}
+				entry_off = start_pgoff + i - entry->pgoff;
+				blocknr += entry_off;
+				if (GET_INVALID(entry->block) < 4000)
+					entry->block++;
+				__pmfs_free_data_block(sb, blocknr, btype,
+							&start_hint);
+				pmfs_dbg_verbose("Free block %d @ %lu, "
+						"entry off %lu\n", i, blocknr,
+						entry_off);
 			}
-			entry_off = start_pgoff + i - entry->pgoff;
-			blocknr += entry_off;
-			if (GET_INVALID(entry->block) < 4000)
-				entry->block++;
-			__pmfs_free_data_block(sb, blocknr, btype,
-						&start_hint);
-			pmfs_dbg_verbose("Free block %d @ %lu, "
-					"entry off %lu\n", i, blocknr,
-					entry_off);
 			freed++;
 		}
 		mutex_unlock(&sbi->s_lock);
@@ -600,11 +604,15 @@ unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
 	if (height == 0) {
 		struct pmfs_inode_entry *entry;
 
-		entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, root);
-		first_blocknr = pmfs_get_blocknr(sb, entry->block, btype);
-		if (GET_INVALID(entry->block) < 4000)
-			entry->block++;
-		pmfs_free_data_block(sb, first_blocknr, btype);
+		if (IS_DRAM_ADDR(root)) {
+			pmfs_free_dram_page(root);
+		} else {
+			entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, root);
+			first_blocknr = pmfs_get_blocknr(sb, entry->block, btype);
+			if (GET_INVALID(entry->block) < 4000)
+				entry->block++;
+			pmfs_free_data_block(sb, first_blocknr, btype);
+		}
 		freed = 1;
 	} else {
 		first_blocknr = 0;
@@ -1119,7 +1127,7 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 
 	for (i = first_index; i <= last_index; i++) {
 		if (height == 1) {
-			if (node[i] && free) {
+			if (node[i] && free && !IS_DRAM_ADDR(node[i])) {
 				entry = pmfs_get_block(sb, node[i]);
 				blocknr = entry->block >> PAGE_SHIFT;
 				if (entry->pgoff > start_pgoff + i ||
@@ -1352,7 +1360,7 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 	} else {
 		if (height == 0) {
 			__le64 root;
-			if (free) {
+			if (free && !IS_DRAM_ADDR(pi->root)) {
 				/* With cow we need to re-assign the root */
 				unsigned long blocknr;
 				struct pmfs_inode_entry *entry;
