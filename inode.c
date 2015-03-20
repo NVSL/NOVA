@@ -326,9 +326,9 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 			if (unlikely(!node[i]))
 				continue;
 			/* Freeing the data block */
-			if (IS_DRAM_ADDR(node[i]))
+			if (IS_DRAM_ADDR(node[i])) {
 				pmfs_free_dram_page(node[i]);
-			else {
+			} else {
 				entry = pmfs_get_block(sb, node[i]);
 				blocknr = entry->block >> PAGE_SHIFT;
 				if (entry->pgoff > start_pgoff + i ||
@@ -516,6 +516,15 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 	end = last_index = last_blocknr >> node_bits;
 
 	if (height == 1) {
+		for (i = first_index; i <= last_index; i++) {
+			if (unlikely(!node[i]))
+				continue;
+			/* Freeing the page cache block */
+			if (IS_DRAM_ADDR(node[i])) {
+				pmfs_free_dram_page(node[i]);
+				freed++;
+			}
+		}
 		*meta_empty = true;
 		return freed;
 	} else {
