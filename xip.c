@@ -975,7 +975,7 @@ out:
 ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos)
 {
-	if (filp->f_mode & O_DIRECT)
+	if (filp->f_flags & O_DIRECT)
 		return pmfs_cow_file_write(filp, buf, len, ppos);
 	else
 		return pmfs_page_cache_file_write(filp, buf, len, ppos);
