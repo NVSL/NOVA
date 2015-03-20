@@ -728,7 +728,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	unsigned long start_blk, num_blocks;
 	unsigned long total_blocks;
 	unsigned long page_addr = 0;
-	unsigned int data_bits;
+//	unsigned int data_bits;
 	int allocated, existed = 0;
 	void* kmem;
 	size_t bytes;
@@ -826,19 +826,21 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 			break;
 	}
 
-	*ppos = pos;
+/*
 	pmfs_memunlock_inode(sb, pi);
 	data_bits = blk_type_to_shift[pi->i_blk_type];
 	le64_add_cpu(&pi->i_blocks,
 			(total_blocks << (data_bits - sb->s_blocksize_bits)));
 	pmfs_memlock_inode(sb, pi);
-
+*/
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	if (pos > inode->i_size) {
 		i_size_write(inode, pos);
-		pmfs_update_isize(inode, pi);
+		/* Don't update the actual size for pi */
+//		pmfs_update_isize(inode, pi);
 	}
 
+	*ppos = pos;
 	ret = written;
 	write_breaks += step;
 //	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
