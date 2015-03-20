@@ -1703,6 +1703,7 @@ void pmfs_evict_inode(struct inode *inode)
 	unsigned int height, btype;
 	timing_t evict_time;
 	int err = 0;
+	int freed = 0;
 
 	PMFS_START_TIMING(evict_inode_t, evict_time);
 	pmfs_dbg_verbose("%s: %lu\n", __func__, inode->i_ino);
@@ -1716,6 +1717,8 @@ void pmfs_evict_inode(struct inode *inode)
 		root = pi->root;
 		height = pi->height;
 		btype = pi->i_blk_type;
+		pmfs_dbg_verbose("%s: root 0x%llx, height %u\n",
+					__func__, root, height);
 
 		if (pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL)) {
 			last_blocknr = (1UL << (pi->height * META_BLK_SHIFT))
@@ -1733,19 +1736,23 @@ void pmfs_evict_inode(struct inode *inode)
 		/* We need the log to free the blocks from the b-tree */
 		switch (inode->i_mode & S_IFMT) {
 		case S_IFREG:
-			pmfs_free_file_inode_subtree(sb, root, height, btype,
-							last_blocknr);
+			/* Rebuild the tree if it's not there */
+			if (pi->root == 0 && pi->height > 0)
+				pmfs_rebuild_inode_tree(sb, inode, pi);
+			freed = pmfs_free_file_inode_subtree(sb, pi->root,
+					pi->height, btype, last_blocknr);
 			break;
 		case S_IFDIR:
 		case S_IFLNK:
-			pmfs_free_dir_inode_subtree(sb, root, height, btype,
-							last_blocknr);
+			freed = pmfs_free_dir_inode_subtree(sb, root, height,
+					btype, last_blocknr);
 			break;
 		default:
 			pmfs_dbg("%s: unknown\n", __func__);
 			break;
 		}
 
+		pmfs_dbg_verbose("%s: Freed %d\n", __func__, freed);
 		/* Then we can free the inode */
 		err = pmfs_free_inode(inode);
 		if (err)
