@@ -206,7 +206,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	{
 		pmfs_dbg_verbose("[%s:%d] : (ERR) isize(%llx), start(%llx),"
 			" end(%llx)\n", __func__, __LINE__, isize, start, end);
-		return -ENODATA;
+		return 0;
 	}
 
 	/* Align start and end to cacheline boundaries */
@@ -214,7 +214,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	end = CACHELINE_ALIGN(end);
 	do {
 		sector_t block = 0;
-		void *xip_mem;
+//		void *xip_mem;
 		pgoff_t pgoff;
 		loff_t offset;
 		unsigned long nr_flush_bytes;
@@ -236,16 +236,16 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 						nr_flush_bytes);
 			}
 		} else if (block) {
-			xip_mem = pmfs_get_block(inode->i_sb, block);
+//			xip_mem = pmfs_get_block(inode->i_sb, block);
 			/* flush the range */
-			pmfs_flush_buffer(xip_mem + offset, nr_flush_bytes, 0);
+//			pmfs_flush_buffer(xip_mem + offset, nr_flush_bytes, 0);
+			/* Do nothing by now */
 		} else {
 			/* sparse files could have such holes */
 			pmfs_dbg_verbose("[%s:%d] : start(%llx), end(%llx),"
 			" pgoff(%lx)\n", __func__, __LINE__, start, end, pgoff);
 			break;
 		}
-
 		start += nr_flush_bytes;
 	} while (start < end);
 
