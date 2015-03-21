@@ -257,9 +257,16 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 /* This callback is called when a file is closed */
 static int pmfs_flush(struct file *file, fl_owner_t id)
 {
+	struct address_space *mapping = file->f_mapping;
+	struct inode *inode = mapping->host;
+	loff_t isize;
 	int ret = 0;
 	/* if the file was opened for writing, make it persistent.
 	 * TODO: Should we be more smart to check if the file was modified? */
+
+	isize = i_size_read(inode);
+	pmfs_fsync(file, 0, isize, 1);
+
 	if (file->f_mode & FMODE_WRITE) {
 		PERSISTENT_MARK();
 		PERSISTENT_BARRIER();
@@ -338,8 +345,8 @@ pmfs_get_unmapped_area(struct file *file, unsigned long addr,
 const struct file_operations pmfs_xip_file_operations = {
 	.llseek			= pmfs_llseek,
 	.read			= pmfs_xip_file_read,
-//	.write			= pmfs_xip_file_write,
-	.write			= pmfs_cow_file_write,
+	.write			= pmfs_xip_file_write,
+//	.write			= pmfs_cow_file_write,
 //	.aio_read		= xip_file_aio_read,
 //	.aio_write		= xip_file_aio_write,
 	.read_iter		= generic_file_read_iter,
