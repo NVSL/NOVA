@@ -638,6 +638,44 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 			((req_block - entry->pgoff) << PAGE_SHIFT));
 }
 
+static inline int pmfs_find_dram_page_and_clean(struct super_block *sb,
+		struct pmfs_inode *pi, unsigned long blocknr, u64 *dram_addr)
+{
+	__le64 *level_ptr;
+	u64 bp = 0;
+	u32 height, bit_shift;
+	unsigned int idx;
+
+	height = pi->height;
+	bp = le64_to_cpu(pi->root);
+	if (bp == 0)
+		return 0;
+
+	if (height == 0 && IS_DRAM_ADDR(bp) && IS_DIRTY(bp)) {
+		*dram_addr = bp;
+		pi->root &= ~DIRTY_BIT;
+		return 1;
+	}
+
+	while (height > 0) {
+		level_ptr = (__le64 *)DRAM_ADDR(bp);
+		bit_shift = (height - 1) * META_BLK_SHIFT;
+		idx = blocknr >> bit_shift;
+		bp = le64_to_cpu(level_ptr[idx]);
+		if (bp == 0)
+			return 0;
+		blocknr = blocknr & ((1 << bit_shift) - 1);
+		height--;
+		if (height == 0 && IS_DRAM_ADDR(bp) && IS_DIRTY(bp)) {
+			*dram_addr = bp;
+			level_ptr[idx] &= ~DIRTY_BIT;
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
 static inline struct pmfs_inode_entry *__pmfs_get_entry(struct super_block *sb,
 		struct pmfs_inode *pi, unsigned long blocknr,
 		unsigned long *dram_address)
@@ -847,6 +885,8 @@ int pmfs_search_dirblock(u8 *blk_base, struct inode *dir, struct qstr *child,
 /* xip.c */
 ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
           size_t len, loff_t *ppos);
+int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
+				unsigned long count);
 
 /* pmfs_stats.c */
 void pmfs_print_timing_stats(struct super_block *sb);

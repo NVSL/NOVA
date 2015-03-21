@@ -193,8 +193,8 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	loff_t isize;
 
 	/* if the file is not mmap'ed, there is no need to do clflushes */
-	if (mapping_mapped(mapping) == 0)
-		goto persist;
+//	if (mapping_mapped(mapping) == 0)
+//		goto persist;
 
 	end += 1; /* end is inclusive. We like our indices normal please ! */
 
@@ -229,8 +229,12 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
 		block = pmfs_find_data_block(inode, (sector_t)pgoff, &dram);
 		if (dram && block) {
-			xip_mem = (void *)DRAM_ADDR(block);
-			/* FIXME: copy to NVMM */
+			if (IS_DIRTY(block)) {
+				pmfs_dbg_verbose("fsync: pgoff %lu, "
+					"block 0x%lx dirty\n", pgoff, block);
+				pmfs_copy_to_nvmm(inode, pgoff, offset,
+						nr_flush_bytes);
+			}
 		} else if (block) {
 			xip_mem = pmfs_get_block(inode->i_sb, block);
 			/* flush the range */
@@ -244,7 +248,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
 		start += nr_flush_bytes;
 	} while (start < end);
-persist:
+
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
 	return 0;

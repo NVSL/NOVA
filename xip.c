@@ -852,6 +852,101 @@ out:
 	return ret;
 }
 
+int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
+				unsigned long count)
+{
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi;
+	unsigned long num_blocks;
+	unsigned long blocknr = 0;
+	unsigned long total_blocks;
+	unsigned int data_bits;
+	int allocated;
+	u64 curr_entry, block;
+	int ret;
+	int dirty;
+	void* kmem;
+	size_t bytes;
+	loff_t pos;
+	timing_t memcpy_time, cow_write_time;
+
+	PMFS_START_TIMING(cow_write_t, cow_write_time);
+	sb_start_write(inode->i_sb);
+	mutex_lock(&inode->i_mutex);
+
+	pi = pmfs_get_inode(sb, inode->i_ino);
+	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
+	total_blocks = num_blocks;
+	pos = offset + (pgoff << sb->s_blocksize_bits);
+
+	while (num_blocks > 0) {
+		offset = pos & (pmfs_inode_blk_size(pi) - 1);
+		dirty = pmfs_find_dram_page_and_clean(sb, pi, pgoff, &block);
+		if (dirty == 0) {
+			pmfs_dbg("%s: Dirty DRAM page not found! pgoff %lu\n",
+					__func__, pgoff);
+			bytes = sb->s_blocksize - offset;
+			pos += bytes;
+			count -= bytes;
+			pgoff++;
+			num_blocks--;
+			continue;
+		}
+
+		allocated = pmfs_new_data_blocks(sb, &blocknr, num_blocks,
+						pi->i_blk_type, 0);
+		if (allocated <= 0) {
+			pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__,
+								allocated);
+			ret = allocated;
+			goto out;
+		}
+
+		bytes = sb->s_blocksize * allocated - offset;
+		if (bytes > count)
+			bytes = count;
+
+		kmem = pmfs_get_block(inode->i_sb,
+			pmfs_get_block_off(sb, blocknr,	pi->i_blk_type));
+		PMFS_START_TIMING(memcpy_w_t, memcpy_time);
+		memcpy(kmem + offset, (void *)DRAM_ADDR(block), bytes);
+		pmfs_flush_buffer(kmem + offset, bytes, 0);
+		PMFS_END_TIMING(memcpy_w_t, memcpy_time);
+
+		curr_entry = pmfs_append_inode_entry(sb, pi, inode,
+						blocknr, pgoff, allocated);
+		if (curr_entry == 0) {
+			pmfs_err(sb, "ERROR: append inode entry failed\n");
+			ret = -EINVAL;
+			goto out;
+		}
+
+		pos += bytes;
+		count -= bytes;
+		pgoff += allocated;
+		num_blocks -= allocated;
+		//FIXME: Possible contention here
+		pi->log_tail = curr_entry + sizeof(struct pmfs_inode_entry);
+	}
+
+	pmfs_memunlock_inode(sb, pi);
+	data_bits = blk_type_to_shift[pi->i_blk_type];
+	le64_add_cpu(&pi->i_blocks,
+			(total_blocks << (data_bits - sb->s_blocksize_bits)));
+	pmfs_memlock_inode(sb, pi);
+
+	inode->i_blocks = le64_to_cpu(pi->i_blocks);
+	//FIXME
+	pmfs_update_isize(inode, pi);
+
+	ret = 0;
+out:
+	mutex_unlock(&inode->i_mutex);
+	sb_end_write(inode->i_sb);
+	PMFS_END_TIMING(cow_write_t, cow_write_time);
+	return ret;
+}
+
 #if 0
 static ssize_t pmfs_cow_file_write_contiguous_alloc(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos)
