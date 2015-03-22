@@ -893,7 +893,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 			continue;
 		}
 
-		allocated = pmfs_new_data_blocks(sb, &blocknr, num_blocks,
+		allocated = pmfs_new_data_blocks(sb, &blocknr, 1,
 						pi->i_blk_type, 0);
 		if (allocated <= 0) {
 			pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__,
@@ -920,6 +920,13 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 			ret = -EINVAL;
 			goto out;
 		}
+
+		/*
+		 * Yeah, we have to assign the blocks to NVMM otherwise
+		 * they cannot be freed
+		 */
+		pmfs_assign_blocks(NULL, inode, pgoff, allocated,
+						curr_entry, false, true);
 
 		pos += bytes;
 		count -= bytes;
