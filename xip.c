@@ -31,6 +31,7 @@ do_xip_mapping_read(struct address_space *mapping,
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
 	struct pmfs_inode_entry *entry;
+	struct mem_addr *pair;
 	pgoff_t index, end_index;
 	unsigned long offset;
 	loff_t isize, pos;
@@ -51,7 +52,6 @@ do_xip_mapping_read(struct address_space *mapping,
 		void *xip_mem;
 //		unsigned long xip_pfn;
 		int zero = 0;
-		unsigned long dram_address = 0;
 
 		/* nr is the maximum number of bytes to copy from this page */
 		if (index >= end_index) {
@@ -63,21 +63,34 @@ do_xip_mapping_read(struct address_space *mapping,
 			}
 		}
 
-		entry = pmfs_get_entry(sb, pi, index, &dram_address);
-		if (dram_address) {
+		pair = pmfs_get_mem_pair(sb, pi, index);
+		if (unlikely(pair == NULL)) {
 			nr = PAGE_SIZE;
-			xip_mem = (void *)DRAM_ADDR(dram_address);
+			zero = 1;
+			goto memcpy;
+		}
+		
+		if (pair->dram) {
+			nr = PAGE_SIZE;
+			xip_mem = (void *)DRAM_ADDR(pair->dram);
 			pmfs_dbg_verbose("%s: memory @ 0x%lx\n", __func__,
 					(unsigned long)xip_mem);
 			goto memcpy;
 		}
 
-		if (unlikely(entry == NULL)) {
-			nr = PAGE_SIZE;
-			zero = 1;
-			goto memcpy;
+		entry = (struct pmfs_inode_entry *)
+				pmfs_get_block(sb, pair->nvmm);
+		if (entry == NULL) {
+			pmfs_dbg("%s: entry is NULL\n", __func__);
+			return -EINVAL;
 		}
-
+		if (index < entry->pgoff ||
+			index - entry->pgoff >= entry->num_pages) {
+			pmfs_err(sb, "%s ERROR: %lu, entry pgoff %u, num %u, blocknr "
+				"%llu\n", __func__, index, entry->pgoff,
+				entry->num_pages, entry->block >> PAGE_SHIFT);
+			return -EINVAL;
+		}
 		if (GET_INVALID(entry->block) == 0) {
 			nr = (entry->num_pages - (index - entry->pgoff))
 				* PAGE_SIZE;
@@ -319,16 +332,12 @@ static inline void pmfs_clear_edge_blk (struct super_block *sb, struct
 	size_t count;
 	unsigned long blknr;
 	u64 bp;
-	int dram = 0;
 
 	if (new_blk) {
 		blknr = block >> (pmfs_inode_blk_shift(pi) -
 			sb->s_blocksize_bits);
-		bp = __pmfs_find_data_block(sb, pi, blknr, &dram);
-		if (dram)
-			ptr = (void *)DRAM_ADDR(bp);
-		else
-			ptr = pmfs_get_block(sb, bp);
+		bp = __pmfs_find_data_block(sb, pi, blknr, true);
+		ptr = pmfs_get_block(sb, bp);
 		if (ptr != NULL) {
 			if (is_end_blk) {
 				ptr = ptr + blk_off - (blk_off % 8);
@@ -358,7 +367,6 @@ ssize_t pmfs_xip_file_write_deprecated(struct file *filp,
 	size_t count, offset, eblk_offset, ret;
 	unsigned long start_blk, end_blk, num_blocks, max_logentries;
 	bool same_block;
-	int dram = 0;
 	timing_t xip_write_time, xip_write_fast_time;
 
 	PMFS_START_TIMING(xip_write_t, xip_write_time);
@@ -386,9 +394,7 @@ ssize_t pmfs_xip_file_write_deprecated(struct file *filp,
 	start_blk = pos >> sb->s_blocksize_bits;
 	end_blk = start_blk + num_blocks - 1;
 
-	block = pmfs_find_data_block(inode, start_blk, &dram);
-	if (dram)
-		goto out;
+	block = pmfs_find_data_block(inode, start_blk, true);
 
 	/* Referring to the inode's block size, not 4K */
 	same_block = (((count + offset - 1) >>
@@ -422,15 +428,13 @@ ssize_t pmfs_xip_file_write_deprecated(struct file *filp,
 	/* We avoid zeroing the alloc'd range, which is going to be overwritten
 	 * by this system call anyway */
 	if (offset != 0) {
-		dram = 0;
-		if (pmfs_find_data_block(inode, start_blk, &dram) == 0)
+		if (pmfs_find_data_block(inode, start_blk, true) == 0)
 		    new_sblk = true;
 	}
 
-	dram = 0;
 	eblk_offset = (pos + count) & (pmfs_inode_blk_size(pi) - 1);
 	if ((eblk_offset != 0) &&
-			(pmfs_find_data_block(inode, end_blk, &dram) == 0))
+			(pmfs_find_data_block(inode, end_blk, true) == 0))
 		new_eblk = true;
 
 	/* don't zero-out the allocated blocks */
@@ -455,15 +459,33 @@ out:
 	return ret;
 }
 
-static inline void pmfs_copy_partial_block(struct super_block *sb,
-	u64 blocknr, size_t offset, void* kmem, bool is_end_blk, int dram)
+static inline int pmfs_copy_partial_block(struct super_block *sb,
+	struct mem_addr *pair, unsigned long index,
+	size_t offset, void* kmem, bool is_end_blk)
 {
 	void *ptr;
+	struct pmfs_inode_entry *entry;
 
-	if (dram)
-		ptr = (void *)DRAM_ADDR(blocknr);
-	else
-		ptr = pmfs_get_block(sb, blocknr);
+	/* Copy from dram page cache, otherwise from nvmm */
+	if (pair->dram) {
+		ptr = (void *)DRAM_ADDR(pair->dram);
+	} else {
+		entry = (struct pmfs_inode_entry *)
+				pmfs_get_block(sb, pair->nvmm);
+		if (entry == NULL) {
+			pmfs_dbg("%s: entry is NULL\n", __func__);
+			return -EINVAL;
+		}
+		if (index < entry->pgoff ||
+			index - entry->pgoff >= entry->num_pages) {
+			pmfs_err(sb, "%s ERROR: %lu, entry pgoff %u, num %u, blocknr "
+				"%llu\n", __func__, index, entry->pgoff,
+				entry->num_pages, entry->block >> PAGE_SHIFT);
+			return -EINVAL;
+		}
+		ptr = pmfs_get_block(sb, BLOCK_OFF(entry->block +
+			((index - entry->pgoff) << PAGE_SHIFT)));
+	}
 	if (ptr != NULL) {
 		if (is_end_blk)
 			memcpy(kmem + offset, ptr + offset,
@@ -471,6 +493,8 @@ static inline void pmfs_copy_partial_block(struct super_block *sb,
 		else 
 			memcpy(kmem, ptr, offset);
 	}
+
+	return 0;
 }
 
 /* 
@@ -484,9 +508,8 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 {
 	size_t offset, eblk_offset;
 	unsigned long start_blk, end_blk, num_blocks;
-	u64 block;
 	unsigned long file_end_blk;
-	int dram = 0;
+	struct mem_addr *pair;
 
 	offset = pos & (sb->s_blocksize - 1);
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
@@ -505,15 +528,14 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	pmfs_dbg_verbose("%s: start offset %lu start blk %lu %p\n", __func__,
 				offset, start_blk, kmem);
 	if (offset != 0) {
-		block = __pmfs_find_data_block(sb, pi, start_blk, &dram);
-		pmfs_dbg_verbose("%s: head block %llu\n", __func__, block);
-		if (block == 0) {
+		pair = pmfs_get_mem_pair(sb, pi, start_blk);
+		if (pair == NULL) {
 			/* Fill zero */
 		    	memset(kmem, 0, offset);
 		} else {
 			/* Copy from original block */
-			pmfs_copy_partial_block(sb, block, offset,
-							kmem, false, dram);
+			pmfs_copy_partial_block(sb, pair, start_blk,
+					offset, kmem, false);
 		}
 	}
 
@@ -525,18 +547,16 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	eblk_offset = (pos + count) & (pmfs_inode_blk_size(pi) - 1);
 	pmfs_dbg_verbose("%s: end offset %lu, end blk %lu %p\n", __func__,
 				eblk_offset, end_blk, kmem);
-	dram = 0;
 	if (eblk_offset != 0) {
-		block = __pmfs_find_data_block(sb, pi, end_blk, &dram);
-		pmfs_dbg_verbose("%s: tail block %llu\n", __func__, block);
-		if (block == 0) {
+		pair = pmfs_get_mem_pair(sb, pi, start_blk);
+		if (pair == NULL) {
 			/* Fill zero */
 		    	memset(kmem + eblk_offset, 0,
-				sb->s_blocksize - eblk_offset);
+					sb->s_blocksize - eblk_offset);
 		} else {
 			/* Copy from original block */
-			pmfs_copy_partial_block(sb, block, eblk_offset,
-							kmem, true, dram);
+			pmfs_copy_partial_block(sb, pair, start_blk,
+					eblk_offset, kmem, true);
 		}
 	}
 }
@@ -642,7 +662,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		}
 
 		pmfs_assign_blocks(NULL, inode, start_blk, allocated,
-						curr_entry, false, true);
+						curr_entry, true, false, true);
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {
@@ -692,25 +712,28 @@ int pmfs_find_alloc_dram_pages(struct super_block *sb, struct inode *inode,
 	unsigned long *page_addr, int *existed, unsigned long num_pages,
 	int zero)
 {
-	u64 block;
-	int dram = 0;
+	struct mem_addr *pair;
+	u64 dram_addr;
 
-	block = pmfs_find_data_block(inode, start_blk, &dram);
-	if (dram) {
-		*page_addr = (unsigned long)block;
+	pair = pmfs_get_mem_pair(sb, pi, start_blk);
+	if (pair == NULL)
+		goto alloc;
+	if (pair->dram) {
+		*page_addr = pair->dram;
 		return 1;
 	}
 
-	if (block) {
+	if (pair->nvmm) {
 		/* The NVMM block is there. Need to handle partial writes. */
 		*existed = 1;
 	}
 
-	block = pmfs_alloc_dram_page(sb, 0);
-	if (block == 0)
+alloc:
+	dram_addr = pmfs_alloc_dram_page(sb, 0);
+	if (dram_addr == 0)
 		return 0;
 
-	*page_addr = block;
+	*page_addr = dram_addr;
 	return 1;
 }
 
@@ -809,7 +832,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 
 		page_addr |= DIRTY_BIT;
 		pmfs_assign_blocks(NULL, inode, start_blk, allocated, page_addr,
-				false, false);
+				false, false, false);
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {
@@ -926,7 +949,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		 * they cannot be freed
 		 */
 		pmfs_assign_blocks(NULL, inode, pgoff, allocated,
-						curr_entry, false, true);
+						curr_entry, true, false, true);
 
 		pos += bytes;
 		count -= bytes;
@@ -1147,14 +1170,14 @@ static int pmfs_xip_file_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 }
 
 static int pmfs_find_and_alloc_blocks(struct inode *inode, sector_t iblock,
-			       sector_t *data_block, int create, int *dram)
+			       sector_t *data_block, int create)
 {
 	int err = -EIO;
 	u64 block;
 	pmfs_transaction_t *trans;
 	struct pmfs_inode *pi;
 
-	block = pmfs_find_data_block(inode, iblock, dram);
+	block = pmfs_find_data_block(inode, iblock, true);
 
 	if (!block) {
 		struct super_block *sb = inode->i_sb;
@@ -1197,8 +1220,7 @@ static int pmfs_find_and_alloc_blocks(struct inode *inode, sector_t iblock,
 				goto err;
 			}
 		}
-		*dram = 0;
-		block = pmfs_find_data_block(inode, iblock, dram);
+		block = pmfs_find_data_block(inode, iblock, true);
 		if (!block) {
 			pmfs_dbg("[%s:%d] But alloc didn't fail!\n",
 				  __func__, __LINE__);
@@ -1217,12 +1239,12 @@ err:
 }
 
 static inline int __pmfs_get_block(struct inode *inode, pgoff_t pgoff,
-				    int create, sector_t *result, int *dram)
+				    int create, sector_t *result)
 {
 	int rc = 0;
 
 	rc = pmfs_find_and_alloc_blocks(inode, (sector_t)pgoff, result,
-					 create, dram);
+					 create);
 	return rc;
 }
 
@@ -1232,9 +1254,8 @@ int pmfs_get_xip_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	int rc;
 	sector_t block = 0;
 	struct inode *inode = mapping->host;
-	int dram = 0;
 
-	rc = __pmfs_get_block(inode, pgoff, create, &block, &dram);
+	rc = __pmfs_get_block(inode, pgoff, create, &block);
 	if (rc) {
 		pmfs_dbg1("[%s:%d] rc(%d), sb->physaddr(0x%llx), block(0x%llx),"
 			" pgoff(0x%lx), flag(0x%x), PFN(0x%lx)\n", __func__,
@@ -1244,14 +1265,8 @@ int pmfs_get_xip_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	}
 //	pmfs_dbg("Get block %lu\n", block);
 
-	if (dram) {
-		*kmem = (void *)block;
-		/* FIXME */
-		*pfn = pmfs_get_pfn(inode->i_sb, block);
-	} else {
-		*kmem = pmfs_get_block(inode->i_sb, block);
-		*pfn = pmfs_get_pfn(inode->i_sb, block);
-	}
+	*kmem = pmfs_get_block(inode->i_sb, block);
+	*pfn = pmfs_get_pfn(inode->i_sb, block);
 
 	pmfs_dbg_mmapvv("[%s:%d] sb->physaddr(0x%llx), block(0x%lx),"
 		" pgoff(0x%lx), flag(0x%x), PFN(0x%lx)\n", __func__, __LINE__,

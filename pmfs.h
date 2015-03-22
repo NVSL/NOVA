@@ -248,9 +248,9 @@ extern int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
 		unsigned long file_blocknr, unsigned int num, bool zero);
 extern int pmfs_assign_blocks(pmfs_transaction_t *trans, struct inode *inode,
 		unsigned long file_blocknr, unsigned int num, u64 curr_entry,
-		bool zero, bool free);
+		bool nvmm, bool zero, bool free);
 extern u64 pmfs_find_data_block(struct inode *inode,
-		unsigned long file_blocknr, int *dram_addr);
+		unsigned long file_blocknr, bool nvmm);
 extern u64 pmfs_find_inode(struct inode *inode,
 	unsigned long file_blocknr);
 int pmfs_set_blocksize_hint(struct super_block *sb, struct pmfs_inode *pi,
@@ -592,8 +592,13 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 #define	IS_DIRTY(p)	((p) & (DIRTY_BIT))
 #define	DRAM_ADDR(p)	((p) & (PAGE_MASK))
 
+struct mem_addr {
+	unsigned long nvmm;
+	unsigned long dram;
+};
+
 static inline u64 __pmfs_find_data_block(struct super_block *sb,
-		struct pmfs_inode *pi, unsigned long blocknr, int *dram_addr)
+		struct pmfs_inode *pi, unsigned long blocknr, bool nvmm)
 {
 	__le64 *level_ptr;
 	u64 bp = 0;
@@ -601,6 +606,7 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 	unsigned int idx;
 	unsigned long req_block = blocknr;
 	struct pmfs_inode_entry *entry;
+	struct mem_addr *pair;
 
 	height = pi->height;
 	bp = le64_to_cpu(pi->root);
@@ -618,24 +624,27 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 		height--;
 	}
 
-	if (IS_DRAM_ADDR(bp)) {
-		*dram_addr = 1;
-		return bp;
-	}
+	pair = (struct mem_addr *)bp;
 
-	entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, bp);
-	pmfs_dbg_verbose("%s: %lu, entry pgoff %u, num %u, blocknr %llu\n",
-		__func__, req_block, entry->pgoff, entry->num_pages,
-		entry->block >> PAGE_SHIFT);
-	if (req_block < entry->pgoff ||
-			 req_block - entry->pgoff >= entry->num_pages) {
-		pmfs_err(sb, "%s ERROR: %lu, entry pgoff %u, num %u, blocknr "
-			"%llu\n", __func__, req_block, entry->pgoff,
+	if (nvmm) {
+		entry = (struct pmfs_inode_entry *)
+					pmfs_get_block(sb, pair->nvmm);
+		pmfs_dbg_verbose("%s: %lu, entry pgoff %u, num %u, "
+			"blocknr %llu\n", __func__, req_block, entry->pgoff,
 			entry->num_pages, entry->block >> PAGE_SHIFT);
-		return 0;
+		if (req_block < entry->pgoff ||
+			 req_block - entry->pgoff >= entry->num_pages) {
+			pmfs_err(sb, "%s ERROR: %lu, entry pgoff %u, num %u, "
+				"blocknr %llu\n", __func__, req_block,
+				entry->pgoff, entry->num_pages,
+				entry->block >> PAGE_SHIFT);
+			return 0;
+		}
+		return BLOCK_OFF(entry->block +
+				((req_block - entry->pgoff) << PAGE_SHIFT));
+	} else {
+		return pair->dram;
 	}
-	return BLOCK_OFF(entry->block +
-			((req_block - entry->pgoff) << PAGE_SHIFT));
 }
 
 static inline int pmfs_find_dram_page_and_clean(struct super_block *sb,
@@ -645,17 +654,12 @@ static inline int pmfs_find_dram_page_and_clean(struct super_block *sb,
 	u64 bp = 0;
 	u32 height, bit_shift;
 	unsigned int idx;
+	struct mem_addr *pair;
 
 	height = pi->height;
 	bp = le64_to_cpu(pi->root);
 	if (bp == 0)
 		return 0;
-
-	if (height == 0 && IS_DRAM_ADDR(bp) && IS_DIRTY(bp)) {
-		*dram_addr = bp;
-		pi->root &= ~DIRTY_BIT;
-		return 1;
-	}
 
 	while (height > 0) {
 		level_ptr = (__le64 *)DRAM_ADDR(bp);
@@ -666,26 +670,25 @@ static inline int pmfs_find_dram_page_and_clean(struct super_block *sb,
 			return 0;
 		blocknr = blocknr & ((1 << bit_shift) - 1);
 		height--;
-		if (height == 0 && IS_DRAM_ADDR(bp) && IS_DIRTY(bp)) {
-			*dram_addr = bp;
-			level_ptr[idx] &= ~DIRTY_BIT;
-			return 1;
-		}
+	}
+
+	pair = (struct mem_addr *)bp;
+	if (pair->dram && IS_DIRTY(pair->dram)) {
+		*dram_addr = pair->dram;
+		pair->dram &= ~DIRTY_BIT;
+		return 1;
 	}
 
 	return 0;
 }
 
-static inline struct pmfs_inode_entry *__pmfs_get_entry(struct super_block *sb,
-		struct pmfs_inode *pi, unsigned long blocknr,
-		unsigned long *dram_address)
+static inline struct mem_addr *__pmfs_get_entry(struct super_block *sb,
+		struct pmfs_inode *pi, unsigned long blocknr)
 {
 	__le64 *level_ptr;
 	u64 bp = 0;
 	u32 height, bit_shift;
 	unsigned int idx;
-	unsigned long req_block = blocknr;
-	struct pmfs_inode_entry *entry;
 
 	height = pi->height;
 	bp = le64_to_cpu(pi->root);
@@ -698,16 +701,13 @@ static inline struct pmfs_inode_entry *__pmfs_get_entry(struct super_block *sb,
 		idx = blocknr >> bit_shift;
 		bp = le64_to_cpu(level_ptr[idx]);
 		if (bp == 0)
-			return 0;
+			return NULL;
 		blocknr = blocknr & ((1 << bit_shift) - 1);
 		height--;
 	}
 
-	if (IS_DRAM_ADDR(bp)) {
-		*dram_address = bp;
-		return 0;
-	}
-
+	return (struct mem_addr *)bp;
+#if 0
 	entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, bp);
 	pmfs_dbg_verbose("%s: %lu, entry pgoff %u, num %u, blocknr %llu\n",
 		__func__, req_block, entry->pgoff, entry->num_pages,
@@ -720,6 +720,7 @@ static inline struct pmfs_inode_entry *__pmfs_get_entry(struct super_block *sb,
 		return NULL;
 	}
 	return entry;
+#endif
 }
 
 static inline unsigned int pmfs_inode_blk_shift (struct pmfs_inode *pi)
@@ -846,9 +847,8 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 void pmfs_free_dram_pages(struct super_block *sb);
 int pmfs_rebuild_inode_tree(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode *pi);
-struct pmfs_inode_entry *pmfs_get_entry(struct super_block *sb,
-		struct pmfs_inode *pi, unsigned long file_blocknr,
-		unsigned long *dram_address);
+struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
+		struct pmfs_inode *pi, unsigned long file_blocknr);
 
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);
