@@ -206,19 +206,18 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	{
 		pmfs_dbg_verbose("[%s:%d] : (ERR) isize(%llx), start(%llx),"
 			" end(%llx)\n", __func__, __LINE__, isize, start, end);
-		return -ENODATA;
+		return 0;
 	}
 
 	/* Align start and end to cacheline boundaries */
 	start = start & CACHELINE_MASK;
 	end = CACHELINE_ALIGN(end);
 	do {
-		sector_t block = 0;
-		void *xip_mem;
+		u64 page = 0;
+//		void *xip_mem;
 		pgoff_t pgoff;
 		loff_t offset;
 		unsigned long nr_flush_bytes;
-		int dram = 0;
 
 		pgoff = start >> PAGE_CACHE_SHIFT;
 		offset = start & ~PAGE_CACHE_MASK;
@@ -227,25 +226,13 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		if (nr_flush_bytes > (end - start))
 			nr_flush_bytes = end - start;
 
-		block = pmfs_find_data_block(inode, (sector_t)pgoff, &dram);
-		if (dram && block) {
-			if (IS_DIRTY(block)) {
-				pmfs_dbg_verbose("fsync: pgoff %lu, "
-					"block 0x%lx dirty\n", pgoff, block);
-				pmfs_copy_to_nvmm(inode, pgoff, offset,
+		page = pmfs_find_data_block(inode, (sector_t)pgoff, false);
+		if (page && IS_DIRTY(page)) {
+			pmfs_dbg_verbose("fsync: pgoff %lu, "
+					"page 0x%llx dirty\n", pgoff, page);
+			pmfs_copy_to_nvmm(inode, pgoff, offset,
 						nr_flush_bytes);
-			}
-		} else if (block) {
-			xip_mem = pmfs_get_block(inode->i_sb, block);
-			/* flush the range */
-			pmfs_flush_buffer(xip_mem + offset, nr_flush_bytes, 0);
-		} else {
-			/* sparse files could have such holes */
-			pmfs_dbg_verbose("[%s:%d] : start(%llx), end(%llx),"
-			" pgoff(%lx)\n", __func__, __LINE__, start, end, pgoff);
-			break;
 		}
-
 		start += nr_flush_bytes;
 	} while (start < end);
 
