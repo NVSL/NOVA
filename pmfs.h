@@ -120,6 +120,7 @@ enum timing_category {
 	ioremap_t,
 	xip_read_t,
 	cow_write_t,
+	page_cache_write_t,
 	xip_write_t,
 	xip_write_fast_t,
 	memcpy_r_t,

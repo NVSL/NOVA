@@ -764,10 +764,10 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	void* kmem;
 	size_t bytes;
 	long status = 0;
-	timing_t cow_write_time, memcpy_time;
+	timing_t dram_write_time, memcpy_time;
 	unsigned long step = 0;
 
-	PMFS_START_TIMING(cow_write_t, cow_write_time);
+	PMFS_START_TIMING(page_cache_write_t, dram_write_time);
 
 	sb_start_write(inode->i_sb);
 	mutex_lock(&inode->i_mutex);
@@ -883,7 +883,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 out:
 	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
-	PMFS_END_TIMING(cow_write_t, cow_write_time);
+	PMFS_END_TIMING(page_cache_write_t, dram_write_time);
 	return ret;
 }
 

@@ -5,6 +5,7 @@ const char *Timingstring[TIMING_NUM] =
 	"ioremap",
 	"xip_read",
 	"cow_write",
+	"page_cache_write",
 	"xip_write",
 	"xip_write_fast",
 	"memcpy_read",
