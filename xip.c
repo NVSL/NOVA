@@ -678,6 +678,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {
+			status = copied;
 			written += copied;
 			pos += copied;
 			buf += copied;
@@ -863,6 +864,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {
+			status = copied;
 			written += copied;
 			pos += copied;
 			buf += copied;
@@ -916,8 +918,9 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 	int ret;
 	int dirty;
 	void* kmem;
-	size_t bytes;
+	size_t bytes, copied;
 	loff_t pos;
+	int status = 0;
 	timing_t memcpy_time, copy_to_nvmm_time;
 
 	PMFS_START_TIMING(copy_to_nvmm_t, copy_to_nvmm_time);
@@ -959,8 +962,11 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		kmem = pmfs_get_block(inode->i_sb,
 			pmfs_get_block_off(sb, blocknr,	pi->i_blk_type));
 		PMFS_START_TIMING(memcpy_w_wb_t, memcpy_time);
-		memcpy(kmem + offset, (void *)DRAM_ADDR(block), bytes);
-		pmfs_flush_buffer(kmem + offset, bytes, 0);
+//		memcpy(kmem + offset, (void *)DRAM_ADDR(block), bytes);
+//		pmfs_flush_buffer(kmem + offset, bytes, 0);
+		copied = bytes -
+			__copy_from_user_inatomic_nocache(kmem + offset,
+					(void *)DRAM_ADDR(block), bytes);
 		PMFS_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
 		curr_entry = pmfs_append_inode_entry(sb, pi, inode,
@@ -978,10 +984,20 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		pmfs_assign_blocks(NULL, inode, pgoff, allocated,
 						curr_entry, true, false, true);
 
-		pos += bytes;
-		count -= bytes;
-		pgoff += allocated;
-		num_blocks -= allocated;
+		if (copied > 0) {
+			status = copied;
+			pos += bytes;
+			count -= bytes;
+			pgoff += allocated;
+			num_blocks -= allocated;
+		}
+		if (unlikely(copied != bytes))
+			if (status >= 0)
+				status = -EFAULT;
+		if (status < 0) {
+			ret = status;
+			goto out;
+		}
 		//FIXME: Possible contention here
 		pi->log_tail = curr_entry + sizeof(struct pmfs_inode_entry);
 	}
