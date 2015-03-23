@@ -129,6 +129,7 @@ enum timing_category {
 	append_entry_t,
 	new_meta_blocks_t,
 	new_data_blocks_t,
+	new_cache_page_t,
 	assign_t,
 	fsync_t,
 	copy_to_nvmm_t,
