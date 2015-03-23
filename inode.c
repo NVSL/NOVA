@@ -655,7 +655,7 @@ unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
 			height, btype, first_blocknr, last_blocknr, 0, &mpty);
 		BUG_ON(!mpty);
 		first_blocknr = root;
-		pmfs_free_mem_addr(sb, root, btype);
+		pmfs_free_meta_block(sb, first_blocknr);
 	}
 	return freed;
 }
