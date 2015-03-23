@@ -647,6 +647,7 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 	}
 }
 
+/* Return 1 if the page is found and dirty */
 static inline int pmfs_find_dram_page_and_clean(struct super_block *sb,
 		struct pmfs_inode *pi, unsigned long blocknr, u64 *dram_addr)
 {
