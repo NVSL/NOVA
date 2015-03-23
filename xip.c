@@ -69,7 +69,7 @@ do_xip_mapping_read(struct address_space *mapping,
 			zero = 1;
 			goto memcpy;
 		}
-		
+
 		if (pair->dram) {
 			nr = PAGE_SIZE;
 			xip_mem = (void *)DRAM_ADDR(pair->dram);

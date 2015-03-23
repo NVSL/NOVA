@@ -357,6 +357,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 				pair->nvmm = 0;
 			}
 
+			kfree(pair);
 			node[i] = 0;
 			freed++;
 		}
@@ -533,6 +534,7 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 				pair->dram = 0;
 				freed++;
 			}
+			kfree(pair);
 		}
 		*meta_empty = true;
 		return freed;
@@ -671,13 +673,14 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 	if (!root)
 		return 0;
 
- 	if (height == 0) {
+	if (height == 0) {
 		struct mem_addr *pair = (struct mem_addr *)root;
 		if (pair->dram) {
 			pmfs_free_dram_page(pair->dram);
 			pair->dram = 0;
 			return 1;
 		}
+		kfree(pair);
 		return 0;
 	}
 
@@ -1160,10 +1163,23 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 	first_index = first_blocknr >> node_bits;
 	last_index = last_blocknr >> node_bits;
 
+	pmfs_dbg_verbose("%s: node 0x%llx, height %u\n",
+				__func__, block, height);
+
 	for (i = first_index; i <= last_index; i++) {
 		if (height == 1) {
+			if (node[i] == 0) {
+				node[i] = (unsigned long)kzalloc(
+					sizeof(struct mem_addr), GFP_KERNEL);
+				if (node[i] == 0) {
+					pmfs_dbg("%s: alloc failed\n",
+						__func__);
+					return -EINVAL;
+				}
+			}
+			pmfs_dbg_verbose("node[%d] @ 0x%llx\n", i, node[i]);
 			leaf = (struct mem_addr *)node[i];
-			if (node[i] && free && nvmm) {
+			if (leaf->nvmm && free && nvmm) {
 				entry = pmfs_get_block(sb, leaf->nvmm);
 				blocknr = entry->block >> PAGE_SHIFT;
 				if (entry->pgoff > start_pgoff + i ||
@@ -1216,7 +1232,7 @@ static int recursive_assign_blocks(pmfs_transaction_t *trans,
 
 			pgoff = start_pgoff + (i << node_bits);
 			errval = recursive_assign_blocks(trans, sb, pi,
-				node[i], height - 1, first_blk,
+				DRAM_ADDR(node[i]), height - 1, first_blk,
 				last_blk, address, new_node, pgoff, nvmm, zero,
 				free);
 			if (errval < 0)
@@ -1401,7 +1417,7 @@ int __pmfs_assign_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 				goto fail;
 			}
 			errval = recursive_assign_blocks(trans, sb, pi,
-					pi->root, pi->height,
+					DRAM_ADDR(pi->root), pi->height,
 					first_blocknr, last_blocknr,
 					address, 1, 0, nvmm, zero, free);
 			if (errval < 0)
