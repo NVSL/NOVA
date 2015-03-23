@@ -15,6 +15,8 @@ const char *Timingstring[TIMING_NUM] =
 	"new_meta_blocks",
 	"new_data_blocks",
 	"assign_blocks",
+	"fsync",
+	"copy_to_nvmm",
 	"free_data_blocks",
 	"free_meta_blocks",
 	"evict_inode",

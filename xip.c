@@ -903,9 +903,9 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 	void* kmem;
 	size_t bytes;
 	loff_t pos;
-	timing_t memcpy_time, cow_write_time;
+	timing_t memcpy_time, copy_to_nvmm_time;
 
-	PMFS_START_TIMING(cow_write_t, cow_write_time);
+	PMFS_START_TIMING(copy_to_nvmm_t, copy_to_nvmm_time);
 	sb_start_write(inode->i_sb);
 	mutex_lock(&inode->i_mutex);
 
@@ -985,7 +985,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 out:
 	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
-	PMFS_END_TIMING(cow_write_t, cow_write_time);
+	PMFS_END_TIMING(copy_to_nvmm_t, copy_to_nvmm_time);
 	return ret;
 }
 

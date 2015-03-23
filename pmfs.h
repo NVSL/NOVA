@@ -130,6 +130,8 @@ enum timing_category {
 	new_meta_blocks_t,
 	new_data_blocks_t,
 	assign_t,
+	fsync_t,
+	copy_to_nvmm_t,
 	free_data_t,
 	free_meta_t,
 	evict_inode_t,
