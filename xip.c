@@ -659,11 +659,11 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 
 		/* Now copy from user buf */
 //		pmfs_dbg("Write: %p\n", kmem);
-		PMFS_START_TIMING(memcpy_w_t, memcpy_time);
+		PMFS_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
 		copied = bytes -
 			__copy_from_user_inatomic_nocache(kmem + offset,
 								buf, bytes);
-		PMFS_END_TIMING(memcpy_w_t, memcpy_time);
+		PMFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
 		curr_entry = pmfs_append_inode_entry(sb, pi, inode,
 						blocknr, start_blk, allocated);
@@ -848,11 +848,11 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 
 		/* Now copy from user buf */
 //		pmfs_dbg("Write: %p\n", kmem);
-		PMFS_START_TIMING(memcpy_w_t, memcpy_time);
+		PMFS_START_TIMING(memcpy_w_dram_t, memcpy_time);
 		copied = bytes -
 			__copy_from_user_inatomic_nocache(kmem + offset,
 								buf, bytes);
-		PMFS_END_TIMING(memcpy_w_t, memcpy_time);
+		PMFS_END_TIMING(memcpy_w_dram_t, memcpy_time);
 
 		/* If the mem pair does not exist, assign the dram page */
 		if (existed == 0) {
@@ -958,10 +958,10 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 
 		kmem = pmfs_get_block(inode->i_sb,
 			pmfs_get_block_off(sb, blocknr,	pi->i_blk_type));
-		PMFS_START_TIMING(memcpy_w_t, memcpy_time);
+		PMFS_START_TIMING(memcpy_w_wb_t, memcpy_time);
 		memcpy(kmem + offset, (void *)DRAM_ADDR(block), bytes);
 		pmfs_flush_buffer(kmem + offset, bytes, 0);
-		PMFS_END_TIMING(memcpy_w_t, memcpy_time);
+		PMFS_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
 		curr_entry = pmfs_append_inode_entry(sb, pi, inode,
 						blocknr, pgoff, allocated);
