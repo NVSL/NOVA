@@ -49,9 +49,10 @@ do_xip_mapping_read(struct address_space *mapping,
 	end_index = (isize - 1) >> PAGE_CACHE_SHIFT;
 	do {
 		unsigned long nr, left;
-		void *xip_mem;
+		void *xip_mem = NULL;
 //		unsigned long xip_pfn;
 		int zero = 0;
+		int dram_copy = 0;
 
 		/* nr is the maximum number of bytes to copy from this page */
 		if (index >= end_index) {
@@ -75,6 +76,7 @@ do_xip_mapping_read(struct address_space *mapping,
 			xip_mem = (void *)DRAM_ADDR(pair->dram);
 			pmfs_dbg_verbose("%s: memory @ 0x%lx\n", __func__,
 					(unsigned long)xip_mem);
+			dram_copy = 1;
 			goto memcpy;
 		}
 
@@ -134,13 +136,23 @@ memcpy:
 		if (nr > len - copied)
 			nr = len - copied;
 
-		PMFS_START_TIMING(memcpy_r_t, memcpy_time);
+		if (dram_copy) {
+			PMFS_START_TIMING(memcpy_r_dram_t, memcpy_time);
+		} else {
+			PMFS_START_TIMING(memcpy_r_nvmm_t, memcpy_time);
+		}
+
 		if (!zero)
 			left = __copy_to_user(buf + copied,
 						xip_mem + offset, nr);
 		else
 			left = __clear_user(buf + copied, nr);
-		PMFS_END_TIMING(memcpy_r_t, memcpy_time);
+
+		if (dram_copy) {
+			PMFS_END_TIMING(memcpy_r_dram_t, memcpy_time);
+		} else {
+			PMFS_END_TIMING(memcpy_r_nvmm_t, memcpy_time);
+		}
 
 		if (left) {
 			error = -EFAULT;
