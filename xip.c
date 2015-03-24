@@ -842,7 +842,8 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 
 		kmem = (void *)DRAM_ADDR(page_addr);
 
-		if (existed && (offset ||
+		/* If only NVMM page presents, copy the partial block */
+		if (existed == 1 && (offset ||
 				((offset + bytes) & (PAGE_SIZE - 1)) != 0))
 			pmfs_handle_head_tail_blocks(sb, pi, inode, pos, bytes,
 							kmem);
