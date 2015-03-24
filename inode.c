@@ -1426,7 +1426,7 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 	} else {
 		if (height == 0) {
 			struct mem_addr *root = (struct mem_addr *)pi->root;
-			if (free && nvmm) {
+			if (root->nvmm && free && nvmm) {
 				/* With cow we need to re-assign the root */
 				unsigned long blocknr;
 				struct pmfs_inode_entry *entry;
