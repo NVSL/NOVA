@@ -2068,8 +2068,10 @@ void pmfs_dirty_inode(struct inode *inode, int flags)
 	/* FIXME: Is this check needed? */
 	if (pmfs_is_inode_dirty(inode, pi))
 		printk_ratelimited(KERN_ERR "pmfs: inode was dirty! "
-			"inode %lu blocks, pi %llu blocks\n",
-			inode->i_blocks, pi->i_blocks);
+			"inode %lu blocks, pi %llu blocks, "
+			"inode size %llu, pi size %llu\n",
+			inode->i_blocks, pi->i_blocks,
+			inode->i_size, pi->i_size);
 }
 
 /*
