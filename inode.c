@@ -1143,7 +1143,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 	struct pmfs_inode *pi, __le64 block, u32 height,
 	unsigned long first_blocknr, unsigned long last_blocknr,
 	u64 address, bool new_node, unsigned long start_pgoff, bool nvmm,
-	bool free)
+	bool free, bool alloc_dram)
 {
 	int i, errval;
 	unsigned int meta_bits = META_BLK_SHIFT, node_bits;
@@ -1204,10 +1204,16 @@ static int recursive_assign_blocks(struct super_block *sb,
 				//FIXME: garbage collection
 				pi->i_blocks--;
 			}
-			if (nvmm)
-				leaf->nvmm = address;
-			else
-				leaf->dram = address;
+			if (alloc_dram) {
+				if (!leaf->dram)
+					leaf->dram =
+						pmfs_alloc_dram_page(sb, 0);
+			} else {
+				if (nvmm)
+					leaf->nvmm = address;
+				else
+					leaf->dram = address;
+			}
 			pmfs_dbg_verbose("Assign block %d to %llu\n", i, 
 							address);
 		} else {
@@ -1234,7 +1240,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 			errval = recursive_assign_blocks(sb, pi,
 				DRAM_ADDR(node[i]), height - 1, first_blk,
 				last_blk, address, new_node, pgoff, nvmm,
-				free);
+				free, alloc_dram);
 			if (errval < 0)
 				goto fail;
 		}
@@ -1348,7 +1354,7 @@ fail:
 
 int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 	unsigned long file_blocknr, unsigned int num,
-	u64 address, bool nvmm, bool free)
+	u64 address, bool nvmm, bool free, bool alloc_dram)
 {
 	int errval;
 	unsigned long max_blocks;
@@ -1399,10 +1405,14 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 				return -EINVAL;
 			}
 
-			if (nvmm)
-				root->nvmm = address;
-			else
-				root->dram = address;
+			if (alloc_dram) {
+				root->dram = pmfs_alloc_dram_page(sb, 0);
+			} else {
+				if (nvmm)
+					root->nvmm = address;
+				else
+					root->dram = address;
+			}
 
 			pmfs_dbg_verbose("Set root @%p\n", root);
 			pmfs_memunlock_inode(sb, pi);
@@ -1419,7 +1429,7 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			errval = recursive_assign_blocks(sb, pi,
 					DRAM_ADDR(pi->root), pi->height,
 					first_blocknr, last_blocknr,
-					address, 1, 0, nvmm, free);
+					address, 1, 0, nvmm, free, alloc_dram);
 			if (errval < 0)
 				goto fail;
 		}
@@ -1443,10 +1453,17 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 						blocknr);
 				pi->i_blocks--;
 			}
-			if (nvmm)
-				root->nvmm = address;
-			else
-				root->dram = address;
+
+			if (alloc_dram) {
+				if (!root->dram)
+					root->dram =
+						pmfs_alloc_dram_page(sb, 0);
+			} else {
+				if (nvmm)
+					root->nvmm = address;
+				else
+					root->dram = address;
+			}
 			pmfs_memunlock_inode(sb, pi);
 			pi->height = height;
 			pmfs_memlock_inode(sb, pi);
@@ -1464,7 +1481,8 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 		}
 		errval = recursive_assign_blocks(sb, pi,
 				DRAM_ADDR(pi->root), height, first_blocknr,
-				last_blocknr, address, 0, 0, nvmm, free);
+				last_blocknr, address, 0, 0, nvmm, free,
+				alloc_dram);
 		if (errval < 0)
 			goto fail;
 	}
@@ -1494,7 +1512,7 @@ inline int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
  * Assign inode to point to the blocks start from alloc_blocknr.
  */
 inline int pmfs_assign_blocks(struct inode *inode, unsigned long file_blocknr,
-	unsigned int num, u64 address, bool nvmm, bool free)
+	unsigned int num, u64 address, bool nvmm, bool free, bool alloc_dram)
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
@@ -1503,7 +1521,7 @@ inline int pmfs_assign_blocks(struct inode *inode, unsigned long file_blocknr,
 
 	PMFS_START_TIMING(assign_t, assign_time);
 	errval = __pmfs_assign_blocks(sb, pi, file_blocknr,
-					num, address, nvmm, free);
+					num, address, nvmm, free, alloc_dram);
 	PMFS_END_TIMING(assign_t, assign_time);
 
 	return errval;
@@ -2792,7 +2810,8 @@ int pmfs_rebuild_inode_tree(struct super_block *sb, struct inode *inode,
 			 * Don't double free them, just re-assign the pointers.
 			 */
 			pmfs_assign_blocks(inode, entry->pgoff,
-					entry->num_pages, curr_p, true, false);
+					entry->num_pages, curr_p, true,
+					false, false);
 		}
 
 		curr_p += sizeof(struct pmfs_inode_entry);

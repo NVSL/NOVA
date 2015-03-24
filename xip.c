@@ -674,7 +674,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		}
 
 		pmfs_assign_blocks(inode, start_blk, allocated,
-						curr_entry, true, true);
+						curr_entry, true, true, false);
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {
@@ -816,6 +816,11 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	pmfs_dbg_verbose("%s: block %llu, offset %lu, count %lu\n", __func__,
 				pos >> sb->s_blocksize_bits, offset, count);
 
+	/* Allocate dram pages for the required extent */
+	start_blk = pos >> sb->s_blocksize_bits;
+	pmfs_assign_blocks(inode, start_blk, num_blocks,
+					0, false, false, true);
+
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
@@ -860,7 +865,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		if (existed == 0) {
 			page_addr |= DIRTY_BIT;
 			pmfs_assign_blocks(inode, start_blk, allocated,
-					page_addr, false, false);
+					page_addr, false, false, false);
 		}
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
@@ -983,7 +988,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		 * they cannot be freed
 		 */
 		pmfs_assign_blocks(inode, pgoff, allocated,
-						curr_entry, true, true);
+						curr_entry, true, true, false);
 
 		if (copied > 0) {
 			status = copied;
