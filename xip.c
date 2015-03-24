@@ -673,7 +673,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 			goto out;
 		}
 
-		pmfs_assign_blocks(NULL, inode, start_blk, allocated,
+		pmfs_assign_blocks(inode, start_blk, allocated,
 						curr_entry, true, false, true);
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
@@ -858,7 +858,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		/* If the mem pair does not exist, assign the dram page */
 		if (existed == 0) {
 			page_addr |= DIRTY_BIT;
-			pmfs_assign_blocks(NULL, inode, start_blk, allocated,
+			pmfs_assign_blocks(inode, start_blk, allocated,
 					page_addr, false, false, false);
 		}
 
@@ -981,7 +981,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		 * Yeah, we have to assign the blocks to NVMM otherwise
 		 * they cannot be freed
 		 */
-		pmfs_assign_blocks(NULL, inode, pgoff, allocated,
+		pmfs_assign_blocks(inode, pgoff, allocated,
 						curr_entry, true, false, true);
 
 		if (copied > 0) {
@@ -1110,7 +1110,7 @@ static ssize_t pmfs_cow_file_write_contiguous_alloc(struct file *filp,
 		goto out;
 	}
 
-	pmfs_assign_blocks(NULL, inode, start_blk, num_blocks,
+	pmfs_assign_blocks(inode, start_blk, num_blocks,
 						curr_entry, false, true);
 
 	written = copied;
