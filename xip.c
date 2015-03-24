@@ -522,7 +522,9 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	unsigned long start_blk, end_blk, num_blocks;
 	unsigned long file_end_blk;
 	struct mem_addr *pair;
+	timing_t partial_time;
 
+	PMFS_START_TIMING(partial_block_t, partial_time);
 	offset = pos & (sb->s_blocksize - 1);
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
 	/* offset in the actual block size block */
@@ -531,8 +533,10 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	end_blk = start_blk + num_blocks - 1;
 
 	file_end_blk = inode->i_size >> PAGE_SHIFT;
-	if (start_blk > file_end_blk)
+	if (start_blk > file_end_blk) {
+		PMFS_END_TIMING(partial_block_t, partial_time);
 		return;
+	}
 
 	pmfs_dbg_verbose("%s: %lu blocks\n", __func__, num_blocks);
 	/* We avoid zeroing the alloc'd range, which is going to be overwritten
@@ -551,8 +555,10 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 		}
 	}
 
-	if (pos + count >= inode->i_size)
+	if (pos + count >= inode->i_size) {
+		PMFS_END_TIMING(partial_block_t, partial_time);
 		return;
+	}
 
 	kmem = (void *)((char *)kmem +
 			((num_blocks - 1) << sb->s_blocksize_bits));
@@ -571,6 +577,8 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 					eblk_offset, kmem, true);
 		}
 	}
+
+	PMFS_END_TIMING(partial_block_t, partial_time);
 }
 
 ssize_t pmfs_cow_file_write(struct file *filp,
@@ -780,7 +788,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	void* kmem;
 	size_t bytes;
 	long status = 0;
-	timing_t dram_write_time, memcpy_time;
+	timing_t dram_write_time, memcpy_time, find_cache_time;
 	unsigned long step = 0;
 
 	PMFS_START_TIMING(page_cache_write_t, dram_write_time);
@@ -828,8 +836,10 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		existed = 0;
 
 		/* don't zero-out the allocated blocks */
+		PMFS_START_TIMING(find_cache_t, find_cache_time);
 		allocated = pmfs_find_alloc_dram_pages(sb, inode, pi,
 					start_blk, &page_addr, &existed, 1, 0);
+		PMFS_END_TIMING(find_cache_t, find_cache_time);
 		pmfs_dbg_verbose("%s: alloc %d dram pages @ 0x%lx\n", __func__,
 					allocated, page_addr);
 
