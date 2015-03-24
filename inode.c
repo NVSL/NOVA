@@ -1143,7 +1143,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 	struct pmfs_inode *pi, __le64 block, u32 height,
 	unsigned long first_blocknr, unsigned long last_blocknr,
 	u64 address, bool new_node, unsigned long start_pgoff, bool nvmm,
-	bool zero, bool free)
+	bool free)
 {
 	int i, errval;
 	unsigned int meta_bits = META_BLK_SHIFT, node_bits;
@@ -1233,7 +1233,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 			pgoff = start_pgoff + (i << node_bits);
 			errval = recursive_assign_blocks(sb, pi,
 				DRAM_ADDR(node[i]), height - 1, first_blk,
-				last_blk, address, new_node, pgoff, nvmm, zero,
+				last_blk, address, new_node, pgoff, nvmm,
 				free);
 			if (errval < 0)
 				goto fail;
@@ -1348,7 +1348,7 @@ fail:
 
 int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 	unsigned long file_blocknr, unsigned int num,
-	u64 address, bool nvmm, bool zero, bool free)
+	u64 address, bool nvmm, bool free)
 {
 	int errval;
 	unsigned long max_blocks;
@@ -1419,7 +1419,7 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			errval = recursive_assign_blocks(sb, pi,
 					DRAM_ADDR(pi->root), pi->height,
 					first_blocknr, last_blocknr,
-					address, 1, 0, nvmm, zero, free);
+					address, 1, 0, nvmm, free);
 			if (errval < 0)
 				goto fail;
 		}
@@ -1464,7 +1464,7 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 		}
 		errval = recursive_assign_blocks(sb, pi,
 				DRAM_ADDR(pi->root), height, first_blocknr,
-				last_blocknr, address, 0, 0, nvmm, zero, free);
+				last_blocknr, address, 0, 0, nvmm, free);
 		if (errval < 0)
 			goto fail;
 	}
@@ -1494,7 +1494,7 @@ inline int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
  * Assign inode to point to the blocks start from alloc_blocknr.
  */
 inline int pmfs_assign_blocks(struct inode *inode, unsigned long file_blocknr,
-	unsigned int num, u64 address, bool nvmm, bool zero, bool free)
+	unsigned int num, u64 address, bool nvmm, bool free)
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
@@ -1503,7 +1503,7 @@ inline int pmfs_assign_blocks(struct inode *inode, unsigned long file_blocknr,
 
 	PMFS_START_TIMING(assign_t, assign_time);
 	errval = __pmfs_assign_blocks(sb, pi, file_blocknr,
-					num, address, nvmm, zero, free);
+					num, address, nvmm, free);
 	PMFS_END_TIMING(assign_t, assign_time);
 
 	return errval;
@@ -2792,8 +2792,7 @@ int pmfs_rebuild_inode_tree(struct super_block *sb, struct inode *inode,
 			 * Don't double free them, just re-assign the pointers.
 			 */
 			pmfs_assign_blocks(inode, entry->pgoff,
-					entry->num_pages, curr_p, true, false,
-					false);
+					entry->num_pages, curr_p, true, false);
 		}
 
 		curr_p += sizeof(struct pmfs_inode_entry);

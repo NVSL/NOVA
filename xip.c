@@ -674,7 +674,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		}
 
 		pmfs_assign_blocks(inode, start_blk, allocated,
-						curr_entry, true, false, true);
+						curr_entry, true, true);
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {
@@ -859,7 +859,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		if (existed == 0) {
 			page_addr |= DIRTY_BIT;
 			pmfs_assign_blocks(inode, start_blk, allocated,
-					page_addr, false, false, false);
+					page_addr, false, false);
 		}
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
@@ -982,7 +982,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		 * they cannot be freed
 		 */
 		pmfs_assign_blocks(inode, pgoff, allocated,
-						curr_entry, true, false, true);
+						curr_entry, true, true);
 
 		if (copied > 0) {
 			status = copied;
