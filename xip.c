@@ -76,8 +76,13 @@ do_xip_mapping_read(struct address_space *mapping,
 			xip_mem = (void *)DRAM_ADDR(pair->dram);
 			pmfs_dbg_verbose("%s: memory @ 0x%lx\n", __func__,
 					(unsigned long)xip_mem);
-			dram_copy = 1;
-			goto memcpy;
+			if (unlikely(pair->dram & OUTDATE_BIT)) {
+				pmfs_dbg("%s: DRAM page is out-of-date\n",
+					__func__);
+			} else {
+				dram_copy = 1;
+				goto memcpy;
+			}
 		}
 
 		entry = (struct pmfs_inode_entry *)
