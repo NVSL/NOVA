@@ -735,8 +735,8 @@ out:
  */
 int pmfs_find_alloc_dram_pages(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode *pi, unsigned long start_blk,
-	unsigned long *page_addr, int *existed, unsigned long num_pages,
-	int zero)
+	unsigned long *page_addr, int *existed,
+	unsigned long num_pages, int zero)
 {
 	struct mem_addr *pair;
 	u64 dram_addr;
@@ -856,15 +856,25 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 			bytes = count;
 
 		kmem = (void *)DRAM_ADDR(page_addr);
+		pmfs_dbg_verbose("Write: 0x%lx\n", page_addr);
 
 		/* If only NVMM page presents, copy the partial block */
-		if (existed == 1 && (offset ||
-				((offset + bytes) & (PAGE_SIZE - 1)) != 0))
-			pmfs_handle_head_tail_blocks(sb, pi, inode, pos, bytes,
-							kmem);
+		if ((existed == 1 || page_addr & OUTDATE_BIT) && (offset ||
+				((offset + bytes) & (PAGE_SIZE - 1)) != 0)) {
+			u64 bp;
+			void *nvmm;
+
+			bp = __pmfs_find_data_block(sb, pi, start_blk, true);
+			nvmm = pmfs_get_block(sb, bp);
+			__copy_from_user_inatomic_nocache(
+				(void *)DRAM_ADDR(page_addr), nvmm, PAGE_SIZE);
+			if (page_addr & OUTDATE_BIT) {
+				page_addr &= ~OUTDATE_BIT;
+				existed = 0;
+			}
+		}
 
 		/* Now copy from user buf */
-//		pmfs_dbg("Write: %p\n", kmem);
 		PMFS_START_TIMING(memcpy_w_dram_t, memcpy_time);
 		copied = bytes -
 			__copy_from_user_inatomic_nocache(kmem + offset,
