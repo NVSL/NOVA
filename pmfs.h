@@ -603,8 +603,8 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 #define	DRAM_ADDR(p)	((p) & (PAGE_MASK))
 
 struct mem_addr {
-	unsigned long nvmm;
-	unsigned long dram;
+	unsigned long nvmm;	// inode entry
+	unsigned long dram;	// DRAM virtual address
 };
 
 static inline u64 __pmfs_find_data_block(struct super_block *sb,
