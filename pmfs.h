@@ -600,6 +600,7 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 #define	OUTDATE_BIT	0x10UL	// Outdate with NVMM page
 #define	IS_DRAM_ADDR(p)	((p) & (DRAM_BIT))
 #define	IS_DIRTY(p)	((p) & (DIRTY_BIT))
+#define	OUTDATE(p)	((p) & (OUTDATE_BIT))
 #define	DRAM_ADDR(p)	((p) & (PAGE_MASK))
 
 struct mem_addr {

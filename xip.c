@@ -76,7 +76,7 @@ do_xip_mapping_read(struct address_space *mapping,
 			xip_mem = (void *)DRAM_ADDR(pair->dram);
 			pmfs_dbg_verbose("%s: memory @ 0x%lx\n", __func__,
 					(unsigned long)xip_mem);
-			if (unlikely(pair->dram & OUTDATE_BIT)) {
+			if (unlikely(OUTDATE(pair->dram))) {
 				pmfs_dbg("%s: DRAM page is out-of-date\n",
 					__func__);
 			} else {
@@ -853,7 +853,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		pmfs_dbg_verbose("Write: 0x%lx\n", page_addr);
 
 		/* If only NVMM page presents, copy the partial block */
-		if ((existed == 1 || page_addr & OUTDATE_BIT) && (offset ||
+		if ((existed == 1 || OUTDATE(page_addr)) && (offset ||
 				((offset + bytes) & (PAGE_SIZE - 1)) != 0)) {
 			u64 bp;
 			void *nvmm;
