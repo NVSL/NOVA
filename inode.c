@@ -2833,6 +2833,8 @@ int pmfs_rebuild_inode_tree(struct super_block *sb, struct inode *inode,
 			curr_p = next_log_page(sb, curr_p);
 	}
 
+	pi->low_dirty = MAX_BLOCK;
+	pi->high_dirty = 0;
 	return 0;
 }
 
