@@ -121,6 +121,9 @@ struct pmfs_inode {
 	__le64	log_head;
 	__le32	log_pages;
 
+	__le32	low_dirty;
+	__le32	high_dirty;
+
 	struct {
 		__le32 rdev;    /* major/minor # */
 	} dev;              /* device inode */

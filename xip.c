@@ -777,7 +777,6 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	unsigned long start_blk, num_blocks;
 	unsigned long total_blocks;
 	unsigned long page_addr = 0;
-//	unsigned int data_bits;
 	int allocated, existed = 0;
 	void* kmem;
 	size_t bytes;
@@ -882,6 +881,11 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 					page_addr, false, false, false);
 		}
 
+		if (start_blk < pi->low_dirty)
+			pi->low_dirty = start_blk;
+		if (start_blk > pi->high_dirty)
+			pi->high_dirty = start_blk;
+
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {
 			status = copied;
@@ -898,13 +902,6 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 			break;
 	}
 
-/*
-	pmfs_memunlock_inode(sb, pi);
-	data_bits = blk_type_to_shift[pi->i_blk_type];
-	le64_add_cpu(&pi->i_blocks,
-			(total_blocks << (data_bits - sb->s_blocksize_bits)));
-	pmfs_memlock_inode(sb, pi);
-*/
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	if (pos > inode->i_size) {
 		i_size_write(inode, pos);
@@ -956,8 +953,9 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		dirty = pmfs_find_dram_page_and_clean(sb, pi, pgoff, &block);
 		if (dirty == 0) {
-			pmfs_dbg("%s: Dirty DRAM page not found! pgoff %lu\n",
-					__func__, pgoff);
+			pmfs_dbg("%s: Dirty DRAM page not found! pgoff %lu, "
+					"blocks %lu\n",	__func__, pgoff,
+					num_blocks);
 			bytes = sb->s_blocksize - offset;
 			pos += bytes;
 			count -= bytes;

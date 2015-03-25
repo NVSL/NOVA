@@ -190,6 +190,9 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	/* Sync from start to end[inclusive] */
 	struct address_space *mapping = file->f_mapping;
 	struct inode *inode = mapping->host;
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi;
+	unsigned long start_blk, end_blk;
 	loff_t isize;
 	timing_t fsync_time;
 
@@ -197,6 +200,11 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	/* if the file is not mmap'ed, there is no need to do clflushes */
 //	if (mapping_mapped(mapping) == 0)
 //		goto persist;
+
+	/* Check the dirty range */
+	pi = pmfs_get_inode(sb, inode->i_ino);
+	if (pi->low_dirty > pi->high_dirty)
+		goto persist;
 
 	end += 1; /* end is inclusive. We like our indices normal please ! */
 
@@ -215,6 +223,20 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	/* Align start and end to cacheline boundaries */
 	start = start & CACHELINE_MASK;
 	end = CACHELINE_ALIGN(end);
+
+	start_blk = start >> PAGE_SHIFT;
+	if (start_blk < pi->low_dirty) {
+		start = pi->low_dirty << PAGE_SHIFT;
+		start_blk = pi->low_dirty;
+	}
+	end_blk = end >> PAGE_SHIFT;
+	if (end_blk > pi->high_dirty) {
+		end = (pi->high_dirty + 1) << PAGE_SHIFT;
+		end_blk = pi->high_dirty;
+	}
+	pmfs_dbg_verbose("%s: start_blk %lu, end_blk %lu\n",
+				__func__, start_blk, end_blk);
+
 	do {
 		u64 page = 0;
 //		void *xip_mem;
@@ -228,6 +250,8 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		nr_flush_bytes = PAGE_CACHE_SIZE - offset;
 		if (nr_flush_bytes > (end - start))
 			nr_flush_bytes = end - start;
+		if (nr_flush_bytes == 0)
+			nr_flush_bytes = PAGE_SIZE;
 
 		page = pmfs_find_data_block(inode, (sector_t)pgoff, false);
 		if (page && IS_DIRTY(page)) {
@@ -239,6 +263,17 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		start += nr_flush_bytes;
 	} while (start < end);
 
+	if (start_blk == pi->low_dirty && end_blk == pi->high_dirty) {
+		pi->low_dirty = MAX_BLOCK;
+		pi->high_dirty = 0;
+	} else if (start_blk == pi->low_dirty) {
+		pi->low_dirty = (start_blk == MAX_BLOCK ?
+					MAX_BLOCK : start_blk + 1);
+	} else if (end_blk == pi->high_dirty) {
+		pi->high_dirty = (end_blk == 0 ? 0 : end_blk - 1);
+	}
+
+persist:
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
 	PMFS_END_TIMING(fsync_t, fsync_time);

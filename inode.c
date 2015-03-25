@@ -1980,6 +1980,8 @@ retry:
 	pi->log_head = 0;
 	pi->log_tail = 0;
 	pi->log_pages = 0;
+	pi->low_dirty = MAX_BLOCK;
+	pi->high_dirty = 0;
 	pmfs_memlock_inode(sb, pi);
 
 	sbi->s_free_inodes_count -= 1;
