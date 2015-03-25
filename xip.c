@@ -1167,6 +1167,8 @@ ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
 		return pmfs_page_cache_file_write(filp, buf, len, ppos);
 }
 
+int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
+		      void **kmem, unsigned long *pfn);
 /* OOM err return with xip file fault handlers doesn't mean anything.
  * It would just cause the OS to go an unnecessary killing spree !
  */
@@ -1189,7 +1191,8 @@ static int __pmfs_xip_file_fault(struct vm_area_struct *vma,
 		return VM_FAULT_SIGBUS;
 	}
 
-	err = pmfs_get_xip_mem(mapping, vmf->pgoff, 1, &xip_mem, &xip_pfn);
+//	err = pmfs_get_xip_mem(mapping, vmf->pgoff, 1, &xip_mem, &xip_pfn);
+	err = pmfs_get_dram_mem(mapping, vmf->pgoff, 1, &xip_mem, &xip_pfn);
 	if (unlikely(err)) {
 		pmfs_dbg("[%s:%d] get_xip_mem failed(OOM). vm_start(0x%lx),"
 			" vm_end(0x%lx), pgoff(0x%lx), VA(%lx)\n",
@@ -1330,6 +1333,43 @@ int pmfs_get_xip_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	pmfs_dbg_mmapvv("[%s:%d] sb->physaddr(0x%llx), block(0x%lx),"
 		" pgoff(0x%lx), flag(0x%x), PFN(0x%lx)\n", __func__, __LINE__,
 		PMFS_SB(inode->i_sb)->phys_addr, block, pgoff, create, *pfn);
+	return 0;
+}
+
+int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
+		      void **kmem, unsigned long *pfn)
+{
+	struct inode *inode = mapping->host;
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi;
+	unsigned long page_addr = 0;
+	int existed = 0;
+	int allocated;
+	u64 bp;
+	void *nvmm;
+	struct page *page;
+
+	pi = pmfs_get_inode(sb, inode->i_ino);
+
+	allocated = pmfs_find_alloc_dram_pages(sb, inode, pi,
+				pgoff, &page_addr, &existed, 1, 0);
+	if (allocated != 1) {
+		pmfs_dbg("%s: failed to allocate dram page\n", __func__);
+		return -EINVAL;
+	}
+
+	if (existed == 1) {
+		/* Copy from NVMM to dram */
+		bp = __pmfs_find_data_block(sb, pi, pgoff, true);
+		nvmm = pmfs_get_block(sb, bp);
+		__copy_from_user_inatomic_nocache((void *)DRAM_ADDR(page_addr),
+					nvmm, PAGE_SIZE);
+	}
+
+	*kmem = (void *)DRAM_ADDR(page_addr);
+	page = virt_to_page(*kmem);
+	*pfn = page_to_pfn(page);
+
 	return 0;
 }
 
