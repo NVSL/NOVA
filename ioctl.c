@@ -47,6 +47,8 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 {
 	timing_t malloc_time;
 	int i;
+	struct page *page;
+	int pfn;
 	unsigned long *addr = kmalloc(1000 * sizeof(unsigned long),
 					GFP_KERNEL); 
 
@@ -55,18 +57,33 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 		switch(category) {
 		case ZERO:
 			addr[i] = get_zeroed_page(GFP_KERNEL);
+			page = virt_to_page((void *)addr[i]);
+			pfn = page_to_pfn(page);
+//			pmfs_dbg("get_zero_page: page %p pfn %d\n", page, pfn);
 			break;
 		case NORMAL:
 			addr[i] = __get_free_page(GFP_KERNEL);
+			page = virt_to_page((void *)addr[i]);
+			pfn = page_to_pfn(page);
+//			pmfs_dbg("get_free_page: page %p pfn %d\n", page, pfn);
 			break;
 		case VMALLOC:
 			addr[i] = (unsigned long)vmalloc(PAGE_SIZE);
+			page = vmalloc_to_page((void *)addr[i]);
+			pfn = page_to_pfn(page);
+//			pmfs_dbg("vmalloc: page %p pfn %d\n", page, pfn);
 			break;
 		case KMALLOC:
 			addr[i] = (unsigned long)kmalloc(PAGE_SIZE, GFP_KERNEL);
+			page = virt_to_page((void *)addr[i]);
+			pfn = page_to_pfn(page);
+//			pmfs_dbg("kmalloc: page %p pfn %d\n", page, pfn);
 			break;
 		case KZALLOC:
 			addr[i] = (unsigned long)kzalloc(PAGE_SIZE, GFP_KERNEL);
+			page = virt_to_page((void *)addr[i]);
+			pfn = page_to_pfn(page);
+//			pmfs_dbg("kzalloc: page %p pfn %d\n", page, pfn);
 			break;
 		default:
 			break;
