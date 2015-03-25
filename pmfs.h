@@ -593,10 +593,11 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 	return bp;
 }
 
-#define	DRAM_BIT	0x1UL
-#define	KMALLOC_BIT	0x2UL
-#define	GETPAGE_BIT	0x4UL
-#define	DIRTY_BIT	0x8UL
+#define	DRAM_BIT	0x1UL	// DRAM
+#define	KMALLOC_BIT	0x2UL	// Alloc with kmalloc
+#define	GETPAGE_BIT	0x4UL	// Alloc with get_free_page
+#define	DIRTY_BIT	0x8UL	// Dirty
+#define	OUTDATE_BIT	0x16UL	// Outdate with NVMM page
 #define	IS_DRAM_ADDR(p)	((p) & (DRAM_BIT))
 #define	IS_DIRTY(p)	((p) & (DIRTY_BIT))
 #define	DRAM_ADDR(p)	((p) & (PAGE_MASK))
