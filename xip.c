@@ -93,8 +93,8 @@ do_xip_mapping_read(struct address_space *mapping,
 		}
 		if (index < entry->pgoff ||
 			index - entry->pgoff >= entry->num_pages) {
-			pmfs_err(sb, "%s ERROR: %lu, entry pgoff %u, num %u, blocknr "
-				"%llu\n", __func__, index, entry->pgoff,
+			pmfs_err(sb, "%s ERROR: %lu, entry pgoff %u, num %u, "
+				"blocknr %llu\n", __func__, index, entry->pgoff,
 				entry->num_pages, entry->block >> PAGE_SHIFT);
 			return -EINVAL;
 		}
@@ -108,17 +108,6 @@ do_xip_mapping_read(struct address_space *mapping,
 		xip_mem = pmfs_get_block(sb, BLOCK_OFF(entry->block +
 			((index - entry->pgoff) << PAGE_SHIFT)));
 
-#if 0
-		error = pmfs_get_xip_mem(mapping, index, 0,
-					&xip_mem, &xip_pfn);
-		if (unlikely(error)) {
-			if (error == -ENODATA) {
-				/* sparse */
-				zero = 1;
-			} else
-				goto out;
-		}
-#endif
 		/* If users can be writing to this page using arbitrary
 		 * virtual addresses, take care about potential aliasing
 		 * before reading the page on the kernel side.
