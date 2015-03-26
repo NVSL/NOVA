@@ -1360,6 +1360,13 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 		return -EINVAL;
 	}
 
+	/* If the mem pair does not exist, assign the dram page */
+	if (existed == 0) {
+		page_addr |= DIRTY_BIT;
+		pmfs_assign_blocks(inode, pgoff, allocated,
+					page_addr, false, false, false);
+	}
+
 	if (existed == 1) {
 		/* Copy from NVMM to dram */
 		bp = __pmfs_find_data_block(sb, pi, pgoff, true);
