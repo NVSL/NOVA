@@ -633,6 +633,8 @@ void pmfs_free_mem_addr(struct super_block *sb, __le64 addr, u32 btype)
 		pmfs_free_dram_page(pair->dram);
 		pair->dram = 0;
 	}
+
+	kfree(pair);
 }
 
 unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
@@ -869,6 +871,7 @@ static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 	if (pi->height == 0) {
 		pmfs_free_mem_addr(sb, root, pi->i_blk_type);
 		freed = 1;
+		root = 0;
 	} else {
 		freed = recursive_truncate_file_blocks(sb, DRAM_ADDR(root),
 			pi->height, pi->i_blk_type, first_blocknr,
