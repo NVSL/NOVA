@@ -30,6 +30,71 @@
 #define PAGE_SECTORS_SHIFT	(PAGE_SHIFT - SECTOR_SHIFT)
 #define PAGE_SECTORS		(1 << PAGE_SECTORS_SHIFT)
 
+int measure_timing = 0;
+module_param(measure_timing, int, S_IRUGO);
+MODULE_PARM_DESC(measure_timing, "Measure timing");
+
+/* ======================= Timing ========================= */
+enum timing_category {
+	ioremap_t,
+	xip_read_t,
+	xip_write_t,
+	memcpy_r_nvmm_t,
+	memcpy_w_nvmm_t,
+	partial_block_t,
+	TIMING_NUM,
+};
+
+const char *Timingstring[TIMING_NUM] =
+{
+	"ioremap",
+	"xip_read",
+	"xip_write",
+	"memcpy_read_nvmm",
+	"memcpy_write_nvmm",
+	"handle_partial_block",
+};
+
+unsigned long long Timingstats[TIMING_NUM];
+u64 Countstats[TIMING_NUM];
+
+typedef struct timespec timing_t;
+
+#define PMFS_START_TIMING(name, start) \
+	{if (measure_timing) getrawmonotonic(&start);}
+
+#define PMFS_END_TIMING(name, start) \
+	{if (measure_timing) { \
+		timing_t end; \
+		getrawmonotonic(&end); \
+		Timingstats[name] += \
+			(end.tv_sec - start.tv_sec) * 1000000000 + \
+			(end.tv_nsec - start.tv_nsec); \
+	} \
+	Countstats[name]++; \
+	}
+
+void pmem_print_timing_stats(void)
+{
+	int i;
+
+	printk("======== PMEM-DAX kernel timing stats ========\n");
+	for (i = 0; i < TIMING_NUM; i++) {
+		if (measure_timing) {
+			printk("%s: count %llu, timing %llu, average %llu\n",
+				Timingstring[i],
+				Countstats[i],
+				Timingstats[i],
+				Countstats[i] ?
+				Timingstats[i] / Countstats[i] : 0);
+		} else {
+			printk("%s: count %llu\n",
+				Timingstring[i],
+				Countstats[i]);
+		}
+	}
+}
+
 struct pmem_device {
 	struct request_queue	*pmem_queue;
 	struct gendisk		*pmem_disk;
@@ -132,17 +197,22 @@ static void pmem_do_bvec(struct pmem_device *pmem, struct page *page,
 			sector_t sector)
 {
 	void *mem = kmap_atomic(page);
+	timing_t read_time, write_time;
 
 	if (rw == READ) {
+		PMFS_START_TIMING(memcpy_r_nvmm_t, read_time);
 		copy_from_pmem(mem + off, pmem, sector, len);
 		flush_dcache_page(page);
+		PMFS_END_TIMING(memcpy_r_nvmm_t, read_time);
 	} else {
 		/*
 		 * FIXME: Need more involved flushing to ensure that writes to
 		 * NVDIMMs are actually durable before returning.
 		 */
+		PMFS_START_TIMING(memcpy_w_nvmm_t, write_time);
 		flush_dcache_page(page);
 		copy_to_pmem(pmem, mem + off, sector, len);
+		PMFS_END_TIMING(memcpy_w_nvmm_t, write_time);
 	}
 
 	kunmap_atomic(mem);
@@ -336,6 +406,7 @@ static void pmem_free(struct pmem_device *pmem)
 
 static void pmem_del_one(struct pmem_device *pmem)
 {
+	pmem_print_timing_stats();
 	list_del(&pmem->pmem_list);
 	del_gendisk(pmem->pmem_disk);
 	pmem_free(pmem);
