@@ -279,6 +279,9 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	if (num_blocks == 0)
 		return -EINVAL;
 
+	if (sbi->num_free_blocks < num_blocks)
+		return -ENOSPC;
+
 	PMFS_START_TIMING(new_data_blocks_t, alloc_time);
 	mutex_lock(&sbi->s_lock);
 
