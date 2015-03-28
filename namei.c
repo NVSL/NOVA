@@ -259,6 +259,7 @@ out:
 	return err;
 out_err:
 	pmfs_abort_transaction(sb, trans);
+	pmfs_err(sb, "%s return %d\n", __func__, err);
 	return err;
 }
 
@@ -298,6 +299,7 @@ out:
 	return err;
 out_err:
 	pmfs_abort_transaction(sb, trans);
+	pmfs_err(sb, "%s return %d\n", __func__, err);
 	return err;
 }
 
@@ -357,6 +359,7 @@ out_fail:
 	unlock_new_inode(inode);
 	iput(inode);
 	pmfs_abort_transaction(sb, trans);
+	pmfs_err(sb, "%s return %d\n", __func__, err);
 	goto out;
 }
 
@@ -441,6 +444,7 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 end_unlink:
 	pmfs_abort_transaction(sb, trans);
 out:
+	pmfs_err(sb, "%s return %d\n", __func__, retval);
 	return retval;
 }
 
@@ -531,6 +535,7 @@ out_clear_inode:
 	unlock_new_inode(inode);
 	iput(inode);
 	pmfs_abort_transaction(sb, trans);
+	pmfs_err(sb, "%s return %d\n", __func__, err);
 	goto out;
 }
 
@@ -654,6 +659,7 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 	return err;
 end_rmdir:
 	pmfs_abort_transaction(sb, trans);
+	pmfs_err(sb, "%s return %d\n", __func__, err);
 	return err;
 }
 
@@ -751,6 +757,7 @@ static int pmfs_rename(struct inode *old_dir,
 	return 0;
 out:
 	pmfs_abort_transaction(sb, trans);
+	pmfs_err(sb, "%s return %d\n", __func__, err);
 	return err;
 }
 

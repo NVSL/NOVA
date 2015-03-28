@@ -1041,6 +1041,7 @@ static int pmfs_increase_dir_btree_height(struct super_block *sb,
 			pmfs_err(sb, "failed to increase btree height\n");
 			break;
 		}
+		errval = 0;
 		blocknr = pmfs_get_block_off(sb, blocknr, PMFS_BLOCK_TYPE_4K);
 		root = pmfs_get_block(sb, blocknr);
 		pmfs_memunlock_block(sb, root);
