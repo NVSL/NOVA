@@ -1092,7 +1092,7 @@ static int recursive_alloc_blocks(pmfs_transaction_t *trans,
 				errval = pmfs_new_data_block(sb, pi, &blocknr,
 							zero);
 				if (errval) {
-					pmfs_dbg_verbose("alloc data blk failed"
+					pmfs_dbg("alloc data blk failed"
 						" %d\n", errval);
 					/* For later recovery in truncate... */
 					pmfs_memunlock_inode(sb, pi);
@@ -1111,8 +1111,7 @@ static int recursive_alloc_blocks(pmfs_transaction_t *trans,
 				errval = pmfs_new_data_blocks(sb, &blocknr, 1,
 					PMFS_BLOCK_TYPE_4K, 1);
 				if (errval != 1) {
-					pmfs_dbg_verbose("alloc meta blk"
-						" failed\n");
+					pmfs_dbg("alloc meta blk failed\n");
 					goto fail;
 				}
 				node[i] = cpu_to_le64(pmfs_get_block_off(sb,
@@ -1231,8 +1230,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 				errval = pmfs_new_meta_blocks(sb,
 							&blocknr, 1, 1);
 				if (errval) {
-					pmfs_dbg_verbose("alloc meta blk"
-						" failed\n");
+					pmfs_dbg("alloc meta blk failed\n");
 					goto fail;
 				}
 				node[i] = blocknr;
@@ -1313,7 +1311,7 @@ int __pmfs_alloc_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 			__le64 root;
 			errval = pmfs_new_data_block(sb, pi, &blocknr, zero);
 			if (errval) {
-				pmfs_dbg_verbose("[%s:%d] failed: alloc data"
+				pmfs_dbg("[%s:%d] failed: alloc data"
 					" block\n", __func__, __LINE__);
 				goto fail;
 			}
@@ -1327,7 +1325,7 @@ int __pmfs_alloc_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 			errval = pmfs_increase_dir_btree_height(sb, pi,
 								height);
 			if (errval) {
-				pmfs_dbg_verbose("[%s:%d] failed: inc btree"
+				pmfs_dbg("[%s:%d] failed: inc btree"
 					" height\n", __func__, __LINE__);
 				goto fail;
 			}
@@ -1431,7 +1429,7 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 		} else {
 			errval = pmfs_increase_btree_height(sb, pi, height);
 			if (errval) {
-				pmfs_dbg_verbose("[%s:%d] failed: inc btree"
+				pmfs_dbg("[%s:%d] failed: inc btree"
 					" height\n", __func__, __LINE__);
 				goto fail;
 			}
