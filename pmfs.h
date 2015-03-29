@@ -148,6 +148,10 @@ enum timing_category {
 extern const char *Timingstring[TIMING_NUM];
 extern unsigned long long Timingstats[TIMING_NUM];
 extern u64 Countstats[TIMING_NUM];
+extern unsigned long long read_bytes;
+extern unsigned long long cow_write_bytes;
+extern unsigned long long page_cache_write_bytes;
+extern unsigned long long fsync_bytes;
 
 extern int measure_timing;
 extern int contiguous_allocation;

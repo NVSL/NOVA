@@ -164,6 +164,7 @@ out:
 	if (filp)
 		file_accessed(filp);
 
+	read_bytes += copied;
 	return (copied ? copied : error);
 }
 
@@ -719,6 +720,7 @@ out:
 	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
 	PMFS_END_TIMING(cow_write_t, cow_write_time);
+	cow_write_bytes += written;
 	return ret;
 }
 
@@ -918,6 +920,7 @@ out:
 	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
 	PMFS_END_TIMING(page_cache_write_t, dram_write_time);
+	page_cache_write_bytes += written;
 	return ret;
 }
 
@@ -932,6 +935,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 	unsigned int data_bits;
 	int allocated;
 	u64 curr_entry, block;
+	ssize_t     written = 0;
 	int ret;
 	int dirty;
 	void* kmem;
@@ -1004,8 +1008,9 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 
 		if (copied > 0) {
 			status = copied;
-			pos += bytes;
-			count -= bytes;
+			written += copied;
+			pos += copied;
+			count -= copied;
 			pgoff += allocated;
 			num_blocks -= allocated;
 		}
@@ -1035,6 +1040,7 @@ out:
 	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
 	PMFS_END_TIMING(copy_to_nvmm_t, copy_to_nvmm_time);
+	fsync_bytes += written;
 	return ret;
 }
 
