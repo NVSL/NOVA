@@ -42,6 +42,7 @@ enum timing_category {
 	memcpy_r_nvmm_t,
 	memcpy_w_nvmm_t,
 	partial_block_t,
+	dax_t,
 	TIMING_NUM,
 };
 
@@ -53,6 +54,7 @@ const char *Timingstring[TIMING_NUM] =
 	"memcpy_read_nvmm",
 	"memcpy_write_nvmm",
 	"handle_partial_block",
+	"direct_access",
 };
 
 unsigned long long Timingstats[TIMING_NUM];
@@ -267,12 +269,15 @@ static long pmem_direct_access(struct block_device *bdev, sector_t sector,
 			      void **kaddr, unsigned long *pfn, long size)
 {
 	struct pmem_device *pmem = bdev->bd_disk->private_data;
+	timing_t dax_time;
 
 	if (!pmem)
 		return -ENODEV;
 
+	PMFS_START_TIMING(dax_t, dax_time);
 	*kaddr = pmem_lookup_pg_addr(pmem, sector);
 	*pfn = pmem_lookup_pfn(pmem, sector);
+	PMFS_END_TIMING(dax_t, dax_time);
 
 	return pmem->size - (sector * 512);
 }
