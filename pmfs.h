@@ -141,6 +141,7 @@ enum timing_category {
 	free_data_t,
 	free_meta_t,
 	evict_inode_t,
+	mmap_fault_t,
 	malloc_test_t,
 	TIMING_NUM,
 };

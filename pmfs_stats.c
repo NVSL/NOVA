@@ -26,6 +26,7 @@ const char *Timingstring[TIMING_NUM] =
 	"free_data_blocks",
 	"free_meta_blocks",
 	"evict_inode",
+	"mmap_page_fault",
 	"malloc_test",
 };
 

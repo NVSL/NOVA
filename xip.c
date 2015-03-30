@@ -1210,6 +1210,9 @@ static int __pmfs_xip_file_fault(struct vm_area_struct *vma,
 		return VM_FAULT_SIGBUS;
 	}
 
+	pmfs_dbg_verbose("%s flags: vma 0x%lx, vmf 0x%x\n",
+			__func__, vma->vm_flags, vmf->flags);
+
 	pmfs_dbg_mmapv("[%s:%d] vm_start(0x%lx), vm_end(0x%lx), pgoff(0x%lx), "
 			"BlockSz(0x%lx), VA(0x%lx)->PA(0x%lx)\n", __func__,
 			__LINE__, vma->vm_start, vma->vm_end, vmf->pgoff,
@@ -1232,10 +1235,13 @@ static int __pmfs_xip_file_fault(struct vm_area_struct *vma,
 static int pmfs_xip_file_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	int ret = 0;
+	timing_t fault_time;
 
+	PMFS_START_TIMING(mmap_fault_t, fault_time);
 	rcu_read_lock();
 	ret = __pmfs_xip_file_fault(vma, vmf);
 	rcu_read_unlock();
+	PMFS_END_TIMING(mmap_fault_t, fault_time);
 	return ret;
 }
 
