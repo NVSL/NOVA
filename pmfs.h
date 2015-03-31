@@ -149,6 +149,7 @@ enum timing_category {
 	find_cache_t,
 	assign_t,
 	fsync_t,
+	direct_IO_t,
 	evict_inode_t,
 	mmap_fault_t,
 	malloc_test_t,

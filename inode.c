@@ -2420,7 +2420,9 @@ static ssize_t pmfs_direct_IO(int rw, struct kiocb *iocb,
 	unsigned long seg;
 	unsigned long nr_segs = iter->nr_segs;
 	const struct iovec *iv = iter->iov;
+	timing_t dio_time;
 
+	PMFS_START_TIMING(direct_IO_t, dio_time);
 	for (seg = 0; seg < nr_segs; seg++) {
 		end += iv->iov_len;
 		iv++;
@@ -2455,6 +2457,7 @@ static ssize_t pmfs_direct_IO(int rw, struct kiocb *iocb,
 		printk(KERN_ERR "pmfs: direct_IO: end = %lld"
 			"but offset = %lld\n", end, offset);
 err:
+	PMFS_END_TIMING(direct_IO_t, dio_time);
 	return err;
 }
 

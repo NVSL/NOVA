@@ -30,6 +30,7 @@ const char *Timingstring[TIMING_NUM] =
 	"find_cache_page",
 	"assign_blocks",
 	"fsync",
+	"direct_IO",
 	"evict_inode",
 	"mmap_page_fault",
 	"malloc_test",
