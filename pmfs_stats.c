@@ -41,6 +41,7 @@ unsigned long long read_bytes;
 unsigned long long cow_write_bytes;
 unsigned long long page_cache_write_bytes;
 unsigned long long fsync_bytes;
+unsigned long long checked_pages;
 unsigned long gc_pages;
 
 void pmfs_print_blocknode_list(struct super_block *sb)
@@ -68,9 +69,12 @@ void pmfs_print_blocknode_list(struct super_block *sb)
 		Countstats[free_data_t], free_steps,
 		Countstats[free_data_t] ?
 			free_steps / Countstats[free_data_t] : 0);
-	printk("Garbage collection %llu, free pages %lu, average %llu\n",
-		Countstats[log_gc_t], gc_pages,
+	printk("Garbage collection %llu, check pages %llu, average %llu,\n"
+		"free pages %lu, average %llu\n",
+		Countstats[log_gc_t], checked_pages,
 		Countstats[log_gc_t] ?
+			checked_pages / Countstats[log_gc_t] : 0,
+		gc_pages, Countstats[log_gc_t] ?
 			gc_pages / Countstats[log_gc_t] : 0);
 }
 

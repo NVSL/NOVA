@@ -2673,6 +2673,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 		}
 
 		curr = next;
+		checked_pages++;
 		if (curr == 0)
 			break;
 	}
