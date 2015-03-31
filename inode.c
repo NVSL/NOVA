@@ -2435,12 +2435,13 @@ static ssize_t pmfs_direct_IO(int rw, struct kiocb *iocb,
 	pmfs_dbg_verbose("%s\n", __func__);
 	iv = iter->iov;
 	for (seg = 0; seg < nr_segs; seg++) {
-		if (rw == READ)
+		if (rw == READ) {
 			err = pmfs_xip_file_read(filp, iv->iov_base,
 					iv->iov_len, &offset);
-		else if (rw == WRITE)
-			err = pmfs_xip_file_write(filp, iv->iov_base,
-					iv->iov_len, &offset);
+		} else if (rw == WRITE) {
+			err = pmfs_cow_file_write(filp, iv->iov_base,
+					iv->iov_len, &offset, false);
+		}
 		if (err <= 0)
 			goto err;
 		if (iter->count > iv->iov_len)

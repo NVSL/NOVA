@@ -577,7 +577,7 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 }
 
 ssize_t pmfs_cow_file_write(struct file *filp,
-	const char __user *buf,	size_t len, loff_t *ppos)
+	const char __user *buf,	size_t len, loff_t *ppos, bool need_mutex)
 {
 	struct address_space *mapping = filp->f_mapping;
 	struct inode    *inode = mapping->host;
@@ -601,7 +601,8 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	PMFS_START_TIMING(cow_write_t, cow_write_time);
 
 	sb_start_write(inode->i_sb);
-	mutex_lock(&inode->i_mutex);
+	if (need_mutex)
+		mutex_lock(&inode->i_mutex);
 
 	if (!access_ok(VERIFY_READ, buf, len)) {
 		ret = -EFAULT;
@@ -718,7 +719,8 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	//FIXME: Possible contention here
 //	pi->log_tail = curr_entry + sizeof(struct pmfs_inode_entry);
 out:
-	mutex_unlock(&inode->i_mutex);
+	if (need_mutex)
+		mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
 	PMFS_END_TIMING(cow_write_t, cow_write_time);
 	cow_write_bytes += written;
@@ -1171,7 +1173,7 @@ ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos)
 {
 	if (filp->f_flags & O_DIRECT)
-		return pmfs_cow_file_write(filp, buf, len, ppos);
+		return pmfs_cow_file_write(filp, buf, len, ppos, true);
 	else
 		return pmfs_page_cache_file_write(filp, buf, len, ppos);
 }

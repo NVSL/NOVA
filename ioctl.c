@@ -235,7 +235,7 @@ setversion_out:
 		copy_from_user(&request, (void *)arg,
 					sizeof(struct write_request));
 		pmfs_cow_file_write(filp, request.buf, request.len,
-					&request.offset);
+					&request.offset, true);
 		return 0;
 	}
 	case PMFS_PRINT_LOG: {

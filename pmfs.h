@@ -906,7 +906,7 @@ int pmfs_search_dirblock(u8 *blk_base, struct inode *dir, struct qstr *child,
 
 /* xip.c */
 ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
-          size_t len, loff_t *ppos);
+          size_t len, loff_t *ppos, bool need_mutex);
 int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 				unsigned long count);
 
