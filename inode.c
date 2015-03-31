@@ -2561,13 +2561,18 @@ static bool curr_page_invalid(struct super_block *sb, struct pmfs_inode *pi,
 {
 	struct pmfs_inode_entry *entry;
 	int i;
+	timing_t check_time;
 
+	PMFS_START_TIMING(check_invalid_t, check_time);
 	for (i = 0; i < ENTRIES_PER_PAGE; i++) {
 		entry = &curr_page->entries[i];
-		if (entry->num_pages != GET_INVALID(entry->block))
+		if (entry->num_pages != GET_INVALID(entry->block)) {
+			PMFS_END_TIMING(check_invalid_t, check_time);
 			return false;
+		}
 	}
 
+	PMFS_END_TIMING(check_invalid_t, check_time);
 	return true;
 }
 

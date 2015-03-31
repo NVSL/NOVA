@@ -17,6 +17,7 @@ const char *Timingstring[TIMING_NUM] =
 	"logging",
 	"append_inode_entry",
 	"inode_log_gc",
+	"check_invalid_log",
 	"new_meta_blocks",
 	"new_data_blocks",
 	"new_cache_page",
