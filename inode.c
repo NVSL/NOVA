@@ -2457,17 +2457,49 @@ err:
 	return err;
 }
 
+static int pmfs_coalesce_log_pages(struct super_block *sb,
+	unsigned long prev_blocknr, unsigned long first_blocknr,
+	unsigned long num_pages)
+{
+	unsigned long next_blocknr;
+	u64 curr_block;
+	struct pmfs_inode_log_page *curr_page;
+	int i;
+
+	if (prev_blocknr) {
+		/* Link prev block and newly allocated head block */
+		curr_block = pmfs_get_block_off(sb, prev_blocknr,
+						PMFS_BLOCK_TYPE_4K);
+		curr_page = (struct pmfs_inode_log_page *)
+				pmfs_get_block(sb, curr_block);
+		curr_page->page_tail.next_page = pmfs_get_block_off(sb,
+				first_blocknr, PMFS_BLOCK_TYPE_4K);
+	}
+
+	next_blocknr = first_blocknr + 1;
+	curr_block = pmfs_get_block_off(sb, first_blocknr,
+						PMFS_BLOCK_TYPE_4K);
+	curr_page = (struct pmfs_inode_log_page *)
+				pmfs_get_block(sb, curr_block);
+	for (i = 0; i < num_pages - 1; i++) {
+		curr_page->page_tail.next_page = pmfs_get_block_off(sb,
+				next_blocknr, PMFS_BLOCK_TYPE_4K);
+		curr_page++;
+		next_blocknr++;
+	}
+
+	return 0;
+}
+
 /* Log block resides in NVMM */
 int pmfs_allocate_inode_log_pages(struct super_block *sb,
 	struct pmfs_inode *pi, unsigned long num_pages,
 	u64 *new_block)
 {
 	unsigned long new_inode_blocknr;
-	unsigned long next_blocknr;
-	u64 curr_block;
-	struct pmfs_inode_log_page *curr_page;
+	unsigned long first_blocknr;
+	unsigned long prev_blocknr;
 	int allocated;
-	int i;
 
 	allocated = pmfs_new_data_blocks(sb, &new_inode_blocknr, num_pages,
 						PMFS_BLOCK_TYPE_4K, 1);
@@ -2477,24 +2509,31 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 			num_pages, allocated);
 		return allocated;
 	}
-	num_pages = allocated;
-	pmfs_dbg_verbose("Alloc %lu log blocks %lu\n", num_pages,
+	num_pages -= allocated;
+	pmfs_dbg_verbose("Alloc %d log blocks %lu\n", allocated,
 						new_inode_blocknr);
 
 	/* Coalesce the pages */
-	next_blocknr = new_inode_blocknr + 1;
-	curr_block = pmfs_get_block_off(sb, new_inode_blocknr,
-						PMFS_BLOCK_TYPE_4K);
-	curr_page = (struct pmfs_inode_log_page *)
-				pmfs_get_block(sb, curr_block);
-	for (i = 0; i < num_pages - 1; i++) {
-		curr_page->page_tail.next_page =
-			pmfs_get_block_off(sb, next_blocknr, PMFS_BLOCK_TYPE_4K);
-		curr_page++;
-		next_blocknr++;
+	pmfs_coalesce_log_pages(sb, 0, new_inode_blocknr, allocated);
+	first_blocknr = new_inode_blocknr;
+	prev_blocknr = new_inode_blocknr + allocated - 1;
+
+	while (num_pages) {
+		allocated = pmfs_new_data_blocks(sb, &new_inode_blocknr,
+					num_pages, PMFS_BLOCK_TYPE_4K, 1);
+
+		if (allocated <= 0) {
+			pmfs_err(sb, "ERROR: no inode log page available: "
+				"%d %d\n", num_pages, allocated);
+			return allocated;
+		}
+		num_pages -= allocated;
+		pmfs_coalesce_log_pages(sb, prev_blocknr, new_inode_blocknr,
+						allocated);
+		prev_blocknr = new_inode_blocknr + allocated - 1;
 	}
 
-	*new_block = pmfs_get_block_off(sb, new_inode_blocknr,
+	*new_block = pmfs_get_block_off(sb, first_blocknr,
 						PMFS_BLOCK_TYPE_4K);
 
 	return allocated;
