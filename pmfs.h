@@ -118,33 +118,42 @@ extern unsigned int blk_type_to_size[PMFS_BLOCK_TYPE_MAX];
 /* ======================= Timing ========================= */
 enum timing_category {
 	ioremap_t,
+	/* I/O operations */
 	xip_read_t,
 	cow_write_t,
 	page_cache_write_t,
-	xip_write_t,
-	xip_write_fast_t,
+	copy_to_nvmm_t,
+
+	/* Memory operations */
 	memcpy_r_nvmm_t,
 	memcpy_r_dram_t,
 	memcpy_w_nvmm_t,
 	memcpy_w_dram_t,
 	memcpy_w_wb_t,
 	partial_block_t,
+
+	/* Memory management */
+	new_data_blocks_t,
+	new_meta_blocks_t,
+	new_cache_page_t,
+	free_data_t,
+	free_meta_t,
+
+	/* Logging and journaling */
 	logging_t,
 	append_entry_t,
 	log_gc_t,
 	check_invalid_t,
-	new_meta_blocks_t,
-	new_data_blocks_t,
-	new_cache_page_t,
+
+	/* Others */
 	find_cache_t,
 	assign_t,
 	fsync_t,
-	copy_to_nvmm_t,
-	free_data_t,
-	free_meta_t,
 	evict_inode_t,
 	mmap_fault_t,
 	malloc_test_t,
+
+	/* Sentinel */
 	TIMING_NUM,
 };
 

@@ -374,9 +374,6 @@ ssize_t pmfs_xip_file_write_deprecated(struct file *filp,
 	size_t count, offset, eblk_offset, ret;
 	unsigned long start_blk, end_blk, num_blocks, max_logentries;
 	bool same_block;
-	timing_t xip_write_time, xip_write_fast_time;
-
-	PMFS_START_TIMING(xip_write_t, xip_write_time);
 
 	sb_start_write(inode->i_sb);
 	mutex_lock(&inode->i_mutex);
@@ -407,10 +404,8 @@ ssize_t pmfs_xip_file_write_deprecated(struct file *filp,
 	same_block = (((count + offset - 1) >>
 			pmfs_inode_blk_shift(pi)) == 0) ? 1 : 0;
 	if (block && same_block) {
-		PMFS_START_TIMING(xip_write_fast_t, xip_write_fast_time);
 		ret = pmfs_file_write_fast(sb, inode, pi, buf, count, pos,
 			ppos, block);
-		PMFS_END_TIMING(xip_write_fast_t, xip_write_fast_time);
 		goto out;
 	}
 	max_logentries = num_blocks / MAX_PTRS_PER_LENTRY + 2;
@@ -462,7 +457,6 @@ ssize_t pmfs_xip_file_write_deprecated(struct file *filp,
 out:
 	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
-	PMFS_END_TIMING(xip_write_t, xip_write_time);
 	return ret;
 }
 

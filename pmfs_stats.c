@@ -3,30 +3,33 @@
 const char *Timingstring[TIMING_NUM] = 
 {
 	"ioremap",
+
 	"xip_read",
 	"cow_write",
 	"page_cache_write",
-	"xip_write",
-	"xip_write_fast",
+	"copy_to_nvmm",
+
 	"memcpy_read_nvmm",
 	"memcpy_read_dram",
 	"memcpy_write_nvmm",
 	"memcpy_write_dram",
 	"memcpy_write_back_to_nvmm",
 	"handle_partial_block",
+
+	"new_data_blocks",
+	"new_meta_blocks",
+	"new_cache_page",
+	"free_data_blocks",
+	"free_meta_blocks",
+
 	"logging",
 	"append_inode_entry",
 	"inode_log_gc",
 	"check_invalid_log",
-	"new_meta_blocks",
-	"new_data_blocks",
-	"new_cache_page",
+
 	"find_cache_page",
 	"assign_blocks",
 	"fsync",
-	"copy_to_nvmm",
-	"free_data_blocks",
-	"free_meta_blocks",
 	"evict_inode",
 	"mmap_page_fault",
 	"malloc_test",
