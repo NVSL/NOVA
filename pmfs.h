@@ -155,6 +155,7 @@ extern unsigned long long read_bytes;
 extern unsigned long long cow_write_bytes;
 extern unsigned long long page_cache_write_bytes;
 extern unsigned long long fsync_bytes;
+extern unsigned long gc_pages;
 
 extern int measure_timing;
 extern int contiguous_allocation;

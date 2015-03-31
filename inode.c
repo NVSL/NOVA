@@ -2663,6 +2663,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 				free_curr_page(sb, pi, curr_page, last_page,
 						curr);
 			}
+			gc_pages++;
 		} else {
 			if (found_head == 0) {
 				possible_head = cpu_to_le64(curr);
