@@ -66,6 +66,11 @@ hint_set:
 	return 0;
 }
 
+/*
+ * We do not suppoer fallocate as pre-allocation does not make sense
+ * for a copy-on-write file system.
+ */
+#if 0
 static long pmfs_fallocate(struct file *file, int mode, loff_t offset,
 			    loff_t len)
 {
@@ -78,6 +83,8 @@ static long pmfs_fallocate(struct file *file, int mode, loff_t offset,
 	pmfs_transaction_t *trans;
 	loff_t new_size;
 
+	pmfs_dbg_verbose("%s: inode %lu, offset %lld, len %lld\n",
+			__func__, inode->i_ino, offset, len);
 	/* We only support the FALLOC_FL_KEEP_SIZE mode */
 	if (mode & ~FALLOC_FL_KEEP_SIZE)
 		return -EOPNOTSUPP;
@@ -139,6 +146,7 @@ out:
 	mutex_unlock(&inode->i_mutex);
 	return ret;
 }
+#endif
 
 static loff_t pmfs_llseek(struct file *file, loff_t offset, int origin)
 {
@@ -383,7 +391,7 @@ const struct file_operations pmfs_xip_file_operations = {
 	.flush			= pmfs_flush,
 	.get_unmapped_area	= pmfs_get_unmapped_area,
 	.unlocked_ioctl		= pmfs_ioctl,
-	.fallocate		= pmfs_fallocate,
+//	.fallocate		= pmfs_fallocate,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl		= pmfs_compat_ioctl,
 #endif

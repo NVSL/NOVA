@@ -1514,6 +1514,8 @@ inline int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
 	int errval;
 
+	pmfs_dbg_verbose("%s: inode %lu, blocknr %lu, num %u\n",
+			__func__, inode->i_ino, file_blocknr, num);
 	errval = __pmfs_alloc_blocks(trans, sb, pi, file_blocknr, num, zero);
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 

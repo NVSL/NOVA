@@ -628,8 +628,9 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	pmfs_update_time(inode, pi);
 
-	pmfs_dbg_verbose("%s: block %llu, offset %lu, count %lu\n", __func__,
-				pos >> sb->s_blocksize_bits, offset, count);
+	pmfs_dbg_verbose("%s: inode %lu, block %llu, offset %lu, count %lu\n",
+			__func__, inode->i_ino,	pos >> sb->s_blocksize_bits,
+			offset, count);
 
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);

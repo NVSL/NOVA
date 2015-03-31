@@ -714,6 +714,7 @@ static inline struct mem_addr *__pmfs_get_entry(struct super_block *sb,
 	if (bp == 0)
 		return NULL;
 
+	pmfs_dbg_verbose("%s: height %u, root 0x%llx\n", __func__, height, bp);
 	while (height > 0) {
 		level_ptr = (__le64 *)DRAM_ADDR(bp);
 		bit_shift = (height - 1) * META_BLK_SHIFT;
