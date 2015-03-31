@@ -2591,7 +2591,9 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 	struct pmfs_inode_log_page *curr_page = NULL;
 	int first_need_free = 0;
 	unsigned short btype = pi->i_blk_type;
+	timing_t gc_time;
 
+	PMFS_START_TIMING(log_gc_t, gc_time);
 	curr = pi->log_head;
 
 	while (1) {
@@ -2646,6 +2648,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 		pmfs_free_data_block(sb, pmfs_get_blocknr(sb, curr, btype),
 					btype);
 	}
+	PMFS_END_TIMING(log_gc_t, gc_time);
 	return 0;
 }
 

@@ -131,6 +131,7 @@ enum timing_category {
 	partial_block_t,
 	logging_t,
 	append_entry_t,
+	log_gc_t,
 	new_meta_blocks_t,
 	new_data_blocks_t,
 	new_cache_page_t,
