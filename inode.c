@@ -2708,20 +2708,16 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
  * blocknr and start_blk are pgoff.
  */ 
 u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, unsigned long blocknr, unsigned long start_blk,
-	unsigned long num_blocks)
+	struct inode *inode, void *entry_data)
 {
 	struct pmfs_inode_entry *entry;
-	loff_t offset;
-	u64 block;
+	struct pmfs_inode_entry *data = (struct pmfs_inode_entry *)entry_data;
 	u64 curr_p;
 	unsigned long num_pages;
 	int allocated;
 	timing_t append_time;
 
 	PMFS_START_TIMING(append_entry_t, append_time);
-	offset = start_blk << sb->s_blocksize_bits;
-	block = pmfs_get_block_off(sb, blocknr, pi->i_blk_type);
 
 	curr_p = pi->log_tail;
 	if (curr_p == 0 || (is_last_entry(curr_p) &&
@@ -2771,11 +2767,12 @@ u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, curr_p);
-	entry->pgoff = start_blk;
-	entry->num_pages = num_blocks;
-	entry->block = block;
-	pmfs_dbg_verbose("entry @ %llu: pgoff %lu, num %lu, block %llu\n",
-			curr_p, start_blk, num_blocks, block >> PAGE_SHIFT);
+	entry->pgoff = data->pgoff;
+	entry->num_pages = data->num_pages;
+	entry->block = data->block;
+	pmfs_dbg_verbose("entry @ %llu: pgoff %u, num %u, block %llu\n",
+			curr_p, entry->pgoff, entry->num_pages,
+			entry->block >> PAGE_SHIFT);
 	/* entry->invalid is set to 0 */
 
 	pmfs_flush_buffer(entry, sizeof(struct pmfs_inode_entry), 1);

@@ -577,6 +577,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	struct inode    *inode = mapping->host;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi;
+	struct pmfs_inode_entry entry_data;
 	ssize_t     written = 0;
 	loff_t pos;
 	size_t count, offset, copied, ret;
@@ -664,8 +665,13 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 								buf, bytes);
 		PMFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
+		entry_data.pgoff = start_blk;
+		entry_data.num_pages = allocated;
+		entry_data.block = pmfs_get_block_off(sb, blocknr,
+							pi->i_blk_type);
+
 		curr_entry = pmfs_append_inode_entry(sb, pi, inode,
-						blocknr, start_blk, allocated);
+							&entry_data);
 		if (curr_entry == 0) {
 			pmfs_err(sb, "ERROR: append inode entry failed\n");
 			ret = -EINVAL;
@@ -926,6 +932,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi;
+	struct pmfs_inode_entry entry_data;
 	unsigned long num_blocks;
 	unsigned long blocknr = 0;
 	unsigned long total_blocks;
@@ -988,8 +995,13 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 					(void *)DRAM_ADDR(block), bytes);
 		PMFS_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
+		entry_data.pgoff = pgoff;
+		entry_data.num_pages = allocated;
+		entry_data.block = pmfs_get_block_off(sb, blocknr,
+							pi->i_blk_type);
+
 		curr_entry = pmfs_append_inode_entry(sb, pi, inode,
-						blocknr, pgoff, allocated);
+							&entry_data);
 		if (curr_entry == 0) {
 			pmfs_err(sb, "ERROR: append inode entry failed\n");
 			ret = -EINVAL;
