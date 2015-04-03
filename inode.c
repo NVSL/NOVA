@@ -406,7 +406,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 	return freed;
 }
 
-/* recursive_truncate_dir_blocks: recursively deallocate a range of blocks from
+/* recursive_truncate_blocks: recursively deallocate a range of blocks from
  * first_blocknr to last_blocknr in the inode's btree.
  * Input:
  * block: points to the root of the b-tree where the blocks need to be allocated
@@ -416,7 +416,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
  * end: last byte offset of the range
  * For dir entries.
  */
-static int recursive_truncate_dir_blocks(struct super_block *sb, __le64 block,
+static int recursive_truncate_blocks(struct super_block *sb, __le64 block,
 	u32 height, u32 btype, unsigned long first_blocknr,
 	unsigned long last_blocknr, bool *meta_empty)
 {
@@ -458,7 +458,7 @@ static int recursive_truncate_dir_blocks(struct super_block *sb, __le64 block,
 			last_blk = (i == last_index) ? (last_blocknr &
 				((1 << node_bits) - 1)) : (1 << node_bits) - 1;
 
-			freed += recursive_truncate_dir_blocks(sb, node[i],
+			freed += recursive_truncate_blocks(sb, node[i],
 				height - 1, btype, first_blk, last_blk, &mpty);
 			/* cond_resched(); */
 			if (mpty) {
@@ -582,7 +582,7 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 	return freed;
 }
 
-unsigned int pmfs_free_dir_inode_subtree(struct super_block *sb,
+unsigned int pmfs_free_inode_subtree(struct super_block *sb,
 		__le64 root, u32 height, u32 btype, unsigned long last_blocknr)
 {
 	unsigned long first_blocknr;
@@ -600,7 +600,7 @@ unsigned int pmfs_free_dir_inode_subtree(struct super_block *sb,
 	} else {
 		first_blocknr = 0;
 
-		freed = recursive_truncate_dir_blocks(sb, root, height, btype,
+		freed = recursive_truncate_blocks(sb, root, height, btype,
 			first_blocknr, last_blocknr, &mpty);
 		BUG_ON(!mpty);
 		first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
@@ -743,7 +743,7 @@ update_root_and_height:
 		*(u64 *)b, newroot);
 }
 
-static void pmfs_decrease_dir_btree_height(struct super_block *sb,
+static void pmfs_decrease_btree_height(struct super_block *sb,
 	struct pmfs_inode *pi, unsigned long newsize, __le64 newroot)
 {
 	unsigned int height = pi->height, new_height = 0;
@@ -911,7 +911,7 @@ end_truncate_blocks:
 	pmfs_flush_buffer(pi, 1, false);
 }
 
-static void __pmfs_truncate_dir_blocks(struct inode *inode, loff_t start,
+static void __pmfs_truncate_blocks(struct inode *inode, loff_t start,
 				    loff_t end)
 {
 	struct super_block *sb = inode->i_sb;
@@ -954,7 +954,7 @@ static void __pmfs_truncate_dir_blocks(struct inode *inode, loff_t start,
 		root = 0;
 		freed = 1;
 	} else {
-		freed = recursive_truncate_dir_blocks(sb, root, pi->height,
+		freed = recursive_truncate_blocks(sb, root, pi->height,
 			pi->i_blk_type, first_blocknr, last_blocknr, &mpty);
 		if (mpty) {
 			first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
@@ -977,7 +977,7 @@ static void __pmfs_truncate_dir_blocks(struct inode *inode, loff_t start,
 	pi->i_blocks = cpu_to_le64(inode->i_blocks);
 	pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
 	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-	pmfs_decrease_dir_btree_height(sb, pi, start, root);
+	pmfs_decrease_btree_height(sb, pi, start, root);
 	/* Check for the flag EOFBLOCKS is still valid after the set size */
 	check_eof_blocks(sb, pi, inode->i_size);
 	pmfs_memlock_inode(sb, pi);
@@ -994,7 +994,7 @@ end_truncate_blocks:
 }
 
 
-static int pmfs_increase_btree_height(struct super_block *sb,
+static int pmfs_increase_file_btree_height(struct super_block *sb,
 		struct pmfs_inode *pi, u32 new_height)
 {
 	u32 height = pi->height;
@@ -1024,7 +1024,7 @@ static int pmfs_increase_btree_height(struct super_block *sb,
 	return errval;
 }
 
-static int pmfs_increase_dir_btree_height(struct super_block *sb,
+static int pmfs_increase_btree_height(struct super_block *sb,
 		struct pmfs_inode *pi, u32 new_height)
 {
 	u32 height = pi->height;
@@ -1322,7 +1322,7 @@ int __pmfs_alloc_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 			pi->height = height;
 			pmfs_memlock_inode(sb, pi);
 		} else {
-			errval = pmfs_increase_dir_btree_height(sb, pi,
+			errval = pmfs_increase_btree_height(sb, pi,
 								height);
 			if (errval) {
 				pmfs_dbg("[%s:%d] failed: inc btree"
@@ -1340,7 +1340,7 @@ int __pmfs_alloc_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 			return 0;
 
 		if (height > pi->height) {
-			errval = pmfs_increase_dir_btree_height(sb, pi,
+			errval = pmfs_increase_btree_height(sb, pi,
 								height);
 			if (errval) {
 				pmfs_dbg_verbose("Err: inc height %x:%x tot "
@@ -1427,7 +1427,8 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			pi->height = height;
 			pmfs_memlock_inode(sb, pi);
 		} else {
-			errval = pmfs_increase_btree_height(sb, pi, height);
+			errval = pmfs_increase_file_btree_height(sb, pi,
+								height);
 			if (errval) {
 				pmfs_dbg("[%s:%d] failed: inc btree"
 					" height\n", __func__, __LINE__);
@@ -1484,7 +1485,8 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 		}
 
 		if (height > pi->height) {
-			errval = pmfs_increase_btree_height(sb, pi, height);
+			errval = pmfs_increase_file_btree_height(sb, pi,
+								height);
 			if (errval) {
 				pmfs_dbg_verbose("Err: inc height %x:%x tot %lx"
 					"\n", pi->height, height, total_blocks);
@@ -1834,7 +1836,7 @@ void pmfs_evict_inode(struct inode *inode)
 			break;
 		case S_IFDIR:
 		case S_IFLNK:
-			freed = pmfs_free_dir_inode_subtree(sb, root, height,
+			freed = pmfs_free_inode_subtree(sb, root, height,
 					btype, last_blocknr);
 			break;
 		default:
@@ -2248,7 +2250,7 @@ void pmfs_setsize(struct inode *inode, loff_t newsize)
 	if (S_ISREG(inode->i_mode))
 		__pmfs_truncate_file_blocks(inode, newsize, oldsize);
 	else
-		__pmfs_truncate_dir_blocks(inode, newsize, oldsize);
+		__pmfs_truncate_blocks(inode, newsize, oldsize);
 	/* No need to make the b-tree persistent here if we are called from
 	 * within a transaction, because the transaction will provide a
 	 * subsequent persistent barrier */

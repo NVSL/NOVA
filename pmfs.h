@@ -264,7 +264,7 @@ extern int pmfs_remove_entry(pmfs_transaction_t *trans,
 extern struct dentry *pmfs_get_parent(struct dentry *child);
 
 /* inode.c */
-extern unsigned int pmfs_free_dir_inode_subtree(struct super_block *sb,
+extern unsigned int pmfs_free_inode_subtree(struct super_block *sb,
 		__le64 root, u32 height, u32 btype, unsigned long last_blocknr);
 extern unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
 		__le64 root, u32 height, u32 btype, unsigned long last_blocknr);
