@@ -1024,6 +1024,12 @@ static int pmfs_increase_file_btree_height(struct super_block *sb,
 	return errval;
 }
 
+static int pmfs_increase_dir_btree_height(struct super_block *sb,
+		struct pmfs_inode *pi, u32 new_height)
+{
+	return pmfs_increase_file_btree_height(sb, pi, new_height);
+}
+
 static int pmfs_increase_btree_height(struct super_block *sb,
 		struct pmfs_inode *pi, u32 new_height)
 {
@@ -1137,6 +1143,87 @@ static int recursive_alloc_blocks(pmfs_transaction_t *trans,
 		flush_bytes = (last_index - first_index + 1) * sizeof(node[0]);
 		pmfs_flush_buffer(&node[first_index], flush_bytes, false);
 	}
+	errval = 0;
+fail:
+	return errval;
+}
+
+/* recursive_alloc_dir_blocks: recursively allocate a range of blocks from
+ * first_blocknr to last_blocknr in the inode's btree.
+ * Input:
+ * block: points to the root of the b-tree where the blocks need to be allocated
+ * height: height of the btree
+ * first_blocknr: first block in the specified range
+ * last_blocknr: last_blocknr in the specified range
+ * zero: whether to zero-out the allocated block(s)
+ */
+static int recursive_alloc_dir_blocks(struct super_block *sb,
+	struct pmfs_inode *pi, __le64 block, u32 height,
+	unsigned long first_blocknr, unsigned long last_blocknr, bool new_node,
+	bool zero)
+{
+	int i, errval = -EINVAL;
+	unsigned int meta_bits = META_BLK_SHIFT, node_bits;
+	__le64 *node;
+	unsigned long blocknr, first_blk, last_blk;
+	unsigned int first_index, last_index;
+
+	node = pmfs_get_block(sb, le64_to_cpu(block));
+
+	node_bits = (height - 1) * meta_bits;
+
+	first_index = first_blocknr >> node_bits;
+	last_index = last_blocknr >> node_bits;
+
+	for (i = first_index; i <= last_index; i++) {
+		if (height == 1) {
+			if (node[i] == 0) {
+				node[i] = pmfs_alloc_dram_page(sb, 1);
+				if (node[i] == 0) {
+					pmfs_dbg("alloc data blk failed"
+						" %d\n", errval);
+					/* For later recovery in truncate... */
+					pmfs_memunlock_inode(sb, pi);
+					pi->i_flags |= cpu_to_le32(
+							PMFS_EOFBLOCKS_FL);
+					pmfs_memlock_inode(sb, pi);
+					return -ENOMEM;
+				}
+			}
+		} else {
+			if (node[i] == 0) {
+				/* allocate the meta block */
+				errval = pmfs_new_meta_blocks(sb,
+							&blocknr, 1, 1);
+				if (errval) {
+					pmfs_dbg("alloc meta blk failed\n");
+					goto fail;
+				}
+				node[i] = blocknr;
+				new_node = 1;
+			}
+
+			first_blk = (i == first_index) ? (first_blocknr &
+				((1 << node_bits) - 1)) : 0;
+
+			last_blk = (i == last_index) ? (last_blocknr &
+				((1 << node_bits) - 1)) : (1 << node_bits) - 1;
+
+			errval = recursive_alloc_dir_blocks(sb, pi,
+				DRAM_ADDR(node[i]), height - 1, first_blk,
+				last_blk, new_node, zero);
+			if (errval < 0)
+				goto fail;
+		}
+	}
+#if 0
+	if (new_node || trans == NULL) {
+		/* if the changes were not logged, flush the cachelines we may
+		 * have modified */
+		flush_bytes = (last_index - first_index + 1) * sizeof(node[0]);
+		pmfs_flush_buffer(&node[first_index], flush_bytes, false);
+	}
+#endif
 	errval = 0;
 fail:
 	return errval;
@@ -1351,6 +1438,100 @@ int __pmfs_alloc_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 		}
 		errval = recursive_alloc_blocks(trans, sb, pi, pi->root, height,
 				first_blocknr, last_blocknr, 0, zero);
+		if (errval < 0)
+			goto fail;
+	}
+	return 0;
+fail:
+	return errval;
+}
+
+int __pmfs_alloc_dir_blocks(struct super_block *sb, struct pmfs_inode *pi,
+	unsigned long file_blocknr, unsigned int num, bool zero)
+{
+	int errval;
+	unsigned long max_blocks;
+	unsigned int height;
+	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
+	unsigned int blk_shift, meta_bits = META_BLK_SHIFT;
+	unsigned long first_blocknr, last_blocknr, total_blocks;
+	/* convert the 4K blocks into the actual blocks the inode is using */
+	blk_shift = data_bits - sb->s_blocksize_bits;
+
+	first_blocknr = file_blocknr >> blk_shift;
+	last_blocknr = (file_blocknr + num - 1) >> blk_shift;
+
+	pmfs_dbg_verbose("alloc_blocks height %d file_blocknr %lx num %x, "
+		   "first blocknr 0x%lx, last_blocknr 0x%lx\n",
+		   pi->height, file_blocknr, num, first_blocknr, last_blocknr);
+
+	height = pi->height;
+
+	blk_shift = height * meta_bits;
+
+	max_blocks = 0x1UL << blk_shift;
+
+	if (last_blocknr > max_blocks - 1) {
+		/* B-tree height increases as a result of this allocation */
+		total_blocks = last_blocknr >> blk_shift;
+		while (total_blocks > 0) {
+			total_blocks = total_blocks >> meta_bits;
+			height++;
+		}
+		if (height > 3) {
+			pmfs_dbg("[%s:%d] Max file size. Cant grow the file\n",
+				__func__, __LINE__);
+			errval = -ENOSPC;
+			goto fail;
+		}
+	}
+
+	if (!pi->root) {
+		if (height == 0) {
+			unsigned long root;
+			root = pmfs_alloc_dram_page(sb, 1);
+			if (root == 0) {
+				pmfs_dbg("[%s:%d] failed: alloc data"
+					" block\n", __func__, __LINE__);
+				errval = -ENOMEM;
+				goto fail;
+			}
+			pmfs_memunlock_inode(sb, pi);
+			pi->root = cpu_to_le64(root);
+			pi->height = height;
+			pmfs_memlock_inode(sb, pi);
+		} else {
+			errval = pmfs_increase_dir_btree_height(sb, pi,
+								height);
+			if (errval) {
+				pmfs_dbg("[%s:%d] failed: inc btree"
+					" height\n", __func__, __LINE__);
+				goto fail;
+			}
+			errval = recursive_alloc_dir_blocks(sb, pi,
+				DRAM_ADDR(pi->root), pi->height, first_blocknr,
+				last_blocknr, 1, zero);
+			if (errval < 0)
+				goto fail;
+		}
+	} else {
+		/* Go forward only if the height of the tree is non-zero. */
+		if (height == 0)
+			return 0;
+
+		if (height > pi->height) {
+			errval = pmfs_increase_dir_btree_height(sb, pi,
+								height);
+			if (errval) {
+				pmfs_dbg_verbose("Err: inc height %x:%x tot "
+					"%lx\n", pi->height, height,
+					total_blocks);
+				goto fail;
+			}
+		}
+		errval = recursive_alloc_dir_blocks(sb, pi,
+				DRAM_ADDR(pi->root), height, first_blocknr,
+				last_blocknr, 0, zero);
 		if (errval < 0)
 			goto fail;
 	}
