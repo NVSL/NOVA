@@ -493,6 +493,87 @@ static int recursive_truncate_blocks(struct super_block *sb, __le64 block,
 	return freed;
 }
 
+/* recursive_truncate_dir_blocks: recursively deallocate a range of blocks from
+ * first_blocknr to last_blocknr in the inode's btree.
+ * Input:
+ * block: points to the root of the b-tree where the blocks need to be allocated
+ * height: height of the btree
+ * first_blocknr: first block in the specified range
+ * last_blocknr: last_blocknr in the specified range
+ * end: last byte offset of the range
+ * For dir entries.
+ */
+static int recursive_truncate_dir_blocks(struct super_block *sb, __le64 block,
+	u32 height, u32 btype, unsigned long first_blocknr,
+	unsigned long last_blocknr, bool *meta_empty)
+{
+	unsigned long first_blk, last_blk;
+	unsigned int node_bits, first_index, last_index, i;
+	__le64 *node;
+	unsigned int freed = 0, bzero;
+	int start, end;
+	bool mpty, all_range_freed = true;
+
+	node = pmfs_get_block(sb, le64_to_cpu(block));
+
+	node_bits = (height - 1) * META_BLK_SHIFT;
+
+	start = first_index = first_blocknr >> node_bits;
+	end = last_index = last_blocknr >> node_bits;
+
+	if (height == 1) {
+		for (i = first_index; i <= last_index; i++) {
+			if (unlikely(!node[i]))
+				continue;
+			/* Freeing the last level block */
+			pmfs_free_meta_block(sb, node[i]);
+			node[i] = 0;
+			freed++;
+		}
+	} else {
+		for (i = first_index; i <= last_index; i++) {
+			if (unlikely(!node[i]))
+				continue;
+			first_blk = (i == first_index) ? (first_blocknr &
+				((1 << node_bits) - 1)) : 0;
+
+			last_blk = (i == last_index) ? (last_blocknr &
+				((1 << node_bits) - 1)) : (1 << node_bits) - 1;
+
+			freed += recursive_truncate_dir_blocks(sb,
+				DRAM_ADDR(node[i]), height - 1, btype,
+				first_blk, last_blk, &mpty);
+			/* cond_resched(); */
+			if (mpty) {
+				/* Freeing the meta-data block */
+				/* Dir files are using NVMM meta blocks */
+				pmfs_free_meta_block(sb, node[i]);
+				node[i] = 0;
+			} else {
+				if (i == first_index)
+				    start++;
+				else if (i == last_index)
+				    end--;
+				all_range_freed = false;
+			}
+		}
+	}
+	if (all_range_freed &&
+		is_empty_meta_block(node, first_index, last_index)) {
+		*meta_empty = true;
+	} else {
+		/* Zero-out the freed range if the meta-block in not empty */
+		if (start <= end) {
+			bzero = (end - start + 1) * sizeof(u64);
+			pmfs_memunlock_block(sb, node);
+			memset(&node[start], 0, bzero);
+			pmfs_memlock_block(sb, node);
+		}
+		*meta_empty = false;
+	}
+	return freed;
+}
+
 /* recursive_truncate_meta_blocks: recursively deallocate meta blocks from
  * first_blocknr to last_blocknr in the inode's btree.
  * Input:
@@ -606,6 +687,30 @@ unsigned int pmfs_free_inode_subtree(struct super_block *sb,
 		first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
 			PMFS_BLOCK_TYPE_4K);
 		pmfs_free_data_block(sb, first_blocknr, PMFS_BLOCK_TYPE_4K);
+	}
+	return freed;
+}
+
+unsigned int pmfs_free_dir_inode_subtree(struct super_block *sb,
+		__le64 root, u32 height, u32 btype, unsigned long last_blocknr)
+{
+	unsigned long first_blocknr;
+	unsigned int freed;
+	bool mpty;
+
+	if (!root)
+		return 0;
+
+	if (height == 0) {
+		pmfs_free_meta_block(sb, root);
+		freed = 1;
+	} else {
+		first_blocknr = 0;
+
+		freed = recursive_truncate_dir_blocks(sb, root, height, btype,
+			first_blocknr, last_blocknr, &mpty);
+		BUG_ON(!mpty);
+		pmfs_free_meta_block(sb, root);
 	}
 	return freed;
 }
@@ -741,6 +846,12 @@ update_root_and_height:
 	 * 16 bytes atomically. Confirm if it is really true. */
 	cmpxchg_double_local((u64 *)pi, &pi->root, *(u64 *)pi, pi->root,
 		*(u64 *)b, newroot);
+}
+
+static void pmfs_decrease_dir_btree_height(struct super_block *sb,
+	struct pmfs_inode *pi, unsigned long newsize, __le64 newroot)
+{
+	return pmfs_decrease_file_btree_height(sb, pi, newsize, newroot);
 }
 
 static void pmfs_decrease_btree_height(struct super_block *sb,
@@ -896,6 +1007,85 @@ static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 	pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
 	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
 	pmfs_decrease_file_btree_height(sb, pi, start, root);
+	/* Check for the flag EOFBLOCKS is still valid after the set size */
+	check_eof_blocks(sb, pi, inode->i_size);
+	pmfs_memlock_inode(sb, pi);
+	/* now flush the inode's first cacheline which was modified */
+	pmfs_flush_buffer(pi, 1, false);
+	return;
+end_truncate_blocks:
+	/* we still need to update ctime and mtime */
+	pmfs_memunlock_inode(sb, pi);
+	pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	pmfs_memlock_inode(sb, pi);
+	pmfs_flush_buffer(pi, 1, false);
+}
+
+static void __pmfs_truncate_dir_blocks(struct inode *inode, loff_t start,
+				    loff_t end)
+{
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	unsigned long first_blocknr, last_blocknr;
+	__le64 root;
+	unsigned int freed = 0;
+	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
+	unsigned int meta_bits = META_BLK_SHIFT;
+	bool mpty;
+
+	inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
+
+	if (!pi->root)
+		goto end_truncate_blocks;
+
+	pmfs_dbg_verbose("truncate: pi %p iblocks %llx %llx %llx %x %llx\n", pi,
+			 pi->i_blocks, start, end, pi->height, pi->i_size);
+
+	first_blocknr = (start + (1UL << data_bits) - 1) >> data_bits;
+
+	if (pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL)) {
+		last_blocknr = (1UL << (pi->height * meta_bits)) - 1;
+	} else {
+		if (end == 0)
+			goto end_truncate_blocks;
+		last_blocknr = (end - 1) >> data_bits;
+		last_blocknr = pmfs_sparse_last_blocknr(pi->height,
+			last_blocknr);
+	}
+
+	if (first_blocknr > last_blocknr)
+		goto end_truncate_blocks;
+	root = pi->root;
+
+	if (pi->height == 0) {
+		pmfs_free_meta_block(sb, root);
+		freed = 1;
+		root = 0;
+	} else {
+		freed = recursive_truncate_dir_blocks(sb, DRAM_ADDR(root),
+			pi->height, pi->i_blk_type, first_blocknr,
+			last_blocknr, &mpty);
+		if (mpty) {
+			first_blocknr = root;
+			pmfs_free_meta_block(sb, first_blocknr);
+			root = 0;
+		}
+	}
+	/* if we are called during mount, a power/system failure had happened.
+	 * Don't trust inode->i_blocks; recalculate it by rescanning the inode
+	 */
+	if (pmfs_is_mounting(sb))
+		inode->i_blocks = pmfs_inode_count_iblocks(sb, pi, root);
+	else
+		inode->i_blocks -= (freed * (1 << (data_bits -
+				sb->s_blocksize_bits)));
+
+	pmfs_memunlock_inode(sb, pi);
+	pi->i_blocks = cpu_to_le64(inode->i_blocks);
+	pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	pmfs_decrease_dir_btree_height(sb, pi, start, root);
 	/* Check for the flag EOFBLOCKS is still valid after the set size */
 	check_eof_blocks(sb, pi, inode->i_size);
 	pmfs_memlock_inode(sb, pi);
