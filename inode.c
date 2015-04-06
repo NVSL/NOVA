@@ -169,7 +169,7 @@ u64 pmfs_find_dir_block(struct inode *inode, unsigned long file_blocknr)
 
 	if (bp == 0)
 		return 0;
-	return bp + (blk_offset << sb->s_blocksize_bits);
+	return DRAM_ADDR(bp + (blk_offset << sb->s_blocksize_bits));
 }
 
 /* recursive_find_region: recursively search the btree to find hole or data
@@ -1923,6 +1923,25 @@ inline int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
 	pmfs_dbg_verbose("%s: inode %lu, blocknr %lu, num %u\n",
 			__func__, inode->i_ino, file_blocknr, num);
 	errval = __pmfs_alloc_blocks(trans, sb, pi, file_blocknr, num, zero);
+	inode->i_blocks = le64_to_cpu(pi->i_blocks);
+
+	return errval;
+}
+
+/*
+ * Allocate num data blocks for dir, starting at given file-relative
+ * block number.
+ */
+inline int pmfs_alloc_dir_blocks(struct inode *inode,
+	unsigned long file_blocknr, unsigned int num, bool zero)
+{
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	int errval;
+
+	pmfs_dbg_verbose("%s: inode %lu, blocknr %lu, num %u\n",
+			__func__, inode->i_ino, file_blocknr, num);
+	errval = __pmfs_alloc_dir_blocks(sb, pi, file_blocknr, num, zero);
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 
 	return errval;

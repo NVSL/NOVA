@@ -163,8 +163,7 @@ static ino_t pmfs_inode_by_name(struct inode *dir, struct qstr *entry,
 	block = start;
 restart:
 	do {
-		blk_base =
-			pmfs_get_block(sb, pmfs_find_inode(dir, block));
+		blk_base = (char *)pmfs_find_dir_block(dir, block);
 		if (!blk_base)
 			goto done;
 		i = pmfs_search_dirblock(blk_base, dir, entry,
@@ -482,12 +481,12 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	/* since this is a new inode so we don't need to include this
 	 * pmfs_alloc_blocks in the transaction
 	 */
-	err = pmfs_alloc_blocks(NULL, inode, 0, 1, false);
+	err = pmfs_alloc_dir_blocks(inode, 0, 1, false);
 	if (err)
 		goto out_clear_inode;
 	inode->i_size = sb->s_blocksize;
 
-	blk_base = pmfs_get_block(sb, pmfs_find_inode(inode, 0));
+	blk_base = (char *)pmfs_find_dir_block(inode, 0);
 	de = (struct pmfs_direntry *)blk_base;
 	pmfs_memunlock_range(sb, blk_base, sb->s_blocksize);
 	de->ino = cpu_to_le64(inode->i_ino);
@@ -557,7 +556,7 @@ static int pmfs_empty_dir(struct inode *inode)
 		return 1;
 	}
 
-	blk_base = pmfs_get_block(sb, pmfs_find_inode(inode, 0));
+	blk_base = (char *)pmfs_find_dir_block(inode, 0);
 	if (!blk_base) {
 		pmfs_dbg("bad directory (dir #%lu)-no data block",
 			  inode->i_ino);
@@ -579,8 +578,8 @@ static int pmfs_empty_dir(struct inode *inode)
 		if (!blk_base || (void *)de >= (void *)(blk_base +
 					sb->s_blocksize)) {
 			err = 0;
-			blk_base = pmfs_get_block(sb, pmfs_find_inode(
-				    inode, offset >> sb->s_blocksize_bits));
+			blk_base = (char *)pmfs_find_dir_block(inode,
+					offset >> sb->s_blocksize_bits);
 			if (!blk_base) {
 				pmfs_dbg("Error: reading dir #%lu offset %lu\n",
 					  inode->i_ino, offset);

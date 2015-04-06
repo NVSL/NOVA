@@ -274,6 +274,8 @@ extern int __pmfs_alloc_blocks(pmfs_transaction_t *trans,
 extern int pmfs_init_inode_table(struct super_block *sb);
 extern int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
 		unsigned long file_blocknr, unsigned int num, bool zero);
+extern int pmfs_alloc_dir_blocks(struct inode *inode,
+		unsigned long file_blocknr, unsigned int num, bool zero);
 extern int pmfs_assign_blocks(struct inode *inode, unsigned long file_blocknr,
 		unsigned int num, u64 curr_entry, bool nvmm, bool free,
 		bool alloc_dram);
