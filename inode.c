@@ -2258,6 +2258,10 @@ void pmfs_evict_inode(struct inode *inode)
 					pi->height, btype, last_blocknr);
 			break;
 		case S_IFDIR:
+			/* FIXME: Rebuild dir here too */
+			freed = pmfs_free_dir_inode_subtree(sb, root, height,
+					btype, last_blocknr);
+			break;
 		case S_IFLNK:
 			freed = pmfs_free_inode_subtree(sb, root, height,
 					btype, last_blocknr);
@@ -2672,6 +2676,8 @@ void pmfs_setsize(struct inode *inode, loff_t newsize)
 	/* synchronize_rcu(); */
 	if (S_ISREG(inode->i_mode))
 		__pmfs_truncate_file_blocks(inode, newsize, oldsize);
+	else if (S_ISDIR(inode->i_mode))
+		__pmfs_truncate_dir_blocks(inode, newsize, oldsize);
 	else
 		__pmfs_truncate_blocks(inode, newsize, oldsize);
 	/* No need to make the b-tree persistent here if we are called from
