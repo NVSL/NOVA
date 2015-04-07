@@ -3145,10 +3145,9 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
  * blocknr and start_blk are pgoff.
  */ 
 u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, void *entry_data)
+	struct inode *inode, struct pmfs_inode_entry *data)
 {
 	struct pmfs_inode_entry *entry;
-	struct pmfs_inode_entry *data = (struct pmfs_inode_entry *)entry_data;
 	u64 curr_p;
 	unsigned long num_pages;
 	int allocated;
