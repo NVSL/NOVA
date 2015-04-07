@@ -54,6 +54,7 @@ void pmfs_free_dram_page(unsigned long page_addr)
 	if ((page_addr & DRAM_BIT) == 0) {
 		pmfs_dbg("Error: free a non-DRAM page? 0x%lx\n", page_addr);
 		dump_stack();
+		return;
 	}
 
 	pmfs_dbg_verbose("Free DRAM page 0x%lx\n", page_addr);

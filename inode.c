@@ -547,7 +547,7 @@ static int recursive_truncate_dir_blocks(struct super_block *sb, __le64 block,
 	int start, end;
 	bool mpty, all_range_freed = true;
 
-	node = pmfs_get_block(sb, le64_to_cpu(block));
+	node = (__le64 *)block;
 
 	node_bits = (height - 1) * META_BLK_SHIFT;
 
@@ -559,6 +559,8 @@ static int recursive_truncate_dir_blocks(struct super_block *sb, __le64 block,
 			if (unlikely(!node[i]))
 				continue;
 			/* Freeing the last level block */
+			pmfs_dbg_verbose("%s: free node %u, leaf 0x%llx\n",
+						__func__, i, node[i]);
 			pmfs_free_meta_block(sb, node[i]);
 			node[i] = 0;
 			freed++;
@@ -734,15 +736,18 @@ unsigned int pmfs_free_dir_inode_subtree(struct super_block *sb,
 	if (!root)
 		return 0;
 
+	pmfs_dbg_verbose("%s: root 0x%llx, height %u\n",
+				__func__, root, height);
 	if (height == 0) {
 		pmfs_free_meta_block(sb, root);
 		freed = 1;
 	} else {
 		first_blocknr = 0;
 
-		freed = recursive_truncate_dir_blocks(sb, root, height, btype,
-			first_blocknr, last_blocknr, &mpty);
+		freed = recursive_truncate_dir_blocks(sb, DRAM_ADDR(root),
+			height, btype, first_blocknr, last_blocknr, &mpty);
 		BUG_ON(!mpty);
+		pmfs_dbg_verbose("%s: freed %u\n", __func__, freed);
 		pmfs_free_meta_block(sb, root);
 	}
 	return freed;
@@ -1225,7 +1230,8 @@ static int pmfs_increase_file_btree_height(struct super_block *sb,
 	unsigned long page_addr;
 	int errval = 0;
 
-	pmfs_dbg_verbose("increasing tree height %x:%x\n", height, new_height);
+	pmfs_dbg_verbose("increasing tree height %x:%x, prev root 0x%llx\n",
+						height, new_height, prev_root);
 	while (height < new_height) {
 		/* allocate the meta block */
 		errval = pmfs_new_meta_blocks(sb, &page_addr, 1, 1);
