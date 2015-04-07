@@ -670,7 +670,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		entry_data.block = pmfs_get_block_off(sb, blocknr,
 							pi->i_blk_type);
 
-		curr_entry = pmfs_append_inode_entry(sb, pi, inode,
+		curr_entry = pmfs_append_file_inode_entry(sb, pi, inode,
 							&entry_data);
 		if (curr_entry == 0) {
 			pmfs_err(sb, "ERROR: append inode entry failed\n");
@@ -1000,7 +1000,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		entry_data.block = pmfs_get_block_off(sb, blocknr,
 							pi->i_blk_type);
 
-		curr_entry = pmfs_append_inode_entry(sb, pi, inode,
+		curr_entry = pmfs_append_file_inode_entry(sb, pi, inode,
 							&entry_data);
 		if (curr_entry == 0) {
 			pmfs_err(sb, "ERROR: append inode entry failed\n");

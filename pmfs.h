@@ -906,10 +906,10 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync);
 
 /* inode.c */
 extern const struct address_space_operations pmfs_aops_xip;
-u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
+u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, void *entry_data);
 void pmfs_free_dram_pages(struct super_block *sb);
-int pmfs_rebuild_inode_tree(struct super_block *sb, struct inode *inode,
+int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode *pi);
 struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 		struct pmfs_inode *pi, unsigned long file_blocknr);

@@ -2259,7 +2259,7 @@ void pmfs_evict_inode(struct inode *inode)
 		case S_IFREG:
 			/* Rebuild the tree if it's not there */
 			if (pi->root == 0 && pi->height > 0)
-				pmfs_rebuild_inode_tree(sb, inode, pi);
+				pmfs_rebuild_file_inode_tree(sb, inode, pi);
 			freed = pmfs_free_file_inode_subtree(sb, pi->root,
 					pi->height, btype, last_blocknr);
 			break;
@@ -3144,7 +3144,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
  * FIXME: Must hold inode->i_mutex. Convert it to lock-free.
  * blocknr and start_blk are pgoff.
  */ 
-u64 pmfs_append_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
+u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, void *entry_data)
 {
 	struct pmfs_inode_entry *entry;
@@ -3289,7 +3289,7 @@ void pmfs_free_dram_pages(struct super_block *sb)
 	mutex_unlock(&sbi->inode_table_mutex);
 }
 
-int pmfs_rebuild_inode_tree(struct super_block *sb, struct inode *inode,
+int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 			struct pmfs_inode *pi)
 {
 	struct pmfs_inode_entry *entry;
