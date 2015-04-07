@@ -1391,7 +1391,7 @@ static int recursive_alloc_dir_blocks(struct super_block *sb,
 	unsigned long blocknr, first_blk, last_blk;
 	unsigned int first_index, last_index;
 
-	node = pmfs_get_block(sb, le64_to_cpu(block));
+	node = (__le64 *)block;
 
 	node_bits = (height - 1) * meta_bits;
 
