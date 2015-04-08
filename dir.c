@@ -29,10 +29,12 @@ static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 	struct pmfs_direntry *de, u8 *blk_base,  struct pmfs_inode *pidir)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
+	struct super_block *sb = dir->i_sb;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
 	unsigned short reclen;
 	int nlen, rlen;
+	u64 curr_entry;
 	char *top;
 
 	reclen = PMFS_DIR_REC_LEN(namelen);
@@ -100,6 +102,11 @@ static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 	pidir->i_mtime = cpu_to_le32(dir->i_mtime.tv_sec);
 	pidir->i_ctime = cpu_to_le32(dir->i_ctime.tv_sec);
 	pmfs_memlock_inode(dir->i_sb, pidir);
+
+	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, de, reclen);
+	/* FIXME: Flush all data before update log_tail */
+	pidir->log_tail = curr_entry + reclen;
+
 	return 0;
 }
 

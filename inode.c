@@ -3145,6 +3145,8 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
  * Append a pmfs_inode_entry to the current pmfs_inode_log_page.
  * FIXME: Must hold inode->i_mutex. Convert it to lock-free.
  * blocknr and start_blk are pgoff.
+ * We cannot update pi->log_tail here because a transaction may contain
+ * multiple entries.
  */
 u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_inode_entry *data)
@@ -3224,13 +3226,13 @@ out:
  * Append a pmfs_direntry to the current pmfs_inode_log_page.
  */
 u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, struct pmfs_direntry *data)
+	struct inode *inode, struct pmfs_direntry *data, unsigned short de_len)
 {
 	struct pmfs_direntry *entry;
 	u64 curr_p;
 	unsigned long num_pages;
 	int allocated;
-	size_t size = data->de_len;
+	size_t size = de_len;
 	timing_t append_time;
 
 	PMFS_START_TIMING(append_entry_t, append_time);
@@ -3282,13 +3284,15 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct pmfs_direntry *)pmfs_get_block(sb, curr_p);
-	__copy_from_user_inatomic_nocache(entry, data, data->de_len);
-	pmfs_dbg_verbose("dir entry @ %llu: ino %llu, entry len %u, "
+	__copy_from_user_inatomic_nocache(entry, data, de_len);
+	/* Update actual de_len */
+	entry->de_len = de_len;
+	pmfs_dbg_verbose("dir entry @ 0x%llx: ino %llu, entry len %u, "
 			"name len %u, file type %u\n",
 			curr_p, entry->ino, entry->de_len,
 			entry->name_len, entry->file_type);
 
-//	pmfs_flush_buffer(entry, data->de_len, 1);
+	pmfs_flush_buffer(entry, de_len, 1);
 out:
 	PMFS_END_TIMING(append_entry_t, append_time);
 	return curr_p;
