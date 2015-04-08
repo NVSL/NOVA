@@ -2986,9 +2986,9 @@ inline u64 next_log_page(struct super_block *sb, u64 curr_p)
 			pmfs_get_block(sb, curr_p))->next_page;
 }
 
-inline bool is_last_entry(u64 curr_p)
+inline bool is_last_entry(u64 curr_p, size_t size)
 {
-	return ENTRY_LOC(curr_p) == LAST_ENTRY;
+	return ENTRY_LOC(curr_p) + size > LAST_ENTRY;
 }
 
 /*
@@ -3143,7 +3143,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
  * Append a pmfs_inode_entry to the current pmfs_inode_log_page.
  * FIXME: Must hold inode->i_mutex. Convert it to lock-free.
  * blocknr and start_blk are pgoff.
- */ 
+ */
 u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_inode_entry *data)
 {
@@ -3151,12 +3151,13 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	u64 curr_p;
 	unsigned long num_pages;
 	int allocated;
+	size_t size = sizeof(struct pmfs_inode_entry);
 	timing_t append_time;
 
 	PMFS_START_TIMING(append_entry_t, append_time);
 
 	curr_p = pi->log_tail;
-	if (curr_p == 0 || (is_last_entry(curr_p) &&
+	if (curr_p == 0 || (is_last_entry(curr_p, size) &&
 				next_log_page(sb, curr_p) == 0)) {
 		/* Allocate new inode log page */
 		u64 new_block;
@@ -3199,19 +3200,93 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 		curr_p = new_block;
 	}
 
-	if (is_last_entry(curr_p))
+	if (is_last_entry(curr_p, size))
 		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, curr_p);
 	entry->pgoff = data->pgoff;
 	entry->num_pages = data->num_pages;
 	entry->block = data->block;
-	pmfs_dbg_verbose("entry @ %llu: pgoff %u, num %u, block %llu\n",
+	pmfs_dbg_verbose("file entry @ %llu: pgoff %u, num %u, block %llu\n",
 			curr_p, entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT);
 	/* entry->invalid is set to 0 */
 
 	pmfs_flush_buffer(entry, sizeof(struct pmfs_inode_entry), 1);
+out:
+	PMFS_END_TIMING(append_entry_t, append_time);
+	return curr_p;
+}
+
+/*
+ * Append a pmfs_direntry to the current pmfs_inode_log_page.
+ */
+u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
+	struct inode *inode, struct pmfs_direntry *data)
+{
+	struct pmfs_direntry *entry;
+	u64 curr_p;
+	unsigned long num_pages;
+	int allocated;
+	size_t size = data->de_len;
+	timing_t append_time;
+
+	PMFS_START_TIMING(append_entry_t, append_time);
+
+	curr_p = pi->log_tail;
+	if (curr_p == 0 || (is_last_entry(curr_p, size) &&
+				next_log_page(sb, curr_p) == 0)) {
+		/* Allocate new inode log page */
+		u64 new_block;
+
+		if (curr_p == 0) {
+			allocated = pmfs_allocate_inode_log_pages(sb, pi,
+						1, &new_block);
+			if (allocated != 1) {
+				pmfs_err(sb, "ERROR: no inode log page "
+						"available\n");
+				curr_p = 0;
+				goto out;
+			}
+			pi->log_head = new_block;
+			pi->log_pages = 1;
+			pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+		} else {
+			num_pages = pi->log_pages >= 256 ? 256 : pi->log_pages;
+			pmfs_dbg_verbose("Before append log pages:\n");
+//			pmfs_print_inode_log_page(sb, inode);
+			allocated = pmfs_allocate_inode_log_pages(sb, pi,
+						num_pages, &new_block);
+			pmfs_dbg_verbose("Link block %llu to block %llu\n",
+						curr_p >> PAGE_SHIFT,
+						new_block >> PAGE_SHIFT);
+			if (allocated <= 0) {
+				pmfs_err(sb, "ERROR: no inode log page "
+						"available\n");
+				curr_p = 0;
+				goto out;
+			}
+			/* FIXME: Disable GC by now */
+//			pmfs_inode_log_garbage_collection(sb, pi, new_block,
+//						allocated);
+
+			pmfs_dbg_verbose("After append log pages:\n");
+//			pmfs_print_inode_log_page(sb, inode);
+		}
+		curr_p = new_block;
+	}
+
+	if (is_last_entry(curr_p, size))
+		curr_p = next_log_page(sb, curr_p);
+
+	entry = (struct pmfs_direntry *)pmfs_get_block(sb, curr_p);
+	__copy_from_user_inatomic_nocache(entry, data, data->de_len);
+	pmfs_dbg_verbose("dir entry @ %llu: ino %llu, entry len %u, "
+			"name len %u, file type %u\n",
+			curr_p, entry->ino, entry->de_len,
+			entry->name_len, entry->file_type);
+
+//	pmfs_flush_buffer(entry, data->de_len, 1);
 out:
 	PMFS_END_TIMING(append_entry_t, append_time);
 	return curr_p;
@@ -3319,7 +3394,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 		}
 
 		curr_p += sizeof(struct pmfs_inode_entry);
-		if (is_last_entry(curr_p))
+		if (is_last_entry(curr_p, sizeof(struct pmfs_inode_entry)))
 			curr_p = next_log_page(sb, curr_p);
 	}
 
