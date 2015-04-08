@@ -221,6 +221,7 @@ struct	pmfs_inode_log_page {
 };
 
 #define	LAST_ENTRY	4080
+#define	PAGE_TAIL(p)	(((p) & ~INVALID_MASK) + LAST_ENTRY)
 
 /* Function Prototypes */
 extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
