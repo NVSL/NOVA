@@ -514,7 +514,9 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	de->name_len = 2;
 	strcpy(de->name, "..");
 	pmfs_memlock_range(sb, de, sb->s_blocksize);
-	pmfs_flush_buffer(de, PMFS_DIR_REC_LEN(2), false);
+
+	pmfs_append_dir_init_entries(sb, root_i, PMFS_ROOT_INO, root);
+
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
 	return root_i;

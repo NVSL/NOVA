@@ -3298,6 +3298,54 @@ out:
 	return curr_p;
 }
 
+/* Append . and .. entries */
+int pmfs_append_dir_init_entries(struct super_block *sb,
+	struct pmfs_inode *pi, u64 ino, unsigned long dram_page)
+{
+	int allocated;
+	u64 new_block;
+	u64 curr_p;
+	struct pmfs_direntry *de_entry;
+
+	if (pi->log_head) {
+		pmfs_dbg("%s: log head exists @ 0x%llx!\n",
+				__func__, pi->log_head);
+		return - EINVAL;
+	}
+
+	allocated = pmfs_allocate_inode_log_pages(sb, pi, 1, &new_block);
+	if (allocated != 1) {
+		pmfs_err(sb, "ERROR: no inode log page available\n");
+		return - ENOMEM;
+	}
+	pi->log_tail = pi->log_head = new_block;
+	pi->log_pages = 1;
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+
+	de_entry = (struct pmfs_direntry *)pmfs_get_block(sb, new_block);
+	de_entry->ino = cpu_to_le64(ino);
+	de_entry->name_len = 1;
+	de_entry->de_len = cpu_to_le16(PMFS_DIR_REC_LEN(1));
+	strcpy(de_entry->name, ".");
+	pmfs_flush_buffer(de_entry, PMFS_DIR_REC_LEN(1), false);
+	curr_p = new_block + PMFS_DIR_REC_LEN(1);
+//	dram_addr[0] = new_block;
+
+	de_entry = (struct pmfs_direntry *)((char *)de_entry +
+					le16_to_cpu(de_entry->de_len));
+	de_entry->ino = cpu_to_le64(ino);
+	de_entry->name_len = 2;
+	de_entry->de_len = cpu_to_le16(PMFS_DIR_REC_LEN(2));
+	strcpy(de_entry->name, "..");
+	pmfs_flush_buffer(de_entry, PMFS_DIR_REC_LEN(2), true);
+	curr_p += PMFS_DIR_REC_LEN(2);
+//	dram_addr[1] = new_block + PMFS_DIR_REC_LEN(1);
+
+	pi->log_tail = curr_p;
+	pmfs_flush_buffer(&pi->log_tail, CACHELINE_SIZE, true);
+	return 0;
+}
+
 static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);

@@ -502,9 +502,9 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	/*de->file_type =  S_IFDIR; */
 	pmfs_memlock_range(sb, blk_base, sb->s_blocksize);
 
-	/* No need to journal the dir entries but we need to persist them */
-	pmfs_flush_buffer(blk_base, PMFS_DIR_REC_LEN(1) +
-			PMFS_DIR_REC_LEN(2), true);
+	pi = pmfs_get_inode(sb, inode->i_ino);
+	pmfs_append_dir_init_entries(sb, pi, inode->i_ino,
+					(unsigned long)blk_base);
 
 	set_nlink(inode, 2);
 
@@ -513,7 +513,6 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		pmfs_dbg_verbose("failed to add dir entry\n");
 		goto out_clear_inode;
 	}
-	pi = pmfs_get_inode(sb, inode->i_ino);
 	pmfs_memunlock_inode(sb, pi);
 	pi->i_links_count = cpu_to_le16(inode->i_nlink);
 	pi->i_size = cpu_to_le64(inode->i_size);
