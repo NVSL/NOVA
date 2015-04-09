@@ -178,6 +178,9 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 	struct pmfs_inode *pidir;
 	struct qstr *entry = &de->d_name;
 	struct pmfs_direntry *res_entry, *prev_entry;
+	struct pmfs_direntry de_entry;
+	unsigned short de_len;
+	u64 curr_entry;
 	int retval = -EINVAL;
 	unsigned long blocks, block;
 	char *blk_base = NULL;
@@ -224,6 +227,17 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 	pidir->i_mtime = cpu_to_le32(dir->i_mtime.tv_sec);
 	pidir->i_ctime = cpu_to_le32(dir->i_ctime.tv_sec);
 	pmfs_memlock_inode(sb, pidir);
+
+	/* Append a zero-length entry for deletion */
+	de_len = PMFS_DIR_REC_LEN(0);
+	de_entry.ino = inode->i_ino;
+	de_entry.de_len = de_len;
+	de_entry.name_len = 0;
+	de_entry.file_type = 0;
+	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir,
+					&de_entry, de_len);
+	/* FIXME: Flush all data before update log_tail */
+	pidir->log_tail = curr_entry + de_len;
 	retval = 0;
 out:
 	return retval;
