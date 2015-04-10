@@ -317,7 +317,7 @@ static int pmfs_open(struct inode *inode, struct file *filp)
 
 	mutex_lock(&inode->i_mutex);
 	pi = pmfs_get_inode(sb, inode->i_ino);
-	if (pi->root == 0 && pi->height > 0 && S_ISREG(inode->i_mode))
+	if (pi->root == 0 && pi->i_size > 0 && S_ISREG(inode->i_mode))
 		pmfs_rebuild_file_inode_tree(sb, inode, pi);
 	mutex_unlock(&inode->i_mutex);
 

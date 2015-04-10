@@ -809,7 +809,7 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 		struct pmfs_inode *pi, unsigned long last_blocknr)
 {
 	unsigned long first_blocknr;
-	unsigned int freed;
+	unsigned int freed = 0;
 	bool mpty;
 	__le64 root = pi->root;
 	u32 height = pi->height;
@@ -823,10 +823,11 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 		if (pair->dram) {
 			pmfs_free_dram_page(pair->dram);
 			pair->dram = 0;
-			return 1;
+			freed = 1;
 		}
 		kfree(pair);
-		return 0;
+		pi->root = 0;
+		return freed;
 	}
 
 	first_blocknr = 0;
@@ -2258,7 +2259,7 @@ void pmfs_evict_inode(struct inode *inode)
 		switch (inode->i_mode & S_IFMT) {
 		case S_IFREG:
 			/* Rebuild the tree if it's not there */
-			if (pi->root == 0 && pi->height > 0)
+			if (pi->root == 0 && pi->i_size > 0)
 				pmfs_rebuild_file_inode_tree(sb, inode, pi);
 			freed = pmfs_free_file_inode_subtree(sb, pi->root,
 					pi->height, btype, last_blocknr);
@@ -3388,7 +3389,7 @@ void pmfs_free_dram_pages(struct super_block *sb)
 	for (i = PMFS_FREE_INODE_HINT_START; i <= sbi->s_max_inode; i++) {
 		pi = pmfs_get_inode(sb, i << PMFS_INODE_BITS);
 
-		if (pi->root == 0 || pi->height == 0)
+		if (pi->root == 0)
 			continue;
 
 		if (!(S_ISREG(pi->i_mode)))
