@@ -843,6 +843,38 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 	return freed;
 }
 
+unsigned int pmfs_free_dir_meta_blocks(struct super_block *sb,
+		struct pmfs_inode *pi, unsigned long last_blocknr)
+{
+	unsigned long first_blocknr;
+	unsigned int freed = 0;
+	bool mpty;
+	__le64 root = pi->root;
+	u32 height = pi->height;
+	u32 btype = pi->i_blk_type;
+
+	if (!root)
+		return 0;
+
+	if (height == 0) {
+		pmfs_free_meta_block(sb, root);
+		pi->root = 0;
+		return freed;
+	}
+
+	first_blocknr = 0;
+
+	freed = recursive_truncate_dir_blocks(sb, DRAM_ADDR(root),
+			height, btype, first_blocknr, last_blocknr, &mpty);
+	BUG_ON(!mpty);
+	first_blocknr = root;
+	pmfs_free_meta_block(sb, first_blocknr);
+	freed++;
+	pi->root = 0;
+
+	return freed;
+}
+
 static void pmfs_decrease_file_btree_height(struct super_block *sb,
 	struct pmfs_inode *pi, unsigned long newsize, __le64 newroot)
 {
@@ -3217,7 +3249,7 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_direntry *data, unsigned short de_len)
 {
 	struct pmfs_direntry *entry;
-	u64 curr_p;
+	u64 curr_p, page_tail;
 	unsigned long num_pages;
 	int allocated;
 	size_t size = de_len;
@@ -3261,6 +3293,12 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 			/* FIXME: Disable GC by now */
 //			pmfs_inode_log_garbage_collection(sb, pi, new_block,
 //						allocated);
+			page_tail = (curr_p & ~INVALID_MASK) + LAST_ENTRY;
+			((struct pmfs_inode_page_tail *)
+				pmfs_get_block(sb, page_tail))->next_page
+								= new_block;
+			pi->log_tail = new_block;
+			pi->log_pages += num_pages;
 
 			pmfs_dbg_verbose("After append log pages:\n");
 //			pmfs_print_inode_log_page(sb, inode);
@@ -3373,13 +3411,13 @@ void pmfs_free_dram_pages(struct super_block *sb)
 	int i;
 
 	mutex_lock(&sbi->inode_table_mutex);
-	for (i = PMFS_FREE_INODE_HINT_START; i <= sbi->s_max_inode; i++) {
+	for (i = 1; i <= sbi->s_max_inode; i++) {
 		pi = pmfs_get_inode(sb, i << PMFS_INODE_BITS);
 
-		if (pi->root == 0)
+		if (pi->root == 0 || i == 2)
 			continue;
 
-		if (!(S_ISREG(pi->i_mode)))
+		if (!(S_ISREG(pi->i_mode)) && !(S_ISDIR(pi->i_mode)))
 			continue;
 
 		if (pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL)) {
@@ -3396,7 +3434,12 @@ void pmfs_free_dram_pages(struct super_block *sb)
 		}
 		pmfs_dbg_verbose("%s: inode %u, height %u, root 0x%llx\n",
 				__func__, i, pi->height, pi->root);
-		freed = pmfs_free_file_meta_blocks(sb, pi, last_blocknr);
+		if (S_ISREG(pi->i_mode))
+			freed = pmfs_free_file_meta_blocks(sb, pi,
+							last_blocknr);
+		else
+			freed = pmfs_free_dir_meta_blocks(sb, pi,
+							last_blocknr);
 		pmfs_dbg_verbose("%s after: inode %u, height %u, root 0x%llx, "
 				"freed %u\n", __func__, i, pi->height,
 				pi->root, freed);

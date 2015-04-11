@@ -232,7 +232,7 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 	de_len = PMFS_DIR_REC_LEN(0);
 	de_entry.ino = inode->i_ino;
 	de_entry.de_len = de_len;
-	de_entry.name_len = de->d_name.len;
+	de_entry.name_len = 0;
 	de_entry.file_type = 0;
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir,
 					&de_entry, de_len);
@@ -282,12 +282,7 @@ static int pmfs_replay_add_dirent_to_buf(struct super_block *sb,
 		de = de1;
 	}
 	/*de->file_type = 0;*/
-	if (inode) {
-		de->ino = cpu_to_le64(inode->i_ino);
-		/*de->file_type = IF2DT(inode->i_mode); */
-	} else {
-		de->ino = 0;
-	}
+	de->ino = entry->ino;
 	de->name_len = namelen;
 	memcpy(de->name, name, namelen);
 
@@ -299,7 +294,6 @@ int pmfs_replay_add_entry(struct super_block *sb, struct pmfs_inode *pi,
 {
 	int retval = -EINVAL;
 	unsigned long block, blocks;
-	struct pmfs_direntry *de;
 	char *blk_base;
 
 	if (!entry->name_len)
@@ -308,32 +302,17 @@ int pmfs_replay_add_entry(struct super_block *sb, struct pmfs_inode *pi,
 	blocks = pi->i_size >> sb->s_blocksize_bits;
 	for (block = 0; block < blocks; block++) {
 		blk_base = (char *)pmfs_find_dir_block(inode, block);
-		if (!blk_base)
-			break;
+		if (!blk_base) {
+			retval = -EIO;
+			goto out;
+		}
 
 		retval = pmfs_replay_add_dirent_to_buf(sb, pi, inode, entry,
 				NULL, blk_base);
 		if (retval != -ENOSPC)
 			goto out;
 	}
-	retval = pmfs_alloc_dir_blocks(inode, blocks, 1, false);
-	if (retval)
-		goto out;
-
-	blk_base = (char *)pmfs_find_dir_block(inode, blocks);
-	if (!blk_base) {
-		retval = -ENOSPC;
-		goto out;
-	}
-
-	de = (struct pmfs_direntry *)blk_base;
-	pmfs_memunlock_block(sb, blk_base);
-	de->ino = 0;
-	de->de_len = cpu_to_le16(sb->s_blocksize);
-	pmfs_memlock_block(sb, blk_base);
-	/* Since this is a new block, no need to log changes to this block */
-	retval = pmfs_replay_add_dirent_to_buf(sb, pi, inode,
-						entry, de, blk_base);
+	retval = -EIO;
 out:
 	return retval;
 }
@@ -375,16 +354,29 @@ out:
 int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 			struct pmfs_inode *pi)
 {
-	struct pmfs_direntry *entry;
+	struct pmfs_direntry *entry, *de;
+	unsigned long block, blocks;
 	u64 curr_p = pi->log_head;
 	int ret;
 
-	pmfs_dbg_verbose("Rebuild dir %lu tree\n", inode->i_ino);
+	pmfs_dbg("Rebuild dir %lu tree\n", inode->i_ino);
 	/*
 	 * We will regenerate the tree during blocks assignment.
 	 * Set height to 0.
 	 */
 	pi->height = 0;
+	blocks = pi->i_size >> sb->s_blocksize_bits;
+	ret = pmfs_alloc_dir_blocks(inode, 0, blocks, false);
+	if (ret)
+		return ret;
+
+	/* Insert bogus entries for all the blocks */
+	for (block = 0; block < blocks; block++) {
+		de = (struct pmfs_direntry *)pmfs_find_dir_block(inode, block);
+		de->ino = 0;
+		de->de_len = cpu_to_le16(sb->s_blocksize);
+	}
+
 	while (curr_p != pi->log_tail) {
 		if (curr_p == 0) {
 			pmfs_err(sb, "log is NULL!\n");
@@ -394,7 +386,10 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 		if (is_last_dir_entry(sb, curr_p))
 			curr_p = next_log_page(sb, curr_p);
 
+		pmfs_dbg_verbose("curr_p: 0x%llx\n", curr_p);
 		entry = (struct pmfs_direntry *)pmfs_get_block(sb, curr_p);
+		pmfs_dbg_verbose("entry @%p, ino %llu, name %s, namelen %u\n",
+			entry, entry->ino, entry->name, entry->name_len);
 
 		if (entry->name_len > 0) {
 			/* A valid entry to add */
@@ -415,11 +410,18 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi;
+	struct pmfs_inode *pi, *pidir;
 	char *blk_base;
 	unsigned long offset;
 	struct pmfs_direntry *de;
 	ino_t ino;
+
+	pidir = pmfs_get_inode(sb, inode->i_ino);
+	pmfs_dbg_verbose("%s: ino %llu, root 0x%llx, size %llu\n",
+				__func__, (u64)inode->i_ino, pidir->root,
+				pidir->i_size);
+	if (pidir->root == 0 && pidir->i_size > 0 && S_ISDIR(inode->i_mode))
+		pmfs_rebuild_dir_inode_tree(sb, inode, pidir);
 
 	offset = ctx->pos & (sb->s_blocksize - 1);
 	while (ctx->pos < inode->i_size) {
@@ -466,6 +468,10 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 			if (de->ino) {
 				ino = le64_to_cpu(de->ino);
 				pi = pmfs_get_inode(sb, ino);
+				pmfs_dbg_verbose("ctx: ino %llu, name %s, "
+					"name_len %u, de_len %u\n",
+					(u64)ino, de->name, de->name_len,
+					de->de_len);
 				if (!dir_emit(ctx, de->name, de->name_len,
 					ino, IF2DT(le16_to_cpu(pi->i_mode))))
 					return 0;
