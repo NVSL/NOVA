@@ -232,7 +232,7 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 	de_len = PMFS_DIR_REC_LEN(0);
 	de_entry.ino = inode->i_ino;
 	de_entry.de_len = de_len;
-	de_entry.name_len = 0;
+	de_entry.name_len = de->d_name.len;
 	de_entry.file_type = 0;
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir,
 					&de_entry, de_len);
@@ -241,6 +241,174 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 	retval = 0;
 out:
 	return retval;
+}
+
+static int pmfs_replay_add_dirent_to_buf(struct super_block *sb,
+	struct pmfs_inode *pi, struct inode *inode,
+	struct pmfs_direntry *entry, struct pmfs_direntry *de,
+	u8 *blk_base)
+{
+	const char *name = entry->name;
+	int namelen = entry->name_len;
+	unsigned short reclen;
+	int nlen, rlen;
+	char *top;
+
+	reclen = PMFS_DIR_REC_LEN(namelen);
+	if (!de) {
+		de = (struct pmfs_direntry *)blk_base;
+		top = blk_base + sb->s_blocksize - reclen;
+		while ((char *)de <= top) {
+			rlen = le16_to_cpu(de->de_len);
+			if (de->ino) {
+				nlen = PMFS_DIR_REC_LEN(de->name_len);
+				if ((rlen - nlen) >= reclen)
+					break;
+			} else if (rlen >= reclen)
+				break;
+			de = (struct pmfs_direntry *)((char *)de + rlen);
+		}
+		if ((char *)de > top)
+			return -ENOSPC;
+	}
+	rlen = le16_to_cpu(de->de_len);
+
+	if (de->ino) {
+		struct pmfs_direntry *de1;
+		nlen = PMFS_DIR_REC_LEN(de->name_len);
+		de1 = (struct pmfs_direntry *)((char *)de + nlen);
+		de1->de_len = cpu_to_le16(rlen - nlen);
+		de->de_len = cpu_to_le16(nlen);
+		de = de1;
+	}
+	/*de->file_type = 0;*/
+	if (inode) {
+		de->ino = cpu_to_le64(inode->i_ino);
+		/*de->file_type = IF2DT(inode->i_mode); */
+	} else {
+		de->ino = 0;
+	}
+	de->name_len = namelen;
+	memcpy(de->name, name, namelen);
+
+	return 0;
+}
+
+int pmfs_replay_add_entry(struct super_block *sb, struct pmfs_inode *pi,
+		struct inode *inode, struct pmfs_direntry *entry)
+{
+	int retval = -EINVAL;
+	unsigned long block, blocks;
+	struct pmfs_direntry *de;
+	char *blk_base;
+
+	if (!entry->name_len)
+		return -EINVAL;
+
+	blocks = pi->i_size >> sb->s_blocksize_bits;
+	for (block = 0; block < blocks; block++) {
+		blk_base = (char *)pmfs_find_dir_block(inode, block);
+		if (!blk_base)
+			break;
+
+		retval = pmfs_replay_add_dirent_to_buf(sb, pi, inode, entry,
+				NULL, blk_base);
+		if (retval != -ENOSPC)
+			goto out;
+	}
+	retval = pmfs_alloc_dir_blocks(inode, blocks, 1, false);
+	if (retval)
+		goto out;
+
+	blk_base = (char *)pmfs_find_dir_block(inode, blocks);
+	if (!blk_base) {
+		retval = -ENOSPC;
+		goto out;
+	}
+
+	de = (struct pmfs_direntry *)blk_base;
+	pmfs_memunlock_block(sb, blk_base);
+	de->ino = 0;
+	de->de_len = cpu_to_le16(sb->s_blocksize);
+	pmfs_memlock_block(sb, blk_base);
+	/* Since this is a new block, no need to log changes to this block */
+	retval = pmfs_replay_add_dirent_to_buf(sb, pi, inode,
+						entry, de, blk_base);
+out:
+	return retval;
+}
+
+int pmfs_replay_remove_entry(struct super_block *sb, struct pmfs_inode *pi,
+		struct inode *inode, struct pmfs_direntry *entry)
+{
+	struct pmfs_direntry *res_entry, *prev_entry;
+	int retval = -EINVAL;
+	unsigned long blocks, block;
+	char *blk_base = NULL;
+
+	blocks = pi->i_size >> sb->s_blocksize_bits;
+
+	for (block = 0; block < blocks; block++) {
+		blk_base = (char *)pmfs_find_dir_block(inode, block);
+		if (!blk_base)
+			goto out;
+		if (pmfs_search_dirblock_inode(blk_base, inode, entry,
+					  block << sb->s_blocksize_bits,
+					  &res_entry, &prev_entry) == 1)
+			break;
+	}
+
+	if (block == blocks)
+		goto out;
+	if (prev_entry) {
+		prev_entry->de_len =
+			cpu_to_le16(le16_to_cpu(prev_entry->de_len) +
+				    le16_to_cpu(res_entry->de_len));
+	} else {
+		res_entry->ino = 0;
+	}
+	retval = 0;
+out:
+	return retval;
+}
+
+int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
+			struct pmfs_inode *pi)
+{
+	struct pmfs_direntry *entry;
+	u64 curr_p = pi->log_head;
+	int ret;
+
+	pmfs_dbg_verbose("Rebuild dir %lu tree\n", inode->i_ino);
+	/*
+	 * We will regenerate the tree during blocks assignment.
+	 * Set height to 0.
+	 */
+	pi->height = 0;
+	while (curr_p != pi->log_tail) {
+		if (curr_p == 0) {
+			pmfs_err(sb, "log is NULL!\n");
+			BUG();
+		}
+
+		if (is_last_dir_entry(sb, curr_p))
+			curr_p = next_log_page(sb, curr_p);
+
+		entry = (struct pmfs_direntry *)pmfs_get_block(sb, curr_p);
+
+		if (entry->name_len > 0) {
+			/* A valid entry to add */
+			ret = pmfs_replay_add_entry(sb, pi, inode, entry);
+		} else {
+			/* Delete the entry */
+			ret = pmfs_replay_remove_entry(sb, pi, inode, entry);
+		}
+		curr_p += entry->de_len;
+		if (ret)
+			pmfs_err(sb, "ERROR %d\n", ret);
+	}
+
+	return 0;
 }
 
 static int pmfs_readdir(struct file *file, struct dir_context *ctx)

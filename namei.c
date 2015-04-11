@@ -130,6 +130,47 @@ int pmfs_search_dirblock(u8 *blk_base, struct inode *dir, struct qstr *child,
 	return 0;
 }
 
+/*
+ * Returns 0 if not found, -1 on failure, and 1 on success
+ */
+int pmfs_search_dirblock_inode(u8 *blk_base, struct inode *dir,
+	struct pmfs_direntry *entry, unsigned long offset,
+	struct pmfs_direntry **res_dir, struct pmfs_direntry **prev_dir)
+{
+	struct pmfs_direntry *de;
+	struct pmfs_direntry *pde = NULL;
+	char *dlimit;
+	int de_len;
+	int namelen = entry->name_len;
+
+	de = (struct pmfs_direntry *)blk_base;
+	dlimit = blk_base + dir->i_sb->s_blocksize;
+	while ((char *)de < dlimit) {
+		/* this code is executed quadratically often */
+		/* do minimal checking `by hand' */
+
+		if ((char *)de + namelen <= dlimit &&
+		    de->ino == entry->ino && de->name_len == namelen) {
+			/* found a match - just to be sure, do a full check */
+			if (!pmfs_check_dir_entry("pmfs_inode_by_name",
+						   dir, de, blk_base, offset))
+				return -1;
+			*res_dir = de;
+			if (prev_dir)
+				*prev_dir = pde;
+			return 1;
+		}
+		/* prevent looping on a bad block */
+		de_len = le16_to_cpu(de->de_len);
+		if (de_len <= 0)
+			return -1;
+		offset += de_len;
+		pde = de;
+		de = (struct pmfs_direntry *)((char *)de + de_len);
+	}
+	return 0;
+}
+
 static ino_t pmfs_inode_by_name(struct inode *dir, struct qstr *entry,
 				 struct pmfs_direntry **res_entry)
 {

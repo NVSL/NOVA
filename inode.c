@@ -2981,19 +2981,6 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 	return allocated;
 }
 
-inline u64 next_log_page(struct super_block *sb, u64 curr_p)
-{
-	void *curr_addr = pmfs_get_block(sb, curr_p);
-	unsigned long page_tail = ((unsigned long)curr_addr & ~INVALID_MASK)
-					+ LAST_ENTRY;
-	return ((struct pmfs_inode_page_tail *)page_tail)->next_page;
-}
-
-inline bool is_last_entry(u64 curr_p, size_t size)
-{
-	return ENTRY_LOC(curr_p) + size > LAST_ENTRY;
-}
-
 /*
  * Copy alive log entries to the new log,
  * merge entries if possible

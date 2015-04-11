@@ -906,6 +906,32 @@ extern const struct file_operations pmfs_xip_file_operations;
 int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync);
 
 /* inode.c */
+static inline u64 next_log_page(struct super_block *sb, u64 curr_p)
+{
+	void *curr_addr = pmfs_get_block(sb, curr_p);
+	unsigned long page_tail = ((unsigned long)curr_addr & ~INVALID_MASK)
+					+ LAST_ENTRY;
+	return ((struct pmfs_inode_page_tail *)page_tail)->next_page;
+}
+
+static inline bool is_last_entry(u64 curr_p, size_t size)
+{
+	return ENTRY_LOC(curr_p) + size > LAST_ENTRY;
+}
+
+static inline bool is_last_dir_entry(struct super_block *sb, u64 curr_p)
+{
+	struct pmfs_direntry *entry;
+
+	if (ENTRY_LOC(curr_p) + PMFS_DIR_REC_LEN(0) > LAST_ENTRY)
+		return true;
+
+	entry = (struct pmfs_direntry *)pmfs_get_block(sb, curr_p);
+	if (entry->ino == 0)
+		return true;
+	return false;
+}
+
 extern const struct address_space_operations pmfs_aops_xip;
 u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_inode_entry *data);
@@ -950,6 +976,9 @@ int pmfs_search_dirblock(u8 *blk_base, struct inode *dir, struct qstr *child,
 			  unsigned long offset,
 			  struct pmfs_direntry **res_dir,
 			  struct pmfs_direntry **prev_dir);
+int pmfs_search_dirblock_inode(u8 *blk_base, struct inode *dir,
+	struct pmfs_direntry *entry, unsigned long offset,
+	struct pmfs_direntry **res_dir, struct pmfs_direntry **prev_dir);
 
 /* xip.c */
 ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
