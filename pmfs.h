@@ -899,6 +899,7 @@ static inline void check_eof_blocks(struct super_block *sb,
 
 /* dir.c */
 extern const struct file_operations pmfs_dir_operations;
+void pmfs_rebuild_root_dir(struct super_block *sb, struct pmfs_inode *root_pi);
 
 /* file.c */
 extern const struct inode_operations pmfs_file_inode_operations;
