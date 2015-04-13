@@ -65,20 +65,20 @@ static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 
 	if (de->ino) {
 		struct pmfs_direntry *de1;
-		pmfs_add_logentry(dir->i_sb, trans, &de->de_len,
-			sizeof(de->de_len), LE_DATA);
+//		pmfs_add_logentry(dir->i_sb, trans, &de->de_len,
+//			sizeof(de->de_len), LE_DATA);
 		nlen = PMFS_DIR_REC_LEN(de->name_len);
 		de1 = (struct pmfs_direntry *)((char *)de + nlen);
-		pmfs_memunlock_block(dir->i_sb, blk_base);
+//		pmfs_memunlock_block(dir->i_sb, blk_base);
 		de1->de_len = cpu_to_le16(rlen - nlen);
 		de->de_len = cpu_to_le16(nlen);
-		pmfs_memlock_block(dir->i_sb, blk_base);
+//		pmfs_memlock_block(dir->i_sb, blk_base);
 		de = de1;
 	} else {
-		pmfs_add_logentry(dir->i_sb, trans, &de->ino,
-			sizeof(de->ino), LE_DATA);
+//		pmfs_add_logentry(dir->i_sb, trans, &de->ino,
+//			sizeof(de->ino), LE_DATA);
 	}
-	pmfs_memunlock_block(dir->i_sb, blk_base);
+//	pmfs_memunlock_block(dir->i_sb, blk_base);
 	/*de->file_type = 0;*/
 	if (inode) {
 		de->ino = cpu_to_le64(inode->i_ino);
@@ -88,8 +88,8 @@ static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 	}
 	de->name_len = namelen;
 	memcpy(de->name, name, namelen);
-	pmfs_memlock_block(dir->i_sb, blk_base);
-	pmfs_flush_buffer(de, reclen, false);
+//	pmfs_memlock_block(dir->i_sb, blk_base);
+//	pmfs_flush_buffer(de, reclen, false);
 	/*
 	 * XXX shouldn't update any times until successful
 	 * completion of syscall, but too many callers depend
@@ -156,10 +156,10 @@ int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 	}
 	/* No need to log the changes to this de because its a new block */
 	de = (struct pmfs_direntry *)blk_base;
-	pmfs_memunlock_block(sb, blk_base);
+//	pmfs_memunlock_block(sb, blk_base);
 	de->ino = 0;
 	de->de_len = cpu_to_le16(sb->s_blocksize);
-	pmfs_memlock_block(sb, blk_base);
+//	pmfs_memlock_block(sb, blk_base);
 	/* Since this is a new block, no need to log changes to this block */
 	retval = pmfs_add_dirent_to_buf(NULL, dentry, inode, de, blk_base,
 		pidir);
@@ -203,19 +203,19 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 	if (block == blocks)
 		goto out;
 	if (prev_entry) {
-		pmfs_add_logentry(sb, trans, &prev_entry->de_len,
-				sizeof(prev_entry->de_len), LE_DATA);
-		pmfs_memunlock_block(sb, blk_base);
+//		pmfs_add_logentry(sb, trans, &prev_entry->de_len,
+//				sizeof(prev_entry->de_len), LE_DATA);
+//		pmfs_memunlock_block(sb, blk_base);
 		prev_entry->de_len =
 			cpu_to_le16(le16_to_cpu(prev_entry->de_len) +
 				    le16_to_cpu(res_entry->de_len));
-		pmfs_memlock_block(sb, blk_base);
+//		pmfs_memlock_block(sb, blk_base);
 	} else {
-		pmfs_add_logentry(sb, trans, &res_entry->ino,
-				sizeof(res_entry->ino), LE_DATA);
-		pmfs_memunlock_block(sb, blk_base);
+//		pmfs_add_logentry(sb, trans, &res_entry->ino,
+//				sizeof(res_entry->ino), LE_DATA);
+//		pmfs_memunlock_block(sb, blk_base);
 		res_entry->ino = 0;
-		pmfs_memlock_block(sb, blk_base);
+//		pmfs_memlock_block(sb, blk_base);
 	}
 	/*dir->i_version++; */
 	dir->i_ctime = dir->i_mtime = CURRENT_TIME_SEC;
