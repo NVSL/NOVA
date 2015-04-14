@@ -46,6 +46,16 @@ do_xip_mapping_read(struct address_space *mapping,
 	if (!isize)
 		goto out;
 
+	pmfs_dbg_verbose("%s: inode %lu, block %llu, offset %lu, count %lu, "
+		"size %lld\n", __func__, inode->i_ino,
+		pos >> sb->s_blocksize_bits, offset, len, isize);
+
+	if (len > isize - pos)
+		len = isize - pos;
+
+	if (len <= 0)
+		goto out;
+
 	end_index = (isize - 1) >> PAGE_CACHE_SHIFT;
 	do {
 		unsigned long nr, left;
@@ -165,6 +175,7 @@ out:
 		file_accessed(filp);
 
 	read_bytes += copied;
+	pmfs_dbg_verbose("%s returned %zu\n", __func__, copied);
 	return (copied ? copied : error);
 }
 
@@ -822,8 +833,9 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	pmfs_update_time(inode, pi);
 
-	pmfs_dbg_verbose("%s: block %llu, offset %lu, count %lu\n", __func__,
-				pos >> sb->s_blocksize_bits, offset, count);
+	pmfs_dbg_verbose("%s: ino %lu, block %llu, offset %lu, count %lu\n",
+		__func__, inode->i_ino, pos >> sb->s_blocksize_bits, offset,
+		count);
 
 	/* Allocate dram pages for the required extent */
 	start_blk = pos >> sb->s_blocksize_bits;
