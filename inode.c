@@ -2067,7 +2067,8 @@ int pmfs_init_inode_table(struct super_block *sb)
 	return 0;
 }
 
-static int pmfs_read_inode(struct inode *inode, struct pmfs_inode *pi)
+static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
+	struct pmfs_inode *pi)
 {
 	int ret = -EIO;
 
@@ -2107,10 +2108,12 @@ static int pmfs_read_inode(struct inode *inode, struct pmfs_inode *pi)
 	case S_IFREG:
 		inode->i_op = &pmfs_file_inode_operations;
 		inode->i_fop = &pmfs_xip_file_operations;
+		pmfs_rebuild_file_inode_tree(sb, inode, pi);
 		break;
 	case S_IFDIR:
 		inode->i_op = &pmfs_dir_inode_operations;
 		inode->i_fop = &pmfs_dir_operations;
+		pmfs_rebuild_dir_inode_tree(sb, inode, pi);
 		break;
 	case S_IFLNK:
 		inode->i_op = &pmfs_symlink_inode_operations;
@@ -2236,7 +2239,7 @@ struct inode *pmfs_iget(struct super_block *sb, unsigned long ino)
 		err = -EACCES;
 		goto fail;
 	}
-	err = pmfs_read_inode(inode, pi);
+	err = pmfs_read_inode(sb, inode, pi);
 	if (unlikely(err))
 		goto fail;
 	inode->i_ino = ino;
@@ -3468,6 +3471,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 	 * We will regenerate the tree during blocks assignment.
 	 * Set height to 0.
 	 */
+	pi->root = 0;
 	pi->height = 0;
 	while (curr_p != pi->log_tail) {
 		if (curr_p == 0) {

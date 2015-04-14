@@ -309,18 +309,8 @@ static int pmfs_flush(struct file *file, fl_owner_t id)
 	return ret;
 }
 
-/* Rebuild the tree when open the file */
 static int pmfs_open(struct inode *inode, struct file *filp)
 {
-	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi;
-
-	mutex_lock(&inode->i_mutex);
-	pi = pmfs_get_inode(sb, inode->i_ino);
-	if (pi->root == 0 && pi->i_size > 0 && S_ISREG(inode->i_mode))
-		pmfs_rebuild_file_inode_tree(sb, inode, pi);
-	mutex_unlock(&inode->i_mutex);
-
 	return generic_file_open(inode, filp);
 }
 

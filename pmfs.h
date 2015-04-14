@@ -260,6 +260,8 @@ extern int pmfs_add_entry(pmfs_transaction_t *trans,
 		struct dentry *dentry, struct inode *inode);
 extern int pmfs_remove_entry(pmfs_transaction_t *trans,
 		struct dentry *dentry, struct inode *inode);
+int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
+			struct pmfs_inode *pi);
 
 /* namei.c */
 extern struct dentry *pmfs_get_parent(struct dentry *child);

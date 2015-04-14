@@ -245,7 +245,9 @@ static struct dentry *pmfs_lookup(struct inode *dir, struct dentry *dentry,
 	if (dentry->d_name.len > PMFS_NAME_LEN)
 		return ERR_PTR(-ENAMETOOLONG);
 
+	pmfs_dbg_verbose("%s: %s\n", __func__, dentry->d_name.name);
 	ino = pmfs_inode_by_name(dir, &dentry->d_name, &de);
+	pmfs_dbg_verbose("%s: ino %lu\n", __func__, ino);
 	if (ino) {
 		inode = pmfs_iget(dir->i_sb, ino);
 		if (inode == ERR_PTR(-ESTALE)) {

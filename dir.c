@@ -365,6 +365,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 	 * We will regenerate the tree during blocks assignment.
 	 * Set height to 0.
 	 */
+	pi->root = 0;
 	pi->height = 0;
 	blocks = pi->i_size >> sb->s_blocksize_bits;
 	ret = pmfs_alloc_dir_blocks(inode, 0, blocks, false);
@@ -431,8 +432,8 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 	pmfs_dbg_verbose("%s: ino %llu, root 0x%llx, size %llu\n",
 				__func__, (u64)inode->i_ino, pidir->root,
 				pidir->i_size);
-	if (pidir->root == 0 && pidir->i_size > 0 && S_ISDIR(inode->i_mode))
-		pmfs_rebuild_dir_inode_tree(sb, inode, pidir);
+//	if (pidir->root == 0 && pidir->i_size > 0 && S_ISDIR(inode->i_mode))
+//		pmfs_rebuild_dir_inode_tree(sb, inode, pidir);
 
 	offset = ctx->pos & (sb->s_blocksize - 1);
 	while (ctx->pos < inode->i_size) {
