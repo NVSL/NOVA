@@ -3466,7 +3466,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode_entry *entry;
 	u64 curr_p = pi->log_head;
 
-	pmfs_dbg_verbose("Rebuild inode %lu tree\n", inode->i_ino);
+	pmfs_dbg_verbose("Rebuild file inode %lu tree\n", inode->i_ino);
 	/*
 	 * We will regenerate the tree during blocks assignment.
 	 * Set height to 0.
