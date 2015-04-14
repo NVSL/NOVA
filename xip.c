@@ -592,6 +592,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	long status = 0;
 	timing_t cow_write_time, memcpy_time;
 	unsigned long step = 0;
+	u64 temp_tail;
 
 	PMFS_START_TIMING(cow_write_t, cow_write_time);
 
@@ -628,6 +629,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 			__func__, inode->i_ino,	pos >> sb->s_blocksize_bits,
 			offset, count);
 
+	temp_tail = pi->log_tail;
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
@@ -671,7 +673,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 							pi->i_blk_type);
 
 		curr_entry = pmfs_append_file_inode_entry(sb, pi, inode,
-							&entry_data);
+							&entry_data, temp_tail);
 		if (curr_entry == 0) {
 			pmfs_err(sb, "ERROR: append inode entry failed\n");
 			ret = -EINVAL;
@@ -696,7 +698,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		if (status < 0)
 			break;
 		//FIXME: Possible contention here
-		pi->log_tail = curr_entry + sizeof(struct pmfs_inode_entry);
+		temp_tail = curr_entry + sizeof(struct pmfs_inode_entry);
 	}
 
 	*ppos = pos;
@@ -712,6 +714,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		pmfs_update_isize(inode, pi);
 	}
 
+	pi->log_tail = temp_tail;
 	ret = written;
 	write_breaks += step;
 //	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
@@ -946,6 +949,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 	size_t bytes, copied;
 	loff_t pos;
 	int status = 0;
+	u64 temp_tail;
 	timing_t memcpy_time, copy_to_nvmm_time;
 
 	PMFS_START_TIMING(copy_to_nvmm_t, copy_to_nvmm_time);
@@ -957,6 +961,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 	total_blocks = num_blocks;
 	pos = offset + (pgoff << sb->s_blocksize_bits);
 
+	temp_tail = pi->log_tail;
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		dirty = pmfs_find_dram_page_and_clean(sb, pi, pgoff, &block);
@@ -1001,7 +1006,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 							pi->i_blk_type);
 
 		curr_entry = pmfs_append_file_inode_entry(sb, pi, inode,
-							&entry_data);
+						&entry_data, temp_tail);
 		if (curr_entry == 0) {
 			pmfs_err(sb, "ERROR: append inode entry failed\n");
 			ret = -EINVAL;
@@ -1031,7 +1036,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 			goto out;
 		}
 		//FIXME: Possible contention here
-		pi->log_tail = curr_entry + sizeof(struct pmfs_inode_entry);
+		temp_tail = curr_entry + sizeof(struct pmfs_inode_entry);
 	}
 
 	pmfs_memunlock_inode(sb, pi);
@@ -1043,6 +1048,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	//FIXME
 	pmfs_update_isize(inode, pi);
+	pi->log_tail = temp_tail;
 
 	ret = 0;
 out:

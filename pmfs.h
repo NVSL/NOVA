@@ -935,9 +935,10 @@ static inline bool is_last_dir_entry(struct super_block *sb, u64 curr_p)
 
 extern const struct address_space_operations pmfs_aops_xip;
 u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, struct pmfs_inode_entry *data);
+	struct inode *inode, struct pmfs_inode_entry *data, u64 tail);
 u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, struct pmfs_direntry *data, unsigned short de_len);
+	struct inode *inode, struct pmfs_direntry *data, unsigned short de_len,
+	u64 tail);
 int pmfs_append_dir_init_entries(struct super_block *sb,
 	struct pmfs_inode *pi, u64 ino, unsigned long dram_page);
 void pmfs_free_dram_pages(struct super_block *sb);

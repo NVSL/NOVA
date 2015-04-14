@@ -103,7 +103,8 @@ static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 	pidir->i_ctime = cpu_to_le32(dir->i_ctime.tv_sec);
 	pmfs_memlock_inode(dir->i_sb, pidir);
 
-	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, de, reclen);
+	curr_entry = pmfs_append_dir_inode_entry(sb, pidir,
+						dir, de, reclen, 0);
 	/* FIXME: Flush all data before update log_tail */
 	pidir->log_tail = curr_entry + reclen;
 
@@ -235,7 +236,7 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 	de_entry.name_len = 0;
 	de_entry.file_type = 0;
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir,
-					&de_entry, de_len);
+					&de_entry, de_len, 0);
 	/* FIXME: Flush all data before update log_tail */
 	pidir->log_tail = curr_entry + de_len;
 	retval = 0;

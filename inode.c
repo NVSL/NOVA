@@ -3169,7 +3169,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
  * multiple entries.
  */
 u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, struct pmfs_inode_entry *data)
+	struct inode *inode, struct pmfs_inode_entry *data, u64 tail)
 {
 	struct pmfs_inode_entry *entry;
 	u64 curr_p;
@@ -3180,7 +3180,11 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 
 	PMFS_START_TIMING(append_entry_t, append_time);
 
-	curr_p = pi->log_tail;
+	if (tail)
+		curr_p = tail;
+	else
+		curr_p = pi->log_tail;
+
 	if (curr_p == 0 || (is_last_entry(curr_p, size) &&
 				next_log_page(sb, curr_p) == 0)) {
 		/* Allocate new inode log page */
@@ -3246,7 +3250,8 @@ out:
  * Append a pmfs_direntry to the current pmfs_inode_log_page.
  */
 u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, struct pmfs_direntry *data, unsigned short de_len)
+	struct inode *inode, struct pmfs_direntry *data, unsigned short de_len,
+	u64 tail)
 {
 	struct pmfs_direntry *entry;
 	u64 curr_p, page_tail;
@@ -3257,7 +3262,11 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 
 	PMFS_START_TIMING(append_entry_t, append_time);
 
-	curr_p = pi->log_tail;
+	if (tail)
+		curr_p = tail;
+	else
+		curr_p = pi->log_tail;
+
 	if (curr_p == 0 || (is_last_entry(curr_p, size) &&
 				next_log_page(sb, curr_p) == 0)) {
 		/* Allocate new inode log page */
