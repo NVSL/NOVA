@@ -3242,9 +3242,10 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	entry->ctime = data->ctime;
 	entry->mtime = data->mtime;
 	entry->size = data->size;
-	pmfs_dbg_verbose("file entry @ %llu: pgoff %u, num %u, block %llu\n",
+	pmfs_dbg_verbose("file %lu entry @ 0x%llx: pgoff %u, num %u, "
+			"block %llu, size %llu\n", inode->i_ino,
 			curr_p, entry->pgoff, entry->num_pages,
-			entry->block >> PAGE_SHIFT);
+			entry->block >> PAGE_SHIFT, entry->size);
 	/* entry->invalid is set to 0 */
 
 	pmfs_flush_buffer(entry, sizeof(struct pmfs_inode_entry), 1);

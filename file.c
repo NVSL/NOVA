@@ -228,9 +228,9 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		return 0;
 	}
 
-	/* Align start and end to cacheline boundaries */
+	/* Align start to cacheline boundaries */
 	start = start & CACHELINE_MASK;
-	end = CACHELINE_ALIGN(end);
+//	end = CACHELINE_ALIGN(end);
 
 	start_blk = start >> PAGE_SHIFT;
 	if (start_blk < pi->low_dirty) {
