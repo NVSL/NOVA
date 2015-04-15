@@ -205,14 +205,19 @@ struct	pmfs_inode_entry {
 	u32	num_pages;
 	/* ret of find_data_block, last 12 bits are invalid count */
 	u64	block;
+	u32	ctime;
+	u32	mtime;
+	u64	size;
 };
 
 struct	pmfs_inode_page_tail {
-	u64	padding;
+	u64	padding1;
+	u64	padding2;
+	u64	padding3;
 	u64	next_page;
 };
 
-#define	ENTRIES_PER_PAGE	255
+#define	ENTRIES_PER_PAGE	127
 
 /* Fit in PAGE_SIZE */
 struct	pmfs_inode_log_page {
@@ -220,7 +225,7 @@ struct	pmfs_inode_log_page {
 	struct pmfs_inode_page_tail page_tail;
 };
 
-#define	LAST_ENTRY	4080
+#define	LAST_ENTRY	4064
 #define	PAGE_TAIL(p)	(((p) & ~INVALID_MASK) + LAST_ENTRY)
 
 /* Function Prototypes */

@@ -604,6 +604,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	timing_t cow_write_time, memcpy_time;
 	unsigned long step = 0;
 	u64 temp_tail;
+	u32 time;
 
 	PMFS_START_TIMING(cow_write_t, cow_write_time);
 
@@ -634,7 +635,8 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		goto out;
 	}
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
-	pmfs_update_time(inode, pi);
+//	pmfs_update_time(inode, pi);
+	time = CURRENT_TIME_SEC.tv_sec;
 
 	pmfs_dbg_verbose("%s: inode %lu, block %llu, offset %lu, count %lu\n",
 			__func__, inode->i_ino,	pos >> sb->s_blocksize_bits,
@@ -682,6 +684,11 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		entry_data.num_pages = allocated;
 		entry_data.block = pmfs_get_block_off(sb, blocknr,
 							pi->i_blk_type);
+		entry_data.ctime = entry_data.mtime = time;
+		if (pos + copied > inode->i_size)
+			entry_data.size = pos + copied;
+		else
+			entry_data.size = inode->i_size;
 
 		curr_entry = pmfs_append_file_inode_entry(sb, pi, inode,
 							&entry_data, temp_tail);
@@ -722,7 +729,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	if (pos > inode->i_size) {
 		i_size_write(inode, pos);
-		pmfs_update_isize(inode, pi);
+//		pmfs_update_isize(inode, pi);
 	}
 
 	pi->log_tail = temp_tail;
@@ -831,7 +838,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		goto out;
 	}
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
-	pmfs_update_time(inode, pi);
+//	pmfs_update_time(inode, pi);
 
 	pmfs_dbg_verbose("%s: ino %lu, block %llu, offset %lu, count %lu\n",
 		__func__, inode->i_ino, pos >> sb->s_blocksize_bits, offset,
@@ -962,6 +969,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 	loff_t pos;
 	int status = 0;
 	u64 temp_tail;
+	u32 time;
 	timing_t memcpy_time, copy_to_nvmm_time;
 
 	PMFS_START_TIMING(copy_to_nvmm_t, copy_to_nvmm_time);
@@ -972,6 +980,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
 	total_blocks = num_blocks;
 	pos = offset + (pgoff << sb->s_blocksize_bits);
+	time = CURRENT_TIME_SEC.tv_sec;
 
 	temp_tail = pi->log_tail;
 	while (num_blocks > 0) {
@@ -1016,6 +1025,12 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		entry_data.num_pages = allocated;
 		entry_data.block = pmfs_get_block_off(sb, blocknr,
 							pi->i_blk_type);
+		/* FIXME: should we use the page cache write time? */
+		entry_data.ctime = entry_data.mtime = time;
+		if (pos + copied > inode->i_size)
+			entry_data.size = pos + copied;
+		else
+			entry_data.size = inode->i_size;
 
 		curr_entry = pmfs_append_file_inode_entry(sb, pi, inode,
 						&entry_data, temp_tail);
@@ -1059,7 +1074,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	//FIXME
-	pmfs_update_isize(inode, pi);
+//	pmfs_update_isize(inode, pi);
 	pi->log_tail = temp_tail;
 
 	ret = 0;

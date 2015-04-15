@@ -2084,12 +2084,6 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 	i_uid_write(inode, le32_to_cpu(pi->i_uid));
 	i_gid_write(inode, le32_to_cpu(pi->i_gid));
 	set_nlink(inode, le16_to_cpu(pi->i_links_count));
-	inode->i_size = le64_to_cpu(pi->i_size);
-	inode->i_atime.tv_sec = le32_to_cpu(pi->i_atime);
-	inode->i_ctime.tv_sec = le32_to_cpu(pi->i_ctime);
-	inode->i_mtime.tv_sec = le32_to_cpu(pi->i_mtime);
-	inode->i_atime.tv_nsec = inode->i_mtime.tv_nsec =
-					 inode->i_ctime.tv_nsec = 0;
 	inode->i_generation = le32_to_cpu(pi->i_generation);
 	pmfs_set_inode_flags(inode, pi);
 
@@ -2126,6 +2120,13 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 		break;
 	}
 
+	/* Update size and time after rebuild the tree */
+	inode->i_size = le64_to_cpu(pi->i_size);
+	inode->i_atime.tv_sec = le32_to_cpu(pi->i_atime);
+	inode->i_ctime.tv_sec = le32_to_cpu(pi->i_ctime);
+	inode->i_mtime.tv_sec = le32_to_cpu(pi->i_mtime);
+	inode->i_atime.tv_nsec = inode->i_mtime.tv_nsec =
+					 inode->i_ctime.tv_nsec = 0;
 	return 0;
 
 bad_inode:
@@ -3238,6 +3239,9 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	entry->pgoff = data->pgoff;
 	entry->num_pages = data->num_pages;
 	entry->block = data->block;
+	entry->ctime = data->ctime;
+	entry->mtime = data->mtime;
+	entry->size = data->size;
 	pmfs_dbg_verbose("file entry @ %llu: pgoff %u, num %u, block %llu\n",
 			curr_p, entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT);
@@ -3460,6 +3464,14 @@ void pmfs_free_dram_pages(struct super_block *sb)
 	mutex_unlock(&sbi->inode_table_mutex);
 }
 
+void pmfs_rebuild_file_time_and_size(struct super_block *sb,
+	struct pmfs_inode *pi, struct pmfs_inode_entry *entry)
+{
+	pi->i_ctime = cpu_to_le32(entry->ctime);
+	pi->i_mtime = cpu_to_le32(entry->mtime);
+	pi->i_size = cpu_to_le64(entry->size);
+}
+
 int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 			struct pmfs_inode *pi)
 {
@@ -3490,6 +3502,8 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 					entry->num_pages, curr_p, true,
 					false, false);
 		}
+
+		pmfs_rebuild_file_time_and_size(sb, pi, entry);
 
 		curr_p += sizeof(struct pmfs_inode_entry);
 		if (is_last_entry(curr_p, sizeof(struct pmfs_inode_entry)))
