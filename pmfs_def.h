@@ -69,6 +69,26 @@ struct pmfs_direntry {
 #define PMFS_DIR_REC_LEN(name_len)  (((name_len) + 12 + PMFS_DIR_ROUND) & \
 				      ~PMFS_DIR_ROUND)
 
+/*
+ * Structure of a directory log entry in PMFS.
+ */
+struct pmfs_log_direntry {
+	__le64	ino;                    /* inode no pointed to by this entry */
+	__le64	size;
+	__le32	ctime;
+	__le32	mtime;
+	__le16	de_len;                 /* length of this directory entry */
+	__le16	links_count;
+	u8	name_len;               /* length of the directory entry name */
+	u8	file_type;              /* file type */
+	char	name[PMFS_NAME_LEN];   /* File name */
+};
+
+#define PMFS_DIR_PAD            4
+#define PMFS_DIR_ROUND          (PMFS_DIR_PAD - 1)
+#define PMFS_DIR_LOG_REC_LEN(name_len)  (((name_len) + 30 + PMFS_DIR_ROUND) & \
+				      ~PMFS_DIR_ROUND)
+
 /* PMFS supported data blocks */
 #define PMFS_BLOCK_TYPE_4K     0
 #define PMFS_BLOCK_TYPE_2M     1

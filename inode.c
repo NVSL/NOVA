@@ -3261,7 +3261,7 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_direntry *data, unsigned short de_len,
 	u64 tail)
 {
-	struct pmfs_direntry *entry;
+	struct pmfs_log_direntry *entry;
 	u64 curr_p, page_tail;
 	unsigned long num_pages;
 	int allocated;
@@ -3326,8 +3326,13 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	if (is_last_entry(curr_p, size))
 		curr_p = next_log_page(sb, curr_p);
 
-	entry = (struct pmfs_direntry *)pmfs_get_block(sb, curr_p);
-	__copy_from_user_inatomic_nocache(entry, data, de_len);
+	entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr_p);
+//	__copy_from_user_inatomic_nocache(entry, data, de_len);
+	entry->ino = data->ino;
+	entry->name_len = data->name_len;
+	__copy_from_user_inatomic_nocache(entry->name, data->name,
+					data->name_len);
+	entry->file_type = data->file_type;
 	/* Update actual de_len */
 	entry->de_len = de_len;
 	pmfs_dbg_verbose("dir entry @ 0x%llx: ino %llu, entry len %u, "
@@ -3348,7 +3353,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	int allocated;
 	u64 new_block;
 	u64 curr_p;
-	struct pmfs_direntry *de_entry;
+	struct pmfs_log_direntry *de_entry;
 
 	if (pi->log_head) {
 		pmfs_dbg("%s: log head exists @ 0x%llx!\n",
@@ -3365,23 +3370,23 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	pi->log_pages = 1;
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 
-	de_entry = (struct pmfs_direntry *)pmfs_get_block(sb, new_block);
+	de_entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, new_block);
 	de_entry->ino = cpu_to_le64(ino);
 	de_entry->name_len = 1;
-	de_entry->de_len = cpu_to_le16(PMFS_DIR_REC_LEN(1));
+	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(1));
 	strcpy(de_entry->name, ".");
-	pmfs_flush_buffer(de_entry, PMFS_DIR_REC_LEN(1), false);
-	curr_p = new_block + PMFS_DIR_REC_LEN(1);
+	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(1), false);
+	curr_p = new_block + PMFS_DIR_LOG_REC_LEN(1);
 //	dram_addr[0] = new_block;
 
-	de_entry = (struct pmfs_direntry *)((char *)de_entry +
+	de_entry = (struct pmfs_log_direntry *)((char *)de_entry +
 					le16_to_cpu(de_entry->de_len));
 	de_entry->ino = cpu_to_le64(ino);
 	de_entry->name_len = 2;
-	de_entry->de_len = cpu_to_le16(PMFS_DIR_REC_LEN(2));
+	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(2));
 	strcpy(de_entry->name, "..");
-	pmfs_flush_buffer(de_entry, PMFS_DIR_REC_LEN(2), true);
-	curr_p += PMFS_DIR_REC_LEN(2);
+	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(2), true);
+	curr_p += PMFS_DIR_LOG_REC_LEN(2);
 //	dram_addr[1] = new_block + PMFS_DIR_REC_LEN(1);
 
 	pi->log_tail = curr_p;

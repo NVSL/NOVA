@@ -32,7 +32,7 @@ static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 	struct super_block *sb = dir->i_sb;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
-	unsigned short reclen;
+	unsigned short reclen, loglen;
 	int nlen, rlen;
 	u64 curr_entry;
 	char *top;
@@ -103,10 +103,11 @@ static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 	pidir->i_ctime = cpu_to_le32(dir->i_ctime.tv_sec);
 	pmfs_memlock_inode(dir->i_sb, pidir);
 
+	loglen = PMFS_DIR_LOG_REC_LEN(namelen);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir,
-						dir, de, reclen, 0);
+						dir, de, loglen, 0);
 	/* FIXME: Flush all data before update log_tail */
-	pidir->log_tail = curr_entry + reclen;
+	pidir->log_tail = curr_entry + loglen;
 
 	return 0;
 }
@@ -180,7 +181,7 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 	struct qstr *entry = &de->d_name;
 	struct pmfs_direntry *res_entry, *prev_entry;
 	struct pmfs_direntry de_entry;
-	unsigned short de_len;
+	unsigned short de_len, loglen;
 	u64 curr_entry;
 	int retval = -EINVAL;
 	unsigned long blocks, block;
@@ -235,10 +236,11 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 	de_entry.de_len = de_len;
 	de_entry.name_len = 0;
 	de_entry.file_type = 0;
+	loglen = PMFS_DIR_LOG_REC_LEN(0);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir,
-					&de_entry, de_len, 0);
+					&de_entry, loglen, 0);
 	/* FIXME: Flush all data before update log_tail */
-	pidir->log_tail = curr_entry + de_len;
+	pidir->log_tail = curr_entry + loglen;
 	retval = 0;
 out:
 	return retval;
@@ -246,9 +248,9 @@ out:
 
 static int pmfs_replay_add_dirent_to_buf(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode,
-	struct pmfs_direntry *entry, struct pmfs_direntry *de,
-	u8 *blk_base)
+	struct pmfs_log_direntry *entry, u8 *blk_base)
 {
+	struct pmfs_direntry *de;
 	const char *name = entry->name;
 	int namelen = entry->name_len;
 	unsigned short reclen;
@@ -256,22 +258,21 @@ static int pmfs_replay_add_dirent_to_buf(struct super_block *sb,
 	char *top;
 
 	reclen = PMFS_DIR_REC_LEN(namelen);
-	if (!de) {
-		de = (struct pmfs_direntry *)blk_base;
-		top = blk_base + sb->s_blocksize - reclen;
-		while ((char *)de <= top) {
-			rlen = le16_to_cpu(de->de_len);
-			if (de->ino) {
-				nlen = PMFS_DIR_REC_LEN(de->name_len);
-				if ((rlen - nlen) >= reclen)
-					break;
-			} else if (rlen >= reclen)
+	de = (struct pmfs_direntry *)blk_base;
+	top = blk_base + sb->s_blocksize - reclen;
+	while ((char *)de <= top) {
+		rlen = le16_to_cpu(de->de_len);
+		if (de->ino) {
+			nlen = PMFS_DIR_REC_LEN(de->name_len);
+			if ((rlen - nlen) >= reclen)
 				break;
-			de = (struct pmfs_direntry *)((char *)de + rlen);
-		}
-		if ((char *)de > top)
-			return -ENOSPC;
+		} else if (rlen >= reclen)
+			break;
+		de = (struct pmfs_direntry *)((char *)de + rlen);
 	}
+	if ((char *)de > top)
+		return -ENOSPC;
+
 	rlen = le16_to_cpu(de->de_len);
 
 	if (de->ino) {
@@ -291,7 +292,7 @@ static int pmfs_replay_add_dirent_to_buf(struct super_block *sb,
 }
 
 int pmfs_replay_add_entry(struct super_block *sb, struct pmfs_inode *pi,
-		struct inode *inode, struct pmfs_direntry *entry)
+		struct inode *inode, struct pmfs_log_direntry *entry)
 {
 	int retval = -EINVAL;
 	unsigned long block, blocks;
@@ -309,7 +310,7 @@ int pmfs_replay_add_entry(struct super_block *sb, struct pmfs_inode *pi,
 		}
 
 		retval = pmfs_replay_add_dirent_to_buf(sb, pi, inode, entry,
-				NULL, blk_base);
+				blk_base);
 		if (retval != -ENOSPC)
 			goto out;
 	}
@@ -319,7 +320,7 @@ out:
 }
 
 int pmfs_replay_remove_entry(struct super_block *sb, struct pmfs_inode *pi,
-		struct inode *inode, struct pmfs_direntry *entry)
+		struct inode *inode, struct pmfs_log_direntry *entry)
 {
 	struct pmfs_direntry *res_entry, *prev_entry;
 	int retval = -EINVAL;
@@ -355,7 +356,8 @@ out:
 int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 			struct pmfs_inode *pi)
 {
-	struct pmfs_direntry *entry, *de;
+	struct pmfs_log_direntry *entry;
+	struct pmfs_direntry *de;
 	unsigned long block, blocks;
 	u64 curr_p = pi->log_head;
 	int ret;
@@ -389,9 +391,10 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 			curr_p = next_log_page(sb, curr_p);
 
 		pmfs_dbg_verbose("curr_p: 0x%llx\n", curr_p);
-		entry = (struct pmfs_direntry *)pmfs_get_block(sb, curr_p);
-		pmfs_dbg_verbose("entry @%p, ino %llu, name %s, namelen %u\n",
-			entry, entry->ino, entry->name, entry->name_len);
+		entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr_p);
+		pmfs_dbg_verbose("entry @%p, ino %llu, name %s, namelen %u, "
+			"rec len %u\n", entry, entry->ino, entry->name,
+			entry->name_len, entry->de_len);
 
 		if (entry->name_len > 0) {
 			/* A valid entry to add */
@@ -401,8 +404,10 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 			ret = pmfs_replay_remove_entry(sb, pi, inode, entry);
 		}
 		curr_p += entry->de_len;
-		if (ret)
+		if (ret) {
 			pmfs_err(sb, "ERROR %d\n", ret);
+			break;
+		}
 	}
 
 	return 0;

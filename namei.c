@@ -134,7 +134,7 @@ int pmfs_search_dirblock(u8 *blk_base, struct inode *dir, struct qstr *child,
  * Returns 0 if not found, -1 on failure, and 1 on success
  */
 int pmfs_search_dirblock_inode(u8 *blk_base, struct inode *dir,
-	struct pmfs_direntry *entry, unsigned long offset,
+	struct pmfs_log_direntry *entry, unsigned long offset,
 	struct pmfs_direntry **res_dir, struct pmfs_direntry **prev_dir)
 {
 	struct pmfs_direntry *de;

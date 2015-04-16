@@ -929,12 +929,12 @@ static inline bool is_last_entry(u64 curr_p, size_t size)
 
 static inline bool is_last_dir_entry(struct super_block *sb, u64 curr_p)
 {
-	struct pmfs_direntry *entry;
+	struct pmfs_log_direntry *entry;
 
-	if (ENTRY_LOC(curr_p) + PMFS_DIR_REC_LEN(0) > LAST_ENTRY)
+	if (ENTRY_LOC(curr_p) + PMFS_DIR_LOG_REC_LEN(0) > LAST_ENTRY)
 		return true;
 
-	entry = (struct pmfs_direntry *)pmfs_get_block(sb, curr_p);
+	entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr_p);
 	if (entry->ino == 0)
 		return true;
 	return false;
@@ -986,7 +986,7 @@ int pmfs_search_dirblock(u8 *blk_base, struct inode *dir, struct qstr *child,
 			  struct pmfs_direntry **res_dir,
 			  struct pmfs_direntry **prev_dir);
 int pmfs_search_dirblock_inode(u8 *blk_base, struct inode *dir,
-	struct pmfs_direntry *entry, unsigned long offset,
+	struct pmfs_log_direntry *entry, unsigned long offset,
 	struct pmfs_direntry **res_dir, struct pmfs_direntry **prev_dir);
 
 /* xip.c */
