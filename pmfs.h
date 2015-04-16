@@ -118,6 +118,18 @@ extern unsigned int blk_type_to_size[PMFS_BLOCK_TYPE_MAX];
 /* ======================= Timing ========================= */
 enum timing_category {
 	ioremap_t,
+	/* Namei operations */
+	create_t,
+	lookup_t,
+	link_t,
+	unlink_t,
+	symlink_t,
+	mkdir_t,
+	rmdir_t,
+	mknod_t,
+	rename_t,
+	readdir_t,
+
 	/* I/O operations */
 	xip_read_t,
 	cow_write_t,

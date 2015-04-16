@@ -444,7 +444,9 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 	unsigned long offset;
 	struct pmfs_direntry *de;
 	ino_t ino;
+	timing_t readdir_time;
 
+	PMFS_START_TIMING(readdir_t, readdir_time);
 	pidir = pmfs_get_inode(sb, inode->i_ino);
 	pmfs_dbg_verbose("%s: ino %llu, root 0x%llx, size %llu\n",
 				__func__, (u64)inode->i_ino, pidir->root,
@@ -509,6 +511,7 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 		}
 		offset = 0;
 	}
+	PMFS_END_TIMING(readdir_t, readdir_time);
 	return 0;
 }
 

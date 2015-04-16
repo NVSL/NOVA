@@ -4,6 +4,17 @@ const char *Timingstring[TIMING_NUM] =
 {
 	"ioremap",
 
+	"create",
+	"lookup",
+	"link",
+	"unlink",
+	"symlink",
+	"mkdir",
+	"rmdir",
+	"mknod",
+	"rename",
+	"readdir",
+
 	"xip_read",
 	"cow_write",
 	"page_cache_write",
