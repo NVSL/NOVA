@@ -593,8 +593,7 @@ static int recursive_truncate_dir_blocks(struct super_block *sb, __le64 block,
 			}
 		}
 	}
-	if (all_range_freed &&
-		is_empty_meta_block(node, first_index, last_index)) {
+	if (all_range_freed) {
 		*meta_empty = true;
 	} else {
 		/* Zero-out the freed range if the meta-block in not empty */
@@ -3333,6 +3332,9 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	__copy_from_user_inatomic_nocache(entry->name, data->name,
 					data->name_len);
 	entry->file_type = data->file_type;
+	entry->mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	entry->size = cpu_to_le64(inode->i_size);
 	/* Update actual de_len */
 	entry->de_len = de_len;
 	pmfs_dbg_verbose("dir entry @ 0x%llx: ino %llu, entry len %u, "
@@ -3374,6 +3376,8 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	de_entry->ino = cpu_to_le64(ino);
 	de_entry->name_len = 1;
 	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(1));
+	de_entry->ctime = de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
+	de_entry->size = sb->s_blocksize;
 	strcpy(de_entry->name, ".");
 	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(1), false);
 	curr_p = new_block + PMFS_DIR_LOG_REC_LEN(1);
@@ -3384,6 +3388,8 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	de_entry->ino = cpu_to_le64(ino);
 	de_entry->name_len = 2;
 	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(2));
+	de_entry->ctime = de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
+	de_entry->size = sb->s_blocksize;
 	strcpy(de_entry->name, "..");
 	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(2), true);
 	curr_p += PMFS_DIR_LOG_REC_LEN(2);

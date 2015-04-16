@@ -98,10 +98,10 @@ static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
 	/*dir->i_version++; */
 
-	pmfs_memunlock_inode(dir->i_sb, pidir);
-	pidir->i_mtime = cpu_to_le32(dir->i_mtime.tv_sec);
-	pidir->i_ctime = cpu_to_le32(dir->i_ctime.tv_sec);
-	pmfs_memlock_inode(dir->i_sb, pidir);
+//	pmfs_memunlock_inode(dir->i_sb, pidir);
+//	pidir->i_mtime = cpu_to_le32(dir->i_mtime.tv_sec);
+//	pidir->i_ctime = cpu_to_le32(dir->i_ctime.tv_sec);
+//	pmfs_memlock_inode(dir->i_sb, pidir);
 
 	loglen = PMFS_DIR_LOG_REC_LEN(namelen);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir,
@@ -130,7 +130,7 @@ int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 		return -EINVAL;
 
 	pidir = pmfs_get_inode(sb, dir->i_ino);
-	pmfs_add_logentry(sb, trans, pidir, MAX_DATA_PER_LENTRY, LE_DATA);
+//	pmfs_add_logentry(sb, trans, pidir, MAX_DATA_PER_LENTRY, LE_DATA);
 
 	blocks = dir->i_size >> sb->s_blocksize_bits;
 	for (block = 0; block < blocks; block++) {
@@ -223,12 +223,12 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 	dir->i_ctime = dir->i_mtime = CURRENT_TIME_SEC;
 
 	pidir = pmfs_get_inode(sb, dir->i_ino);
-	pmfs_add_logentry(sb, trans, pidir, MAX_DATA_PER_LENTRY, LE_DATA);
+//	pmfs_add_logentry(sb, trans, pidir, MAX_DATA_PER_LENTRY, LE_DATA);
 
-	pmfs_memunlock_inode(sb, pidir);
-	pidir->i_mtime = cpu_to_le32(dir->i_mtime.tv_sec);
-	pidir->i_ctime = cpu_to_le32(dir->i_ctime.tv_sec);
-	pmfs_memlock_inode(sb, pidir);
+//	pmfs_memunlock_inode(sb, pidir);
+//	pidir->i_mtime = cpu_to_le32(dir->i_mtime.tv_sec);
+//	pidir->i_ctime = cpu_to_le32(dir->i_ctime.tv_sec);
+//	pmfs_memlock_inode(sb, pidir);
 
 	/* Append a zero-length entry for deletion */
 	de_len = PMFS_DIR_REC_LEN(0);
@@ -353,6 +353,16 @@ out:
 	return retval;
 }
 
+void pmfs_rebuild_dir_time_and_size(struct super_block *sb,
+	struct pmfs_inode *pi, struct pmfs_log_direntry *entry)
+{
+	pi->i_ctime = cpu_to_le32(entry->ctime);
+	pi->i_mtime = cpu_to_le32(entry->mtime);
+	/* FIXME: We rely on correct size */
+	if (cpu_to_le64(entry->size) > pi->i_size)
+		pi->i_size = cpu_to_le64(entry->size);
+}
+
 int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 			struct pmfs_inode *pi)
 {
@@ -370,6 +380,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 	pi->root = 0;
 	pi->height = 0;
 	blocks = pi->i_size >> sb->s_blocksize_bits;
+	pmfs_dbg_verbose("size %llu, blocks %lu\n", pi->i_size, blocks);
 	ret = pmfs_alloc_dir_blocks(inode, 0, blocks, false);
 	if (ret)
 		return ret;
@@ -403,9 +414,10 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 			/* Delete the entry */
 			ret = pmfs_replay_remove_entry(sb, pi, inode, entry);
 		}
+		pmfs_rebuild_dir_time_and_size(sb, pi, entry);
 		curr_p += entry->de_len;
 		if (ret) {
-			pmfs_err(sb, "ERROR %d\n", ret);
+			pmfs_err(sb, "%s ERROR %d\n", __func__, ret);
 			break;
 		}
 	}
