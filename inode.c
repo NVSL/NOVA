@@ -3378,6 +3378,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(1));
 	de_entry->ctime = de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
 	de_entry->size = sb->s_blocksize;
+	de_entry->links_count = 1;
 	strcpy(de_entry->name, ".");
 	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(1), false);
 	curr_p = new_block + PMFS_DIR_LOG_REC_LEN(1);
@@ -3390,6 +3391,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(2));
 	de_entry->ctime = de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
 	de_entry->size = sb->s_blocksize;
+	de_entry->links_count = 2;
 	strcpy(de_entry->name, "..");
 	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(2), true);
 	curr_p += PMFS_DIR_LOG_REC_LEN(2);
