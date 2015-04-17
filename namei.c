@@ -38,7 +38,7 @@ static inline int pmfs_add_nondir(pmfs_transaction_t *trans,
 		struct inode *dir, struct dentry *dentry, struct inode *inode)
 {
 	struct pmfs_inode *pi;
-	int err = pmfs_add_entry(trans, dentry, inode);
+	int err = pmfs_add_entry(trans, dentry, inode, 0);
 
 	if (!err) {
 		d_instantiate(dentry, inode);
@@ -445,14 +445,14 @@ static int pmfs_link(struct dentry *dest_dentry, struct inode *dir,
 
 	ihold(inode);
 
-	err = pmfs_add_entry(trans, dentry, inode);
+	err = pmfs_add_entry(trans, dentry, inode, 1);
 	if (!err) {
 		inode->i_ctime = CURRENT_TIME_SEC;
 		inc_nlink(inode);
 
 		pmfs_memunlock_inode(sb, pi);
 		pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-		pi->i_links_count = cpu_to_le16(inode->i_nlink);
+//		pi->i_links_count = cpu_to_le16(inode->i_nlink);
 		pmfs_memlock_inode(sb, pi);
 
 		d_instantiate(dentry, inode);
@@ -484,7 +484,7 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 	}
 	pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
 
-	retval = pmfs_remove_entry(trans, dentry, inode);
+	retval = pmfs_remove_entry(trans, dentry, inode, -1);
 	if (retval)
 		goto end_unlink;
 
@@ -495,7 +495,7 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 	pmfs_memunlock_inode(sb, pi);
 	if (inode->i_nlink) {
 		drop_nlink(inode);
-		pi->i_links_count = cpu_to_le16(inode->i_nlink);
+//		pi->i_links_count = cpu_to_le16(inode->i_nlink);
 	}
 	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
 	pmfs_memlock_inode(sb, pi);
@@ -574,7 +574,7 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	set_nlink(inode, 2);
 
-	err = pmfs_add_entry(trans, dentry, inode);
+	err = pmfs_add_entry(trans, dentry, inode, 0);
 	if (err) {
 		pmfs_dbg_verbose("failed to add dir entry\n");
 		goto out_clear_inode;
@@ -700,7 +700,7 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 	}
 	pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
 
-	err = pmfs_remove_entry(trans, dentry, inode);
+	err = pmfs_remove_entry(trans, dentry, inode, 0);
 	if (err)
 		goto end_rmdir;
 
@@ -774,7 +774,7 @@ static int pmfs_rename(struct inode *old_dir,
 
 	if (!new_de) {
 		/* link it into the new directory. */
-		err = pmfs_add_entry(trans, new_dentry, old_inode);
+		err = pmfs_add_entry(trans, new_dentry, old_inode, 0);
 		if (err)
 			goto out;
 	} else {
@@ -794,7 +794,7 @@ static int pmfs_rename(struct inode *old_dir,
 	}
 
 	/* and unlink the inode from the old directory ... */
-	err = pmfs_remove_entry(trans, old_dentry, old_inode);
+	err = pmfs_remove_entry(trans, old_dentry, old_inode, 0);
 	if (err)
 		goto out;
 

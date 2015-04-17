@@ -2082,13 +2082,12 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 	inode->i_mode = le16_to_cpu(pi->i_mode);
 	i_uid_write(inode, le32_to_cpu(pi->i_uid));
 	i_gid_write(inode, le32_to_cpu(pi->i_gid));
-	set_nlink(inode, le16_to_cpu(pi->i_links_count));
+//	set_nlink(inode, le16_to_cpu(pi->i_links_count));
 	inode->i_generation = le32_to_cpu(pi->i_generation);
 	pmfs_set_inode_flags(inode, pi);
 
 	/* check if the inode is active. */
-	if (inode->i_nlink == 0 &&
-	   (inode->i_mode == 0 || le32_to_cpu(pi->i_dtime))) {
+	if (inode->i_mode == 0 || le32_to_cpu(pi->i_dtime)) {
 		/* this inode is deleted */
 		ret = -ESTALE;
 		goto bad_inode;
@@ -2126,6 +2125,7 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 	inode->i_mtime.tv_sec = le32_to_cpu(pi->i_mtime);
 	inode->i_atime.tv_nsec = inode->i_mtime.tv_nsec =
 					 inode->i_ctime.tv_nsec = 0;
+	set_nlink(inode, le16_to_cpu(pi->i_links_count));
 	return 0;
 
 bad_inode:
@@ -3258,13 +3258,14 @@ out:
  */
 u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_direntry *data, unsigned short de_len,
-	u64 tail)
+	u64 tail, int link_change)
 {
 	struct pmfs_log_direntry *entry;
 	u64 curr_p, page_tail;
 	unsigned long num_pages;
 	int allocated;
 	size_t size = de_len;
+	unsigned short links_count;
 	timing_t append_time;
 
 	PMFS_START_TIMING(append_entry_t, append_time);
@@ -3335,6 +3336,14 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	entry->mtime = cpu_to_le32(inode->i_mtime.tv_sec);
 	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
 	entry->size = cpu_to_le64(inode->i_size);
+
+	links_count = cpu_to_le16(inode->i_nlink);
+	if (links_count == 0 && link_change == -1)
+		links_count = 0;
+	else
+		links_count += link_change;
+	entry->links_count = cpu_to_le16(links_count);
+
 	/* Update actual de_len */
 	entry->de_len = de_len;
 	pmfs_dbg_verbose("dir entry @ 0x%llx: ino %llu, entry len %u, "

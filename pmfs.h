@@ -274,9 +274,9 @@ void pmfs_free_dram_page(unsigned long page_addr);
 
 /* dir.c */
 extern int pmfs_add_entry(pmfs_transaction_t *trans,
-		struct dentry *dentry, struct inode *inode);
+		struct dentry *dentry, struct inode *inode, int inc_link);
 extern int pmfs_remove_entry(pmfs_transaction_t *trans,
-		struct dentry *dentry, struct inode *inode);
+		struct dentry *dentry, struct inode *inode, int dec_link);
 int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 			struct pmfs_inode *pi);
 
@@ -957,7 +957,7 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_inode_entry *data, u64 tail);
 u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_direntry *data, unsigned short de_len,
-	u64 tail);
+	u64 tail, int link_change);
 int pmfs_append_dir_init_entries(struct super_block *sb,
 	struct pmfs_inode *pi, u64 ino, unsigned long dram_page);
 void pmfs_free_dram_pages(struct super_block *sb);
