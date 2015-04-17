@@ -424,44 +424,22 @@ static int pmfs_link(struct dentry *dest_dentry, struct inode *dir,
 {
 	struct inode *inode = dest_dentry->d_inode;
 	int err = -ENOMEM;
-	pmfs_transaction_t *trans;
-	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
 	timing_t link_time;
 
 	PMFS_START_TIMING(link_t, link_time);
 	if (inode->i_nlink >= PMFS_LINK_MAX)
 		return -EMLINK;
 
-	trans = pmfs_new_transaction(sb, MAX_INODE_LENTRIES * 2 +
-			MAX_DIRENTRY_LENTRIES);
-	if (IS_ERR(trans)) {
-		err = PTR_ERR(trans);
-		goto out;
-	}
-	/* only need to log the first 48 bytes since we only modify ctime and
-	 * i_links_count in this system call */
-	pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
-
-	ihold(inode);
-
-	err = pmfs_add_entry(trans, dentry, inode, 1);
+	err = pmfs_add_entry(NULL, dentry, inode, 1);
 	if (!err) {
 		inode->i_ctime = CURRENT_TIME_SEC;
 		inc_nlink(inode);
 
-		pmfs_memunlock_inode(sb, pi);
-		pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-//		pi->i_links_count = cpu_to_le16(inode->i_nlink);
-		pmfs_memlock_inode(sb, pi);
-
 		d_instantiate(dentry, inode);
-		pmfs_commit_transaction(sb, trans);
 	} else {
 		iput(inode);
-		pmfs_abort_transaction(sb, trans);
 	}
-out:
+
 	PMFS_END_TIMING(link_t, link_time);
 	return err;
 }
@@ -469,42 +447,26 @@ out:
 static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
+	struct super_block *sb = dir->i_sb;
 	int retval = -ENOMEM;
-	pmfs_transaction_t *trans;
-	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
 	timing_t unlink_time;
 
 	PMFS_START_TIMING(unlink_t, unlink_time);
-	trans = pmfs_new_transaction(sb, MAX_INODE_LENTRIES * 2 +
-		MAX_DIRENTRY_LENTRIES);
-	if (IS_ERR(trans)) {
-		retval = PTR_ERR(trans);
-		goto out;
-	}
-	pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
 
-	retval = pmfs_remove_entry(trans, dentry, inode, -1);
+	retval = pmfs_remove_entry(NULL, dentry, inode, -1);
 	if (retval)
-		goto end_unlink;
+		goto out;
 
 	if (inode->i_nlink == 1)
 		pmfs_truncate_add(inode, inode->i_size);
 	inode->i_ctime = dir->i_ctime;
 
-	pmfs_memunlock_inode(sb, pi);
 	if (inode->i_nlink) {
 		drop_nlink(inode);
-//		pi->i_links_count = cpu_to_le16(inode->i_nlink);
 	}
-	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-	pmfs_memlock_inode(sb, pi);
 
-	pmfs_commit_transaction(sb, trans);
 	PMFS_END_TIMING(unlink_t, unlink_time);
 	return 0;
-end_unlink:
-	pmfs_abort_transaction(sb, trans);
 out:
 	pmfs_err(sb, "%s return %d\n", __func__, retval);
 	PMFS_END_TIMING(unlink_t, unlink_time);
