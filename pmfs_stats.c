@@ -17,6 +17,7 @@ const char *Timingstring[TIMING_NUM] =
 	"new_inode",
 	"add_entry",
 	"remove_entry",
+	"setattr",
 
 	"xip_read",
 	"cow_write",

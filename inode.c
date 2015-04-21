@@ -2788,7 +2788,9 @@ int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 	pmfs_transaction_t *trans;
 	int ret;
 	unsigned int ia_valid = attr->ia_valid, attr_mask;
+	timing_t setattr_time;
 
+	PMFS_START_TIMING(setattr_t, setattr_time);
 	if (!pi)
 		return -EACCES;
 
@@ -2842,6 +2844,7 @@ int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 
 	pmfs_commit_transaction(sb, trans);
 
+	PMFS_END_TIMING(setattr_t, setattr_time);
 	return ret;
 }
 
