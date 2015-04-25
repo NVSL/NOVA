@@ -126,7 +126,9 @@ int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 	struct pmfs_direntry *de;
 	char *blk_base;
 	struct pmfs_inode *pidir;
+	timing_t add_entry_time;
 
+	PMFS_START_TIMING(add_entry_t, add_entry_time);
 	if (!dentry->d_name.len)
 		return -EINVAL;
 
@@ -168,6 +170,7 @@ int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 	retval = pmfs_add_dirent_to_buf(NULL, dentry, inode, de, blk_base,
 		pidir, inc_link);
 out:
+	PMFS_END_TIMING(add_entry_t, add_entry_time);
 	return retval;
 }
 
@@ -188,6 +191,9 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 	int retval = -EINVAL;
 	unsigned long blocks, block;
 	char *blk_base = NULL;
+	timing_t remove_entry_time;
+
+	PMFS_START_TIMING(remove_entry_t, remove_entry_time);
 
 	if (!de->d_name.len)
 		return -EINVAL;
@@ -245,6 +251,7 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 	pidir->log_tail = curr_entry + loglen;
 	retval = 0;
 out:
+	PMFS_END_TIMING(remove_entry_t, remove_entry_time);
 	return retval;
 }
 

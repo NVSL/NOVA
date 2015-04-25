@@ -129,6 +129,9 @@ enum timing_category {
 	mknod_t,
 	rename_t,
 	readdir_t,
+	new_inode_t,
+	add_entry_t,
+	remove_entry_t,
 
 	/* I/O operations */
 	xip_read_t,

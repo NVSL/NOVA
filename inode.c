@@ -2382,7 +2382,9 @@ struct inode *pmfs_new_inode(pmfs_transaction_t *trans, struct inode *dir,
 	int i, errval;
 	u32 num_inodes, inodes_per_block;
 	ino_t ino = 0;
+	timing_t new_inode_time;
 
+	PMFS_START_TIMING(new_inode_t, new_inode_time);
 	sb = dir->i_sb;
 	sbi = (struct pmfs_sb_info *)sb->s_fs_info;
 	inode = new_inode(sb);
@@ -2481,10 +2483,12 @@ retry:
 		goto fail1;
 	}
 
+	PMFS_END_TIMING(new_inode_t, new_inode_time);
 	return inode;
 fail1:
 	make_bad_inode(inode);
 	iput(inode);
+	PMFS_END_TIMING(new_inode_t, new_inode_time);
 	return ERR_PTR(errval);
 }
 

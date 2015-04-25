@@ -14,6 +14,9 @@ const char *Timingstring[TIMING_NUM] =
 	"mknod",
 	"rename",
 	"readdir",
+	"new_inode",
+	"add_entry",
+	"remove_entry",
 
 	"xip_read",
 	"cow_write",
