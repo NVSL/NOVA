@@ -24,6 +24,8 @@
 #define DT2IF(dt) (((dt) << 12) & S_IFMT)
 #define IF2DT(sif) (((sif) & S_IFMT) >> 12)
 
+/* ========================= RB Tree operations ============================= */
+
 static int pmfs_rbtree_compare_find(struct super_block *sb,
 	struct pmfs_dir_node *curr, struct dentry *dentry)
 {
@@ -155,6 +157,24 @@ void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
 
 	return;
 }
+
+void pmfs_delete_dir_tree(struct super_block *sb, struct inode *inode)
+{
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_dir_node *curr;
+	struct rb_node *temp;
+
+	temp = rb_first(&si->dir_tree);
+	while (temp) {
+		curr = container_of(temp, struct pmfs_dir_node, node);
+		temp = rb_next(temp);
+		rb_erase(&curr->node, &si->dir_tree);
+		pmfs_free_dirnode(sb, curr);
+	}
+	return;
+}
+
+/* ========================= Entry operations ============================= */
 
 static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 	struct dentry *dentry, struct inode *inode,
