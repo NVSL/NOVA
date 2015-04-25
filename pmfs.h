@@ -428,6 +428,7 @@ struct pmfs_inode_info {
 	__u32   i_dir_start_lookup;
 	struct list_head i_truncated;
 	struct inode	vfs_inode;
+	struct rb_root	dir_tree;
 };
 
 /*

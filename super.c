@@ -1034,6 +1034,7 @@ static struct inode *pmfs_alloc_inode(struct super_block *sb)
 		return NULL;
 
 	vi->vfs_inode.i_version = 1;
+	vi->dir_tree = RB_ROOT;
 	return &vi->vfs_inode;
 }
 
