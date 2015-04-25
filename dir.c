@@ -139,6 +139,7 @@ void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
 	struct pmfs_log_direntry *entry;
 	struct rb_node *temp;
 
+	pmfs_dbg("%s: dir ino %lu\n", __func__, inode->i_ino);
 	temp = rb_first(&si->dir_tree);
 	while (temp) {
 		curr = container_of(temp, struct pmfs_dir_node, node);
@@ -655,6 +656,7 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 		offset = 0;
 	}
 	PMFS_END_TIMING(readdir_t, readdir_time);
+//	pmfs_print_dir_tree(sb, inode);
 	return 0;
 }
 
