@@ -20,6 +20,7 @@
 #include <linux/pagemap.h>
 #include <linux/rcupdate.h>
 #include <linux/types.h>
+#include <linux/rbtree.h>
 
 #include "pmfs_def.h"
 #include "journal.h"
@@ -244,6 +245,12 @@ struct	pmfs_inode_log_page {
 #define	LAST_ENTRY	4064
 #define	PAGE_TAIL(p)	(((p) & ~INVALID_MASK) + LAST_ENTRY)
 
+struct pmfs_dir_node {
+	struct rb_node node;
+	unsigned long nvmm;
+};
+
+
 /* Function Prototypes */
 extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
 
@@ -349,6 +356,8 @@ extern struct super_block *pmfs_read_super(struct super_block *sb, void *data,
 	int silent);
 extern int pmfs_statfs(struct dentry *d, struct kstatfs *buf);
 extern int pmfs_remount(struct super_block *sb, int *flags, char *data);
+struct pmfs_dir_node *pmfs_alloc_dirnode(struct super_block *sb);
+void pmfs_free_dirnode(struct super_block *sb, struct pmfs_dir_node *node);
 
 /* Provides ordering from all previous clflush too */
 static inline void PERSISTENT_MARK(void)

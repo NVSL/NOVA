@@ -45,6 +45,7 @@ MODULE_PARM_DESC(contiguous_allocation, "Contiguous allocation");
 static struct super_operations pmfs_sops;
 static const struct export_operations pmfs_export_ops;
 static struct kmem_cache *pmfs_inode_cachep;
+static struct kmem_cache *pmfs_dirnode_cachep;
 static struct kmem_cache *pmfs_blocknode_cachep;
 static struct kmem_cache *pmfs_transaction_cachep;
 /* FIXME: should the following variable be one per PMFS instance? */
@@ -993,6 +994,11 @@ void pmfs_free_blocknode(struct super_block *sb, struct pmfs_blocknode *bnode)
 	__pmfs_free_blocknode(bnode);
 }
 
+void pmfs_free_dirnode(struct super_block *sb, struct pmfs_dir_node *node)
+{
+	kmem_cache_free(pmfs_dirnode_cachep, node);
+}
+
 inline pmfs_transaction_t *pmfs_alloc_transaction(void)
 {
 	return (pmfs_transaction_t *)
@@ -1008,6 +1014,14 @@ struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb)
 	if (p) {
 		sbi->num_blocknode_allocated++;
 	}
+	return p;
+}
+
+struct pmfs_dir_node *pmfs_alloc_dirnode(struct super_block *sb)
+{
+	struct pmfs_dir_node *p;
+	p = (struct pmfs_dir_node *)
+		kmem_cache_alloc(pmfs_dirnode_cachep, GFP_NOFS);
 	return p;
 }
 
@@ -1068,6 +1082,17 @@ static int __init init_inodecache(void)
 	return 0;
 }
 
+static int __init init_dirnode(void)
+{
+	pmfs_dirnode_cachep = kmem_cache_create("pmfs_dirnode_cache",
+					       sizeof(struct pmfs_dir_node),
+					       0, (SLAB_RECLAIM_ACCOUNT |
+						   SLAB_MEM_SPREAD), init_once);
+	if (pmfs_dirnode_cachep == NULL)
+		return -ENOMEM;
+	return 0;
+}
+
 static int __init init_transaction_cache(void)
 {
 	pmfs_transaction_cachep = kmem_cache_create("pmfs_journal_transaction",
@@ -1090,6 +1115,11 @@ static void destroy_transaction_cache(void)
 static void destroy_inodecache(void)
 {
 	kmem_cache_destroy(pmfs_inode_cachep);
+}
+
+static void destroy_dirnode(void)
+{
+	kmem_cache_destroy(pmfs_dirnode_cachep);
 }
 
 static void destroy_blocknode_cache(void)
@@ -1190,12 +1220,18 @@ static int __init init_pmfs_fs(void)
 	if (rc)
 		goto out2;
 
-	rc = register_filesystem(&pmfs_fs_type);
+	rc = init_dirnode();
 	if (rc)
 		goto out3;
 
+	rc = register_filesystem(&pmfs_fs_type);
+	if (rc)
+		goto out4;
+
 	return 0;
 
+out4:
+	destroy_dirnode();
 out3:
 	destroy_inodecache();
 out2:
@@ -1209,6 +1245,7 @@ static void __exit exit_pmfs_fs(void)
 {
 	unregister_filesystem(&pmfs_fs_type);
 	destroy_inodecache();
+	destroy_dirnode();
 	destroy_blocknode_cache();
 	destroy_transaction_cache();
 }
