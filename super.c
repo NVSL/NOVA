@@ -1034,7 +1034,6 @@ static struct inode *pmfs_alloc_inode(struct super_block *sb)
 		return NULL;
 
 	vi->vfs_inode.i_version = 1;
-	vi->dir_tree = RB_ROOT;
 	return &vi->vfs_inode;
 }
 
@@ -1056,6 +1055,7 @@ static void init_once(void *foo)
 
 	vi->i_dir_start_lookup = 0;
 	INIT_LIST_HEAD(&vi->i_truncated);
+	vi->dir_tree = RB_ROOT;
 	inode_init_once(&vi->vfs_inode);
 }
 
@@ -1088,7 +1088,7 @@ static int __init init_dirnode(void)
 	pmfs_dirnode_cachep = kmem_cache_create("pmfs_dirnode_cache",
 					       sizeof(struct pmfs_dir_node),
 					       0, (SLAB_RECLAIM_ACCOUNT |
-						   SLAB_MEM_SPREAD), init_once);
+						   SLAB_MEM_SPREAD), NULL);
 	if (pmfs_dirnode_cachep == NULL)
 		return -ENOMEM;
 	return 0;
