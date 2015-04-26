@@ -685,6 +685,8 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 	pmfs_dec_count(dir, pidir);
 
 	pmfs_commit_transaction(sb, trans);
+
+	pmfs_delete_dir_tree(sb, inode);
 	PMFS_END_TIMING(rmdir_t, rmdir_time);
 	return err;
 end_rmdir:

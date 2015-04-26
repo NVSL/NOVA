@@ -3452,6 +3452,7 @@ void pmfs_free_dram_pages(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi;
+	struct inode *inode;
 	unsigned long last_blocknr;
 	unsigned int freed;
 	int i;
@@ -3480,12 +3481,16 @@ void pmfs_free_dram_pages(struct super_block *sb)
 		}
 		pmfs_dbg_verbose("%s: inode %u, height %u, root 0x%llx\n",
 				__func__, i, pi->height, pi->root);
-		if (S_ISREG(pi->i_mode))
+		if (S_ISREG(pi->i_mode)) {
 			freed = pmfs_free_file_meta_blocks(sb, pi,
 							last_blocknr);
-		else
+		} else {
 			freed = pmfs_free_dir_meta_blocks(sb, pi,
 							last_blocknr);
+			inode = pmfs_iget(sb, i << PMFS_INODE_BITS);
+			pmfs_delete_dir_tree(sb, inode);
+			iput(inode);
+		}
 		pmfs_dbg_verbose("%s after: inode %u, height %u, root 0x%llx, "
 				"freed %u\n", __func__, i, pi->height,
 				pi->root, freed);
