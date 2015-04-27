@@ -3488,7 +3488,7 @@ void pmfs_free_dram_pages(struct super_block *sb)
 			freed = pmfs_free_dir_meta_blocks(sb, pi,
 							last_blocknr);
 			inode = pmfs_iget(sb, i << PMFS_INODE_BITS);
-//			pmfs_delete_dir_tree(sb, inode);
+			pmfs_delete_dir_tree(sb, inode);
 			iput(inode);
 		}
 		pmfs_dbg_verbose("%s after: inode %u, height %u, root 0x%llx, "

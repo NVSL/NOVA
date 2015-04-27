@@ -315,7 +315,7 @@ static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 	loglen = PMFS_DIR_LOG_REC_LEN(namelen);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir,
 					dir, de, loglen, 0, inc_link);
-//	pmfs_insert_dir_node(sb, pidir, dir, dentry, curr_entry);
+	pmfs_insert_dir_node(sb, pidir, dir, dentry, curr_entry);
 	/* FIXME: Flush all data before update log_tail */
 	pidir->log_tail = curr_entry + loglen;
 
@@ -460,7 +460,7 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 					&de_entry, loglen, 0, dec_link);
 	/* FIXME: Flush all data before update log_tail */
 	pidir->log_tail = curr_entry + loglen;
-//	pmfs_remove_dir_node(sb, pidir, dir, de);
+	pmfs_remove_dir_node(sb, pidir, dir, de);
 	retval = 0;
 out:
 	PMFS_END_TIMING(remove_entry_t, remove_entry_time);
