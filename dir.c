@@ -44,6 +44,24 @@ static int pmfs_rbtree_compare_find(struct super_block *sb,
 	return 0;
 }
 
+static int pmfs_rbtree_compare_find_by_name(struct super_block *sb,
+	struct pmfs_dir_node *curr, const char *name)
+{
+	struct pmfs_log_direntry *entry;
+
+	if (!curr || curr->nvmm == 0)
+		BUG();
+
+	entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr->nvmm);
+
+	if (strcmp(name, entry->name) < 0)
+		return -1;
+	if (strcmp(name, entry->name) > 0)
+		return 1;
+
+	return 0;
+}
+
 struct pmfs_dir_node *pmfs_find_dir_node(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, struct dentry *dentry)
 {
@@ -92,6 +110,44 @@ int pmfs_insert_dir_node(struct super_block *sb, struct pmfs_inode *pi,
 		} else {
 			pmfs_dbg("%s: entry %s already exists\n",
 				__func__, dentry->d_name.name);
+			return -EINVAL;
+		}
+	}
+
+	new = pmfs_alloc_dirnode(sb);
+	if (!new)
+		return -ENOMEM;
+
+	new->nvmm = dir_entry;
+	rb_link_node(&new->node, parent, temp);
+	rb_insert_color(&new->node, &si->dir_tree);
+
+	return 0;
+}
+
+int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
+	struct inode *inode, const char *name, u64 dir_entry)
+{
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_dir_node *curr, *new;
+	struct rb_node **temp, *parent;
+	int compVal;
+
+	temp = &(si->dir_tree.rb_node);
+	parent = NULL;
+
+	while (*temp) {
+		curr = container_of(*temp, struct pmfs_dir_node, node);
+		compVal = pmfs_rbtree_compare_find_by_name(sb, curr, name);
+		parent = *temp;
+
+		if (compVal == -1) {
+			temp = &((*temp)->rb_left);
+		} else if (compVal == 1) {
+			temp = &((*temp)->rb_right);
+		} else {
+			pmfs_dbg("%s: entry %s already exists\n",
+				__func__, name);
 			return -EINVAL;
 		}
 	}
@@ -259,7 +315,7 @@ static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 	loglen = PMFS_DIR_LOG_REC_LEN(namelen);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir,
 					dir, de, loglen, 0, inc_link);
-	pmfs_insert_dir_node(sb, pidir, dir, dentry, curr_entry);
+//	pmfs_insert_dir_node(sb, pidir, dir, dentry, curr_entry);
 	/* FIXME: Flush all data before update log_tail */
 	pidir->log_tail = curr_entry + loglen;
 
@@ -281,6 +337,8 @@ int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 	struct pmfs_inode *pidir;
 	timing_t add_entry_time;
 
+	pmfs_dbg_verbose("%s: dir %lu new inode %lu\n", __func__, dir->i_ino,
+				inode->i_ino);
 	PMFS_START_TIMING(add_entry_t, add_entry_time);
 	if (!dentry->d_name.len)
 		return -EINVAL;
@@ -402,7 +460,7 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 					&de_entry, loglen, 0, dec_link);
 	/* FIXME: Flush all data before update log_tail */
 	pidir->log_tail = curr_entry + loglen;
-	pmfs_remove_dir_node(sb, pidir, dir, de);
+//	pmfs_remove_dir_node(sb, pidir, dir, de);
 	retval = 0;
 out:
 	PMFS_END_TIMING(remove_entry_t, remove_entry_time);
