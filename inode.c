@@ -3401,7 +3401,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	strcpy(de_entry->name, ".");
 	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(1), false);
 
-	pmfs_insert_dir_node_by_name(sb, pi, inode, self, new_block);
+	pmfs_insert_dir_node_by_name(sb, pi, inode, self, 1, new_block);
 	curr_p = new_block + PMFS_DIR_LOG_REC_LEN(1);
 //	dram_addr[0] = new_block;
 
@@ -3416,7 +3416,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	strcpy(de_entry->name, "..");
 	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(2), true);
 
-	pmfs_insert_dir_node_by_name(sb, pi, inode, parent, curr_p);
+	pmfs_insert_dir_node_by_name(sb, pi, inode, parent, 2, curr_p);
 	curr_p += PMFS_DIR_LOG_REC_LEN(2);
 
 //	dram_addr[1] = new_block + PMFS_DIR_REC_LEN(1);

@@ -30,37 +30,50 @@ static int pmfs_rbtree_compare_find(struct super_block *sb,
 	struct pmfs_dir_node *curr, struct dentry *dentry)
 {
 	struct pmfs_log_direntry *entry;
+	int namelen = dentry->d_name.len;
+	int min_len;
 
 	if (!curr || curr->nvmm == 0)
 		BUG();
 
 	entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr->nvmm);
+	min_len = namelen < entry->name_len ? namelen : entry->name_len;
 
-	if (strcmp(dentry->d_name.name, entry->name) < 0)
+	if (strncmp(dentry->d_name.name, entry->name, min_len) < 0)
 		return -1;
-	if (strcmp(dentry->d_name.name, entry->name) > 0)
+	if (strncmp(dentry->d_name.name, entry->name, min_len) > 0)
 		return 1;
 
+	if (namelen < entry->name_len)
+		return -1;
+	if (namelen > entry->name_len)
+		return 1;
 	return 0;
 }
 
 static int pmfs_rbtree_compare_find_by_name(struct super_block *sb,
-	struct pmfs_dir_node *curr, const char *name)
+	struct pmfs_dir_node *curr, const char *name, int namelen)
 {
 	struct pmfs_log_direntry *entry;
+	int min_len;
 
 	if (!curr || curr->nvmm == 0)
 		BUG();
 
 	entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr->nvmm);
+	min_len = namelen < entry->name_len ? namelen : entry->name_len;
 
 	pmfs_dbg_verbose("%s: %s %s, entry @0x%lx\n", __func__,
 				name, entry->name, curr->nvmm);
-	if (strcmp(name, entry->name) < 0)
+	if (strncmp(name, entry->name, min_len) < 0)
 		return -1;
-	if (strcmp(name, entry->name) > 0)
+	if (strncmp(name, entry->name, min_len) > 0)
 		return 1;
 
+	if (namelen < entry->name_len)
+		return -1;
+	if (namelen > entry->name_len)
+		return 1;
 	return 0;
 }
 
@@ -123,12 +136,13 @@ int pmfs_insert_dir_node(struct super_block *sb, struct pmfs_inode *pi,
 	new->nvmm = dir_entry;
 	rb_link_node(&new->node, parent, temp);
 	rb_insert_color(&new->node, &si->dir_tree);
+//	pmfs_print_dir_tree(sb, inode);
 
 	return 0;
 }
 
 int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, const char *name, u64 dir_entry)
+	struct inode *inode, const char *name, int namelen, u64 dir_entry)
 {
 	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct pmfs_dir_node *curr, *new;
@@ -142,7 +156,8 @@ int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 
 	while (*temp) {
 		curr = container_of(*temp, struct pmfs_dir_node, node);
-		compVal = pmfs_rbtree_compare_find_by_name(sb, curr, name);
+		compVal = pmfs_rbtree_compare_find_by_name(sb, curr,
+							name, namelen);
 		parent = *temp;
 
 		if (compVal == -1) {
@@ -163,6 +178,7 @@ int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 	new->nvmm = dir_entry;
 	rb_link_node(&new->node, parent, temp);
 	rb_insert_color(&new->node, &si->dir_tree);
+//	pmfs_print_dir_tree(sb, inode);
 
 	return 0;
 }
@@ -211,7 +227,7 @@ void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
 
 		entry = (struct pmfs_log_direntry *)
 				pmfs_get_block(sb, curr->nvmm);
-		pmfs_dbg("%s\n", entry->name);
+		pmfs_dbg("%.*s\n", entry->name_len, entry->name);
 		temp = rb_next(temp);
 	}
 
@@ -250,6 +266,7 @@ static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 	u64 curr_entry;
 	char *top;
 
+	pmfs_dbg_verbose("%s: %s %d\n", __func__, name, namelen);
 	reclen = PMFS_DIR_REC_LEN(namelen);
 	if (!de) {
 		de = (struct pmfs_direntry *)blk_base;
