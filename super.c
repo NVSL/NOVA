@@ -519,13 +519,14 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	strcpy(de->name, "..");
 	pmfs_memlock_range(sb, de, sb->s_blocksize);
 
+	root_info = kmem_cache_alloc(pmfs_inode_cachep, GFP_NOFS);
+	if (!root_info)
+		return NULL;
+
 	root_inode = pmfs_iget(sb, PMFS_ROOT_INO);
 	pmfs_append_dir_init_entries(sb, root_i, root_inode,
 					PMFS_ROOT_INO, root);
 	iput(root_inode);
-	root_info = kmem_cache_alloc(pmfs_inode_cachep, GFP_NOFS);
-	if (!root_info)
-		return NULL;
 
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();

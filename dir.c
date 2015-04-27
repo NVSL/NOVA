@@ -54,6 +54,8 @@ static int pmfs_rbtree_compare_find_by_name(struct super_block *sb,
 
 	entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr->nvmm);
 
+	pmfs_dbg_verbose("%s: %s %s, entry @0x%lx\n", __func__,
+				name, entry->name, curr->nvmm);
 	if (strcmp(name, entry->name) < 0)
 		return -1;
 	if (strcmp(name, entry->name) > 0)
@@ -132,6 +134,8 @@ int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_dir_node *curr, *new;
 	struct rb_node **temp, *parent;
 	int compVal;
+
+	pmfs_dbg_verbose("%s: insert %s @ 0x%llx\n", __func__, name, dir_entry);
 
 	temp = &(si->dir_tree.rb_node);
 	parent = NULL;
