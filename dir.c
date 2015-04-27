@@ -65,7 +65,7 @@ static int pmfs_rbtree_compare_find_by_name(struct super_block *sb,
 struct pmfs_dir_node *pmfs_find_dir_node(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, struct dentry *dentry)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
 	int compVal;
@@ -90,7 +90,7 @@ struct pmfs_dir_node *pmfs_find_dir_node(struct super_block *sb,
 int pmfs_insert_dir_node(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct dentry *dentry, u64 dir_entry)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct pmfs_dir_node *curr, *new;
 	struct rb_node **temp, *parent;
 	int compVal;
@@ -128,7 +128,7 @@ int pmfs_insert_dir_node(struct super_block *sb, struct pmfs_inode *pi,
 int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, const char *name, u64 dir_entry)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct pmfs_dir_node *curr, *new;
 	struct rb_node **temp, *parent;
 	int compVal;
@@ -166,7 +166,7 @@ int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 void pmfs_remove_dir_node(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct dentry *dentry)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
 	int compVal;
@@ -192,7 +192,7 @@ void pmfs_remove_dir_node(struct super_block *sb, struct pmfs_inode *pi,
 
 void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct pmfs_dir_node *curr;
 	struct pmfs_log_direntry *entry;
 	struct rb_node *temp;
@@ -216,7 +216,7 @@ void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
 
 void pmfs_delete_dir_tree(struct super_block *sb, struct inode *inode)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
 

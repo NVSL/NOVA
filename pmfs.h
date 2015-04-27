@@ -498,6 +498,15 @@ static inline struct pmfs_inode_info *PMFS_I(struct inode *inode)
 	return container_of(inode, struct pmfs_inode_info, vfs_inode);
 }
 
+extern struct pmfs_inode_info *root_info;
+static inline struct pmfs_inode_info *PMFS_GET_INFO(struct inode *inode)
+{
+	if (inode->i_ino == PMFS_ROOT_INO)
+		return root_info;
+	else
+		return container_of(inode, struct pmfs_inode_info, vfs_inode);
+}
+
 /* If this is part of a read-modify-write of the super block,
  * pmfs_memunlock_super() before calling! */
 static inline struct pmfs_super_block *pmfs_get_super(struct super_block *sb)
