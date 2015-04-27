@@ -3366,7 +3366,8 @@ out:
 
 /* Append . and .. entries */
 int pmfs_append_dir_init_entries(struct super_block *sb,
-	struct pmfs_inode *pi, u64 ino, unsigned long dram_page)
+	struct pmfs_inode *pi, struct inode *inode, u64 parent_ino,
+	unsigned long dram_page)
 {
 	int allocated;
 	u64 new_block;
@@ -3389,7 +3390,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 
 	de_entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, new_block);
-	de_entry->ino = cpu_to_le64(ino);
+	de_entry->ino = cpu_to_le64(inode->i_ino);
 	de_entry->name_len = 1;
 	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(1));
 	de_entry->ctime = de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
@@ -3402,7 +3403,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 
 	de_entry = (struct pmfs_log_direntry *)((char *)de_entry +
 					le16_to_cpu(de_entry->de_len));
-	de_entry->ino = cpu_to_le64(ino);
+	de_entry->ino = cpu_to_le64(parent_ino);
 	de_entry->name_len = 2;
 	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(2));
 	de_entry->ctime = de_entry->mtime = CURRENT_TIME_SEC.tv_sec;

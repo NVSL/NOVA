@@ -531,7 +531,7 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	pmfs_memlock_range(sb, blk_base, sb->s_blocksize);
 
 	pi = pmfs_get_inode(sb, inode->i_ino);
-	pmfs_append_dir_init_entries(sb, pi, inode->i_ino,
+	pmfs_append_dir_init_entries(sb, pi, inode, dir->i_ino,
 					(unsigned long)blk_base);
 
 	set_nlink(inode, 2);

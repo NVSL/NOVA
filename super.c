@@ -393,6 +393,7 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	unsigned long blocksize;
 	u64 journal_meta_start, journal_data_start, inode_table_start;
 	struct pmfs_inode *root_i;
+	struct inode *root_inode;
 	struct pmfs_super_block *super;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_direntry *de;
@@ -518,7 +519,10 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	strcpy(de->name, "..");
 	pmfs_memlock_range(sb, de, sb->s_blocksize);
 
-	pmfs_append_dir_init_entries(sb, root_i, PMFS_ROOT_INO, root);
+	root_inode = pmfs_iget(sb, PMFS_ROOT_INO);
+	pmfs_append_dir_init_entries(sb, root_i, root_inode,
+					PMFS_ROOT_INO, root);
+	iput(root_inode);
 	root_info = kmem_cache_alloc(pmfs_inode_cachep, GFP_NOFS);
 	if (!root_info)
 		return NULL;
