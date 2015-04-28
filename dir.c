@@ -292,6 +292,7 @@ static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 	int nlen, rlen;
 	u64 curr_entry;
 	char *top;
+	u64 ino;
 
 	pmfs_dbg_verbose("%s: %s %d\n", __func__, name, namelen);
 	reclen = PMFS_DIR_REC_LEN(namelen);
@@ -339,9 +340,11 @@ static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 	/*de->file_type = 0;*/
 	if (inode) {
 		de->ino = cpu_to_le64(inode->i_ino);
+		ino = inode->i_ino;
 		/*de->file_type = IF2DT(inode->i_mode); */
 	} else {
 		de->ino = 0;
+		ino = 0;
 	}
 	de->name_len = namelen;
 	memcpy(de->name, name, namelen);
@@ -362,7 +365,7 @@ static int pmfs_add_dirent_to_buf(pmfs_transaction_t *trans,
 
 	loglen = PMFS_DIR_LOG_REC_LEN(namelen);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir,
-					dir, de, loglen, 0, inc_link);
+					dir, ino, dentry, loglen, 0, inc_link);
 	pmfs_insert_dir_node(sb, pidir, dir, dentry, curr_entry);
 	/* FIXME: Flush all data before update log_tail */
 	pidir->log_tail = curr_entry + loglen;
@@ -436,13 +439,13 @@ out:
 /* removes a directory entry pointing to the inode. assumes the inode has
  * already been logged for consistency
  */
-int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
+int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 		struct inode *inode, int dec_link)
 {
 	struct super_block *sb = inode->i_sb;
-	struct inode *dir = de->d_parent->d_inode;
+	struct inode *dir = dentry->d_parent->d_inode;
 	struct pmfs_inode *pidir;
-	struct qstr *entry = &de->d_name;
+	struct qstr *entry = &dentry->d_name;
 	struct pmfs_direntry *res_entry, *prev_entry;
 	struct pmfs_direntry de_entry;
 	unsigned short de_len, loglen;
@@ -454,7 +457,7 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 
 	PMFS_START_TIMING(remove_entry_t, remove_entry_time);
 
-	if (!de->d_name.len)
+	if (!dentry->d_name.len)
 		return -EINVAL;
 
 	blocks = dir->i_size >> sb->s_blocksize_bits;
@@ -506,10 +509,10 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 	de_entry.file_type = 0;
 	loglen = PMFS_DIR_LOG_REC_LEN(entry->len);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir,
-					&de_entry, loglen, 0, dec_link);
+					0, dentry, loglen, 0, dec_link);
 	/* FIXME: Flush all data before update log_tail */
 	pidir->log_tail = curr_entry + loglen;
-	pmfs_remove_dir_node(sb, pidir, dir, de);
+	pmfs_remove_dir_node(sb, pidir, dir, dentry);
 	retval = 0;
 out:
 	PMFS_END_TIMING(remove_entry_t, remove_entry_time);

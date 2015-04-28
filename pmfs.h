@@ -989,8 +989,8 @@ extern const struct address_space_operations pmfs_aops_xip;
 u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_inode_entry *data, u64 tail);
 u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, struct pmfs_direntry *data, unsigned short de_len,
-	u64 tail, int link_change);
+	struct inode *inode, u64 ino, struct dentry *dentry,
+	unsigned short de_len, u64 tail, int link_change);
 int pmfs_append_dir_init_entries(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, u64 parent_ino);
 void pmfs_free_dram_pages(struct super_block *sb);

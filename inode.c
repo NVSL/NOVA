@@ -3266,8 +3266,8 @@ out:
  * Append a pmfs_direntry to the current pmfs_inode_log_page.
  */
 u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, struct pmfs_direntry *data, unsigned short de_len,
-	u64 tail, int link_change)
+	struct inode *inode, u64 ino, struct dentry *dentry,
+	unsigned short de_len, u64 tail, int link_change)
 {
 	struct pmfs_log_direntry *entry;
 	u64 curr_p, page_tail;
@@ -3336,12 +3336,11 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr_p);
-//	__copy_from_user_inatomic_nocache(entry, data, de_len);
-	entry->ino = data->ino;
-	entry->name_len = data->name_len;
-	__copy_from_user_inatomic_nocache(entry->name, data->name,
-					data->name_len);
-	entry->file_type = data->file_type;
+	entry->ino = cpu_to_le64(ino);
+	entry->name_len = dentry->d_name.len;
+	__copy_from_user_inatomic_nocache(entry->name, dentry->d_name.name,
+					dentry->d_name.len);
+	entry->file_type = 0;
 	entry->mtime = cpu_to_le32(inode->i_mtime.tv_sec);
 	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
 	entry->size = cpu_to_le64(inode->i_size);
