@@ -649,6 +649,34 @@ static int pmfs_empty_dir(struct inode *inode)
 	return 1;
 }
 
+#if 0
+static int pmfs_empty_dir(struct inode *inode)
+{
+	struct super_block *sb;
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_dir_node *curr;
+	struct pmfs_log_direntry *entry;
+	struct rb_node *temp;
+
+	sb = inode->i_sb;
+	temp = rb_first(&si->dir_tree);
+	while (temp) {
+		curr = container_of(temp, struct pmfs_dir_node, node);
+
+		if (!curr || curr->nvmm == 0)
+			BUG();
+
+		entry = (struct pmfs_log_direntry *)
+				pmfs_get_block(sb, curr->nvmm);
+		if (!is_dir_init_entry(sb, entry))
+			return 0;
+		temp = rb_next(temp);
+	}
+
+	return 1;
+}
+#endif
+
 static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;

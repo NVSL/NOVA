@@ -985,6 +985,17 @@ static inline bool is_last_dir_entry(struct super_block *sb, u64 curr_p)
 	return false;
 }
 
+static inline int is_dir_init_entry(struct super_block *sb,
+	struct pmfs_log_direntry *entry)
+{
+	if (entry->name_len == 1 && strncmp(entry->name, ".", 1) == 0)
+		return 1;
+	if (entry->name_len == 2 && strncmp(entry->name, "..", 2) == 0)
+		return 1;
+
+	return 0;
+}
+
 extern const struct address_space_operations pmfs_aops_xip;
 u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_inode_entry *data, u64 tail);
