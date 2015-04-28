@@ -320,7 +320,8 @@ int pmfs_set_blocksize_hint(struct super_block *sb, struct pmfs_inode *pi,
 		loff_t new_size);
 void pmfs_setsize(struct inode *inode, loff_t newsize);
 
-extern struct inode *pmfs_iget(struct super_block *sb, unsigned long ino);
+extern struct inode *pmfs_iget(struct super_block *sb, unsigned long ino,
+		int rebuild);
 extern void pmfs_put_inode(struct inode *inode);
 extern void pmfs_evict_inode(struct inode *inode);
 extern struct inode *pmfs_new_inode(pmfs_transaction_t *trans,

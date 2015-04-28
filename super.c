@@ -523,7 +523,7 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	if (!root_info)
 		return NULL;
 
-	root_inode = pmfs_iget(sb, PMFS_ROOT_INO);
+	root_inode = pmfs_iget(sb, PMFS_ROOT_INO, 0);
 	pmfs_append_dir_init_entries(sb, root_i, root_inode,
 					PMFS_ROOT_INO, root);
 	iput(root_inode);
@@ -632,7 +632,7 @@ static void pmfs_recover_truncate_list(struct super_block *sb)
 	while (ino_next != 0) {
 		pi = pmfs_get_inode(sb, ino_next);
 		li = (struct pmfs_inode_truncate_item *)(pi + 1);
-		inode = pmfs_iget(sb, ino_next);
+		inode = pmfs_iget(sb, ino_next, 0);
 		if (IS_ERR(inode))
 			break;
 		pmfs_dbg("Recover ino %llx nlink %d sz %llx:%llx\n", ino_next,
@@ -799,7 +799,7 @@ setup_sb:
 	sb->s_export_op = &pmfs_export_ops;
 	sb->s_xattr = NULL;
 	sb->s_flags |= MS_NOSEC;
-	root_i = pmfs_iget(sb, PMFS_ROOT_INO);
+	root_i = pmfs_iget(sb, PMFS_ROOT_INO, 1);
 	if (IS_ERR(root_i)) {
 		retval = PTR_ERR(root_i);
 		goto out;
@@ -1184,7 +1184,7 @@ static struct inode *pmfs_nfs_get_inode(struct super_block *sb,
 	if ((ino >> PMFS_INODE_BITS) > (sbi->s_inodes_count))
 		return ERR_PTR(-ESTALE);
 
-	inode = pmfs_iget(sb, ino);
+	inode = pmfs_iget(sb, ino, 0);
 	if (IS_ERR(inode))
 		return ERR_CAST(inode);
 
