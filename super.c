@@ -781,6 +781,9 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 
 //	/* Rebuild root directory */
 //	pmfs_rebuild_root_dir(sb, root_pi);
+	root_info = kmem_cache_alloc(pmfs_inode_cachep, GFP_NOFS);
+	if (!root_info)
+		return -ENOMEM;
 
 #ifdef CONFIG_PMFS_TEST
 	if (!first_pmfs_super)

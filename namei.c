@@ -171,6 +171,7 @@ int pmfs_search_dirblock_inode(u8 *blk_base, struct inode *dir,
 	return 0;
 }
 
+#if 0
 static ino_t pmfs_inode_by_name(struct inode *dir, struct qstr *entry,
 				 struct pmfs_direntry **res_entry)
 {
@@ -234,12 +235,29 @@ restart:
 done:
 	return i_no;
 }
+#endif
+
+static ino_t pmfs_inode_by_name(struct inode *dir, struct qstr *entry,
+				 struct pmfs_log_direntry **res_entry)
+{
+	struct super_block *sb = dir->i_sb;
+	struct pmfs_dir_node *node;
+	struct pmfs_log_direntry *direntry;
+
+	node = pmfs_find_dir_node_by_name(sb, NULL, dir, entry);
+	if (node == NULL)
+		return 0;
+
+	direntry = (struct pmfs_log_direntry *)pmfs_get_block(sb, node->nvmm);
+	*res_entry = direntry;
+	return direntry->ino;
+}
 
 static struct dentry *pmfs_lookup(struct inode *dir, struct dentry *dentry,
 				   unsigned int flags)
 {
 	struct inode *inode = NULL;
-	struct pmfs_direntry *de;
+	struct pmfs_log_direntry *de;
 	ino_t ino;
 	timing_t lookup_time;
 
@@ -634,7 +652,7 @@ static int pmfs_empty_dir(struct inode *inode)
 static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
-	struct pmfs_direntry *de;
+	struct pmfs_log_direntry *de;
 	pmfs_transaction_t *trans;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino), *pidir;
@@ -702,7 +720,7 @@ static int pmfs_rename(struct inode *old_dir,
 {
 	struct inode *old_inode = old_dentry->d_inode;
 	struct inode *new_inode = new_dentry->d_inode;
-	struct pmfs_direntry *new_de = NULL, *old_de = NULL;
+	struct pmfs_log_direntry *new_de = NULL, *old_de = NULL;
 	pmfs_transaction_t *trans;
 	struct super_block *sb = old_inode->i_sb;
 	struct pmfs_inode *pi, *new_pidir, *old_pidir;
@@ -802,7 +820,7 @@ struct dentry *pmfs_get_parent(struct dentry *child)
 {
 	struct inode *inode;
 	struct qstr dotdot = QSTR_INIT("..", 2);
-	struct pmfs_direntry *de = NULL;
+	struct pmfs_log_direntry *de = NULL;
 	ino_t ino;
 
 	pmfs_inode_by_name(child->d_inode, &dotdot, &de);

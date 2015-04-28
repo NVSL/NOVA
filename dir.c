@@ -102,6 +102,32 @@ struct pmfs_dir_node *pmfs_find_dir_node(struct super_block *sb,
 	return NULL;
 }
 
+struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
+	struct pmfs_inode *pi, struct inode *inode, struct qstr *entry)
+{
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_dir_node *curr;
+	struct rb_node *temp;
+	int compVal;
+
+	temp = si->dir_tree.rb_node;
+	while (temp) {
+		curr = container_of(temp, struct pmfs_dir_node, node);
+		compVal = pmfs_rbtree_compare_find_by_name(sb, curr,
+						entry->name, entry->len);
+
+		if (compVal == -1) {
+			temp = temp->rb_left;
+		} else if (compVal == 1) {
+			temp = temp->rb_right;
+		} else {
+			return curr;
+		}
+	}
+
+	return NULL;
+}
+
 int pmfs_insert_dir_node(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct dentry *dentry, u64 dir_entry)
 {
@@ -611,6 +637,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 {
 	struct pmfs_log_direntry *entry;
 	struct pmfs_direntry *de;
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	unsigned long block, blocks;
 	u64 curr_p = pi->log_head;
 	int ret;
@@ -623,6 +650,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 	pi->root = 0;
 	pi->height = 0;
 	blocks = pi->i_size >> sb->s_blocksize_bits;
+	si->dir_tree = RB_ROOT;
 	pmfs_dbg_verbose("size %llu, blocks %lu\n", pi->i_size, blocks);
 	ret = pmfs_alloc_dir_blocks(inode, 0, blocks, false);
 	if (ret)

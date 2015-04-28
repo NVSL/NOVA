@@ -946,6 +946,8 @@ void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode);
 void pmfs_delete_dir_tree(struct super_block *sb, struct inode *inode);
 int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, const char *name, int namelen, u64 dir_entry);
+struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
+	struct pmfs_inode *pi, struct inode *inode, struct qstr *entry);
 
 /* file.c */
 extern const struct inode_operations pmfs_file_inode_operations;
