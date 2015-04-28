@@ -497,12 +497,13 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *de,
 //	pmfs_memlock_inode(sb, pidir);
 
 	/* Append a zero-length entry for deletion */
-	de_len = PMFS_DIR_REC_LEN(0);
-	de_entry.ino = inode->i_ino;
+	de_len = PMFS_DIR_REC_LEN(entry->len);
+	de_entry.ino = 0;
 	de_entry.de_len = de_len;
-	de_entry.name_len = 0;
+	de_entry.name_len = entry->len;
+	memcpy(de_entry.name, entry->name, entry->len);
 	de_entry.file_type = 0;
-	loglen = PMFS_DIR_LOG_REC_LEN(0);
+	loglen = PMFS_DIR_LOG_REC_LEN(entry->len);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir,
 					&de_entry, loglen, 0, dec_link);
 	/* FIXME: Flush all data before update log_tail */
@@ -682,7 +683,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 			"rec len %u\n", entry, entry->ino, entry->name,
 			entry->name_len, entry->de_len);
 
-		if (entry->name_len > 0) {
+		if (entry->ino > 0) {
 			/* A valid entry to add */
 			ret = pmfs_replay_add_entry(sb, pi, inode,
 							entry, curr_p);

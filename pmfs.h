@@ -977,7 +977,7 @@ static inline bool is_last_dir_entry(struct super_block *sb, u64 curr_p)
 		return true;
 
 	entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr_p);
-	if (entry->ino == 0)
+	if (entry->name_len == 0)
 		return true;
 	return false;
 }

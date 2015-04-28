@@ -150,7 +150,7 @@ int pmfs_search_dirblock_inode(u8 *blk_base, struct inode *dir,
 		/* do minimal checking `by hand' */
 
 		if ((char *)de + namelen <= dlimit &&
-			    de->ino == entry->ino) {
+		    pmfs_match(namelen, entry->name, de)) {
 			/* found a match - just to be sure, do a full check */
 			if (!pmfs_check_dir_entry("pmfs_inode_by_name",
 						   dir, de, blk_base, offset))
