@@ -560,7 +560,8 @@ static int pmfs_replay_add_dirent_to_buf(struct super_block *sb,
 }
 
 int pmfs_replay_add_entry(struct super_block *sb, struct pmfs_inode *pi,
-		struct inode *inode, struct pmfs_log_direntry *entry)
+		struct inode *inode, struct pmfs_log_direntry *entry,
+		u64 curr_p)
 {
 	int retval = -EINVAL;
 	unsigned long block, blocks;
@@ -568,6 +569,9 @@ int pmfs_replay_add_entry(struct super_block *sb, struct pmfs_inode *pi,
 
 	if (!entry->name_len)
 		return -EINVAL;
+
+	pmfs_insert_dir_node_by_name(sb, pi, inode, entry->name,
+					entry->name_len, curr_p);
 
 	blocks = pi->i_size >> sb->s_blocksize_bits;
 	for (block = 0; block < blocks; block++) {
@@ -680,7 +684,8 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 
 		if (entry->name_len > 0) {
 			/* A valid entry to add */
-			ret = pmfs_replay_add_entry(sb, pi, inode, entry);
+			ret = pmfs_replay_add_entry(sb, pi, inode,
+							entry, curr_p);
 		} else {
 			/* Delete the entry */
 			ret = pmfs_replay_remove_entry(sb, pi, inode, entry);
