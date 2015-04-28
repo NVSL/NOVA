@@ -3368,8 +3368,7 @@ out:
 
 /* Append . and .. entries */
 int pmfs_append_dir_init_entries(struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode, u64 parent_ino,
-	unsigned long dram_page)
+	struct pmfs_inode *pi, struct inode *inode, u64 parent_ino)
 {
 	int allocated;
 	u64 new_block;

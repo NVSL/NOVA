@@ -525,7 +525,7 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 
 	root_inode = pmfs_iget(sb, PMFS_ROOT_INO, 0);
 	pmfs_append_dir_init_entries(sb, root_i, root_inode,
-					PMFS_ROOT_INO, root);
+					PMFS_ROOT_INO);
 	iput(root_inode);
 
 	PERSISTENT_MARK();
