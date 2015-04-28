@@ -244,7 +244,8 @@ static ino_t pmfs_inode_by_name(struct inode *dir, struct qstr *entry,
 	struct pmfs_dir_node *node;
 	struct pmfs_log_direntry *direntry;
 
-	node = pmfs_find_dir_node_by_name(sb, NULL, dir, entry);
+	node = pmfs_find_dir_node_by_name(sb, NULL, dir,
+					entry->name, entry->len);
 	if (node == NULL)
 		return 0;
 

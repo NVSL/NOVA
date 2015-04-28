@@ -103,7 +103,8 @@ struct pmfs_dir_node *pmfs_find_dir_node(struct super_block *sb,
 }
 
 struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode, struct qstr *entry)
+	struct pmfs_inode *pi, struct inode *inode, const char *name,
+	unsigned long name_len)
 {
 	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct pmfs_dir_node *curr;
@@ -114,7 +115,7 @@ struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
 	while (temp) {
 		curr = container_of(temp, struct pmfs_dir_node, node);
 		compVal = pmfs_rbtree_compare_find_by_name(sb, curr,
-						entry->name, entry->len);
+							name, name_len);
 
 		if (compVal == -1) {
 			temp = temp->rb_left;
@@ -712,6 +713,7 @@ void pmfs_rebuild_root_dir(struct super_block *sb, struct pmfs_inode *root_pi)
 	pmfs_rebuild_dir_inode_tree(sb, &inode, root_pi);
 }
 
+#if 0
 static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);
@@ -725,9 +727,9 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 
 	PMFS_START_TIMING(readdir_t, readdir_time);
 	pidir = pmfs_get_inode(sb, inode->i_ino);
-	pmfs_dbg_verbose("%s: ino %llu, root 0x%llx, size %llu\n",
+	pmfs_dbg_verbose("%s: ino %llu, root 0x%llx, size %llu, pos %llu\n",
 				__func__, (u64)inode->i_ino, pidir->root,
-				pidir->i_size);
+				pidir->i_size, ctx->pos);
 //	if (pidir->root == 0 && pidir->i_size > 0 && S_ISDIR(inode->i_mode))
 //		pmfs_rebuild_dir_inode_tree(sb, inode, pidir);
 
@@ -790,6 +792,76 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 	}
 	PMFS_END_TIMING(readdir_t, readdir_time);
 //	pmfs_print_dir_tree(sb, inode);
+	return 0;
+}
+#endif
+
+static int pmfs_readdir(struct file *file, struct dir_context *ctx)
+{
+	struct inode *inode = file_inode(file);
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi, *pidir;
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_dir_node *curr;
+	struct pmfs_log_direntry *entry;
+	struct rb_node *temp;
+	ino_t ino;
+	timing_t readdir_time;
+
+	PMFS_START_TIMING(readdir_t, readdir_time);
+	pidir = pmfs_get_inode(sb, inode->i_ino);
+	pmfs_dbg_verbose("%s: ino %llu, root 0x%llx, size %llu, pos %llu\n",
+				__func__, (u64)inode->i_ino, pidir->root,
+				pidir->i_size, ctx->pos);
+
+	if (ctx->pos == 0) {
+		temp = rb_first(&si->dir_tree);
+	} else if (ctx->pos == READDIR_END) {
+		goto out;
+	} else if (ctx->pos) {
+		entry = (struct pmfs_log_direntry *)
+				pmfs_get_block(sb, ctx->pos);
+		pmfs_dbg_verbose("ctx: ino %llu, name %*.s, "
+				"name_len %u, de_len %u\n",
+				(u64)entry->ino, entry->name_len, entry->name,
+				entry->name_len, entry->de_len);
+		curr = pmfs_find_dir_node_by_name(sb, NULL, inode,
+					entry->name, entry->name_len);
+		temp = &curr->node;
+	}
+
+	while (temp) {
+		curr = container_of(temp, struct pmfs_dir_node, node);
+
+		if (!curr || curr->nvmm == 0)
+			BUG();
+
+		entry = (struct pmfs_log_direntry *)
+				pmfs_get_block(sb, curr->nvmm);
+		if (entry->ino) {
+			ino = le64_to_cpu(entry->ino);
+			pi = pmfs_get_inode(sb, ino);
+			pmfs_dbg_verbose("ctx: ino %llu, name %*.s, "
+					"name_len %u, de_len %u\n",
+					(u64)ino, entry->name_len, entry->name,
+					entry->name_len, entry->de_len);
+			if (!dir_emit(ctx, entry->name, entry->name_len,
+					ino, IF2DT(le16_to_cpu(pi->i_mode)))) {
+				pmfs_dbg_verbose("Here: pos %llu\n", ctx->pos);
+				ctx->pos = curr->nvmm;
+				return 0;
+			}
+		}
+		temp = rb_next(temp);
+	}
+
+	/*
+	 * We have reach the end. To let readdir knows that, we assign
+	 * a bogus end offset to ctx.
+	 */
+	ctx->pos = READDIR_END;
+out:
+	PMFS_END_TIMING(readdir_t, readdir_time);
 	return 0;
 }
 

@@ -113,6 +113,8 @@ extern unsigned int pmfs_dbgmask;
 #define	PMFS_MALLOC_TEST		0xBCD00016
 
 
+#define	READDIR_END			0x1
+
 extern unsigned int blk_type_to_shift[PMFS_BLOCK_TYPE_MAX];
 extern unsigned int blk_type_to_size[PMFS_BLOCK_TYPE_MAX];
 
@@ -948,7 +950,8 @@ void pmfs_delete_dir_tree(struct super_block *sb, struct inode *inode);
 int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, const char *name, int namelen, u64 dir_entry);
 struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode, struct qstr *entry);
+	struct pmfs_inode *pi, struct inode *inode, const char *name,
+	unsigned long name_len);
 
 /* file.c */
 extern const struct inode_operations pmfs_file_inode_operations;
