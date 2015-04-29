@@ -18,38 +18,13 @@
 #include "pmfs.h"
 
 /*
- *	Parent is locked.
+ *	Parent is locked. We do not take lock for RB Tree operations.
  */
 
 #define DT2IF(dt) (((dt) << 12) & S_IFMT)
 #define IF2DT(sif) (((sif) & S_IFMT) >> 12)
 
 /* ========================= RB Tree operations ============================= */
-
-static int pmfs_rbtree_compare_find(struct super_block *sb,
-	struct pmfs_dir_node *curr, struct dentry *dentry)
-{
-	struct pmfs_log_direntry *entry;
-	int namelen = dentry->d_name.len;
-	int min_len;
-
-	if (!curr || curr->nvmm == 0)
-		BUG();
-
-	entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr->nvmm);
-	min_len = namelen < entry->name_len ? namelen : entry->name_len;
-
-	if (strncmp(dentry->d_name.name, entry->name, min_len) < 0)
-		return -1;
-	if (strncmp(dentry->d_name.name, entry->name, min_len) > 0)
-		return 1;
-
-	if (namelen < entry->name_len)
-		return -1;
-	if (namelen > entry->name_len)
-		return 1;
-	return 0;
-}
 
 static int pmfs_rbtree_compare_find_by_name(struct super_block *sb,
 	struct pmfs_dir_node *curr, const char *name, int namelen)
@@ -75,31 +50,6 @@ static int pmfs_rbtree_compare_find_by_name(struct super_block *sb,
 	if (namelen > entry->name_len)
 		return 1;
 	return 0;
-}
-
-struct pmfs_dir_node *pmfs_find_dir_node(struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode, struct dentry *dentry)
-{
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
-	struct pmfs_dir_node *curr;
-	struct rb_node *temp;
-	int compVal;
-
-	temp = si->dir_tree.rb_node;
-	while (temp) {
-		curr = container_of(temp, struct pmfs_dir_node, node);
-		compVal = pmfs_rbtree_compare_find(sb, curr, dentry);
-
-		if (compVal == -1) {
-			temp = temp->rb_left;
-		} else if (compVal == 1) {
-			temp = temp->rb_right;
-		} else {
-			return curr;
-		}
-	}
-
-	return NULL;
 }
 
 struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
@@ -129,43 +79,13 @@ struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
 	return NULL;
 }
 
-int pmfs_insert_dir_node(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, struct dentry *dentry, u64 dir_entry)
+static inline struct pmfs_dir_node *pmfs_find_dir_node(struct super_block *sb,
+	struct pmfs_inode *pi, struct inode *inode, struct dentry *dentry)
 {
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
-	struct pmfs_dir_node *curr, *new;
-	struct rb_node **temp, *parent;
-	int compVal;
+	const char *name = dentry->d_name.name;
+	int namelen = dentry->d_name.len;
 
-	temp = &(si->dir_tree.rb_node);
-	parent = NULL;
-
-	while (*temp) {
-		curr = container_of(*temp, struct pmfs_dir_node, node);
-		compVal = pmfs_rbtree_compare_find(sb, curr, dentry);
-		parent = *temp;
-
-		if (compVal == -1) {
-			temp = &((*temp)->rb_left);
-		} else if (compVal == 1) {
-			temp = &((*temp)->rb_right);
-		} else {
-			pmfs_dbg("%s: entry %s already exists\n",
-				__func__, dentry->d_name.name);
-			return -EINVAL;
-		}
-	}
-
-	new = pmfs_alloc_dirnode(sb);
-	if (!new)
-		return -ENOMEM;
-
-	new->nvmm = dir_entry;
-	rb_link_node(&new->node, parent, temp);
-	rb_insert_color(&new->node, &si->dir_tree);
-//	pmfs_print_dir_tree(sb, inode);
-
-	return 0;
+	return pmfs_find_dir_node_by_name(sb, pi, inode, name, namelen);
 }
 
 int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
@@ -210,31 +130,15 @@ int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 	return 0;
 }
 
-void pmfs_remove_dir_node(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, struct dentry *dentry)
+static inline int pmfs_insert_dir_node(struct super_block *sb,
+	struct pmfs_inode *pi, struct inode *inode, struct dentry *dentry,
+	u64 dir_entry)
 {
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
-	struct pmfs_dir_node *curr;
-	struct rb_node *temp;
-	int compVal;
+	const char *name = dentry->d_name.name;
+	int namelen = dentry->d_name.len;
 
-	temp = si->dir_tree.rb_node;
-	while (temp) {
-		curr = container_of(temp, struct pmfs_dir_node, node);
-		compVal = pmfs_rbtree_compare_find(sb, curr, dentry);
-
-		if (compVal == -1) {
-			temp = temp->rb_left;
-		} else if (compVal == 1) {
-			temp = temp->rb_right;
-		} else {
-			rb_erase(&curr->node, &si->dir_tree);
-			pmfs_free_dirnode(sb, curr);
-			break;
-		}
-	}
-
-	return;
+	return pmfs_insert_dir_node_by_name(sb, pi, inode, name,
+						namelen, dir_entry);
 }
 
 void pmfs_remove_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
@@ -263,6 +167,15 @@ void pmfs_remove_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 	}
 
 	return;
+}
+
+static inline void pmfs_remove_dir_node(struct super_block *sb,
+	struct pmfs_inode *pi, struct inode *inode, struct dentry *dentry)
+{
+	const char *name = dentry->d_name.name;
+	int namelen = dentry->d_name.len;
+
+	return pmfs_remove_dir_node_by_name(sb, pi, inode, name, namelen);
 }
 
 void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
