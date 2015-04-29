@@ -1037,14 +1037,6 @@ static inline int pmfs_match(int len, const char *const name,
 	return 0;
 }
 
-int pmfs_search_dirblock(u8 *blk_base, struct inode *dir, struct qstr *child,
-			  unsigned long offset,
-			  struct pmfs_direntry **res_dir,
-			  struct pmfs_direntry **prev_dir);
-int pmfs_search_dirblock_inode(u8 *blk_base, struct inode *dir,
-	struct pmfs_log_direntry *entry, unsigned long offset,
-	struct pmfs_direntry **res_dir, struct pmfs_direntry **prev_dir);
-
 /* xip.c */
 ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
           size_t len, loff_t *ppos, bool need_mutex);
