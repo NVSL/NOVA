@@ -2519,17 +2519,32 @@ inline void pmfs_update_time(struct inode *inode, struct pmfs_inode *pi)
 /* This function checks if VFS's inode and PMFS's inode are not in sync */
 static bool pmfs_is_inode_dirty(struct inode *inode, struct pmfs_inode *pi)
 {
+	bool retval = false;
+
 	if (inode->i_ctime.tv_sec != le32_to_cpu(pi->i_ctime) ||
 		inode->i_mtime.tv_sec != le32_to_cpu(pi->i_mtime) ||
-		inode->i_size != le64_to_cpu(pi->i_size) ||
-		inode->i_mode != le16_to_cpu(pi->i_mode) ||
+		inode->i_atime.tv_sec != le32_to_cpu(pi->i_atime)) {
+			printk_ratelimited(KERN_ERR "dirty check: "
+						"time not sync\n");
+			retval = true;
+	}
+
+	if (inode->i_size != le64_to_cpu(pi->i_size) ||
+		inode->i_blocks != le64_to_cpu(pi->i_blocks)) {
+			printk_ratelimited(KERN_ERR "dirty check: "
+						"size not sync\n");
+			retval = true;
+	}
+
+	if (inode->i_mode != le16_to_cpu(pi->i_mode) ||
 		i_uid_read(inode) != le32_to_cpu(pi->i_uid) ||
 		i_gid_read(inode) != le32_to_cpu(pi->i_gid) ||
-		inode->i_nlink != le16_to_cpu(pi->i_links_count) ||
-		inode->i_blocks != le64_to_cpu(pi->i_blocks) ||
-		inode->i_atime.tv_sec != le32_to_cpu(pi->i_atime))
-		return true;
-	return false;
+		inode->i_nlink != le16_to_cpu(pi->i_links_count)) {
+			printk_ratelimited(KERN_ERR "dirty check: "
+						"mode not sync\n");
+			retval = true;
+	}
+	return retval;
 }
 
 int pmfs_write_inode(struct inode *inode, struct writeback_control *wbc)
@@ -2562,9 +2577,11 @@ void pmfs_dirty_inode(struct inode *inode, int flags)
 	if (pmfs_is_inode_dirty(inode, pi))
 		printk_ratelimited(KERN_ERR "pmfs: inode was dirty! "
 			"inode %lu blocks, pi %llu blocks, "
-			"inode size %llu, pi size %llu\n",
+			"inode size %llu, pi size %llu, "
+			"inode link %u, pi link %u\n",
 			inode->i_blocks, pi->i_blocks,
-			inode->i_size, pi->i_size);
+			inode->i_size, pi->i_size,
+			inode->i_nlink, pi->i_links_count);
 }
 
 /*
