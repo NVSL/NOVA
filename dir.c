@@ -340,9 +340,7 @@ void pmfs_rebuild_dir_time_and_size(struct super_block *sb,
 {
 	pi->i_ctime = cpu_to_le32(entry->ctime);
 	pi->i_mtime = cpu_to_le32(entry->mtime);
-	/* FIXME: We rely on correct size */
-	if (cpu_to_le64(entry->size) > pi->i_size)
-		pi->i_size = cpu_to_le64(entry->size);
+	pi->i_size = cpu_to_le64(entry->size);
 	pi->i_links_count = entry->links_count;
 }
 
@@ -411,16 +409,6 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 	return 0;
 }
 
-void pmfs_rebuild_root_dir(struct super_block *sb, struct pmfs_inode *root_pi)
-{
-	struct inode inode;
-
-	/* Use a bogus inode to rebuild the root directory */
-	inode.i_sb = sb;
-	inode.i_ino = PMFS_ROOT_INO;
-	pmfs_rebuild_dir_inode_tree(sb, &inode, root_pi);
-}
-
 static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);
@@ -481,7 +469,7 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 	}
 
 	/*
-	 * We have reach the end. To let readdir knows that, we assign
+	 * We have reach the end. To let readdir be aware of that, we assign
 	 * a bogus end offset to ctx.
 	 */
 	ctx->pos = READDIR_END;
