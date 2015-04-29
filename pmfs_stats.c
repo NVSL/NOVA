@@ -206,19 +206,20 @@ void pmfs_print_inode_log_page(struct super_block *sb, struct inode *inode)
 		return;
 
 	curr = pi->log_head;
-	pmfs_dbg("Pi %lu: log head block @ %llu, tail @ block %llu, %llu\n",
-			inode->i_ino, curr >> PAGE_SHIFT,
+	pmfs_dbg("Pi %lu: log head block @ 0x%llx, tail @ block 0x%llx, "
+			"0x%llx\n", inode->i_ino, curr >> PAGE_SHIFT,
 			pi->log_tail >> PAGE_SHIFT, pi->log_tail);
 	curr_page = (struct pmfs_inode_log_page *)pmfs_get_block(sb, curr);
 	while ((next = curr_page->page_tail.next_page) != 0) {
-		pmfs_dbg("Current page %llu, next page %llu\n",
+		pmfs_dbg("Current page 0x%llx, next page 0x%llx\n",
 			curr >> PAGE_SHIFT, next >> PAGE_SHIFT);
 		curr = next;
 		curr_page = (struct pmfs_inode_log_page *)
 			pmfs_get_block(sb, curr);
 		count++;
 	}
-	pmfs_dbg("Pi %lu: log has %d pages\n", inode->i_ino, count);
+	pmfs_dbg("Pi %lu: log has %d pages, should have %d pages\n",
+			inode->i_ino, count, pi->log_pages);
 }
 
 void pmfs_print_inode_log_blocknode(struct super_block *sb,
@@ -236,12 +237,12 @@ void pmfs_print_inode_log_blocknode(struct super_block *sb,
 		goto out;
 
 	curr = pi->log_head;
-	pmfs_dbg("Pi %lu: log head @ %llu, tail @ %llu\n", inode->i_ino,
+	pmfs_dbg("Pi %lu: log head @ 0x%llx, tail @ 0x%llx\n", inode->i_ino,
 			curr >> PAGE_SHIFT, pi->log_tail >> PAGE_SHIFT);
 	do {
 		tail = pmfs_get_block(sb, curr +
 					entry_size * ENTRIES_PER_PAGE);
-		pmfs_dbg("log block @ %llu\n", curr >> PAGE_SHIFT);
+		pmfs_dbg("log block @ 0x%llx\n", curr >> PAGE_SHIFT);
 		curr = tail->next_page;
 		count++;
 		if ((curr >> PAGE_SHIFT) == 0)
