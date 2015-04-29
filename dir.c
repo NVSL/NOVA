@@ -348,32 +348,12 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 			struct pmfs_inode *pi)
 {
 	struct pmfs_log_direntry *entry;
-	struct pmfs_direntry *de;
 	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
-	unsigned long block, blocks;
 	u64 curr_p = pi->log_head;
 	int ret;
 
 	pmfs_dbg("Rebuild dir %lu tree\n", inode->i_ino);
-	/*
-	 * We will regenerate the tree during blocks assignment.
-	 * Set height to 0.
-	 */
-	pi->root = 0;
-	pi->height = 0;
-	blocks = pi->i_size >> sb->s_blocksize_bits;
 	si->dir_tree = RB_ROOT;
-	pmfs_dbg_verbose("size %llu, blocks %lu\n", pi->i_size, blocks);
-	ret = pmfs_alloc_dir_blocks(inode, 0, blocks, false);
-	if (ret)
-		return ret;
-
-	/* Insert bogus entries for all the blocks */
-	for (block = 0; block < blocks; block++) {
-		de = (struct pmfs_direntry *)pmfs_find_dir_block(inode, block);
-		de->ino = 0;
-		de->de_len = cpu_to_le16(sb->s_blocksize);
-	}
 
 	while (curr_p != pi->log_tail) {
 		if (curr_p == 0) {
