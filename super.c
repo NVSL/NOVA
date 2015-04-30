@@ -1070,6 +1070,8 @@ static void init_once(void *foo)
 	vi->i_dir_start_lookup = 0;
 	INIT_LIST_HEAD(&vi->i_truncated);
 	vi->dir_tree = RB_ROOT;
+	vi->root = 0;
+	vi->height = 0;
 	inode_init_once(&vi->vfs_inode);
 }
 

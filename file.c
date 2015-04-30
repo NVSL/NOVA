@@ -262,6 +262,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 			nr_flush_bytes = PAGE_SIZE;
 
 		page = pmfs_find_data_block(inode, (sector_t)pgoff, false);
+		pmfs_dbg_verbose("pgoff %lu: page 0x%llx\n", pgoff, page);
 		if (page && IS_DIRTY(page)) {
 			pmfs_dbg_verbose("fsync: pgoff %lu, "
 					"page 0x%llx dirty\n", pgoff, page);

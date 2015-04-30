@@ -28,6 +28,13 @@
 unsigned int blk_type_to_shift[PMFS_BLOCK_TYPE_MAX] = {12, 21, 30};
 uint32_t blk_type_to_size[PMFS_BLOCK_TYPE_MAX] = {0x1000, 0x200000, 0x40000000};
 
+void pmfs_print_inode_entry(struct pmfs_inode_entry *entry)
+{
+	pmfs_dbg("entry @%p: pgoff %u, num_pages %u, block 0x%llx, "
+		"size %llu\n", entry, entry->pgoff, entry->num_pages,
+		entry->block, entry->size);
+}
+
 /*
  * allocate a data block for inode and return it's absolute blocknr.
  * Zeroes out the block if zero set. Increments inode->i_blocks.
@@ -59,6 +66,7 @@ u64 pmfs_find_data_block(struct inode *inode, unsigned long file_blocknr,
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	u32 blk_shift;
 	unsigned long blk_offset, blocknr = file_blocknr;
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
@@ -70,12 +78,14 @@ u64 pmfs_find_data_block(struct inode *inode, unsigned long file_blocknr,
 	blk_offset = file_blocknr & ((1 << blk_shift) - 1);
 	blocknr = file_blocknr >> blk_shift;
 
-	if (blocknr >= (1UL << (pi->height * meta_bits)))
+	if (blocknr >= (1UL << (si->height * meta_bits)))
 		return 0;
 
-	bp = __pmfs_find_data_block(sb, pi, blocknr, nvmm);
+	pmfs_dbg_verbose("%s: inode %lu, si %p, root 0x%llx, height %u\n",
+		__func__, inode->i_ino, si, si->root, si->height);
+	bp = __pmfs_find_data_block(sb, si, blocknr, nvmm);
 	pmfs_dbg1("find_data_block %lx, %x %llx blk_p %p blk_shift %x"
-		" blk_offset %lx\n", file_blocknr, pi->height, bp,
+		" blk_offset %lx\n", file_blocknr, si->height, bp,
 		pmfs_get_block(sb, bp), blk_shift, blk_offset);
 
 	if (bp == 0)
@@ -88,7 +98,8 @@ u64 pmfs_find_data_block(struct inode *inode, unsigned long file_blocknr,
  * relative block number.
  */
 struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
-		struct pmfs_inode *pi, unsigned long file_blocknr)
+	struct pmfs_inode *pi, struct pmfs_inode_info *si,
+	unsigned long file_blocknr)
 {
 	u32 blk_shift;
 	unsigned long blk_offset, blocknr = file_blocknr;
@@ -100,10 +111,12 @@ struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 	blk_offset = file_blocknr & ((1 << blk_shift) - 1);
 	blocknr = file_blocknr >> blk_shift;
 
-	if (blocknr >= (1UL << (pi->height * meta_bits)))
+	if (blocknr >= (1UL << (si->height * meta_bits)))
 		return NULL;
 
-	return __pmfs_get_entry(sb, pi, blocknr);
+	pmfs_dbg_verbose("%s: si %p, root 0x%llx, height %u\n",
+		__func__, si, si->root, si->height);
+	return __pmfs_get_entry(sb, si, blocknr);
 }
 
 /*
@@ -701,12 +714,12 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 }
 
 static void pmfs_decrease_file_btree_height(struct super_block *sb,
-	struct pmfs_inode *pi, unsigned long newsize, __le64 newroot)
+	struct pmfs_inode *pi, struct pmfs_inode_info *si,
+	unsigned long newsize, __le64 newroot)
 {
-	unsigned int height = pi->height, new_height = 0;
+	unsigned int height = si->height, new_height = 0;
 	unsigned long last_blocknr, page_addr;
 	__le64 *root;
-	char b[8];
 
 	if (pi->i_blocks == 0 || newsize == 0) {
 		/* root must be NULL */
@@ -732,16 +745,8 @@ static void pmfs_decrease_file_btree_height(struct super_block *sb,
 		height--;
 	}
 update_root_and_height:
-	/* pi->height and pi->root need to be atomically updated. use
-	 * cmpxchg16 here. The following is dependent on a specific layout of
-	 * inode fields */
-	*(u64 *)b = *(u64 *)pi;
-	/* pi->height is at offset 2 from pi */
-	b[2] = (u8)new_height;
-	/* TODO: the following function assumes cmpxchg16b instruction writes
-	 * 16 bytes atomically. Confirm if it is really true. */
-	cmpxchg_double_local((u64 *)pi, &pi->root, *(u64 *)pi, pi->root,
-		*(u64 *)b, newroot);
+	si->root = newroot;
+	si->height = new_height;
 }
 
 static void pmfs_decrease_btree_height(struct super_block *sb,
@@ -838,6 +843,7 @@ static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	unsigned long first_blocknr, last_blocknr;
 	__le64 root;
 	unsigned int freed = 0;
@@ -896,7 +902,7 @@ static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 	pi->i_blocks = cpu_to_le64(inode->i_blocks);
 	pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
 	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-	pmfs_decrease_file_btree_height(sb, pi, start, root);
+	pmfs_decrease_file_btree_height(sb, pi, si, start, root);
 	/* Check for the flag EOFBLOCKS is still valid after the set size */
 	check_eof_blocks(sb, pi, inode->i_size);
 	pmfs_memlock_inode(sb, pi);
@@ -996,10 +1002,10 @@ end_truncate_blocks:
 
 
 static int pmfs_increase_file_btree_height(struct super_block *sb,
-		struct pmfs_inode *pi, u32 new_height)
+		struct pmfs_inode_info *si, u32 new_height)
 {
-	u32 height = pi->height;
-	__le64 *root, prev_root = pi->root;
+	u32 height = si->height;
+	__le64 *root, prev_root = si->root;
 	unsigned long page_addr;
 	int errval = 0;
 
@@ -1017,10 +1023,8 @@ static int pmfs_increase_file_btree_height(struct super_block *sb,
 		prev_root = page_addr;
 		height++;
 	}
-	pmfs_memunlock_inode(sb, pi);
-	pi->root = prev_root;
-	pi->height = height;
-	pmfs_memlock_inode(sb, pi);
+	si->root = prev_root;
+	si->height = height;
 	pmfs_dbg_verbose("increased tree height, new root 0x%llx\n",
 							prev_root);
 	return errval;
@@ -1361,10 +1365,12 @@ fail:
 	return errval;
 }
 
-int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
-	unsigned long file_blocknr, unsigned int num,
-	u64 address, bool nvmm, bool free, bool alloc_dram)
+int __pmfs_assign_blocks(struct super_block *sb, struct inode *inode,
+	unsigned long file_blocknr, unsigned int num, u64 address, bool nvmm,
+	bool free, bool alloc_dram)
 {
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	int errval;
 	unsigned long max_blocks;
 	unsigned int height;
@@ -1380,10 +1386,10 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 	pmfs_dbg_verbose("assign_blocks height %d file_blocknr %lx "
 			"address 0x%llx, num %x, root %llu, "
 			"first blocknr 0x%lx, last_blocknr 0x%lx\n",
-			pi->height, file_blocknr, address, num,
-			pi->root, first_blocknr, last_blocknr);
+			si->height, file_blocknr, address, num,
+			si->root, first_blocknr, last_blocknr);
 
-	height = pi->height;
+	height = si->height;
 
 	blk_shift = height * meta_bits;
 
@@ -1404,7 +1410,7 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 		}
 	}
 
-	if (!pi->root) {
+	if (!si->root) {
 		if (height == 0) {
 			struct mem_addr *root;
 			root = kzalloc(sizeof(struct mem_addr), GFP_KERNEL);
@@ -1424,12 +1430,10 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			}
 
 			pmfs_dbg_verbose("Set root @%p\n", root);
-			pmfs_memunlock_inode(sb, pi);
-			pi->root = cpu_to_le64(root);
-			pi->height = height;
-			pmfs_memlock_inode(sb, pi);
+			si->root = cpu_to_le64(root);
+			si->height = height;
 		} else {
-			errval = pmfs_increase_file_btree_height(sb, pi,
+			errval = pmfs_increase_file_btree_height(sb, si,
 								height);
 			if (errval) {
 				pmfs_dbg("[%s:%d] failed: inc btree"
@@ -1437,7 +1441,7 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 				goto fail;
 			}
 			errval = recursive_assign_blocks(sb, pi,
-					DRAM_ADDR(pi->root), pi->height,
+					DRAM_ADDR(si->root), si->height,
 					first_blocknr, last_blocknr,
 					address, 1, 0, nvmm, free, alloc_dram);
 			if (errval < 0)
@@ -1445,7 +1449,7 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 		}
 	} else {
 		if (height == 0) {
-			struct mem_addr *root = (struct mem_addr *)pi->root;
+			struct mem_addr *root = (struct mem_addr *)si->root;
 			if (root->nvmm && free && nvmm) {
 				/* With cow we need to re-assign the root */
 				unsigned long blocknr;
@@ -1479,24 +1483,22 @@ int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 				else
 					root->dram = address;
 			}
-			pmfs_memunlock_inode(sb, pi);
-			pi->height = height;
-			pmfs_memlock_inode(sb, pi);
+			si->height = height;
 			pmfs_dbg_verbose("Set root @%p\n", root);
 			return 0;
 		}
 
-		if (height > pi->height) {
-			errval = pmfs_increase_file_btree_height(sb, pi,
+		if (height > si->height) {
+			errval = pmfs_increase_file_btree_height(sb, si,
 								height);
 			if (errval) {
 				pmfs_dbg_verbose("Err: inc height %x:%x tot %lx"
-					"\n", pi->height, height, total_blocks);
+					"\n", si->height, height, total_blocks);
 				goto fail;
 			}
 		}
 		errval = recursive_assign_blocks(sb, pi,
-				DRAM_ADDR(pi->root), height, first_blocknr,
+				DRAM_ADDR(si->root), height, first_blocknr,
 				last_blocknr, address, 0, 0, nvmm, free,
 				alloc_dram);
 		if (errval < 0)
@@ -1533,12 +1535,11 @@ inline int pmfs_assign_blocks(struct inode *inode, unsigned long file_blocknr,
 	unsigned int num, u64 address, bool nvmm, bool free, bool alloc_dram)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
 	int errval;
 	timing_t assign_time;
 
 	PMFS_START_TIMING(assign_t, assign_time);
-	errval = __pmfs_assign_blocks(sb, pi, file_blocknr,
+	errval = __pmfs_assign_blocks(sb, inode, file_blocknr,
 					num, address, nvmm, free, alloc_dram);
 	PMFS_END_TIMING(assign_t, assign_time);
 
@@ -1836,9 +1837,6 @@ void pmfs_evict_inode(struct inode *inode)
 		/* We need the log to free the blocks from the b-tree */
 		switch (inode->i_mode & S_IFMT) {
 		case S_IFREG:
-			/* Rebuild the tree if it's not there */
-			if (pi->root == 0 && pi->i_size > 0)
-				pmfs_rebuild_file_inode_tree(sb, inode, pi);
 			freed = pmfs_free_file_inode_subtree(sb, pi->root,
 					pi->height, btype, last_blocknr);
 			break;
@@ -3081,16 +3079,19 @@ void pmfs_rebuild_file_time_and_size(struct super_block *sb,
 int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 			struct pmfs_inode *pi)
 {
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct pmfs_inode_entry *entry;
 	u64 curr_p = pi->log_head;
 
 	pmfs_dbg_verbose("Rebuild file inode %lu tree\n", inode->i_ino);
+	pmfs_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
+				curr_p, pi->log_tail);
 	/*
 	 * We will regenerate the tree during blocks assignment.
 	 * Set height to 0.
 	 */
-	pi->root = 0;
-	pi->height = 0;
+	si->root = 0;
+	si->height = 0;
 	while (curr_p != pi->log_tail) {
 		if (curr_p == 0) {
 			pmfs_err(sb, "log is NULL!\n");
@@ -3098,6 +3099,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 		}
 
 		entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, curr_p);
+		//pmfs_print_inode_entry(entry);
 
 		if (entry->num_pages != GET_INVALID(entry->block)) {
 			/*

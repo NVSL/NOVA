@@ -30,6 +30,7 @@ do_xip_mapping_read(struct address_space *mapping,
 	struct inode *inode = mapping->host;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct pmfs_inode_entry *entry;
 	struct mem_addr *pair;
 	pgoff_t index, end_index;
@@ -74,7 +75,7 @@ do_xip_mapping_read(struct address_space *mapping,
 			}
 		}
 
-		pair = pmfs_get_mem_pair(sb, pi, index);
+		pair = pmfs_get_mem_pair(sb, pi, si, index);
 		if (unlikely(pair == NULL)) {
 			nr = PAGE_SIZE;
 			zero = 1;
@@ -343,9 +344,10 @@ static ssize_t pmfs_file_write_fast(struct super_block *sb, struct inode *inode,
  * end-of-block
  */
 static inline void pmfs_clear_edge_blk (struct super_block *sb, struct
-	pmfs_inode *pi, bool new_blk, unsigned long block, size_t blk_off,
-	bool is_end_blk)
+	pmfs_inode *pi, struct inode *inode, bool new_blk, unsigned long block,
+	size_t blk_off,	bool is_end_blk)
 {
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	void *ptr;
 	size_t count;
 	unsigned long blknr;
@@ -354,7 +356,7 @@ static inline void pmfs_clear_edge_blk (struct super_block *sb, struct
 	if (new_blk) {
 		blknr = block >> (pmfs_inode_blk_shift(pi) -
 			sb->s_blocksize_bits);
-		bp = __pmfs_find_data_block(sb, pi, blknr, true);
+		bp = __pmfs_find_data_block(sb, si, blknr, true);
 		ptr = pmfs_get_block(sb, bp);
 		if (ptr != NULL) {
 			if (is_end_blk) {
@@ -454,8 +456,9 @@ ssize_t pmfs_xip_file_write_deprecated(struct file *filp,
 	pmfs_alloc_blocks(trans, inode, start_blk, num_blocks, false);
 
 	/* now zero out the edge blocks which will be partially written */
-	pmfs_clear_edge_blk(sb, pi, new_sblk, start_blk, offset, false);
-	pmfs_clear_edge_blk(sb, pi, new_eblk, end_blk, eblk_offset, true);
+	pmfs_clear_edge_blk(sb, pi, inode, new_sblk, start_blk, offset, false);
+	pmfs_clear_edge_blk(sb, pi, inode, new_eblk, end_blk,
+					eblk_offset, true);
 
 	written = __pmfs_xip_file_write(mapping, buf, count, pos, ppos);
 	if (written < 0 || written != count)
@@ -518,6 +521,7 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, loff_t pos, size_t count,
 	void *kmem)
 {
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	size_t offset, eblk_offset;
 	unsigned long start_blk, end_blk, num_blocks;
 	unsigned long file_end_blk;
@@ -544,7 +548,7 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	pmfs_dbg_verbose("%s: start offset %lu start blk %lu %p\n", __func__,
 				offset, start_blk, kmem);
 	if (offset != 0) {
-		pair = pmfs_get_mem_pair(sb, pi, start_blk);
+		pair = pmfs_get_mem_pair(sb, pi, si, start_blk);
 		if (pair == NULL) {
 			/* Fill zero */
 		    	memset(kmem, 0, offset);
@@ -566,7 +570,7 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	pmfs_dbg_verbose("%s: end offset %lu, end blk %lu %p\n", __func__,
 				eblk_offset, end_blk, kmem);
 	if (eblk_offset != 0) {
-		pair = pmfs_get_mem_pair(sb, pi, start_blk);
+		pair = pmfs_get_mem_pair(sb, pi, si, start_blk);
 		if (pair == NULL) {
 			/* Fill zero */
 		    	memset(kmem + eblk_offset, 0,
@@ -758,11 +762,12 @@ int pmfs_find_alloc_dram_pages(struct super_block *sb, struct inode *inode,
 	unsigned long *page_addr, int *existed,
 	unsigned long num_pages, int zero)
 {
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct mem_addr *pair;
 	u64 dram_addr;
 	timing_t alloc_dram_time;
 
-	pair = pmfs_get_mem_pair(sb, pi, start_blk);
+	pair = pmfs_get_mem_pair(sb, pi, si, start_blk);
 	if (pair == NULL)
 		goto alloc;
 	if (pair->dram) {
@@ -795,6 +800,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 {
 	struct address_space *mapping = filp->f_mapping;
 	struct inode    *inode = mapping->host;
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi;
 	ssize_t     written = 0;
@@ -876,7 +882,8 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 			bytes = count;
 
 		kmem = (void *)DRAM_ADDR(page_addr);
-		pmfs_dbg_verbose("Write: 0x%lx\n", page_addr);
+		pmfs_dbg_verbose("Write: 0x%lx, existed %d\n",
+					page_addr, existed);
 
 		/* If only NVMM page presents, copy the partial block */
 		if ((existed == 1 || OUTDATE(page_addr)) && (offset ||
@@ -884,11 +891,12 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 			u64 bp;
 			void *nvmm;
 
-			bp = __pmfs_find_data_block(sb, pi, start_blk, true);
+			bp = __pmfs_find_data_block(sb, si, start_blk, true);
 			nvmm = pmfs_get_block(sb, bp);
 			__copy_from_user_inatomic_nocache(
 				(void *)DRAM_ADDR(page_addr), nvmm, PAGE_SIZE);
 			if (page_addr & OUTDATE_BIT) {
+				pmfs_dbg("Clear page\n");
 				page_addr &= ~OUTDATE_BIT;
 				existed = 0;
 			}
@@ -953,6 +961,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 				unsigned long count)
 {
 	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct pmfs_inode *pi;
 	struct pmfs_inode_entry entry_data;
 	unsigned long num_blocks;
@@ -985,7 +994,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 	temp_tail = pi->log_tail;
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
-		dirty = pmfs_find_dram_page_and_clean(sb, pi, pgoff, &block);
+		dirty = pmfs_find_dram_page_and_clean(sb, si, pgoff, &block);
 		if (dirty == 0) {
 			pmfs_dbg("%s: Dirty DRAM page not found! pgoff %lu, "
 					"blocks %lu\n",	__func__, pgoff,
@@ -1397,6 +1406,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 {
 	struct inode *inode = mapping->host;
 	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct pmfs_inode *pi;
 	unsigned long page_addr = 0;
 	int existed = 0;
@@ -1423,7 +1433,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 
 	if (existed == 1) {
 		/* Copy from NVMM to dram */
-		bp = __pmfs_find_data_block(sb, pi, pgoff, true);
+		bp = __pmfs_find_data_block(sb, si, pgoff, true);
 		nvmm = pmfs_get_block(sb, bp);
 		__copy_from_user_inatomic_nocache((void *)DRAM_ADDR(page_addr),
 					nvmm, PAGE_SIZE);
