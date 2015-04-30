@@ -393,11 +393,8 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	unsigned long blocksize;
 	u64 journal_meta_start, journal_data_start, inode_table_start;
 	struct pmfs_inode *root_i;
-	struct inode *root_inode;
 	struct pmfs_super_block *super;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_direntry *de;
-	unsigned long root;
 
 	pmfs_info("creating an empty pmfs of size %lu\n", size);
 	sbi->virt_addr = pmfs_ioremap(sb, sbi->phys_addr, size);
@@ -483,7 +480,6 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	pmfs_flush_buffer((char *)super + PMFS_SB_SIZE, sizeof(*super), false);
 
 //	pmfs_new_data_blocks(sb, &blocknr, 1, PMFS_BLOCK_TYPE_4K, 1);
-	root = pmfs_alloc_dram_page(sb, 1);
 
 	pmfs_dbg_verbose("Allocate root inode\n");
 	root_i = pmfs_get_inode(sb, PMFS_ROOT_INO);
@@ -499,34 +495,14 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	root_i->i_size = cpu_to_le64(sb->s_blocksize);
 	root_i->i_atime = root_i->i_mtime = root_i->i_ctime =
 		cpu_to_le32(get_seconds());
-	root_i->root = cpu_to_le64(root);
+	root_i->root = 0;
 	root_i->height = 0;
 	/* pmfs_sync_inode(root_i); */
 	pmfs_memlock_inode(sb, root_i);
 	pmfs_flush_buffer(root_i, sizeof(*root_i), false);
-	pmfs_dbg_verbose("Get root dir entry\n");
-	de = (struct pmfs_direntry *)DRAM_ADDR(root);
 
-	pmfs_memunlock_range(sb, de, sb->s_blocksize);
-	de->ino = cpu_to_le64(PMFS_ROOT_INO);
-	de->name_len = 1;
-	de->de_len = cpu_to_le16(PMFS_DIR_REC_LEN(de->name_len));
-	strcpy(de->name, ".");
-	de = (struct pmfs_direntry *)((char *)de + le16_to_cpu(de->de_len));
-	de->ino = cpu_to_le64(PMFS_ROOT_INO);
-	de->de_len = cpu_to_le16(sb->s_blocksize - PMFS_DIR_REC_LEN(1));
-	de->name_len = 2;
-	strcpy(de->name, "..");
-	pmfs_memlock_range(sb, de, sb->s_blocksize);
-
-	root_info = kmem_cache_alloc(pmfs_inode_cachep, GFP_NOFS);
-	if (!root_info)
-		return NULL;
-
-	root_inode = pmfs_iget(sb, PMFS_ROOT_INO, 0);
-	pmfs_append_dir_init_entries(sb, root_i, root_inode,
+	pmfs_append_dir_init_entries(sb, root_i, PMFS_ROOT_INO,
 					PMFS_ROOT_INO);
-	iput(root_inode);
 
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
@@ -799,6 +775,13 @@ setup_sb:
 	sb->s_export_op = &pmfs_export_ops;
 	sb->s_xattr = NULL;
 	sb->s_flags |= MS_NOSEC;
+
+	root_info = kmem_cache_alloc(pmfs_inode_cachep, GFP_NOFS);
+	if (!root_info) {
+		retval = -ENOMEM;
+		goto out;
+	}
+
 	root_i = pmfs_iget(sb, PMFS_ROOT_INO, 1);
 	if (IS_ERR(root_i)) {
 		retval = PTR_ERR(root_i);

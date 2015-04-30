@@ -366,9 +366,9 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 
 		pmfs_dbg_verbose("curr_p: 0x%llx\n", curr_p);
 		entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr_p);
-		pmfs_dbg_verbose("entry @%p, ino %llu, name %s, namelen %u, "
-			"rec len %u\n", entry, entry->ino, entry->name,
-			entry->name_len, entry->de_len);
+		pmfs_dbg_verbose("entry @%p, ino %llu, name %*.s, namelen %u, "
+			"rec len %u\n", entry, entry->ino, entry->name_len,
+			entry->name, entry->name_len, entry->de_len);
 
 		if (entry->ino > 0) {
 			/* A valid entry to add */

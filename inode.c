@@ -2944,14 +2944,12 @@ out:
 
 /* Append . and .. entries */
 int pmfs_append_dir_init_entries(struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode, u64 parent_ino)
+	struct pmfs_inode *pi, u64 self_ino, u64 parent_ino)
 {
 	int allocated;
 	u64 new_block;
 	u64 curr_p;
 	struct pmfs_log_direntry *de_entry;
-	const char *self = ".";
-	const char *parent = "..";
 
 	if (pi->log_head) {
 		pmfs_dbg("%s: log head exists @ 0x%llx!\n",
@@ -2969,7 +2967,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 
 	de_entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, new_block);
-	de_entry->ino = cpu_to_le64(inode->i_ino);
+	de_entry->ino = cpu_to_le64(self_ino);
 	de_entry->name_len = 1;
 	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(1));
 	de_entry->ctime = de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
@@ -2978,9 +2976,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	strcpy(de_entry->name, ".");
 	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(1), false);
 
-	pmfs_insert_dir_node_by_name(sb, pi, inode, self, 1, new_block);
 	curr_p = new_block + PMFS_DIR_LOG_REC_LEN(1);
-//	dram_addr[0] = new_block;
 
 	de_entry = (struct pmfs_log_direntry *)((char *)de_entry +
 					le16_to_cpu(de_entry->de_len));
@@ -2993,7 +2989,6 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	strcpy(de_entry->name, "..");
 	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(2), true);
 
-	pmfs_insert_dir_node_by_name(sb, pi, inode, parent, 2, curr_p);
 	curr_p += PMFS_DIR_LOG_REC_LEN(2);
 
 //	dram_addr[1] = new_block + PMFS_DIR_REC_LEN(1);
