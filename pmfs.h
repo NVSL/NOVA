@@ -428,6 +428,7 @@ struct pmfs_inode_info {
 	struct list_head i_truncated;
 	struct inode	vfs_inode;
 	struct rb_root	dir_tree;
+	struct list_head link;
 	u64	root;
 	u8	height;
 };
@@ -500,6 +501,9 @@ static inline struct pmfs_inode_info *PMFS_I(struct inode *inode)
 }
 
 extern struct pmfs_inode_info *root_info;
+extern struct list_head pmfs_inode_info_list;
+extern spinlock_t inode_list_lock;
+
 static inline struct pmfs_inode_info *PMFS_GET_INFO(struct inode *inode)
 {
 	if (inode->i_ino == PMFS_ROOT_INO)
@@ -931,6 +935,7 @@ static inline void check_eof_blocks(struct super_block *sb,
 extern const struct file_operations pmfs_dir_operations;
 void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode);
 void pmfs_delete_dir_tree(struct super_block *sb, struct inode *inode);
+void pmfs_delete_root_tree(struct super_block *sb);
 int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, const char *name, int namelen, u64 dir_entry);
 struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,

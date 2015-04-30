@@ -1853,10 +1853,15 @@ void pmfs_evict_inode(struct inode *inode)
 		/* We need the log to free the blocks from the b-tree */
 		switch (inode->i_mode & S_IFMT) {
 		case S_IFREG:
-			freed = pmfs_free_file_inode_subtree(sb, si->root,
-					si->height, btype, last_blocknr);
+			pmfs_dbg_verbose("%s: file ino %lu, root 0x%llx, "
+					"height %u\n", __func__, inode->i_ino,
+					root, height);
+			freed = pmfs_free_file_inode_subtree(sb, root,
+					height, btype, last_blocknr);
 			break;
 		case S_IFDIR:
+			pmfs_dbg_verbose("%s: dir ino %lu\n",
+					__func__, inode->i_ino);
 			pmfs_delete_dir_tree(sb, inode);
 			break;
 		case S_IFLNK:
@@ -1868,6 +1873,8 @@ void pmfs_evict_inode(struct inode *inode)
 			break;
 		}
 
+		si->root = 0;
+		si->height = 0;
 		pmfs_dbg_verbose("%s: Freed %d\n", __func__, freed);
 		/* Then we can free the inode */
 		err = pmfs_free_inode(inode);
@@ -3031,26 +3038,22 @@ static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 /* When fs is umount, free all dram pages */
 void pmfs_free_dram_pages(struct super_block *sb)
 {
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi;
 	struct pmfs_inode_info *si;
 	struct inode *inode;
 	unsigned long last_blocknr;
 	unsigned int freed;
-	int i;
 
-	mutex_lock(&sbi->inode_table_mutex);
-	for (i = 1; i <= sbi->s_max_inode; i++) {
-		pi = pmfs_get_inode(sb, i << PMFS_INODE_BITS);
-
-		if (i == 2)
+	spin_lock(&inode_list_lock);
+	list_for_each_entry(si, &pmfs_inode_info_list, link) {
+		inode = &si->vfs_inode;
+		if (inode->i_ino <= 1) {
+			pmfs_dbg("%s error: ino %lu\n", __func__, inode->i_ino);
 			continue;
-
+		}
+		pi = pmfs_get_inode(sb, inode->i_ino);
 		if (!(S_ISREG(pi->i_mode)) && !(S_ISDIR(pi->i_mode)))
 			continue;
-
-		inode = pmfs_iget(sb, i << PMFS_INODE_BITS, 0);
-		si = PMFS_GET_INFO(inode);
 
 		if (pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL)) {
 			last_blocknr = (1UL << (si->height * META_BLK_SHIFT))
@@ -3064,8 +3067,8 @@ void pmfs_free_dram_pages(struct super_block *sb)
 			last_blocknr = pmfs_sparse_last_blocknr(pi->height,
 				last_blocknr);
 		}
-		pmfs_dbg_verbose("%s: inode %u, height %u, root 0x%llx\n",
-				__func__, i, si->height, si->root);
+		pmfs_dbg_verbose("%s: inode %lu, height %u, root 0x%llx\n",
+				__func__, inode->i_ino, si->height, si->root);
 		if (S_ISREG(pi->i_mode)) {
 			freed = pmfs_free_file_meta_blocks(sb, pi, si,
 							last_blocknr);
@@ -3073,13 +3076,13 @@ void pmfs_free_dram_pages(struct super_block *sb)
 			pmfs_delete_dir_tree(sb, inode);
 			freed = 1;
 		}
-		pmfs_dbg_verbose("%s after: inode %u, height %u, root 0x%llx, "
-				"freed %u\n", __func__, i, si->height,
+		pmfs_dbg_verbose("%s after: inode %lu, height %u, root 0x%llx, "
+				"freed %u\n", __func__, inode->i_ino, si->height,
 				si->root, freed);
-		iput(inode);
 	}
 
-	mutex_unlock(&sbi->inode_table_mutex);
+	pmfs_delete_root_tree(sb);
+	spin_unlock(&inode_list_lock);
 }
 
 void pmfs_rebuild_file_time_and_size(struct super_block *sb,

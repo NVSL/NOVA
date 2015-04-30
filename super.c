@@ -50,6 +50,10 @@ static struct kmem_cache *pmfs_blocknode_cachep;
 static struct kmem_cache *pmfs_transaction_cachep;
 
 struct pmfs_inode_info *root_info;
+
+struct list_head pmfs_inode_info_list;
+spinlock_t inode_list_lock;
+
 /* FIXME: should the following variable be one per PMFS instance? */
 unsigned int pmfs_dbgmask = 0;
 
@@ -681,6 +685,8 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	mutex_init(&sbi->s_truncate_lock);
 	mutex_init(&sbi->inode_table_mutex);
 	mutex_init(&sbi->s_lock);
+	INIT_LIST_HEAD(&pmfs_inode_info_list);
+	spin_lock_init(&inode_list_lock);
 
 	if (pmfs_parse_options(data, sbi, 0))
 		goto out;
@@ -757,9 +763,6 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 
 //	/* Rebuild root directory */
 //	pmfs_rebuild_root_dir(sb, root_pi);
-	root_info = kmem_cache_alloc(pmfs_inode_cachep, GFP_NOFS);
-	if (!root_info)
-		return -ENOMEM;
 
 #ifdef CONFIG_PMFS_TEST
 	if (!first_pmfs_super)
@@ -1024,6 +1027,7 @@ struct pmfs_dir_node *pmfs_alloc_dirnode(struct super_block *sb)
 
 static struct inode *pmfs_alloc_inode(struct super_block *sb)
 {
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode_info *vi;
 
 	vi = kmem_cache_alloc(pmfs_inode_cachep, GFP_NOFS);
@@ -1033,14 +1037,24 @@ static struct inode *pmfs_alloc_inode(struct super_block *sb)
 	vi->root = 0;
 	vi->height = 0;
 	vi->vfs_inode.i_version = 1;
+
+	spin_lock(&inode_list_lock);
+	list_add(&vi->link, &pmfs_inode_info_list);
+	spin_unlock(&inode_list_lock);
+
 	return &vi->vfs_inode;
 }
 
 static void pmfs_i_callback(struct rcu_head *head)
 {
 	struct inode *inode = container_of(head, struct inode, i_rcu);
+	struct pmfs_inode_info *vi = PMFS_GET_INFO(inode);
 
-	kmem_cache_free(pmfs_inode_cachep, PMFS_I(inode));
+	pmfs_dbg_verbose("%s: ino %lu\n", __func__, inode->i_ino);
+	spin_lock(&inode_list_lock);
+	list_del(&vi->link);
+	spin_unlock(&inode_list_lock);
+	kmem_cache_free(pmfs_inode_cachep, vi);
 }
 
 static void pmfs_destroy_inode(struct inode *inode)
@@ -1055,6 +1069,7 @@ static void init_once(void *foo)
 	vi->i_dir_start_lookup = 0;
 	INIT_LIST_HEAD(&vi->i_truncated);
 	vi->dir_tree = RB_ROOT;
+	INIT_LIST_HEAD(&vi->link);
 	vi->root = 0;
 	vi->height = 0;
 	inode_init_once(&vi->vfs_inode);
