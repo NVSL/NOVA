@@ -1047,6 +1047,8 @@ static struct inode *pmfs_alloc_inode(struct super_block *sb)
 	if (!vi)
 		return NULL;
 
+	vi->root = 0;
+	vi->height = 0;
 	vi->vfs_inode.i_version = 1;
 	return &vi->vfs_inode;
 }

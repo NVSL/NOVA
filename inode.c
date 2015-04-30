@@ -217,6 +217,7 @@ unsigned long pmfs_find_region(struct inode *inode, loff_t *offset, int hole)
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
 	unsigned long first_blocknr, last_blocknr;
 	unsigned long blocks = 0, offset_in_block;
@@ -225,7 +226,7 @@ unsigned long pmfs_find_region(struct inode *inode, loff_t *offset, int hole)
 	if (*offset >= inode->i_size)
 		return -ENXIO;
 
-	if (!inode->i_blocks || !pi->root) {
+	if (!inode->i_blocks || !si->root) {
 		if (hole)
 			return inode->i_size;
 		else
@@ -234,7 +235,7 @@ unsigned long pmfs_find_region(struct inode *inode, loff_t *offset, int hole)
 
 	offset_in_block = *offset & ((1UL << data_bits) - 1);
 
-	if (pi->height == 0) {
+	if (si->height == 0) {
 		data_found = 1;
 		goto out;
 	}
@@ -246,7 +247,7 @@ unsigned long pmfs_find_region(struct inode *inode, loff_t *offset, int hole)
 		" last_blocknr %lx hole %d\n",
 		  *offset, first_blocknr, last_blocknr, hole);
 
-	blocks = recursive_find_region(inode->i_sb, pi->root, pi->height,
+	blocks = recursive_find_region(inode->i_sb, si->root, si->height,
 		first_blocknr, last_blocknr, &data_found, &hole_found, hole);
 
 out:
@@ -676,13 +677,14 @@ unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
 }
 
 unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
-		struct pmfs_inode *pi, unsigned long last_blocknr)
+	struct pmfs_inode *pi, struct pmfs_inode_info *si,
+	unsigned long last_blocknr)
 {
 	unsigned long first_blocknr;
 	unsigned int freed = 0;
 	bool mpty;
-	__le64 root = pi->root;
-	u32 height = pi->height;
+	__le64 root = si->root;
+	u32 height = si->height;
 	u32 btype = pi->i_blk_type;
 
 	if (!root)
@@ -696,7 +698,7 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 			freed = 1;
 		}
 		kfree(pair);
-		pi->root = 0;
+		si->root = 0;
 		return freed;
 	}
 
@@ -708,7 +710,7 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 	first_blocknr = root;
 	pmfs_free_meta_block(sb, first_blocknr);
 	freed++;
-	pi->root = 0;
+	si->root = 0;
 
 	return freed;
 }
@@ -813,6 +815,18 @@ static unsigned long pmfs_inode_count_iblocks_recursive(struct super_block *sb,
 	return i_blocks;
 }
 
+static inline
+unsigned long pmfs_inode_file_count_iblocks (struct super_block *sb,
+	struct pmfs_inode *pi, struct inode *inode, __le64 root)
+{
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	unsigned long iblocks;
+	if (root == 0)
+		return 0;
+	iblocks = pmfs_inode_count_iblocks_recursive(sb, root, si->height);
+	return (iblocks << (pmfs_inode_blk_shift(pi) - sb->s_blocksize_bits));
+}
+
 static inline unsigned long pmfs_inode_count_iblocks (struct super_block *sb,
 	struct pmfs_inode *pi, __le64 root)
 {
@@ -853,35 +867,35 @@ static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 
 	inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
 
-	if (!pi->root)
+	if (!si->root)
 		goto end_truncate_blocks;
 
 	pmfs_dbg_verbose("truncate: pi %p iblocks %llx %llx %llx %x %llx\n", pi,
-			 pi->i_blocks, start, end, pi->height, pi->i_size);
+			 pi->i_blocks, start, end, si->height, pi->i_size);
 
 	first_blocknr = (start + (1UL << data_bits) - 1) >> data_bits;
 
 	if (pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL)) {
-		last_blocknr = (1UL << (pi->height * meta_bits)) - 1;
+		last_blocknr = (1UL << (si->height * meta_bits)) - 1;
 	} else {
 		if (end == 0)
 			goto end_truncate_blocks;
 		last_blocknr = (end - 1) >> data_bits;
-		last_blocknr = pmfs_sparse_last_blocknr(pi->height,
+		last_blocknr = pmfs_sparse_last_blocknr(si->height,
 			last_blocknr);
 	}
 
 	if (first_blocknr > last_blocknr)
 		goto end_truncate_blocks;
-	root = pi->root;
+	root = si->root;
 
-	if (pi->height == 0) {
+	if (si->height == 0) {
 		pmfs_free_mem_addr(sb, root, pi->i_blk_type);
 		freed = 1;
 		root = 0;
 	} else {
 		freed = recursive_truncate_file_blocks(sb, DRAM_ADDR(root),
-			pi->height, pi->i_blk_type, first_blocknr,
+			si->height, pi->i_blk_type, first_blocknr,
 			last_blocknr, 0, &mpty);
 		if (mpty) {
 			first_blocknr = root;
@@ -893,7 +907,8 @@ static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 	 * Don't trust inode->i_blocks; recalculate it by rescanning the inode
 	 */
 	if (pmfs_is_mounting(sb))
-		inode->i_blocks = pmfs_inode_count_iblocks(sb, pi, root);
+		inode->i_blocks = pmfs_inode_file_count_iblocks(sb,
+							pi, inode, root);
 	else
 		inode->i_blocks -= (freed * (1 << (data_bits -
 				sb->s_blocksize_bits)));
@@ -1799,6 +1814,7 @@ void pmfs_evict_inode(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	__le64 root;
 	unsigned long last_blocknr;
 	unsigned int height, btype;
@@ -1815,14 +1831,14 @@ void pmfs_evict_inode(struct inode *inode)
 		if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
 			goto out;
 
-		root = pi->root;
-		height = pi->height;
+		root = si->root;
+		height = si->height;
 		btype = pi->i_blk_type;
 		pmfs_dbg_verbose("%s: root 0x%llx, height %u\n",
 					__func__, root, height);
 
 		if (pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL)) {
-			last_blocknr = (1UL << (pi->height * META_BLK_SHIFT))
+			last_blocknr = (1UL << (si->height * META_BLK_SHIFT))
 			    - 1;
 		} else {
 			if (likely(inode->i_size))
@@ -1830,15 +1846,15 @@ void pmfs_evict_inode(struct inode *inode)
 					pmfs_inode_blk_shift(pi);
 			else
 				last_blocknr = 0;
-			last_blocknr = pmfs_sparse_last_blocknr(pi->height,
+			last_blocknr = pmfs_sparse_last_blocknr(si->height,
 				last_blocknr);
 		}
 
 		/* We need the log to free the blocks from the b-tree */
 		switch (inode->i_mode & S_IFMT) {
 		case S_IFREG:
-			freed = pmfs_free_file_inode_subtree(sb, pi->root,
-					pi->height, btype, last_blocknr);
+			freed = pmfs_free_file_inode_subtree(sb, si->root,
+					si->height, btype, last_blocknr);
 			break;
 		case S_IFDIR:
 			pmfs_delete_dir_tree(sb, inode);
@@ -3022,6 +3038,7 @@ void pmfs_free_dram_pages(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi;
+	struct pmfs_inode_info *si;
 	struct inode *inode;
 	unsigned long last_blocknr;
 	unsigned int freed;
@@ -3031,14 +3048,17 @@ void pmfs_free_dram_pages(struct super_block *sb)
 	for (i = 1; i <= sbi->s_max_inode; i++) {
 		pi = pmfs_get_inode(sb, i << PMFS_INODE_BITS);
 
-		if (pi->root == 0 || i == 2)
+		if (i == 2)
 			continue;
 
 		if (!(S_ISREG(pi->i_mode)) && !(S_ISDIR(pi->i_mode)))
 			continue;
 
+		inode = pmfs_iget(sb, i << PMFS_INODE_BITS, 0);
+		si = PMFS_GET_INFO(inode);
+
 		if (pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL)) {
-			last_blocknr = (1UL << (pi->height * META_BLK_SHIFT))
+			last_blocknr = (1UL << (si->height * META_BLK_SHIFT))
 			    - 1;
 		} else {
 			if (likely(pi->i_size))
@@ -3050,19 +3070,18 @@ void pmfs_free_dram_pages(struct super_block *sb)
 				last_blocknr);
 		}
 		pmfs_dbg_verbose("%s: inode %u, height %u, root 0x%llx\n",
-				__func__, i, pi->height, pi->root);
+				__func__, i, si->height, si->root);
 		if (S_ISREG(pi->i_mode)) {
-			freed = pmfs_free_file_meta_blocks(sb, pi,
+			freed = pmfs_free_file_meta_blocks(sb, pi, si,
 							last_blocknr);
 		} else {
-			inode = pmfs_iget(sb, i << PMFS_INODE_BITS, 0);
 			pmfs_delete_dir_tree(sb, inode);
-			iput(inode);
 			freed = 1;
 		}
 		pmfs_dbg_verbose("%s after: inode %u, height %u, root 0x%llx, "
-				"freed %u\n", __func__, i, pi->height,
-				pi->root, freed);
+				"freed %u\n", __func__, i, si->height,
+				si->root, freed);
+		iput(inode);
 	}
 
 	mutex_unlock(&sbi->inode_table_mutex);
