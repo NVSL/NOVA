@@ -759,7 +759,7 @@ out:
  */
 int pmfs_find_alloc_dram_pages(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode *pi, unsigned long start_blk,
-	unsigned long *page_addr, int *existed,
+	unsigned long *page_addr, int *existed, struct mem_addr **ret_pair,
 	unsigned long num_pages, int zero)
 {
 	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
@@ -768,6 +768,7 @@ int pmfs_find_alloc_dram_pages(struct super_block *sb, struct inode *inode,
 	timing_t alloc_dram_time;
 
 	pair = pmfs_get_mem_pair(sb, pi, si, start_blk);
+	*ret_pair = pair;
 	if (pair == NULL)
 		goto alloc;
 	if (pair->dram) {
@@ -856,6 +857,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 					0, false, false, true);
 
 	while (num_blocks > 0) {
+		struct mem_addr *pair = NULL;
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
 		page_addr = 0;
@@ -864,7 +866,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		/* don't zero-out the allocated blocks */
 		PMFS_START_TIMING(find_cache_t, find_cache_time);
 		allocated = pmfs_find_alloc_dram_pages(sb, inode, pi,
-					start_blk, &page_addr, &existed, 1, 0);
+				start_blk, &page_addr, &existed, &pair, 1, 0);
 		PMFS_END_TIMING(find_cache_t, find_cache_time);
 		pmfs_dbg_verbose("%s: alloc %d dram pages @ 0x%lx\n", __func__,
 					allocated, page_addr);
@@ -895,12 +897,10 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 			nvmm = pmfs_get_block(sb, bp);
 			__copy_from_user_inatomic_nocache(
 				(void *)DRAM_ADDR(page_addr), nvmm, PAGE_SIZE);
-			if (page_addr & OUTDATE_BIT) {
-				pmfs_dbg("Clear page\n");
-				page_addr &= ~OUTDATE_BIT;
-				existed = 0;
-			}
 		}
+
+		if (pair && (page_addr & OUTDATE_BIT))
+			pair->dram &= ~OUTDATE_BIT;
 
 		/* Now copy from user buf */
 		PMFS_START_TIMING(memcpy_w_dram_t, memcpy_time);
@@ -1408,6 +1408,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct pmfs_inode *pi;
+	struct mem_addr *pair = NULL;
 	unsigned long page_addr = 0;
 	int existed = 0;
 	int allocated;
@@ -1418,7 +1419,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	pi = pmfs_get_inode(sb, inode->i_ino);
 
 	allocated = pmfs_find_alloc_dram_pages(sb, inode, pi,
-				pgoff, &page_addr, &existed, 1, 0);
+				pgoff, &page_addr, &existed, &pair, 1, 0);
 	if (allocated != 1) {
 		pmfs_dbg("%s: failed to allocate dram page\n", __func__);
 		return -EINVAL;
