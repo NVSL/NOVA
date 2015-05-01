@@ -66,7 +66,7 @@ u64 pmfs_find_data_block(struct inode *inode, unsigned long file_blocknr,
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	u32 blk_shift;
 	unsigned long blk_offset, blocknr = file_blocknr;
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
@@ -217,7 +217,7 @@ unsigned long pmfs_find_region(struct inode *inode, loff_t *offset, int hole)
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
 	unsigned long first_blocknr, last_blocknr;
 	unsigned long blocks = 0, offset_in_block;
@@ -819,7 +819,7 @@ static inline
 unsigned long pmfs_inode_file_count_iblocks (struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, __le64 root)
 {
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	unsigned long iblocks;
 	if (root == 0)
 		return 0;
@@ -857,7 +857,7 @@ static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	unsigned long first_blocknr, last_blocknr;
 	__le64 root;
 	unsigned int freed = 0;
@@ -1385,7 +1385,7 @@ int __pmfs_assign_blocks(struct super_block *sb, struct inode *inode,
 	bool free, bool alloc_dram)
 {
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	int errval;
 	unsigned long max_blocks;
 	unsigned int height;
@@ -1814,7 +1814,7 @@ void pmfs_evict_inode(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	__le64 root;
 	unsigned long last_blocknr;
 	unsigned int height, btype;
@@ -3079,7 +3079,6 @@ void pmfs_free_dram_pages(struct super_block *sb)
 				si->root, freed);
 	}
 
-	pmfs_delete_root_tree(sb);
 	spin_unlock(&inode_list_lock);
 }
 
@@ -3094,7 +3093,7 @@ void pmfs_rebuild_file_time_and_size(struct super_block *sb,
 int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 			struct pmfs_inode *pi)
 {
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_entry *entry;
 	u64 curr_p = pi->log_head;
 

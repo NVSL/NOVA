@@ -30,7 +30,7 @@ do_xip_mapping_read(struct address_space *mapping,
 	struct inode *inode = mapping->host;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_entry *entry;
 	struct mem_addr *pair;
 	pgoff_t index, end_index;
@@ -347,7 +347,7 @@ static inline void pmfs_clear_edge_blk (struct super_block *sb, struct
 	pmfs_inode *pi, struct inode *inode, bool new_blk, unsigned long block,
 	size_t blk_off,	bool is_end_blk)
 {
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	void *ptr;
 	size_t count;
 	unsigned long blknr;
@@ -521,7 +521,7 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, loff_t pos, size_t count,
 	void *kmem)
 {
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	size_t offset, eblk_offset;
 	unsigned long start_blk, end_blk, num_blocks;
 	unsigned long file_end_blk;
@@ -762,7 +762,7 @@ int pmfs_find_alloc_dram_pages(struct super_block *sb, struct inode *inode,
 	unsigned long *page_addr, int *existed, struct mem_addr **ret_pair,
 	unsigned long num_pages, int zero)
 {
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct mem_addr *pair;
 	u64 dram_addr;
 	timing_t alloc_dram_time;
@@ -801,7 +801,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 {
 	struct address_space *mapping = filp->f_mapping;
 	struct inode    *inode = mapping->host;
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi;
 	ssize_t     written = 0;
@@ -961,7 +961,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 				unsigned long count)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode *pi;
 	struct pmfs_inode_entry entry_data;
 	unsigned long num_blocks;
@@ -1406,7 +1406,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 {
 	struct inode *inode = mapping->host;
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode *pi;
 	struct mem_addr *pair = NULL;
 	unsigned long page_addr = 0;

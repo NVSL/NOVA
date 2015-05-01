@@ -56,7 +56,7 @@ struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, const char *name,
 	unsigned long name_len)
 {
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
 	int compVal;
@@ -91,7 +91,7 @@ static inline struct pmfs_dir_node *pmfs_find_dir_node(struct super_block *sb,
 int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, const char *name, int namelen, u64 dir_entry)
 {
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_dir_node *curr, *new;
 	struct rb_node **temp, *parent;
 	int compVal;
@@ -144,7 +144,7 @@ static inline int pmfs_insert_dir_node(struct super_block *sb,
 void pmfs_remove_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, const char *name, int namelen)
 {
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
 	int compVal;
@@ -180,7 +180,7 @@ static inline void pmfs_remove_dir_node(struct super_block *sb,
 
 void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
 {
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_dir_node *curr;
 	struct pmfs_log_direntry *entry;
 	struct rb_node *temp;
@@ -204,47 +204,7 @@ void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
 
 void pmfs_delete_dir_tree(struct super_block *sb, struct inode *inode)
 {
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
-	struct pmfs_dir_node *curr;
-	struct rb_node *temp;
-
-	temp = rb_first(&si->dir_tree);
-	while (temp) {
-		curr = container_of(temp, struct pmfs_dir_node, node);
-		temp = rb_next(temp);
-		rb_erase(&curr->node, &si->dir_tree);
-		pmfs_free_dirnode(sb, curr);
-	}
-	return;
-}
-
-void pmfs_print_root_tree(struct super_block *sb)
-{
-	struct pmfs_inode_info *si = root_info;
-	struct pmfs_dir_node *curr;
-	struct pmfs_log_direntry *entry;
-	struct rb_node *temp;
-
-	pmfs_dbg("%s: dir ino %d\n", __func__, PMFS_ROOT_INO);
-	temp = rb_first(&si->dir_tree);
-	while (temp) {
-		curr = container_of(temp, struct pmfs_dir_node, node);
-
-		if (!curr || curr->nvmm == 0)
-			BUG();
-
-		entry = (struct pmfs_log_direntry *)
-				pmfs_get_block(sb, curr->nvmm);
-		pmfs_dbg("%.*s\n", entry->name_len, entry->name);
-		temp = rb_next(temp);
-	}
-
-	return;
-}
-
-void pmfs_delete_root_tree(struct super_block *sb)
-{
-	struct pmfs_inode_info *si = root_info;
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
 
@@ -388,7 +348,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 			struct pmfs_inode *pi)
 {
 	struct pmfs_log_direntry *entry;
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	u64 curr_p = pi->log_head;
 	int ret;
 
@@ -434,7 +394,7 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 	struct inode *inode = file_inode(file);
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi, *pidir;
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_dir_node *curr;
 	struct pmfs_log_direntry *entry;
 	struct rb_node *temp;

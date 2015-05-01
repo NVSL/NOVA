@@ -49,8 +49,6 @@ static struct kmem_cache *pmfs_dirnode_cachep;
 static struct kmem_cache *pmfs_blocknode_cachep;
 static struct kmem_cache *pmfs_transaction_cachep;
 
-struct pmfs_inode_info *root_info;
-
 struct list_head pmfs_inode_info_list;
 spinlock_t inode_list_lock;
 
@@ -779,12 +777,6 @@ setup_sb:
 	sb->s_xattr = NULL;
 	sb->s_flags |= MS_NOSEC;
 
-	root_info = kmem_cache_alloc(pmfs_inode_cachep, GFP_NOFS);
-	if (!root_info) {
-		retval = -ENOMEM;
-		goto out;
-	}
-
 	root_i = pmfs_iget(sb, PMFS_ROOT_INO, 1);
 	if (IS_ERR(root_i)) {
 		retval = PTR_ERR(root_i);
@@ -971,7 +963,6 @@ static void pmfs_put_super(struct super_block *sb)
 		list_del(&i->link);
 		pmfs_free_blocknode(sb, i);
 	}
-	kmem_cache_free(pmfs_inode_cachep, root_info);
 	sb->s_fs_info = NULL;
 	pmfs_dbgmask = 0;
 	kfree(sbi);
@@ -1049,7 +1040,7 @@ static struct inode *pmfs_alloc_inode(struct super_block *sb)
 static void pmfs_i_callback(struct rcu_head *head)
 {
 	struct inode *inode = container_of(head, struct inode, i_rcu);
-	struct pmfs_inode_info *vi = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *vi = PMFS_I(inode);
 
 	pmfs_dbg_verbose("%s: ino %lu\n", __func__, inode->i_ino);
 	spin_lock(&inode_list_lock);

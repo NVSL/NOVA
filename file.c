@@ -198,7 +198,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	/* Sync from start to end[inclusive] */
 	struct address_space *mapping = file->f_mapping;
 	struct inode *inode = mapping->host;
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi;
 	unsigned long start_blk, end_blk;

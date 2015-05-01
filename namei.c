@@ -421,7 +421,7 @@ out_clear_inode:
 static int pmfs_empty_dir(struct inode *inode)
 {
 	struct super_block *sb;
-	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_dir_node *curr;
 	struct pmfs_log_direntry *entry;
 	struct rb_node *temp;
