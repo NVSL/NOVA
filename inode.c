@@ -2689,7 +2689,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 	struct pmfs_inode_log_page *curr_page = NULL;
 	int first_need_free = 0;
 	unsigned short btype = pi->i_blk_type;
-	unsigned freed_pages = 0;
+	int freed_pages = 0;
 	timing_t gc_time;
 
 	PMFS_START_TIMING(log_gc_t, gc_time);
