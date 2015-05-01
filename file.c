@@ -198,6 +198,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	/* Sync from start to end[inclusive] */
 	struct address_space *mapping = file->f_mapping;
 	struct inode *inode = mapping->host;
+	struct pmfs_inode_info *si = PMFS_GET_INFO(inode);
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi;
 	unsigned long start_blk, end_blk;
@@ -211,7 +212,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
 	/* Check the dirty range */
 	pi = pmfs_get_inode(sb, inode->i_ino);
-	if (pi->low_dirty > pi->high_dirty)
+	if (si->low_dirty > si->high_dirty)
 		goto persist;
 
 	end += 1; /* end is inclusive. We like our indices normal please ! */
@@ -233,14 +234,14 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 //	end = CACHELINE_ALIGN(end);
 
 	start_blk = start >> PAGE_SHIFT;
-	if (start_blk < pi->low_dirty) {
-		start = pi->low_dirty << PAGE_SHIFT;
-		start_blk = pi->low_dirty;
+	if (start_blk < si->low_dirty) {
+		start = si->low_dirty << PAGE_SHIFT;
+		start_blk = si->low_dirty;
 	}
 	end_blk = end >> PAGE_SHIFT;
-	if (end_blk > pi->high_dirty) {
-		end = (pi->high_dirty + 1) << PAGE_SHIFT;
-		end_blk = pi->high_dirty;
+	if (end_blk > si->high_dirty) {
+		end = (si->high_dirty + 1) << PAGE_SHIFT;
+		end_blk = si->high_dirty;
 	}
 	pmfs_dbg_verbose("%s: start_blk %lu, end_blk %lu\n",
 				__func__, start_blk, end_blk);
@@ -272,14 +273,14 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		start += nr_flush_bytes;
 	} while (start < end);
 
-	if (start_blk == pi->low_dirty && end_blk == pi->high_dirty) {
-		pi->low_dirty = MAX_BLOCK;
-		pi->high_dirty = 0;
-	} else if (start_blk == pi->low_dirty) {
-		pi->low_dirty = (start_blk == MAX_BLOCK ?
+	if (start_blk == si->low_dirty && end_blk == si->high_dirty) {
+		si->low_dirty = MAX_BLOCK;
+		si->high_dirty = 0;
+	} else if (start_blk == si->low_dirty) {
+		si->low_dirty = (start_blk == MAX_BLOCK ?
 					MAX_BLOCK : start_blk + 1);
-	} else if (end_blk == pi->high_dirty) {
-		pi->high_dirty = (end_blk == 0 ? 0 : end_blk - 1);
+	} else if (end_blk == si->high_dirty) {
+		si->high_dirty = (end_blk == 0 ? 0 : end_blk - 1);
 	}
 
 persist:

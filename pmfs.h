@@ -427,10 +427,12 @@ struct pmfs_inode_info {
 	__u32   i_dir_start_lookup;
 	struct list_head i_truncated;
 	struct inode	vfs_inode;
-	struct rb_root	dir_tree;
-	struct list_head link;
-	u64	root;
-	u8	height;
+	struct rb_root	dir_tree;	/* Dir name entry tree root */
+	struct list_head link;		/* Activate inode list */
+	u64	root;			/* File Btree root */
+	u8	height;			/* File Btree height */
+	u32	low_dirty;		/* Dirty low range */
+	u32	high_dirty;		/* Dirty high range */
 };
 
 /*

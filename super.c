@@ -1027,7 +1027,6 @@ struct pmfs_dir_node *pmfs_alloc_dirnode(struct super_block *sb)
 
 static struct inode *pmfs_alloc_inode(struct super_block *sb)
 {
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode_info *vi;
 
 	vi = kmem_cache_alloc(pmfs_inode_cachep, GFP_NOFS);
@@ -1036,6 +1035,8 @@ static struct inode *pmfs_alloc_inode(struct super_block *sb)
 
 	vi->root = 0;
 	vi->height = 0;
+	vi->low_dirty = MAX_BLOCK;
+	vi->high_dirty = 0;
 	vi->vfs_inode.i_version = 1;
 
 	spin_lock(&inode_list_lock);

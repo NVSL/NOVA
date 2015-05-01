@@ -916,10 +916,10 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 					page_addr, false, false, false);
 		}
 
-		if (start_blk < pi->low_dirty)
-			pi->low_dirty = start_blk;
-		if (start_blk > pi->high_dirty)
-			pi->high_dirty = start_blk;
+		if (start_blk < si->low_dirty)
+			si->low_dirty = start_blk;
+		if (start_blk > si->high_dirty)
+			si->high_dirty = start_blk;
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {

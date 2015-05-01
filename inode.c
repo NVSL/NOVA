@@ -2019,8 +2019,6 @@ retry:
 	pi->log_head = 0;
 	pi->log_tail = 0;
 	pi->log_pages = 0;
-	pi->low_dirty = MAX_BLOCK;
-	pi->high_dirty = 0;
 	pmfs_memlock_inode(sb, pi);
 
 	sbi->s_free_inodes_count -= 1;
@@ -3135,8 +3133,6 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 			curr_p = next_log_page(sb, curr_p);
 	}
 
-	pi->low_dirty = MAX_BLOCK;
-	pi->high_dirty = 0;
 	return 0;
 }
 

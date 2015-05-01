@@ -137,12 +137,9 @@ struct pmfs_inode {
 	__le32	i_generation;       /* File version (for NFS) */
 	__le32	i_atime;            /* Access time */
 
-	__le64	log_tail;
-	__le64	log_head;
+	__le64	log_head;	    /* Log head pointer */
+	__le64	log_tail;	    /* Log tail pointer */
 	__le32	log_pages;
-
-	__le32	low_dirty;
-	__le32	high_dirty;
 
 	struct {
 		__le32 rdev;    /* major/minor # */
