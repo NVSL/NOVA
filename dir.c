@@ -218,6 +218,30 @@ void pmfs_delete_dir_tree(struct super_block *sb, struct inode *inode)
 	return;
 }
 
+void pmfs_print_root_tree(struct super_block *sb)
+{
+	struct pmfs_inode_info *si = root_info;
+	struct pmfs_dir_node *curr;
+	struct pmfs_log_direntry *entry;
+	struct rb_node *temp;
+
+	pmfs_dbg("%s: dir ino %d\n", __func__, PMFS_ROOT_INO);
+	temp = rb_first(&si->dir_tree);
+	while (temp) {
+		curr = container_of(temp, struct pmfs_dir_node, node);
+
+		if (!curr || curr->nvmm == 0)
+			BUG();
+
+		entry = (struct pmfs_log_direntry *)
+				pmfs_get_block(sb, curr->nvmm);
+		pmfs_dbg("%.*s\n", entry->name_len, entry->name);
+		temp = rb_next(temp);
+	}
+
+	return;
+}
+
 void pmfs_delete_root_tree(struct super_block *sb)
 {
 	struct pmfs_inode_info *si = root_info;
