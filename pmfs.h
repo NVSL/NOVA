@@ -433,6 +433,7 @@ struct pmfs_inode_info {
 	u8	height;			/* File Btree height */
 	u32	low_dirty;		/* Dirty low range */
 	u32	high_dirty;		/* Dirty high range */
+	u32	log_pages;		/* Num of log pages */
 };
 
 /*

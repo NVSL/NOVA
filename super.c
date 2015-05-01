@@ -759,9 +759,6 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	/* Check that the root inode is in a sane state */
 	pmfs_root_check(sb, root_pi);
 
-//	/* Rebuild root directory */
-//	pmfs_rebuild_root_dir(sb, root_pi);
-
 #ifdef CONFIG_PMFS_TEST
 	if (!first_pmfs_super)
 		first_pmfs_super = sbi->virt_addr;
@@ -1028,6 +1025,7 @@ static struct inode *pmfs_alloc_inode(struct super_block *sb)
 	vi->height = 0;
 	vi->low_dirty = MAX_BLOCK;
 	vi->high_dirty = 0;
+	vi->log_pages = 0;
 	vi->vfs_inode.i_version = 1;
 
 	spin_lock(&inode_list_lock);

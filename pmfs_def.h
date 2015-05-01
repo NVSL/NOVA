@@ -139,7 +139,6 @@ struct pmfs_inode {
 
 	__le64	log_head;	    /* Log head pointer */
 	__le64	log_tail;	    /* Log tail pointer */
-	__le32	log_pages;
 
 	struct {
 		__le32 rdev;    /* major/minor # */

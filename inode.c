@@ -2018,7 +2018,6 @@ retry:
 	pi->i_dtime = 0;
 	pi->log_head = 0;
 	pi->log_tail = 0;
-	pi->log_pages = 0;
 	pmfs_memlock_inode(sb, pi);
 
 	sbi->s_free_inodes_count -= 1;
@@ -2561,6 +2560,7 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 	unsigned long first_blocknr;
 	unsigned long prev_blocknr;
 	int allocated;
+	int ret_pages = 0;
 
 	allocated = pmfs_new_data_blocks(sb, &new_inode_blocknr, num_pages,
 						PMFS_BLOCK_TYPE_4K, 1);
@@ -2570,6 +2570,7 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 			num_pages, allocated);
 		return allocated;
 	}
+	ret_pages += allocated;
 	num_pages -= allocated;
 	pmfs_dbg_verbose("Alloc %d log blocks @ 0x%lx\n", allocated,
 						new_inode_blocknr);
@@ -2589,6 +2590,7 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 				"%d %d\n", num_pages, allocated);
 			return allocated;
 		}
+		ret_pages += allocated;
 		num_pages -= allocated;
 		pmfs_coalesce_log_pages(sb, prev_blocknr, new_inode_blocknr,
 						allocated);
@@ -2598,7 +2600,7 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 	*new_block = pmfs_get_block_off(sb, first_blocknr,
 						PMFS_BLOCK_TYPE_4K);
 
-	return allocated;
+	return ret_pages;
 }
 
 /*
@@ -2678,7 +2680,8 @@ static void free_curr_page(struct super_block *sb, struct pmfs_inode *pi,
 }
 
 int pmfs_inode_log_garbage_collection(struct super_block *sb,
-	struct pmfs_inode *pi, u64 curr_tail, u64 new_block, int num_pages)
+	struct pmfs_inode *pi, struct pmfs_inode_info *si, u64 curr_tail,
+	u64 new_block, int num_pages)
 {
 	u64 curr, next, possible_head = 0;
 	int found_head = 0;
@@ -2686,6 +2689,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 	struct pmfs_inode_log_page *curr_page = NULL;
 	int first_need_free = 0;
 	unsigned short btype = pi->i_blk_type;
+	unsigned freed_pages = 0;
 	timing_t gc_time;
 
 	PMFS_START_TIMING(log_gc_t, gc_time);
@@ -2718,6 +2722,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 						curr);
 			}
 			gc_pages++;
+			freed_pages++;
 		} else {
 			if (found_head == 0) {
 				possible_head = cpu_to_le64(curr);
@@ -2741,7 +2746,8 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 	pi->log_head = possible_head;
 	pmfs_dbg_verbose("%s: %d new head 0x%llx\n", __func__,
 					found_head, possible_head);
-	pi->log_pages += num_pages;
+	pmfs_dbg_verbose("Num pages %d, freed %d\n", num_pages, freed_pages);
+	si->log_pages += num_pages - freed_pages;
 	/* Don't update log tail pointer here */
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 
@@ -2765,6 +2771,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_inode_entry *data, u64 tail)
 {
+	struct pmfs_inode_info *si =PMFS_I(inode);
 	struct pmfs_inode_entry *entry;
 	u64 curr_p;
 	unsigned long num_pages;
@@ -2793,11 +2800,13 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 				curr_p = 0;
 				goto out;
 			}
+			/* FIXME: Make this atomic */
 			pi->log_head = new_block;
-			pi->log_pages = 1;
+			pi->log_tail = new_block;
+			si->log_pages = 1;
 			pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 		} else {
-			num_pages = pi->log_pages >= 256 ? 256 : pi->log_pages;
+			num_pages = si->log_pages >= 256 ? 256 : si->log_pages;
 //			pmfs_dbg("Before append log pages:\n");
 //			pmfs_print_inode_log_page(sb, inode);
 			allocated = pmfs_allocate_inode_log_pages(sb, pi,
@@ -2811,7 +2820,7 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 				curr_p = 0;
 				goto out;
 			}
-			pmfs_inode_log_garbage_collection(sb, pi, curr_p,
+			pmfs_inode_log_garbage_collection(sb, pi, si, curr_p,
 							new_block, allocated);
 
 //			pmfs_dbg("After append log pages:\n");
@@ -2851,6 +2860,7 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, u64 ino, struct dentry *dentry,
 	unsigned short de_len, u64 tail, int link_change)
 {
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_log_direntry *entry;
 	u64 curr_p, page_tail;
 	unsigned long num_pages;
@@ -2880,11 +2890,13 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 				curr_p = 0;
 				goto out;
 			}
+			/* FIXME: make this atomic */
 			pi->log_head = new_block;
-			pi->log_pages = 1;
+			pi->log_tail = new_block;
+			si->log_pages = 1;
 			pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 		} else {
-			num_pages = pi->log_pages >= 256 ? 256 : pi->log_pages;
+			num_pages = si->log_pages >= 256 ? 256 : si->log_pages;
 			pmfs_dbg_verbose("Before append log pages:\n");
 //			pmfs_print_inode_log_page(sb, inode);
 			allocated = pmfs_allocate_inode_log_pages(sb, pi,
@@ -2906,7 +2918,7 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 				pmfs_get_block(sb, page_tail))->next_page
 								= new_block;
 			pi->log_tail = new_block;
-			pi->log_pages += num_pages;
+			si->log_pages += num_pages;
 
 			pmfs_dbg_verbose("After append log pages:\n");
 //			pmfs_print_inode_log_page(sb, inode);
@@ -2968,7 +2980,6 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 		return - ENOMEM;
 	}
 	pi->log_tail = pi->log_head = new_block;
-	pi->log_pages = 1;
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 
 	de_entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, new_block);
@@ -3029,8 +3040,8 @@ static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 	}
 	mutex_unlock(&sbi->s_lock);
 
+	/* FIXME: make this atomic */
 	pi->log_head = pi->log_tail = 0;
-	pi->log_pages = 0;
 }
 
 /* When fs is umount, free all dram pages */
@@ -3095,7 +3106,9 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_entry *entry;
+	struct pmfs_inode_log_page *curr_page;
 	u64 curr_p = pi->log_head;
+	u64 next;
 
 	pmfs_dbg_verbose("Rebuild file inode %lu tree\n", inode->i_ino);
 	pmfs_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
@@ -3106,9 +3119,15 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 	 */
 	si->root = 0;
 	si->height = 0;
+
+	if (curr_p == 0 && pi->log_tail == 0)
+		return 0;
+
+	si->log_pages = 1;
 	while (curr_p != pi->log_tail) {
 		if (curr_p == 0) {
-			pmfs_err(sb, "log is NULL!\n");
+			pmfs_err(sb, "File inode %lu log is NULL!\n",
+					inode->i_ino);
 			BUG();
 		}
 
@@ -3128,10 +3147,23 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 		pmfs_rebuild_file_time_and_size(sb, pi, entry);
 
 		curr_p += sizeof(struct pmfs_inode_entry);
-		if (is_last_entry(curr_p, sizeof(struct pmfs_inode_entry)))
+		if (is_last_entry(curr_p, sizeof(struct pmfs_inode_entry))) {
+			si->log_pages++;
 			curr_p = next_log_page(sb, curr_p);
+		}
 	}
 
+	/* Keep traversing until log ends */
+	curr_p &= PAGE_MASK;
+	curr_page = (struct pmfs_inode_log_page *)pmfs_get_block(sb, curr_p);
+	while ((next = curr_page->page_tail.next_page) != 0) {
+		si->log_pages++;
+		curr_p = next;
+		curr_page = (struct pmfs_inode_log_page *)
+			pmfs_get_block(sb, curr_p);
+	}
+
+//	pmfs_print_inode_log_page(sb, inode);
 	return 0;
 }
 
