@@ -61,6 +61,8 @@ void pmfs_free_dram_page(unsigned long page_addr)
 
 	if (page_addr & KMALLOC_BIT)
 		kfree((void *)DRAM_ADDR(page_addr));
+	else if (page_addr & VMALLOC_BIT)
+		vfree((void *)DRAM_ADDR(page_addr));
 	else
 		free_page(DRAM_ADDR(page_addr));
 }
@@ -90,11 +92,25 @@ unsigned long pmfs_alloc_dram_page(struct super_block *sb, int zero)
 	else
 		addr = __get_free_page(GFP_KERNEL);
 
+	if (addr && addr == DRAM_ADDR(addr)) {
+		addr |= DRAM_BIT | GETPAGE_BIT;
+		pmfs_dbg_verbose("Get DRAM page 0x%lx\n", addr);
+		return addr;
+	}
+
+	if (addr)
+		free_page(addr);
+
+	if (zero == 1)
+		addr = (unsigned long)vzalloc(GFP_KERNEL);
+	else
+		addr = (unsigned long)vmalloc(GFP_KERNEL);
+
 	if (addr == 0 || addr != DRAM_ADDR(addr))
 		BUG();
 
-	addr |= DRAM_BIT | GETPAGE_BIT;
-	pmfs_dbg_verbose("Get DRAM page 0x%lx\n", addr);
+	addr |= DRAM_BIT | VMALLOC_BIT;
+	pmfs_dbg_verbose("vmalloc DRAM page 0x%lx\n", addr);
 	return addr;
 }
 
