@@ -189,7 +189,7 @@ static loff_t pmfs_llseek(struct file *file, loff_t offset, int origin)
 	return offset;
 }
 
-int pmfs_is_page_dirty(unsigned long address)
+int pmfs_is_page_dirty(unsigned long address, pte_t **ptep)
 {
 	struct mm_struct *mm = current->mm;
 	pgd_t *pgd;
@@ -230,6 +230,8 @@ int pmfs_is_page_dirty(unsigned long address)
 	} else {
 		pmfs_dbg("%s: page is clean: 0x%lx\n", __func__, address);
 	}
+
+	*ptep = pte;
 out:
 	spin_unlock(&mm->page_table_lock);
 	return ret;
