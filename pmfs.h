@@ -939,6 +939,7 @@ struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
 extern const struct inode_operations pmfs_file_inode_operations;
 extern const struct file_operations pmfs_xip_file_operations;
 int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync);
+int pmfs_is_page_dirty(unsigned long address);
 
 /* inode.c */
 static inline u64 next_log_page(struct super_block *sb, u64 curr_p)
