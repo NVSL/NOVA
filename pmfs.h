@@ -153,7 +153,7 @@ enum timing_category {
 
 	/* Memory management */
 	new_data_blocks_t,
-	new_meta_blocks_t,
+	new_meta_block_t,
 	new_cache_page_t,
 	free_data_t,
 	free_meta_t,
@@ -279,8 +279,8 @@ extern void __pmfs_free_log_block(struct super_block *sb,
 	unsigned short btype, struct pmfs_blocknode **start_hint);
 extern int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned int num, unsigned short btype, int zero);
-extern int pmfs_new_meta_blocks(struct super_block *sb, unsigned long *blocknr,
-	unsigned int num, int zero);
+extern int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
+	int zero);
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
 unsigned long pmfs_alloc_dram_page(struct super_block *sb, int zero);
 void pmfs_free_dram_page(unsigned long page_addr);

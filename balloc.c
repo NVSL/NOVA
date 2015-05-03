@@ -251,25 +251,22 @@ void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,
 	PMFS_END_TIMING(free_data_t, free_time);
 }
 
-int pmfs_new_meta_blocks(struct super_block *sb, unsigned long *blocknr,
-		unsigned int num, int zero)
+int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
+	int zero)
 {
 	unsigned long page_addr;
 	timing_t alloc_time;
 
-	if (num != 1)
-		return -EINVAL;
-
-	PMFS_START_TIMING(new_meta_blocks_t, alloc_time);
+	PMFS_START_TIMING(new_meta_block_t, alloc_time);
 	page_addr = pmfs_alloc_dram_page(sb, zero);
 	if (page_addr == 0) {
-		PMFS_END_TIMING(new_meta_blocks_t, alloc_time);
+		PMFS_END_TIMING(new_meta_block_t, alloc_time);
 		return -EINVAL;
 	}
 
 	*blocknr = page_addr;
 	pmfs_dbg_verbose("%s: 0x%lx\n", __func__, page_addr);
-	PMFS_END_TIMING(new_meta_blocks_t, alloc_time);
+	PMFS_END_TIMING(new_meta_block_t, alloc_time);
 	return 0;
 }
 
