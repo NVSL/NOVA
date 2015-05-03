@@ -1231,7 +1231,8 @@ static int recursive_assign_blocks(struct super_block *sb,
 			if (alloc_dram) {
 				unsigned long dram;
 				if (!leaf->dram) {
-					dram = pmfs_alloc_dram_page(sb, 0);
+					dram = pmfs_alloc_dram_page(sb,
+								KMALLOC, 0);
 					if (leaf->nvmm)
 						/* Outdate with NVMM */
 						dram |= OUTDATE_BIT;
@@ -1435,7 +1436,8 @@ int __pmfs_assign_blocks(struct super_block *sb, struct inode *inode,
 			}
 
 			if (alloc_dram) {
-				root->dram = pmfs_alloc_dram_page(sb, 0);
+				root->dram = pmfs_alloc_dram_page(sb,
+								KMALLOC, 0);
 			} else {
 				if (nvmm)
 					root->nvmm = address;
@@ -1485,7 +1487,8 @@ int __pmfs_assign_blocks(struct super_block *sb, struct inode *inode,
 			if (alloc_dram) {
 				unsigned long dram;
 				if (!root->dram) {
-					dram = pmfs_alloc_dram_page(sb, 0);
+					dram = pmfs_alloc_dram_page(sb,
+								KMALLOC, 0);
 					if (root->nvmm)
 						/* Outdate with NVMM */
 						dram |= OUTDATE_BIT;

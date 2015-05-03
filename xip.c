@@ -785,7 +785,7 @@ int pmfs_find_alloc_dram_pages(struct super_block *sb, struct inode *inode,
 
 alloc:
 	PMFS_START_TIMING(new_cache_page_t, alloc_dram_time);
-	dram_addr = pmfs_alloc_dram_page(sb, 0);
+	dram_addr = pmfs_alloc_dram_page(sb, KMALLOC, 0);
 	PMFS_END_TIMING(new_cache_page_t, alloc_dram_time);
 	if (dram_addr == 0)
 		return 0;

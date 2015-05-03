@@ -252,6 +252,11 @@ struct pmfs_dir_node {
 	unsigned long nvmm;
 };
 
+enum alloc_type {
+	KMALLOC = 1,
+	VMALLOC,
+	GETPAGE,
+};
 
 /* Function Prototypes */
 extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
@@ -282,7 +287,8 @@ extern int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 extern int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
 	int zero);
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
-unsigned long pmfs_alloc_dram_page(struct super_block *sb, int zero);
+unsigned long pmfs_alloc_dram_page(struct super_block *sb, enum alloc_type type,
+	int zero);
 void pmfs_free_dram_page(unsigned long page_addr);
 
 /* dir.c */
