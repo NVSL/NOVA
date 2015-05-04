@@ -191,12 +191,17 @@ static loff_t pmfs_llseek(struct file *file, loff_t offset, int origin)
 
 int pmfs_is_page_dirty(unsigned long address, pte_t **ptep)
 {
-	struct mm_struct *mm = current->mm;
+	struct mm_struct *mm = current->active_mm;
 	pgd_t *pgd;
 	pud_t *pud;
 	pmd_t *pmd;
 	pte_t *pte;
 	int ret = 0;
+
+	if (!mm) {
+		pmfs_dbg("%s: mm is NULL\n", __func__);
+		return 0;
+	}
 
 	spin_lock(&mm->page_table_lock);
 
