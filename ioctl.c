@@ -95,7 +95,8 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 
 	for (i = 0; i < size; i++) {
 		pte_t *ptep;
-		pmfs_is_page_dirty((unsigned long)addr[i], &ptep);
+		pmfs_is_page_dirty(current->active_mm, (unsigned long)addr[i],
+					&ptep);
 
 		switch(category) {
 		case ZERO:

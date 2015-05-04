@@ -189,9 +189,9 @@ static loff_t pmfs_llseek(struct file *file, loff_t offset, int origin)
 	return offset;
 }
 
-int pmfs_is_page_dirty(unsigned long address, pte_t **ptep)
+int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
+	pte_t **ptep)
 {
-	struct mm_struct *mm = current->active_mm;
 	pgd_t *pgd;
 	pud_t *pud;
 	pmd_t *pmd;
@@ -240,6 +240,20 @@ int pmfs_is_page_dirty(unsigned long address, pte_t **ptep)
 out:
 	spin_unlock(&mm->page_table_lock);
 	return ret;
+}
+
+static inline int pmfs_set_page_clean(struct mm_struct *mm,
+	unsigned long address, pte_t *ptep)
+{
+	pte_t pte;
+
+	spin_lock(&mm->page_table_lock);
+	pte = *ptep;
+	pte = pte_mkclean(pte);
+	set_pte_at(mm, address, ptep, pte);
+	spin_unlock(&mm->page_table_lock);
+
+	return 0;
 }
 
 /* This function is called by both msync() and fsync().
