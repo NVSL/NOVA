@@ -286,6 +286,24 @@ int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
 	return 0;
 }
 
+unsigned long pmfs_new_cache_block(struct super_block *sb, int zero)
+{
+	unsigned long page_addr;
+	timing_t alloc_time;
+
+	PMFS_START_TIMING(new_cache_page_t, alloc_time);
+	page_addr = pmfs_alloc_dram_page(sb, KMALLOC, zero);
+	if (page_addr == 0) {
+		PMFS_END_TIMING(new_cache_page_t, alloc_time);
+		pmfs_dbg("%s: allocation failed\n", __func__);
+		BUG();
+		return 0;
+	}
+
+	PMFS_END_TIMING(new_cache_page_t, alloc_time);
+	return page_addr;
+}
+
 /* Return how many blocks allocated */
 int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 		unsigned int num, unsigned short btype, int zero)

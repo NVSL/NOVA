@@ -765,7 +765,6 @@ int pmfs_find_alloc_dram_pages(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct mem_addr *pair;
 	u64 dram_addr;
-	timing_t alloc_dram_time;
 
 	pair = pmfs_get_mem_pair(sb, pi, si, start_blk);
 	*ret_pair = pair;
@@ -784,9 +783,7 @@ int pmfs_find_alloc_dram_pages(struct super_block *sb, struct inode *inode,
 	}
 
 alloc:
-	PMFS_START_TIMING(new_cache_page_t, alloc_dram_time);
-	dram_addr = pmfs_alloc_dram_page(sb, KMALLOC, 0);
-	PMFS_END_TIMING(new_cache_page_t, alloc_dram_time);
+	dram_addr = pmfs_new_cache_block(sb, 0);
 	if (dram_addr == 0)
 		return 0;
 
