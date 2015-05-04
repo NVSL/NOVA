@@ -2077,6 +2077,8 @@ static bool pmfs_is_inode_dirty(struct inode *inode, struct pmfs_inode *pi)
 {
 	bool retval = false;
 
+	/* Time and size are rebuilt upon recovery */
+#if 0
 	if (inode->i_ctime.tv_sec != le32_to_cpu(pi->i_ctime) ||
 		inode->i_mtime.tv_sec != le32_to_cpu(pi->i_mtime) ||
 		inode->i_atime.tv_sec != le32_to_cpu(pi->i_atime)) {
@@ -2085,10 +2087,16 @@ static bool pmfs_is_inode_dirty(struct inode *inode, struct pmfs_inode *pi)
 			retval = true;
 	}
 
-	if (inode->i_size != le64_to_cpu(pi->i_size) ||
-		inode->i_blocks != le64_to_cpu(pi->i_blocks)) {
+	if (inode->i_size != le64_to_cpu(pi->i_size)) {
 			printk_ratelimited(KERN_ERR "dirty check: "
 						"size not sync\n");
+			retval = true;
+	}
+#endif
+
+	if (inode->i_blocks != le64_to_cpu(pi->i_blocks)) {
+			printk_ratelimited(KERN_ERR "dirty check: "
+						"blocks not sync\n");
 			retval = true;
 	}
 
