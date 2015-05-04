@@ -691,7 +691,7 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 		return 0;
 
 	if (height == 0) {
-		struct mem_addr *pair = (struct mem_addr *)root;
+		struct mem_addr *pair = (struct mem_addr *)DRAM_ADDR(root);
 		if (pair->dram) {
 			pmfs_free_cache_block(pair->dram);
 			pair->dram = 0;
@@ -3075,16 +3075,17 @@ void pmfs_free_dram_pages(struct super_block *sb)
 			last_blocknr = (1UL << (si->height * META_BLK_SHIFT))
 			    - 1;
 		} else {
-			if (likely(pi->i_size))
-				last_blocknr = (pi->i_size - 1) >>
+			if (likely(inode->i_size))
+				last_blocknr = (inode->i_size - 1) >>
 					pmfs_inode_blk_shift(pi);
 			else
 				last_blocknr = 0;
 			last_blocknr = pmfs_sparse_last_blocknr(pi->height,
 				last_blocknr);
 		}
-		pmfs_dbg_verbose("%s: inode %lu, height %u, root 0x%llx\n",
-				__func__, inode->i_ino, si->height, si->root);
+		pmfs_dbg_verbose("%s: inode %lu, height %u, root 0x%llx, "
+				"last block %lu\n", __func__, inode->i_ino,
+				si->height, si->root, last_blocknr);
 		if (S_ISREG(pi->i_mode)) {
 			freed = pmfs_free_file_meta_blocks(sb, pi, si,
 							last_blocknr);
