@@ -36,6 +36,7 @@ const char *Timingstring[TIMING_NUM] =
 	"new_cache_page",
 	"free_data_blocks",
 	"free_meta_blocks",
+	"free_cache_blocks",
 
 	"logging",
 	"append_inode_entry",

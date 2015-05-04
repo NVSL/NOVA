@@ -157,6 +157,7 @@ enum timing_category {
 	new_cache_page_t,
 	free_data_t,
 	free_meta_t,
+	free_cache_t,
 
 	/* Logging and journaling */
 	logging_t,
@@ -288,9 +289,7 @@ extern int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
 	int zero);
 extern unsigned long pmfs_new_cache_block(struct super_block *sb, int zero);
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
-unsigned long pmfs_alloc_dram_page(struct super_block *sb, enum alloc_type type,
-	int zero);
-void pmfs_free_dram_page(unsigned long page_addr);
+void pmfs_free_cache_block(unsigned long page_addr);
 
 /* dir.c */
 extern int pmfs_add_entry(pmfs_transaction_t *trans,
