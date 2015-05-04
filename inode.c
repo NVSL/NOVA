@@ -3080,7 +3080,7 @@ void pmfs_free_dram_pages(struct super_block *sb)
 					pmfs_inode_blk_shift(pi);
 			else
 				last_blocknr = 0;
-			last_blocknr = pmfs_sparse_last_blocknr(pi->height,
+			last_blocknr = pmfs_sparse_last_blocknr(si->height,
 				last_blocknr);
 		}
 		pmfs_dbg_verbose("%s: inode %lu, height %u, root 0x%llx, "
