@@ -691,7 +691,7 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 		return 0;
 
 	if (height == 0) {
-		struct mem_addr *pair = (struct mem_addr *)DRAM_ADDR(root);
+		struct mem_addr *pair = (struct mem_addr *)root;
 		if (pair->dram) {
 			pmfs_free_cache_block(pair->dram);
 			pair->dram = 0;
