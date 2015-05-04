@@ -189,6 +189,54 @@ static loff_t pmfs_llseek(struct file *file, loff_t offset, int origin)
 	return offset;
 }
 
+int pmfs_is_page_dirty(unsigned long address, pte_t **ptep)
+{
+	struct mm_struct *mm = current->mm;
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd;
+	pte_t *pte;
+	int ret = 0;
+
+	spin_lock(&mm->page_table_lock);
+
+	pgd = pgd_offset(mm, address);
+	if (!pgd_present(*pgd)) {
+		pmfs_dbg("%s: pgd not found for 0x%lx\n", __func__, address);
+		goto out;
+	}
+
+	pud = pud_offset(pgd, address);
+	if (!pud_present(*pud)) {
+		pmfs_dbg("%s: pud not found for 0x%lx\n", __func__, address);
+		goto out;
+	}
+
+	pmd = pmd_offset(pud, address);
+	if (!pmd_present(*pmd)) {
+		pmfs_dbg("%s: pmd not found for 0x%lx\n", __func__, address);
+		goto out;
+	}
+
+	pte = pte_offset_map(pmd, address);
+	if (!pte_present(*pte)) {
+		pmfs_dbg("%s: pte not found for 0x%lx\n", __func__, address);
+		goto out;
+	}
+
+	if (pte_dirty(*pte)) {
+		pmfs_dbg("%s: page is dirty: 0x%lx\n", __func__, address);
+		ret = 1;
+	} else {
+		pmfs_dbg("%s: page is clean: 0x%lx\n", __func__, address);
+	}
+
+	*ptep = pte;
+out:
+	spin_unlock(&mm->page_table_lock);
+	return ret;
+}
+
 /* This function is called by both msync() and fsync().
  * TODO: Check if we can avoid calling pmfs_flush_buffer() for fsync. We use
  * movnti to write data to files, so we may want to avoid doing unnecessary

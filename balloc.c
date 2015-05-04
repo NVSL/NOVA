@@ -61,40 +61,72 @@ void pmfs_free_dram_page(unsigned long page_addr)
 
 	if (page_addr & KMALLOC_BIT)
 		kfree((void *)DRAM_ADDR(page_addr));
+	else if (page_addr & VMALLOC_BIT)
+		vfree((void *)DRAM_ADDR(page_addr));
 	else
 		free_page(DRAM_ADDR(page_addr));
 }
 
-unsigned long pmfs_alloc_dram_page(struct super_block *sb, int zero)
+unsigned long pmfs_alloc_dram_page(struct super_block *sb,
+	enum alloc_type type, int zero)
 {
 	unsigned long addr = 0;
 
-	/* kmalloc is faster than get_free_page */
-	if (zero == 1)
-		addr = (unsigned long)kzalloc(PAGE_SIZE, GFP_KERNEL);
-	else
-		addr = (unsigned long)kmalloc(PAGE_SIZE, GFP_KERNEL);
-
-	if (addr && addr == DRAM_ADDR(addr)) {
-		addr |= DRAM_BIT | KMALLOC_BIT;
-		pmfs_dbg_verbose("Kmalloc DRAM page 0x%lx\n", addr);
-		return addr;
+	switch (type) {
+		case KMALLOC:
+			if (zero == 1)
+				addr = (unsigned long)kzalloc(PAGE_SIZE,
+								GFP_KERNEL);
+			else
+				addr = (unsigned long)kmalloc(PAGE_SIZE,
+								GFP_KERNEL);
+			if (addr && addr == DRAM_ADDR(addr)) {
+				addr |= DRAM_BIT | KMALLOC_BIT;
+				pmfs_dbg_verbose("Kmalloc DRAM page 0x%lx\n", addr);
+				break;
+			}
+			if (addr) {
+				kfree((void *)addr);
+				addr = 0;
+			}
+			/* Fall through */
+		case VMALLOC:
+			if (zero == 1)
+				addr = (unsigned long)vzalloc(GFP_KERNEL);
+			else
+				addr = (unsigned long)vmalloc(GFP_KERNEL);
+			if (addr && addr == DRAM_ADDR(addr)) {
+				addr |= DRAM_BIT | VMALLOC_BIT;
+				pmfs_dbg_verbose("vmalloc DRAM page 0x%lx\n", addr);
+				break;
+			}
+			if (addr) {
+				vfree((void *)addr);
+				addr = 0;
+			}
+			/* Fall through */
+		case GETPAGE:
+			if (zero == 1)
+				addr = get_zeroed_page(GFP_KERNEL);
+			else
+				addr = __get_free_page(GFP_KERNEL);
+			if (addr && addr == DRAM_ADDR(addr)) {
+				addr |= DRAM_BIT | GETPAGE_BIT;
+				pmfs_dbg_verbose("Get DRAM page 0x%lx\n", addr);
+				break;
+			}
+			if (addr) {
+				free_page(addr);
+				addr = 0;
+			}
+			/* Fall through */
+		default:
+			break;
 	}
 
-	/* Needs to align to PAGE_SIZE */
-	if (addr)
-		kfree((void *)addr);
-
-	if (zero == 1)
-		addr = get_zeroed_page(GFP_KERNEL);
-	else
-		addr = __get_free_page(GFP_KERNEL);
-
-	if (addr == 0 || addr != DRAM_ADDR(addr))
+	if (addr == 0)
 		BUG();
 
-	addr |= DRAM_BIT | GETPAGE_BIT;
-	pmfs_dbg_verbose("Get DRAM page 0x%lx\n", addr);
 	return addr;
 }
 
@@ -235,25 +267,22 @@ void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,
 	PMFS_END_TIMING(free_data_t, free_time);
 }
 
-int pmfs_new_meta_blocks(struct super_block *sb, unsigned long *blocknr,
-		unsigned int num, int zero)
+int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
+	int zero)
 {
 	unsigned long page_addr;
 	timing_t alloc_time;
 
-	if (num != 1)
-		return -EINVAL;
-
-	PMFS_START_TIMING(new_meta_blocks_t, alloc_time);
-	page_addr = pmfs_alloc_dram_page(sb, zero);
+	PMFS_START_TIMING(new_meta_block_t, alloc_time);
+	page_addr = pmfs_alloc_dram_page(sb, KMALLOC, zero);
 	if (page_addr == 0) {
-		PMFS_END_TIMING(new_meta_blocks_t, alloc_time);
+		PMFS_END_TIMING(new_meta_block_t, alloc_time);
 		return -EINVAL;
 	}
 
 	*blocknr = page_addr;
 	pmfs_dbg_verbose("%s: 0x%lx\n", __func__, page_addr);
-	PMFS_END_TIMING(new_meta_blocks_t, alloc_time);
+	PMFS_END_TIMING(new_meta_block_t, alloc_time);
 	return 0;
 }
 

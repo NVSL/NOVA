@@ -153,7 +153,7 @@ enum timing_category {
 
 	/* Memory management */
 	new_data_blocks_t,
-	new_meta_blocks_t,
+	new_meta_block_t,
 	new_cache_page_t,
 	free_data_t,
 	free_meta_t,
@@ -252,6 +252,11 @@ struct pmfs_dir_node {
 	unsigned long nvmm;
 };
 
+enum alloc_type {
+	KMALLOC = 1,
+	VMALLOC,
+	GETPAGE,
+};
 
 /* Function Prototypes */
 extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
@@ -279,10 +284,11 @@ extern void __pmfs_free_log_block(struct super_block *sb,
 	unsigned short btype, struct pmfs_blocknode **start_hint);
 extern int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned int num, unsigned short btype, int zero);
-extern int pmfs_new_meta_blocks(struct super_block *sb, unsigned long *blocknr,
-	unsigned int num, int zero);
+extern int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
+	int zero);
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
-unsigned long pmfs_alloc_dram_page(struct super_block *sb, int zero);
+unsigned long pmfs_alloc_dram_page(struct super_block *sb, enum alloc_type type,
+	int zero);
 void pmfs_free_dram_page(unsigned long page_addr);
 
 /* dir.c */
@@ -660,9 +666,10 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 
 #define	DRAM_BIT	0x1UL	// DRAM
 #define	KMALLOC_BIT	0x2UL	// Alloc with kmalloc
-#define	GETPAGE_BIT	0x4UL	// Alloc with get_free_page
-#define	DIRTY_BIT	0x8UL	// Dirty
-#define	OUTDATE_BIT	0x10UL	// Outdate with NVMM page
+#define	VMALLOC_BIT	0x4UL	// Alloc with vmalloc
+#define	GETPAGE_BIT	0x8UL	// Alloc with get_free_page
+#define	DIRTY_BIT	0x10UL	// Dirty
+#define	OUTDATE_BIT	0x20UL	// Outdate with NVMM page
 #define	IS_DRAM_ADDR(p)	((p) & (DRAM_BIT))
 #define	IS_DIRTY(p)	((p) & (DIRTY_BIT))
 #define	OUTDATE(p)	((p) & (OUTDATE_BIT))
@@ -939,6 +946,7 @@ struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
 extern const struct inode_operations pmfs_file_inode_operations;
 extern const struct file_operations pmfs_xip_file_operations;
 int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync);
+int pmfs_is_page_dirty(unsigned long address, pte_t **ptep);
 
 /* inode.c */
 static inline u64 next_log_page(struct super_block *sb, u64 curr_p)

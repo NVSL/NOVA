@@ -49,11 +49,11 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 	int i;
 	struct page *page;
 	int pfn;
-	unsigned long *addr = kmalloc(1000 * sizeof(unsigned long),
+	unsigned long *addr = kmalloc(size * sizeof(unsigned long),
 					GFP_KERNEL); 
 
 	PMFS_START_TIMING(malloc_test_t, malloc_time);
-	for (i = 0; i < 1000; i++) {
+	for (i = 0; i < size; i++) {
 		switch(category) {
 		case ZERO:
 			addr[i] = get_zeroed_page(GFP_KERNEL);
@@ -93,7 +93,10 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 	}
 	PMFS_END_TIMING(malloc_test_t, malloc_time);
 
-	for (i = 0; i < 1000; i++) {
+	for (i = 0; i < size; i++) {
+		pte_t *ptep;
+		pmfs_is_page_dirty((unsigned long)addr[i], &ptep);
+
 		switch(category) {
 		case ZERO:
 		case NORMAL:
