@@ -261,3 +261,15 @@ void pmfs_print_inode_log_blocknode(struct super_block *sb,
 out:
 	pmfs_dbg("All %lu pages\n", count);
 }
+
+void pmfs_detect_memory_leak(struct super_block *sb)
+{
+	if (Countstats[new_meta_block_t] != Countstats[free_meta_t])
+		pmfs_dbg("%s: meta block memory leak! "
+			"allocated %llu, freed %llu\n", __func__,
+			Countstats[new_meta_block_t], Countstats[free_meta_t]);
+	if (Countstats[new_cache_page_t] != Countstats[free_cache_t])
+		pmfs_dbg("%s: cache block memory leak! "
+			"allocated %llu, freed %llu\n", __func__,
+			Countstats[new_cache_page_t], Countstats[free_cache_t]);
+}
