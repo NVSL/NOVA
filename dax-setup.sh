@@ -2,6 +2,7 @@
 
 umount /mnt/ramdisk
 rmmod pmem
+rmmod pmfs
 insmod pmem.ko measure_timing=0
 
 sleep 1
