@@ -557,6 +557,7 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 			pmfs_copy_partial_block(sb, pair, start_blk,
 					offset, kmem, false);
 		}
+		pmfs_flush_buffer(kmem, offset, 0);
 	}
 
 	if (pos + count >= inode->i_size) {
@@ -580,6 +581,8 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 			pmfs_copy_partial_block(sb, pair, start_blk,
 					eblk_offset, kmem, true);
 		}
+		pmfs_flush_buffer(kmem + eblk_offset,
+					sb->s_blocksize - eblk_offset, 0);
 	}
 
 	PMFS_END_TIMING(partial_block_t, partial_time);
@@ -679,9 +682,8 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		/* Now copy from user buf */
 //		pmfs_dbg("Write: %p\n", kmem);
 		PMFS_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
-		copied = bytes -
-			__copy_from_user_inatomic_nocache(kmem + offset,
-								buf, bytes);
+		copied = bytes - __copy_from_user(kmem + offset, buf, bytes);
+		pmfs_flush_buffer(kmem + offset, copied, 0);
 		PMFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
 		entry_data.pgoff = start_blk;
@@ -736,13 +738,14 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 //		pmfs_update_isize(inode, pi);
 	}
 
+	PERSISTENT_BARRIER();
 	pi->log_tail = temp_tail;
+	pmfs_flush_buffer(&pi->log_tail, CACHELINE_SIZE, 1);
+
 	ret = written;
 	write_breaks += step;
 //	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
 
-	//FIXME: Possible contention here
-//	pi->log_tail = curr_entry + sizeof(struct pmfs_inode_entry);
 out:
 	if (need_mutex)
 		mutex_unlock(&inode->i_mutex);
@@ -1019,9 +1022,9 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		PMFS_START_TIMING(memcpy_w_wb_t, memcpy_time);
 //		memcpy(kmem + offset, (void *)DRAM_ADDR(block), bytes);
 //		pmfs_flush_buffer(kmem + offset, bytes, 0);
-		copied = bytes -
-			__copy_from_user_inatomic_nocache(kmem + offset,
+		copied = bytes - __copy_from_user(kmem + offset,
 					(void *)DRAM_ADDR(block), bytes);
+		pmfs_flush_buffer(kmem + offset, copied, 0);
 		PMFS_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
 		entry_data.pgoff = pgoff;
@@ -1078,7 +1081,9 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	//FIXME
 //	pmfs_update_isize(inode, pi);
+	PERSISTENT_BARRIER();
 	pi->log_tail = temp_tail;
+	pmfs_flush_buffer(&pi->log_tail, CACHELINE_SIZE, 1);
 
 	ret = 0;
 out:

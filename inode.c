@@ -2854,7 +2854,7 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 			entry->block >> PAGE_SHIFT, entry->size);
 	/* entry->invalid is set to 0 */
 
-	pmfs_flush_buffer(entry, sizeof(struct pmfs_inode_entry), 1);
+	pmfs_flush_buffer(entry, sizeof(struct pmfs_inode_entry), 0);
 out:
 	PMFS_END_TIMING(append_entry_t, append_time);
 	return curr_p;
@@ -2960,7 +2960,7 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 			curr_p, entry->ino, entry->de_len,
 			entry->name_len, entry->file_type);
 
-	pmfs_flush_buffer(entry, de_len, 1);
+	pmfs_flush_buffer(entry, de_len, 0);
 out:
 	PMFS_END_TIMING(append_entry_t, append_time);
 	return curr_p;
@@ -3016,6 +3016,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 
 //	dram_addr[1] = new_block + PMFS_DIR_REC_LEN(1);
 
+	PERSISTENT_BARRIER();
 	pi->log_tail = curr_p;
 	pmfs_flush_buffer(&pi->log_tail, CACHELINE_SIZE, true);
 
