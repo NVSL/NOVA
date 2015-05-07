@@ -892,8 +892,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 
 			bp = __pmfs_find_data_block(sb, si, start_blk, true);
 			nvmm = pmfs_get_block(sb, bp);
-			__copy_from_user_inatomic_nocache(
-				(void *)DRAM_ADDR(page_addr), nvmm, PAGE_SIZE);
+			memcpy((void *)DRAM_ADDR(page_addr), nvmm, PAGE_SIZE);
 		}
 
 		if (pair && (page_addr & OUTDATE_BIT))
@@ -901,9 +900,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 
 		/* Now copy from user buf */
 		PMFS_START_TIMING(memcpy_w_dram_t, memcpy_time);
-		copied = bytes -
-			__copy_from_user_inatomic_nocache(kmem + offset,
-								buf, bytes);
+		copied = bytes - __copy_from_user(kmem + offset, buf, bytes);
 		PMFS_END_TIMING(memcpy_w_dram_t, memcpy_time);
 
 		/* If the mem pair does not exist, assign the dram page */
