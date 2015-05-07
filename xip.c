@@ -1430,7 +1430,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 		/* Copy from NVMM to dram */
 		bp = __pmfs_find_data_block(sb, si, pgoff, true);
 		nvmm = pmfs_get_block(sb, bp);
-		__copy_from_user_inatomic_nocache((void *)DRAM_ADDR(page_addr),
+		__copy_from_user((void *)DRAM_ADDR(page_addr),
 					nvmm, PAGE_SIZE);
 	}
 
