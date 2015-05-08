@@ -1042,7 +1042,6 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		PMFS_START_TIMING(memcpy_w_wb_t, memcpy_time);
 		copied = memcpy_to_nvmm((char *)kmem, offset,
 					(char *)DRAM_ADDR(block), bytes);
-		pmfs_flush_buffer(kmem + offset, copied, 0);
 		PMFS_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
 		entry_data.pgoff = pgoff;
