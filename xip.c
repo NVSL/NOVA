@@ -398,9 +398,11 @@ ssize_t pmfs_xip_file_write_deprecated(struct file *filp,
 	pos = *ppos;
 	count = len;
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,0,9)
 	ret = generic_write_checks(filp, &pos, &count, S_ISBLK(inode->i_mode));
 	if (ret || count == 0)
 		goto out;
+#endif
 
 	pi = pmfs_get_inode(sb, inode->i_ino);
 
@@ -626,9 +628,11 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	pos = *ppos;
 	count = len;
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,0,9)
 	ret = generic_write_checks(filp, &pos, &count, S_ISBLK(inode->i_mode));
 	if (ret || count == 0)
 		goto out;
+#endif
 
 	pi = pmfs_get_inode(sb, inode->i_ino);
 
@@ -829,10 +833,11 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	pos = *ppos;
 	count = len;
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,0,9)
 	ret = generic_write_checks(filp, &pos, &count, S_ISBLK(inode->i_mode));
 	if (ret || count == 0)
 		goto out;
-
+#endif
 	pi = pmfs_get_inode(sb, inode->i_ino);
 
 	offset = pos & (sb->s_blocksize - 1);

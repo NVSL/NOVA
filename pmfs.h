@@ -21,6 +21,8 @@
 #include <linux/rcupdate.h>
 #include <linux/types.h>
 #include <linux/rbtree.h>
+#include <linux/version.h>
+#include <linux/uio.h>
 
 #include "pmfs_def.h"
 #include "journal.h"
