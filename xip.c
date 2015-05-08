@@ -590,6 +590,22 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	PMFS_END_TIMING(partial_block_t, partial_time);
 }
 
+static inline size_t memcpy_to_nvmm(char *kmem, loff_t offset,
+	const char *buf, size_t bytes)
+{
+	size_t copied = 0;
+
+	if (support_clwb) {
+		copied = bytes - __copy_from_user(kmem + offset, buf, bytes);
+		pmfs_flush_buffer(kmem + offset, copied, 0);
+	} else {
+		copied = bytes - __copy_from_user_inatomic_nocache(kmem +
+						offset, buf, bytes);
+	}
+
+	return copied;
+}
+
 ssize_t pmfs_cow_file_write(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos, bool need_mutex)
 {
@@ -686,8 +702,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		/* Now copy from user buf */
 //		pmfs_dbg("Write: %p\n", kmem);
 		PMFS_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
-		copied = bytes - __copy_from_user(kmem + offset, buf, bytes);
-		pmfs_flush_buffer(kmem + offset, copied, 0);
+		copied = memcpy_to_nvmm((char *)kmem, offset, buf, bytes);
 		PMFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
 		entry_data.pgoff = start_blk;
@@ -1025,10 +1040,8 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		kmem = pmfs_get_block(inode->i_sb,
 			pmfs_get_block_off(sb, blocknr,	pi->i_blk_type));
 		PMFS_START_TIMING(memcpy_w_wb_t, memcpy_time);
-//		memcpy(kmem + offset, (void *)DRAM_ADDR(block), bytes);
-//		pmfs_flush_buffer(kmem + offset, bytes, 0);
-		copied = bytes - __copy_from_user(kmem + offset,
-					(void *)DRAM_ADDR(block), bytes);
+		copied = memcpy_to_nvmm((char *)kmem, offset,
+					(char *)DRAM_ADDR(block), bytes);
 		pmfs_flush_buffer(kmem + offset, copied, 0);
 		PMFS_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
