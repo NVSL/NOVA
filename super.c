@@ -36,11 +36,14 @@
 
 int measure_timing = 0;
 int contiguous_allocation = 0;
+int support_clwb = 0;
 
 module_param(measure_timing, int, S_IRUGO);
 MODULE_PARM_DESC(measure_timing, "Timing measurement");
 module_param(contiguous_allocation, int, S_IRUGO);
 MODULE_PARM_DESC(contiguous_allocation, "Contiguous allocation");
+module_param(support_clwb, int, S_IRUGO);
+MODULE_PARM_DESC(support_clwb, "clwb");
 
 static struct super_operations pmfs_sops;
 static const struct export_operations pmfs_export_ops;
