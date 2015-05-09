@@ -1020,6 +1020,7 @@ struct pmfs_dir_node *pmfs_alloc_dirnode(struct super_block *sb)
 static struct inode *pmfs_alloc_inode(struct super_block *sb)
 {
 	struct pmfs_inode_info *vi;
+	unsigned long flags;
 
 	vi = kmem_cache_alloc(pmfs_inode_cachep, GFP_NOFS);
 	if (!vi)
@@ -1032,9 +1033,9 @@ static struct inode *pmfs_alloc_inode(struct super_block *sb)
 	vi->log_pages = 0;
 	vi->vfs_inode.i_version = 1;
 
-	spin_lock(&inode_list_lock);
+	spin_lock_irqsave(&inode_list_lock, flags);
 	list_add(&vi->link, &pmfs_inode_info_list);
-	spin_unlock(&inode_list_lock);
+	spin_unlock_irqrestore(&inode_list_lock, flags);
 
 	return &vi->vfs_inode;
 }
@@ -1043,11 +1044,12 @@ static void pmfs_i_callback(struct rcu_head *head)
 {
 	struct inode *inode = container_of(head, struct inode, i_rcu);
 	struct pmfs_inode_info *vi = PMFS_I(inode);
+	unsigned long flags;
 
 	pmfs_dbg_verbose("%s: ino %lu\n", __func__, inode->i_ino);
-	spin_lock(&inode_list_lock);
+	spin_lock_irqsave(&inode_list_lock, flags);
 	list_del(&vi->link);
-	spin_unlock(&inode_list_lock);
+	spin_unlock_irqrestore(&inode_list_lock, flags);
 	kmem_cache_free(pmfs_inode_cachep, vi);
 }
 

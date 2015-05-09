@@ -3115,8 +3115,9 @@ void pmfs_free_dram_pages(struct super_block *sb)
 	struct inode *inode;
 	unsigned long last_blocknr;
 	unsigned int freed;
+	unsigned long flags;
 
-	spin_lock(&inode_list_lock);
+	spin_lock_irqsave(&inode_list_lock, flags);
 	list_for_each_entry(si, &pmfs_inode_info_list, link) {
 		inode = &si->vfs_inode;
 		if (inode->i_ino <= 1) {
@@ -3154,7 +3155,7 @@ void pmfs_free_dram_pages(struct super_block *sb)
 				si->root, freed);
 	}
 
-	spin_unlock(&inode_list_lock);
+	spin_unlock_irqrestore(&inode_list_lock, flags);
 }
 
 void pmfs_rebuild_file_time_and_size(struct super_block *sb,
