@@ -3,7 +3,7 @@
 umount /mnt/ramdisk
 rmmod pmem
 rmmod pmfs
-insmod pmem.ko pmem_start_gb=1024 pmem_size_gb=16 measure_timing=0
+insmod pmem.ko pmem_start_gb=1024 pmem_size_gb=16 measure_timing=0 support_clwb=1
 
 sleep 1
 
