@@ -699,8 +699,8 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 extern struct kmem_cache *pmfs_mempair_cachep;
 
 struct mem_addr {
-	unsigned long nvmm;	// inode entry
-	unsigned long dram;	// DRAM virtual address
+	unsigned long nvmm_entry;	// inode entry
+	unsigned long dram;		// DRAM virtual address
 };
 
 static inline u64 __pmfs_find_data_block(struct super_block *sb,
@@ -734,7 +734,7 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 
 	if (nvmm) {
 		entry = (struct pmfs_inode_entry *)
-					pmfs_get_block(sb, pair->nvmm);
+					pmfs_get_block(sb, pair->nvmm_entry);
 		pmfs_dbg_verbose("%s: %lu, entry pgoff %u, num %u, "
 			"blocknr %llu\n", __func__, req_block, entry->pgoff,
 			entry->num_pages, entry->block >> PAGE_SHIFT);

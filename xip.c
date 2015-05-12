@@ -97,7 +97,7 @@ do_xip_mapping_read(struct address_space *mapping,
 		}
 
 		entry = (struct pmfs_inode_entry *)
-				pmfs_get_block(sb, pair->nvmm);
+				pmfs_get_block(sb, pair->nvmm_entry);
 		if (entry == NULL) {
 			pmfs_dbg("%s: entry is NULL\n", __func__);
 			return -EINVAL;
@@ -488,7 +488,7 @@ static inline int pmfs_copy_partial_block(struct super_block *sb,
 		ptr = (void *)DRAM_ADDR(pair->dram);
 	} else {
 		entry = (struct pmfs_inode_entry *)
-				pmfs_get_block(sb, pair->nvmm);
+				pmfs_get_block(sb, pair->nvmm_entry);
 		if (entry == NULL) {
 			pmfs_dbg("%s: entry is NULL\n", __func__);
 			return -EINVAL;
@@ -799,7 +799,7 @@ int pmfs_find_alloc_dram_pages(struct super_block *sb, struct inode *inode,
 		return 1;
 	}
 
-	if (pair->nvmm) {
+	if (pair->nvmm_entry) {
 		/* The NVMM block is there. Need to handle partial writes. */
 		*existed = 1;
 	}
