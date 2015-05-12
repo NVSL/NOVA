@@ -317,14 +317,14 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 	unsigned long last_blocknr, unsigned long start_pgoff,
 	bool *meta_empty)
 {
-	unsigned long blocknr, first_blk, last_blk, page_addr;
+	unsigned long first_blk, last_blk, page_addr;
 	unsigned int node_bits, first_index, last_index, i;
 	__le64 *node;
 	unsigned int freed = 0, bzero;
 	int start, end;
 	bool mpty, all_range_freed = true;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	unsigned long entry_off, pgoff;
+	unsigned long pgoff;
 	struct pmfs_inode_entry *entry;
 	struct mem_addr *pair;
 
@@ -351,25 +351,12 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 			}
 			if (pair->nvmm_entry) {
 				entry = pmfs_get_block(sb, pair->nvmm_entry);
-				blocknr = entry->block >> PAGE_SHIFT;
-				if (entry->pgoff > pgoff || entry->pgoff +
-						entry->num_pages <= pgoff) {
-					pmfs_err(sb, "Entry ERROR: start pgoff"
-						" %lu, %lu, entry pgoff %lu, "
-						"num %lu\n", start_pgoff, i,
-						entry->pgoff,
-						entry->num_pages);
-					BUG();
-				}
-				entry_off = pgoff - entry->pgoff;
-				blocknr += entry_off;
 				if (GET_INVALID(entry->block) < 4000)
 					entry->block++;
-				__pmfs_free_data_block(sb, blocknr, btype,
+				__pmfs_free_data_block(sb, pair->nvmm, btype,
 							&start_hint);
-				pmfs_dbg_verbose("Free block %d @ %lu, "
-						"entry off %lu\n", i, blocknr,
-						entry_off);
+				pmfs_dbg_verbose("Free block @ %lu\n",
+						pair->nvmm);
 				pair->nvmm_entry = 0;
 				pair->nvmm = 0;
 			}
@@ -630,7 +617,6 @@ unsigned int pmfs_free_inode_subtree(struct super_block *sb,
 void pmfs_free_mem_addr(struct super_block *sb, __le64 addr, u32 btype)
 {
 	struct mem_addr *pair = (struct mem_addr *)addr;
-	unsigned long first_blocknr;
 	struct pmfs_inode_entry *entry;
 
 	if (!pair)
@@ -639,10 +625,9 @@ void pmfs_free_mem_addr(struct super_block *sb, __le64 addr, u32 btype)
 	if (pair->nvmm_entry) {
 		entry = (struct pmfs_inode_entry *)
 				pmfs_get_block(sb, pair->nvmm_entry);
-		first_blocknr = pmfs_get_blocknr(sb, entry->block, btype);
 		if (GET_INVALID(entry->block) < 4000)
 			entry->block++;
-		pmfs_free_data_block(sb, first_blocknr, btype);
+		pmfs_free_data_block(sb, pair->nvmm, btype);
 		pair->nvmm_entry = 0;
 		pair->nvmm = 0;
 	}
@@ -1190,7 +1175,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 	unsigned int meta_bits = META_BLK_SHIFT, node_bits;
 	__le64 *node;
 	unsigned long blocknr, first_blk, last_blk;
-	unsigned long entry_off, pgoff;
+	unsigned long pgoff;
 	unsigned int first_index, last_index;
 	struct pmfs_inode_entry *entry;
 	struct mem_addr *leaf;
@@ -1225,25 +1210,12 @@ static int recursive_assign_blocks(struct super_block *sb,
 			pgoff = start_pgoff + i;
 			if (leaf->nvmm_entry && free && nvmm) {
 				entry = pmfs_get_block(sb, leaf->nvmm_entry);
-				blocknr = entry->block >> PAGE_SHIFT;
-				if (entry->pgoff > pgoff || entry->pgoff +
-						entry->num_pages <= pgoff) {
-					pmfs_err(sb, "Entry ERROR: start pgoff"
-						" %lu, %lu, entry pgoff %lu, "
-						"num %lu\n", start_pgoff, i,
-						entry->pgoff,
-						entry->num_pages);
-					BUG();
-				}
-				entry_off = pgoff - entry->pgoff;
-				blocknr += entry_off;
 				if (GET_INVALID(entry->block) < 4000)
 					entry->block++;
-				pmfs_free_data_block(sb, blocknr,
+				pmfs_free_data_block(sb, leaf->nvmm,
 						pi->i_blk_type);
-				pmfs_dbg_verbose("Free block %d @ %lu, "
-					"entry off %lu\n", i, blocknr,
-					entry_off);
+				pmfs_dbg_verbose("Free block @ %lu\n",
+							leaf->nvmm);
 				//FIXME: garbage collection
 				pi->i_blocks--;
 			}
@@ -1483,19 +1455,16 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct inode *inode,
 			struct mem_addr *root = (struct mem_addr *)si->root;
 			if (root->nvmm_entry && free && nvmm) {
 				/* With cow we need to re-assign the root */
-				unsigned long blocknr;
 				struct pmfs_inode_entry *entry;
 
 				entry = (struct pmfs_inode_entry *)
 					pmfs_get_block(sb, root->nvmm_entry);
-				blocknr = pmfs_get_blocknr(sb, entry->block,
-							pi->i_blk_type);
 				if (GET_INVALID(entry->block) < 4000)
 					entry->block++;
-				pmfs_free_data_block(sb, blocknr,
+				pmfs_free_data_block(sb, root->nvmm,
 						pi->i_blk_type);
 				pmfs_dbg_verbose("Free root block @ %lu\n",
-						blocknr);
+						root->nvmm);
 				pi->i_blocks--;
 			}
 
