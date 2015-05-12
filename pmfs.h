@@ -711,8 +711,6 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 	u64 bp = 0;
 	u32 height, bit_shift;
 	unsigned int idx;
-	unsigned long req_block = blocknr;
-	struct pmfs_inode_entry *entry;
 	struct mem_addr *pair;
 
 	height = si->height;
@@ -733,25 +731,10 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 
 	pair = (struct mem_addr *)bp;
 
-	if (nvmm) {
-		entry = (struct pmfs_inode_entry *)
-					pmfs_get_block(sb, pair->nvmm_entry);
-		pmfs_dbg_verbose("%s: %lu, entry pgoff %u, num %u, "
-			"blocknr %llu\n", __func__, req_block, entry->pgoff,
-			entry->num_pages, entry->block >> PAGE_SHIFT);
-		if (req_block < entry->pgoff ||
-			 req_block - entry->pgoff >= entry->num_pages) {
-			pmfs_err(sb, "%s ERROR: %lu, entry pgoff %u, num %u, "
-				"blocknr %llu\n", __func__, req_block,
-				entry->pgoff, entry->num_pages,
-				entry->block >> PAGE_SHIFT);
-			return 0;
-		}
-		return BLOCK_OFF(entry->block +
-				((req_block - entry->pgoff) << PAGE_SHIFT));
-	} else {
+	if (nvmm)
+		return pair->nvmm << PAGE_SHIFT;
+	else
 		return pair->dram;
-	}
 }
 
 /* Deprecated */

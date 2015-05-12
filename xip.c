@@ -96,6 +96,7 @@ do_xip_mapping_read(struct address_space *mapping,
 			}
 		}
 
+		/* Find contiguous blocks */
 		entry = (struct pmfs_inode_entry *)
 				pmfs_get_block(sb, pair->nvmm_entry);
 		if (entry == NULL) {
@@ -116,8 +117,7 @@ do_xip_mapping_read(struct address_space *mapping,
 			nr = PAGE_SIZE;
 		}
 
-		xip_mem = pmfs_get_block(sb, BLOCK_OFF(entry->block +
-			((index - entry->pgoff) << PAGE_SHIFT)));
+		xip_mem = pmfs_get_block(sb, (pair->nvmm << PAGE_SHIFT));
 
 		/* If users can be writing to this page using arbitrary
 		 * virtual addresses, take care about potential aliasing
@@ -481,27 +481,12 @@ static inline int pmfs_copy_partial_block(struct super_block *sb,
 	size_t offset, void* kmem, bool is_end_blk)
 {
 	void *ptr;
-	struct pmfs_inode_entry *entry;
 
 	/* Copy from dram page cache, otherwise from nvmm */
 	if (pair->dram) {
 		ptr = (void *)DRAM_ADDR(pair->dram);
 	} else {
-		entry = (struct pmfs_inode_entry *)
-				pmfs_get_block(sb, pair->nvmm_entry);
-		if (entry == NULL) {
-			pmfs_dbg("%s: entry is NULL\n", __func__);
-			return -EINVAL;
-		}
-		if (index < entry->pgoff ||
-			index - entry->pgoff >= entry->num_pages) {
-			pmfs_err(sb, "%s ERROR: %lu, entry pgoff %u, num %u, blocknr "
-				"%llu\n", __func__, index, entry->pgoff,
-				entry->num_pages, entry->block >> PAGE_SHIFT);
-			return -EINVAL;
-		}
-		ptr = pmfs_get_block(sb, BLOCK_OFF(entry->block +
-			((index - entry->pgoff) << PAGE_SHIFT)));
+		ptr = pmfs_get_block(sb, (pair->nvmm << PAGE_SHIFT));
 	}
 	if (ptr != NULL) {
 		if (is_end_blk)
