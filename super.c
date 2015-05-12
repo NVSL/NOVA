@@ -1095,13 +1095,24 @@ static int __init init_inodecache(void)
 	return 0;
 }
 
-static int __init init_dirnode(void)
+static int __init init_dirnode_cache(void)
 {
 	pmfs_dirnode_cachep = kmem_cache_create("pmfs_dirnode_cache",
 					       sizeof(struct pmfs_dir_node),
 					       0, (SLAB_RECLAIM_ACCOUNT |
 						   SLAB_MEM_SPREAD), NULL);
 	if (pmfs_dirnode_cachep == NULL)
+		return -ENOMEM;
+	return 0;
+}
+
+static int __init init_mempair_cache(void)
+{
+	pmfs_mempair_cachep = kmem_cache_create("pmfs_mempair_cache",
+					       sizeof(struct mem_addr),
+					       0, (SLAB_RECLAIM_ACCOUNT |
+						   SLAB_MEM_SPREAD), NULL);
+	if (pmfs_mempair_cachep == NULL)
 		return -ENOMEM;
 	return 0;
 }
@@ -1130,9 +1141,14 @@ static void destroy_inodecache(void)
 	kmem_cache_destroy(pmfs_inode_cachep);
 }
 
-static void destroy_dirnode(void)
+static void destroy_dirnode_cache(void)
 {
 	kmem_cache_destroy(pmfs_dirnode_cachep);
+}
+
+static void destroy_mempair_cache(void)
+{
+	kmem_cache_destroy(pmfs_mempair_cachep);
 }
 
 static void destroy_blocknode_cache(void)
@@ -1233,18 +1249,24 @@ static int __init init_pmfs_fs(void)
 	if (rc)
 		goto out2;
 
-	rc = init_dirnode();
+	rc = init_dirnode_cache();
 	if (rc)
 		goto out3;
 
-	rc = register_filesystem(&pmfs_fs_type);
+	rc = init_mempair_cache();
 	if (rc)
 		goto out4;
 
+	rc = register_filesystem(&pmfs_fs_type);
+	if (rc)
+		goto out5;
+
 	return 0;
 
+out5:
+	destroy_mempair_cache();
 out4:
-	destroy_dirnode();
+	destroy_dirnode_cache();
 out3:
 	destroy_inodecache();
 out2:
@@ -1258,7 +1280,8 @@ static void __exit exit_pmfs_fs(void)
 {
 	unregister_filesystem(&pmfs_fs_type);
 	destroy_inodecache();
-	destroy_dirnode();
+	destroy_dirnode_cache();
+	destroy_mempair_cache();
 	destroy_blocknode_cache();
 	destroy_transaction_cache();
 }

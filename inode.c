@@ -28,6 +28,8 @@
 unsigned int blk_type_to_shift[PMFS_BLOCK_TYPE_MAX] = {12, 21, 30};
 uint32_t blk_type_to_size[PMFS_BLOCK_TYPE_MAX] = {0x1000, 0x200000, 0x40000000};
 
+struct kmem_cache *pmfs_mempair_cachep;
+
 void pmfs_print_inode_entry(struct pmfs_inode_entry *entry)
 {
 	pmfs_dbg("entry @%p: pgoff %u, num_pages %u, block 0x%llx, "
@@ -371,7 +373,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 				pair->nvmm = 0;
 			}
 
-			kfree(pair);
+			kmem_cache_free(pmfs_mempair_cachep, pair);
 			node[i] = 0;
 			freed++;
 		}
@@ -548,7 +550,7 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 				pair->dram = 0;
 				freed++;
 			}
-			kfree(pair);
+			kmem_cache_free(pmfs_mempair_cachep, pair);
 		}
 		*meta_empty = true;
 		return freed;
@@ -648,7 +650,7 @@ void pmfs_free_mem_addr(struct super_block *sb, __le64 addr, u32 btype)
 		pair->dram = 0;
 	}
 
-	kfree(pair);
+	kmem_cache_free(pmfs_mempair_cachep, pair);
 }
 
 unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
@@ -697,7 +699,7 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 			pair->dram = 0;
 			freed = 1;
 		}
-		kfree(pair);
+		kmem_cache_free(pmfs_mempair_cachep, pair);
 		si->root = 0;
 		return freed;
 	}
@@ -1193,13 +1195,15 @@ static int recursive_assign_blocks(struct super_block *sb,
 	for (i = first_index; i <= last_index; i++) {
 		if (height == 1) {
 			if (node[i] == 0) {
-				node[i] = (unsigned long)kzalloc(
-					sizeof(struct mem_addr), GFP_KERNEL);
+				node[i] = (unsigned long)kmem_cache_alloc(
+						pmfs_mempair_cachep, GFP_NOFS);
 				if (node[i] == 0) {
 					pmfs_dbg("%s: alloc failed\n",
 						__func__);
 					return -EINVAL;
 				}
+				leaf = (struct mem_addr *)node[i];
+				leaf->nvmm = leaf->dram = 0;
 			}
 			pmfs_dbg_verbose("node[%d] @ 0x%llx\n", i, node[i]);
 			leaf = (struct mem_addr *)node[i];
@@ -1427,13 +1431,14 @@ int __pmfs_assign_blocks(struct super_block *sb, struct inode *inode,
 	if (!si->root) {
 		if (height == 0) {
 			struct mem_addr *root;
-			root = kzalloc(sizeof(struct mem_addr), GFP_KERNEL);
+			root = kmem_cache_alloc(pmfs_mempair_cachep, GFP_NOFS);
 			if (!root) {
 				pmfs_dbg("%s: root allocation failed\n",
 					__func__);
 				return -EINVAL;
 			}
 
+			root->dram = root->nvmm = 0;
 			if (alloc_dram) {
 				root->dram = pmfs_new_cache_block(sb, 0);
 			} else {

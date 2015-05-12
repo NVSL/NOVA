@@ -696,6 +696,8 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 
 #define	MAX_BLOCK	((1UL << 32) - 1)
 
+extern struct kmem_cache *pmfs_mempair_cachep;
+
 struct mem_addr {
 	unsigned long nvmm;	// inode entry
 	unsigned long dram;	// DRAM virtual address
