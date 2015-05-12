@@ -723,8 +723,8 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 			goto out;
 		}
 
-		pmfs_assign_blocks(inode, start_blk, allocated,
-						curr_entry, true, true, false);
+		pmfs_assign_blocks(inode, &entry_data,
+					curr_entry, true, true, false);
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {
@@ -823,6 +823,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi;
+	struct pmfs_inode_entry entry_data;
 	ssize_t     written = 0;
 	loff_t pos;
 	size_t count, offset, copied, ret;
@@ -873,8 +874,9 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 
 	/* Allocate dram pages for the required extent */
 	start_blk = pos >> sb->s_blocksize_bits;
-	pmfs_assign_blocks(inode, start_blk, num_blocks,
-					0, false, false, true);
+	entry_data.pgoff = start_blk;
+	entry_data.num_pages = num_blocks;
+	pmfs_assign_blocks(inode, &entry_data, 0, false, false, true);
 
 	while (num_blocks > 0) {
 		struct mem_addr *pair = NULL;
@@ -929,7 +931,9 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		/* If the mem pair does not exist, assign the dram page */
 		if (existed == 0) {
 			page_addr |= DIRTY_BIT;
-			pmfs_assign_blocks(inode, start_blk, allocated,
+			entry_data.pgoff = start_blk;
+			entry_data.num_pages = allocated;
+			pmfs_assign_blocks(inode, &entry_data,
 					page_addr, false, false, false);
 		}
 
@@ -1067,8 +1071,8 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		 * Yeah, we have to assign the blocks to NVMM otherwise
 		 * they cannot be freed
 		 */
-		pmfs_assign_blocks(inode, pgoff, allocated,
-						curr_entry, true, true, false);
+		pmfs_assign_blocks(inode, &entry_data,
+					curr_entry, true, true, false);
 
 		if (copied > 0) {
 			status = copied;
@@ -1425,6 +1429,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode *pi;
 	struct mem_addr *pair = NULL;
+	struct pmfs_inode_entry entry_data;
 	unsigned long page_addr = 0;
 	int existed = 0;
 	int allocated;
@@ -1444,7 +1449,9 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	/* If the mem pair does not exist, assign the dram page */
 	if (existed == 0) {
 		page_addr |= DIRTY_BIT;
-		pmfs_assign_blocks(inode, pgoff, allocated,
+		entry_data.pgoff = pgoff;
+		entry_data.num_pages = allocated;
+		pmfs_assign_blocks(inode, &entry_data,
 					page_addr, false, false, false);
 	}
 
