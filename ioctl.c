@@ -262,7 +262,13 @@ setversion_out:
 		return 0;
 	}
 	case PMFS_TEST_MULTITHREAD_RECOVERY: {
-		pmfs_mutithread_recovery(sb);
+		int multithread;
+		copy_from_user(&multithread, (void *)arg,
+					sizeof(int));
+		if (multithread)
+			pmfs_mutithread_recovery(sb);
+		else
+			pmfs_singlethread_recovery(sb);
 		return 0;
 	}
 	default:

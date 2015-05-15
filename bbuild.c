@@ -522,11 +522,6 @@ skip:
 	return 0;
 }
 
-static struct task_struct **threads;
-static struct pmfs_inode **tasks;
-wait_queue_head_t finish_wq;
-wait_queue_head_t *assign_wq;
-
 static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 	int cpuid)
 {
@@ -549,6 +544,66 @@ static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 
 	return 0;
 }
+
+static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
+	struct scan_bitmap *bm, unsigned long block,
+	u32 height, u32 btype)
+{
+	__le64 *node;
+	unsigned int i;
+	struct pmfs_inode *pi;
+//	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+
+	node = pmfs_get_block(sb, block);
+
+	if (height == 0) {
+		unsigned int inodes_per_block = INODES_PER_BLOCK(btype);
+//		if (likely(btype == PMFS_BLOCK_TYPE_2M))
+//			set_bit(block >> PAGE_SHIFT_2M, bm->bitmap_2M);
+//		else
+//			set_bit(block >> PAGE_SHIFT, bm->bitmap_4k);
+
+//		sbi->s_inodes_count += inodes_per_block;
+		for (i = 0; i < inodes_per_block; i++) {
+			pi = (struct pmfs_inode *)((void *)node +
+                                                        PMFS_INODE_SIZE * i);
+			if (le16_to_cpu(pi->i_links_count) == 0 &&
+				(le16_to_cpu(pi->i_mode) == 0 ||
+				le32_to_cpu(pi->i_dtime))) {
+					/* Empty inode */
+					continue;
+			}
+//			sbi->s_inodes_used_count++;
+//			pmfs_inode_crawl(sb, bm, pi);
+			pmfs_recover_inode(sb, pi, smp_processor_id());
+		}
+		return;
+	}
+
+//	set_bit(block >> PAGE_SHIFT, bm->bitmap_4k);
+	for (i = 0; i < (1 << META_BLK_SHIFT); i++) {
+		if (node[i] == 0)
+			continue;
+		pmfs_inode_table_singlethread_crawl(sb, NULL,
+			le64_to_cpu(node[i]), height - 1, btype);
+	}
+}
+
+void pmfs_singlethread_recovery(struct super_block *sb)
+{
+	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
+
+	pmfs_dbg("%s\n", __func__);
+	pmfs_inode_table_singlethread_crawl(sb, NULL,
+			le64_to_cpu(pi->root), pi->height, pi->i_blk_type);
+
+	return;
+}
+
+static struct task_struct **threads;
+static struct pmfs_inode **tasks;
+wait_queue_head_t finish_wq;
+wait_queue_head_t *assign_wq;
 
 static int thread_func(void *data)
 {
