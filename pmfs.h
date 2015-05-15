@@ -22,6 +22,7 @@
 #include <linux/types.h>
 #include <linux/rbtree.h>
 #include <linux/version.h>
+#include <linux/kthread.h>
 #include <linux/uio.h>
 
 #include "pmfs_def.h"
@@ -113,6 +114,7 @@ extern unsigned int pmfs_dbgmask;
 #define	PMFS_PRINT_LOG_BLOCKNODE	0xBCD00014
 #define	PMFS_PRINT_LOG_PAGE		0xBCD00015
 #define	PMFS_MALLOC_TEST		0xBCD00016
+#define	PMFS_TEST_MULTITHREAD_RECOVERY	0xBCD00017
 
 
 #define	READDIR_END			0x1
@@ -1009,6 +1011,7 @@ struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);
+void pmfs_mutithread_recovery(struct super_block *sb);
 
 /* namei.c */
 extern const struct inode_operations pmfs_dir_inode_operations;

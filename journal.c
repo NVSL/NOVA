@@ -28,7 +28,6 @@
 #include <linux/mm.h>
 #include <linux/mutex.h>
 #include <linux/sched.h>
-#include <linux/kthread.h>
 #include "pmfs.h"
 #include "journal.h"
 

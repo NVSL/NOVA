@@ -261,6 +261,10 @@ setversion_out:
 		pmfs_malloc_test(sb, request.category, request.size);
 		return 0;
 	}
+	case PMFS_TEST_MULTITHREAD_RECOVERY: {
+		pmfs_mutithread_recovery(sb);
+		return 0;
+	}
 	default:
 		return -ENOTTY;
 	}

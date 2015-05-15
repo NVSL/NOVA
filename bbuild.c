@@ -22,6 +22,8 @@
 #include <linux/fs.h>
 #include <linux/bitops.h>
 #include <linux/slab.h>
+#include <linux/random.h>
+#include <linux/delay.h>
 #include "pmfs.h"
 
 struct scan_bitmap {
@@ -518,4 +520,106 @@ skip:
 	kfree(bm.bitmap_1G);
 
 	return 0;
+}
+
+static struct task_struct **threads;
+static int *tasks;
+wait_queue_head_t finish_wq;
+wait_queue_head_t *wq;
+
+static int thread_func(void *data)
+{
+	int cpuid = smp_processor_id(), i;
+
+	while (!kthread_should_stop()) {
+		if (tasks[cpuid]) {
+			get_random_bytes(&i, sizeof(i));
+			i = i % 10000;
+			if (i < 0) i += 10000;
+			ndelay(i);
+			pmfs_dbg("This is thread %d, processing %d %d\n",
+				cpuid, tasks[cpuid], i);
+			tasks[cpuid] = 0;
+			wake_up_interruptible(&finish_wq);
+		}
+		wait_event_interruptible_timeout(wq[cpuid], false,
+							msecs_to_jiffies(1));
+	}
+
+	return 0;
+}
+
+static int get_empty_slot(int cpus)
+{
+	int i;
+
+	for (i = 0; i < cpus; i++) {
+		if (tasks[i] == 0)
+			return i;
+	}
+
+	return -1;
+}
+
+void pmfs_mutithread_recovery(struct super_block *sb)
+{
+	int cpus, i, j = 0;
+	int slot;
+
+	cpus = num_online_cpus();
+	pmfs_dbg("%s: %d cpus\n", __func__, cpus);
+
+	threads = kzalloc(cpus * sizeof(struct task_struct *), GFP_KERNEL);
+	if (!threads)
+		return;
+
+	tasks = kzalloc(cpus * sizeof(int), GFP_KERNEL);
+	if (!tasks) {
+		kfree(threads);
+		return;
+	}
+
+	wq = kzalloc(cpus * sizeof(wait_queue_head_t), GFP_KERNEL);
+	if (!wq) {
+		kfree(tasks);
+		kfree(threads);
+		return;
+	}
+
+	for (i = 0; i < cpus; i++) {
+		init_waitqueue_head(&wq[i]);
+		threads[i] = kthread_create(thread_func,
+						NULL, "recovery thread");
+		kthread_bind(threads[i], i);
+		wake_up_process(threads[i]);
+	}
+
+	init_waitqueue_head(&finish_wq);
+
+	while (j < 100) {
+		while ((slot = get_empty_slot(cpus)) == -1) {
+			wait_event_interruptible_timeout(finish_wq, false,
+							msecs_to_jiffies(1));
+		}
+
+		pmfs_dbg("Assign %d to %d\n", j, slot);
+		tasks[slot] = j;
+		j++;
+		wake_up_interruptible(&wq[slot]);
+	}
+
+	for (i = 0; i < cpus; i++) {
+		while (tasks[i]) {
+			wait_event_interruptible_timeout(finish_wq, false,
+							msecs_to_jiffies(1));
+		}
+	}
+
+	for (i = 0; i < cpus; i++)
+		kthread_stop(threads[i]);
+
+	kfree(wq);
+	kfree(threads);
+	kfree(tasks);
+	return;
 }
