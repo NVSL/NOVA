@@ -280,7 +280,7 @@ static void pmfs_inode_table_crawl_recursive(struct super_block *sb,
 	unsigned int i;
 	struct pmfs_inode *pi;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	
+
 	node = pmfs_get_block(sb, block);
 
 	if (height == 0) {
@@ -295,8 +295,8 @@ static void pmfs_inode_table_crawl_recursive(struct super_block *sb,
 			pi = (struct pmfs_inode *)((void *)node +
                                                         PMFS_INODE_SIZE * i);
 			if (le16_to_cpu(pi->i_links_count) == 0 &&
-                        	(le16_to_cpu(pi->i_mode) == 0 ||
-                         	le32_to_cpu(pi->i_dtime))) {
+				(le16_to_cpu(pi->i_mode) == 0 ||
+				le32_to_cpu(pi->i_dtime))) {
 					/* Empty inode */
 					continue;
 			}
@@ -561,29 +561,86 @@ static int get_empty_slot(int cpus)
 	return -1;
 }
 
-void pmfs_mutithread_recovery(struct super_block *sb)
+#if 0
+static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
+	struct scan_bitmap *bm, int cpus, unsigned long block,
+	u32 height, u32 btype)
 {
-	int cpus, i, j = 0;
+	__le64 *node;
+	unsigned int i;
 	int slot;
+	struct pmfs_inode *pi;
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 
-	cpus = num_online_cpus();
-	pmfs_dbg("%s: %d cpus\n", __func__, cpus);
+	node = pmfs_get_block(sb, block);
+
+	if (height == 0) {
+		unsigned int inodes_per_block = INODES_PER_BLOCK(btype);
+		if (likely(btype == PMFS_BLOCK_TYPE_2M))
+			set_bit(block >> PAGE_SHIFT_2M, bm->bitmap_2M);
+		else
+			set_bit(block >> PAGE_SHIFT, bm->bitmap_4k);
+
+		sbi->s_inodes_count += inodes_per_block;
+		for (i = 0; i < inodes_per_block; i++) {
+			pi = (struct pmfs_inode *)((void *)node +
+                                                        PMFS_INODE_SIZE * i);
+			if (le16_to_cpu(pi->i_links_count) == 0 &&
+				(le16_to_cpu(pi->i_mode) == 0 ||
+				le32_to_cpu(pi->i_dtime))) {
+					/* Empty inode */
+					continue;
+			}
+			sbi->s_inodes_used_count++;
+			pmfs_inode_crawl(sb, bm, pi);
+
+			while ((slot = get_empty_slot(cpus)) == -1) {
+				wait_event_interruptible_timeout(finish_wq, false,
+							msecs_to_jiffies(1));
+			}
+
+			tasks[slot] = pi;
+			wake_up_interruptible(&assign_wq[slot]);
+		}
+		return;
+	}
+
+	set_bit(block >> PAGE_SHIFT, bm->bitmap_4k);
+	for (i = 0; i < (1 << META_BLK_SHIFT); i++) {
+		if (node[i] == 0)
+			continue;
+		pmfs_inode_table_crawl_recursive(sb, bm,
+			le64_to_cpu(node[i]), height - 1, btype);
+	}
+}
+#endif
+
+static void free_resources(void)
+{
+	kfree(assign_wq);
+	kfree(threads);
+	kfree(tasks);
+}
+
+static int allocate_resources(int cpus)
+{
+	int i;
 
 	threads = kzalloc(cpus * sizeof(struct task_struct *), GFP_KERNEL);
 	if (!threads)
-		return;
+		return -ENOMEM;
 
 	tasks = kzalloc(cpus * sizeof(int), GFP_KERNEL);
 	if (!tasks) {
 		kfree(threads);
-		return;
+		return -ENOMEM;
 	}
 
 	assign_wq = kzalloc(cpus * sizeof(wait_queue_head_t), GFP_KERNEL);
 	if (!assign_wq) {
 		kfree(tasks);
 		kfree(threads);
-		return;
+		return -ENOMEM;
 	}
 
 	for (i = 0; i < cpus; i++) {
@@ -595,6 +652,37 @@ void pmfs_mutithread_recovery(struct super_block *sb)
 	}
 
 	init_waitqueue_head(&finish_wq);
+
+	return 0;
+}
+
+static void wait_to_finish(int cpus)
+{
+	int i;
+
+	for (i = 0; i < cpus; i++) {
+		while (tasks[i]) {
+			wait_event_interruptible_timeout(finish_wq, false,
+							msecs_to_jiffies(1));
+		}
+	}
+
+	for (i = 0; i < cpus; i++)
+		kthread_stop(threads[i]);
+
+}
+
+void pmfs_mutithread_recovery(struct super_block *sb)
+{
+	int cpus, j = 0;
+	int slot, ret;
+
+	cpus = num_online_cpus();
+	pmfs_dbg("%s: %d cpus\n", __func__, cpus);
+
+	ret = allocate_resources(cpus);
+	if (ret)
+		return;
 
 	while (j < 100) {
 		while ((slot = get_empty_slot(cpus)) == -1) {
@@ -608,18 +696,7 @@ void pmfs_mutithread_recovery(struct super_block *sb)
 		wake_up_interruptible(&assign_wq[slot]);
 	}
 
-	for (i = 0; i < cpus; i++) {
-		while (tasks[i]) {
-			wait_event_interruptible_timeout(finish_wq, false,
-							msecs_to_jiffies(1));
-		}
-	}
-
-	for (i = 0; i < cpus; i++)
-		kthread_stop(threads[i]);
-
-	kfree(assign_wq);
-	kfree(threads);
-	kfree(tasks);
+	wait_to_finish(cpus);
+	free_resources();
 	return;
 }
