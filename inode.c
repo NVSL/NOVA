@@ -1993,7 +1993,7 @@ retry:
 	}
 
 	ino = i << PMFS_INODE_BITS;
-	pmfs_dbg_verbose("allocating inode %lx\n", ino);
+	pmfs_dbg_verbose("allocating inode %lu @ %p\n", ino, pi);
 
 	/* chosen inode is in ino */
 	inode->i_ino = ino;

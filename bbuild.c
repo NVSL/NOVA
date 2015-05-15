@@ -523,22 +523,43 @@ skip:
 }
 
 static struct task_struct **threads;
-static int *tasks;
+static struct pmfs_inode **tasks;
 wait_queue_head_t finish_wq;
 wait_queue_head_t *assign_wq;
 
+static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
+	int cpuid)
+{
+	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
+	case S_IFREG:
+		pmfs_dbg("This is thread %d, processing file %p, "
+				"head 0x%llx, tail 0x%llx\n",
+				cpuid, pi, pi->log_head, pi->log_tail);
+		break;
+	case S_IFDIR:
+		pmfs_dbg("This is thread %d, processing dir %p, "
+				"head 0x%llx, tail 0x%llx\n",
+				cpuid, pi, pi->log_head, pi->log_tail);
+		break;
+	case S_IFLNK:
+		break;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
 static int thread_func(void *data)
 {
-	int cpuid = smp_processor_id(), i;
+	struct super_block *sb = data;
+	struct pmfs_inode *pi;
+	int cpuid = smp_processor_id();
 
 	while (!kthread_should_stop()) {
 		if (tasks[cpuid]) {
-			get_random_bytes(&i, sizeof(i));
-			i = i % 10000;
-			if (i < 0) i += 10000;
-			ndelay(i);
-			pmfs_dbg("This is thread %d, processing %d %d\n",
-				cpuid, tasks[cpuid], i);
+			pi = tasks[cpuid];
+			pmfs_recover_inode(sb, pi, cpuid);
 			tasks[cpuid] = 0;
 			wake_up_interruptible(&finish_wq);
 		}
@@ -554,14 +575,13 @@ static int get_empty_slot(int cpus)
 	int i;
 
 	for (i = 0; i < cpus; i++) {
-		if (tasks[i] == 0)
+		if (tasks[i] == NULL)
 			return i;
 	}
 
 	return -1;
 }
 
-#if 0
 static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
 	struct scan_bitmap *bm, int cpus, unsigned long block,
 	u32 height, u32 btype)
@@ -570,18 +590,18 @@ static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
 	unsigned int i;
 	int slot;
 	struct pmfs_inode *pi;
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+//	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 
 	node = pmfs_get_block(sb, block);
 
 	if (height == 0) {
 		unsigned int inodes_per_block = INODES_PER_BLOCK(btype);
-		if (likely(btype == PMFS_BLOCK_TYPE_2M))
-			set_bit(block >> PAGE_SHIFT_2M, bm->bitmap_2M);
-		else
-			set_bit(block >> PAGE_SHIFT, bm->bitmap_4k);
+//		if (likely(btype == PMFS_BLOCK_TYPE_2M))
+//			set_bit(block >> PAGE_SHIFT_2M, bm->bitmap_2M);
+//		else
+//			set_bit(block >> PAGE_SHIFT, bm->bitmap_4k);
 
-		sbi->s_inodes_count += inodes_per_block;
+//		sbi->s_inodes_count += inodes_per_block;
 		for (i = 0; i < inodes_per_block; i++) {
 			pi = (struct pmfs_inode *)((void *)node +
                                                         PMFS_INODE_SIZE * i);
@@ -591,8 +611,8 @@ static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
 					/* Empty inode */
 					continue;
 			}
-			sbi->s_inodes_used_count++;
-			pmfs_inode_crawl(sb, bm, pi);
+//			sbi->s_inodes_used_count++;
+//			pmfs_inode_crawl(sb, bm, pi);
 
 			while ((slot = get_empty_slot(cpus)) == -1) {
 				wait_event_interruptible_timeout(finish_wq, false,
@@ -605,15 +625,14 @@ static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
 		return;
 	}
 
-	set_bit(block >> PAGE_SHIFT, bm->bitmap_4k);
+//	set_bit(block >> PAGE_SHIFT, bm->bitmap_4k);
 	for (i = 0; i < (1 << META_BLK_SHIFT); i++) {
 		if (node[i] == 0)
 			continue;
-		pmfs_inode_table_crawl_recursive(sb, bm,
+		pmfs_inode_table_multithread_crawl(sb, NULL, cpus,
 			le64_to_cpu(node[i]), height - 1, btype);
 	}
 }
-#endif
 
 static void free_resources(void)
 {
@@ -622,7 +641,7 @@ static void free_resources(void)
 	kfree(tasks);
 }
 
-static int allocate_resources(int cpus)
+static int allocate_resources(struct super_block *sb, int cpus)
 {
 	int i;
 
@@ -630,7 +649,7 @@ static int allocate_resources(int cpus)
 	if (!threads)
 		return -ENOMEM;
 
-	tasks = kzalloc(cpus * sizeof(int), GFP_KERNEL);
+	tasks = kzalloc(cpus * sizeof(struct pmfs_inode *), GFP_KERNEL);
 	if (!tasks) {
 		kfree(threads);
 		return -ENOMEM;
@@ -646,7 +665,7 @@ static int allocate_resources(int cpus)
 	for (i = 0; i < cpus; i++) {
 		init_waitqueue_head(&assign_wq[i]);
 		threads[i] = kthread_create(thread_func,
-						NULL, "recovery thread");
+						sb, "recovery thread");
 		kthread_bind(threads[i], i);
 		wake_up_process(threads[i]);
 	}
@@ -674,27 +693,19 @@ static void wait_to_finish(int cpus)
 
 void pmfs_mutithread_recovery(struct super_block *sb)
 {
-	int cpus, j = 0;
-	int slot, ret;
+	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
+	int cpus;
+	int ret;
 
 	cpus = num_online_cpus();
 	pmfs_dbg("%s: %d cpus\n", __func__, cpus);
 
-	ret = allocate_resources(cpus);
+	ret = allocate_resources(sb, cpus);
 	if (ret)
 		return;
 
-	while (j < 100) {
-		while ((slot = get_empty_slot(cpus)) == -1) {
-			wait_event_interruptible_timeout(finish_wq, false,
-							msecs_to_jiffies(1));
-		}
-
-		pmfs_dbg("Assign %d to %d\n", j, slot);
-		tasks[slot] = j;
-		j++;
-		wake_up_interruptible(&assign_wq[slot]);
-	}
+	pmfs_inode_table_multithread_crawl(sb, NULL, cpus,
+			le64_to_cpu(pi->root), pi->height, pi->i_blk_type);
 
 	wait_to_finish(cpus);
 	free_resources();

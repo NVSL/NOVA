@@ -161,6 +161,7 @@ static int pmfs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 		goto out;
 	}
 
+	pmfs_dbg_verbose("%s: %s\n", __func__, dentry->d_name.name);
 	inode = pmfs_new_inode(trans, dir, mode, &dentry->d_name);
 	if (IS_ERR(inode))
 		goto out_err;
@@ -318,10 +319,12 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = dir->i_sb;
 	int retval = -ENOMEM;
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
 	timing_t unlink_time;
 
 	PMFS_START_TIMING(unlink_t, unlink_time);
 
+	pmfs_dbg_verbose("%s: %s\n", __func__, dentry->d_name.name);
 	retval = pmfs_remove_entry(NULL, dentry, inode, -1);
 	if (retval)
 		goto out;
@@ -332,6 +335,8 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 
 	if (inode->i_nlink) {
 		drop_nlink(inode);
+		/* FIXME: We still rely on this to find free inodes */
+		pi->i_links_count = cpu_to_le16(inode->i_nlink);
 	}
 
 	PMFS_END_TIMING(unlink_t, unlink_time);
