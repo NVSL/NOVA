@@ -525,7 +525,7 @@ skip:
 static struct task_struct **threads;
 static int *tasks;
 wait_queue_head_t finish_wq;
-wait_queue_head_t *wq;
+wait_queue_head_t *assign_wq;
 
 static int thread_func(void *data)
 {
@@ -542,7 +542,7 @@ static int thread_func(void *data)
 			tasks[cpuid] = 0;
 			wake_up_interruptible(&finish_wq);
 		}
-		wait_event_interruptible_timeout(wq[cpuid], false,
+		wait_event_interruptible_timeout(assign_wq[cpuid], false,
 							msecs_to_jiffies(1));
 	}
 
@@ -579,15 +579,15 @@ void pmfs_mutithread_recovery(struct super_block *sb)
 		return;
 	}
 
-	wq = kzalloc(cpus * sizeof(wait_queue_head_t), GFP_KERNEL);
-	if (!wq) {
+	assign_wq = kzalloc(cpus * sizeof(wait_queue_head_t), GFP_KERNEL);
+	if (!assign_wq) {
 		kfree(tasks);
 		kfree(threads);
 		return;
 	}
 
 	for (i = 0; i < cpus; i++) {
-		init_waitqueue_head(&wq[i]);
+		init_waitqueue_head(&assign_wq[i]);
 		threads[i] = kthread_create(thread_func,
 						NULL, "recovery thread");
 		kthread_bind(threads[i], i);
@@ -605,7 +605,7 @@ void pmfs_mutithread_recovery(struct super_block *sb)
 		pmfs_dbg("Assign %d to %d\n", j, slot);
 		tasks[slot] = j;
 		j++;
-		wake_up_interruptible(&wq[slot]);
+		wake_up_interruptible(&assign_wq[slot]);
 	}
 
 	for (i = 0; i < cpus; i++) {
@@ -618,7 +618,7 @@ void pmfs_mutithread_recovery(struct super_block *sb)
 	for (i = 0; i < cpus; i++)
 		kthread_stop(threads[i]);
 
-	kfree(wq);
+	kfree(assign_wq);
 	kfree(threads);
 	kfree(tasks);
 	return;
