@@ -522,6 +522,8 @@ skip:
 	return 0;
 }
 
+/*********************** Singlethread recovery *************************/
+
 static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 	int cpuid)
 {
@@ -545,6 +547,8 @@ static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 //	udelay(10);
 	return 0;
 }
+
+int *processed;
 
 static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 	struct scan_bitmap *bm, unsigned long block,
@@ -577,6 +581,7 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 //			sbi->s_inodes_used_count++;
 //			pmfs_inode_crawl(sb, bm, pi);
 			pmfs_recover_inode(sb, pi, smp_processor_id());
+			processed[smp_processor_id()]++;
 		}
 		return;
 	}
@@ -593,13 +598,22 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 void pmfs_singlethread_recovery(struct super_block *sb)
 {
 	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
+	int cpus = num_online_cpus();
+	int i;
+
+	processed = kzalloc(cpus * sizeof(int), GFP_KERNEL);
 
 	pmfs_dbg("%s\n", __func__);
 	pmfs_inode_table_singlethread_crawl(sb, NULL,
 			le64_to_cpu(pi->root), pi->height, pi->i_blk_type);
 
+	for (i = 0; i < cpus; i++)
+		pmfs_dbg("CPU %d: recovered %d\n", i, processed[i]);
+	kfree(processed);
 	return;
 }
+
+/*********************** Multithread recovery *************************/
 
 struct task_ring {
 	struct pmfs_inode *tasks[512];
@@ -676,15 +690,21 @@ static int thread_func(void *data)
 
 static inline struct task_ring *get_free_ring(int cpus, struct task_ring *ring)
 {
-	int i;
+	int start;
+	int i = 0;
 
-	if (ring && !task_ring_is_full(ring))
-		return ring;
+	if (ring)
+		start = ring->id + 1;
+	else
+		start = 0;
 
-	for (i = 0; i < cpus; i++) {
-		ring = &task_rings[i];
+	while (i < cpus) {
+		start = start % cpus;
+		ring = &task_rings[start];
 		if (!task_ring_is_full(ring))
 			return ring;
+		start++;
+		i++;
 	}
 
 	return NULL;
@@ -795,10 +815,11 @@ static void wait_to_finish(int cpus)
 
 	for (i = 0; i < cpus; i++) {
 		ring = &task_rings[i];
+		pmfs_dbg("Ring %d recovered %d\n", i, ring->processed);
 		total += ring->processed;
 	}
 
-	pmfs_dbg("Recovered %d\n", total);
+	pmfs_dbg("Total recovered %d\n", total);
 }
 
 void pmfs_mutithread_recovery(struct super_block *sb)
