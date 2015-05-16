@@ -603,14 +603,18 @@ void pmfs_singlethread_recovery(struct super_block *sb)
 
 struct task_ring {
 	struct pmfs_inode *tasks[512];
+	int id;
 	int enqueue;
 	int dequeue;
+	int processed;
 	wait_queue_head_t assign_wq;
 };
 
-static inline void init_ring(struct task_ring *ring)
+static inline void init_ring(struct task_ring *ring, int id)
 {
+	ring->id = id;
 	ring->enqueue = ring->dequeue = 0;
+	ring->processed = 0;
 	init_waitqueue_head(&ring->assign_wq);
 }
 
@@ -635,8 +639,14 @@ static inline void task_ring_enqueue(struct task_ring *ring,
 static inline struct pmfs_inode *task_ring_dequeue(struct task_ring *ring)
 {
 	struct pmfs_inode *pi = ring->tasks[ring->dequeue];
+
+	if (!pi)
+		BUG();
+
 	ring->tasks[ring->dequeue] = 0;
 	ring->dequeue = (ring->dequeue + 1) % 512;
+	ring->processed++;
+
 	return pi;
 }
 
@@ -754,7 +764,7 @@ static int allocate_resources(struct super_block *sb, int cpus)
 	}
 
 	for (i = 0; i < cpus; i++) {
-		init_ring(&task_rings[i]);
+		init_ring(&task_rings[i], i);
 		threads[i] = kthread_create(thread_func,
 						sb, "recovery thread");
 		kthread_bind(threads[i], i);
@@ -769,6 +779,7 @@ static int allocate_resources(struct super_block *sb, int cpus)
 static void wait_to_finish(int cpus)
 {
 	struct task_ring *ring;
+	int total = 0;
 	int i;
 
 	for (i = 0; i < cpus; i++) {
@@ -782,6 +793,12 @@ static void wait_to_finish(int cpus)
 	for (i = 0; i < cpus; i++)
 		kthread_stop(threads[i]);
 
+	for (i = 0; i < cpus; i++) {
+		ring = &task_rings[i];
+		total += ring->processed;
+	}
+
+	pmfs_dbg("Recovered %d\n", total);
 }
 
 void pmfs_mutithread_recovery(struct super_block *sb)
