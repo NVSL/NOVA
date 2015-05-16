@@ -600,41 +600,82 @@ void pmfs_singlethread_recovery(struct super_block *sb)
 	return;
 }
 
+struct task_ring {
+	struct pmfs_inode *tasks[512];
+	int enqueue;
+	int dequeue;
+	wait_queue_head_t assign_wq;
+};
+
+static inline void init_ring(struct task_ring *ring)
+{
+	memset(ring, '0', sizeof(struct task_ring));
+	init_waitqueue_head(&ring->assign_wq);
+}
+
+static inline bool task_ring_is_empty(struct task_ring *ring)
+{
+	return ring->enqueue == ring->dequeue;
+}
+
+static inline bool task_ring_is_full(struct task_ring *ring)
+{
+	return (ring->enqueue + 1) % 512 == ring->dequeue;
+}
+
+static inline void task_ring_enqueue(struct task_ring *ring,
+	struct pmfs_inode *pi)
+{
+	ring->tasks[ring->enqueue] = pi;
+	ring->enqueue = (ring->enqueue + 1) % 512;
+}
+
+static inline struct pmfs_inode *task_ring_dequeue(struct task_ring *ring)
+{
+	struct pmfs_inode *pi = ring->tasks[ring->dequeue];
+	ring->tasks[ring->dequeue] = 0;
+	ring->dequeue = (ring->dequeue + 1) % 512;
+	return pi;
+}
+
 static struct task_struct **threads;
-static struct pmfs_inode **tasks;
+static struct task_ring *task_rings;
 wait_queue_head_t finish_wq;
-wait_queue_head_t *assign_wq;
 
 static int thread_func(void *data)
 {
 	struct super_block *sb = data;
 	struct pmfs_inode *pi;
 	int cpuid = smp_processor_id();
+	struct task_ring *ring = &task_rings[cpuid];
 
 	while (!kthread_should_stop()) {
-		if (tasks[cpuid]) {
-			pi = tasks[cpuid];
+		while(!task_ring_is_empty(ring)) {
+			pi = task_ring_dequeue(ring);
 			pmfs_recover_inode(sb, pi, cpuid);
-			tasks[cpuid] = 0;
 			wake_up_interruptible(&finish_wq);
 		}
-		wait_event_interruptible_timeout(assign_wq[cpuid], false,
+		wait_event_interruptible_timeout(ring->assign_wq, false,
 							msecs_to_jiffies(1));
 	}
 
 	return 0;
 }
 
-static int get_empty_slot(int cpus)
+static inline struct task_ring *get_free_ring(int cpus, struct task_ring *ring)
 {
 	int i;
 
+	if (ring && !task_ring_is_full(ring))
+		return ring;
+
 	for (i = 0; i < cpus; i++) {
-		if (tasks[i] == NULL)
-			return i;
+		ring = &task_rings[i];
+		if (!task_ring_is_full(ring))
+			return ring;
 	}
 
-	return -1;
+	return NULL;
 }
 
 static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
@@ -643,7 +684,7 @@ static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
 {
 	__le64 *node;
 	unsigned int i;
-	int slot;
+	struct task_ring *ring = NULL;
 	struct pmfs_inode *pi;
 //	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 
@@ -669,13 +710,13 @@ static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
 //			sbi->s_inodes_used_count++;
 //			pmfs_inode_crawl(sb, bm, pi);
 
-			while ((slot = get_empty_slot(cpus)) == -1) {
+			while ((ring = get_free_ring(cpus, ring)) == NULL) {
 				wait_event_interruptible_timeout(finish_wq, false,
 							msecs_to_jiffies(1));
 			}
 
-			tasks[slot] = pi;
-			wake_up_interruptible(&assign_wq[slot]);
+			task_ring_enqueue(ring, pi);
+			wake_up_interruptible(&ring->assign_wq);
 		}
 		return;
 	}
@@ -691,9 +732,8 @@ static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
 
 static void free_resources(void)
 {
-	kfree(assign_wq);
 	kfree(threads);
-	kfree(tasks);
+	kfree(task_rings);
 }
 
 static int allocate_resources(struct super_block *sb, int cpus)
@@ -704,21 +744,14 @@ static int allocate_resources(struct super_block *sb, int cpus)
 	if (!threads)
 		return -ENOMEM;
 
-	tasks = kzalloc(cpus * sizeof(struct pmfs_inode *), GFP_KERNEL);
-	if (!tasks) {
-		kfree(threads);
-		return -ENOMEM;
-	}
-
-	assign_wq = kzalloc(cpus * sizeof(wait_queue_head_t), GFP_KERNEL);
-	if (!assign_wq) {
-		kfree(tasks);
+	task_rings = kzalloc(cpus * sizeof(struct task_ring), GFP_KERNEL);
+	if (!task_rings) {
 		kfree(threads);
 		return -ENOMEM;
 	}
 
 	for (i = 0; i < cpus; i++) {
-		init_waitqueue_head(&assign_wq[i]);
+		init_ring(&task_rings[i]);
 		threads[i] = kthread_create(thread_func,
 						sb, "recovery thread");
 		kthread_bind(threads[i], i);
@@ -732,10 +765,12 @@ static int allocate_resources(struct super_block *sb, int cpus)
 
 static void wait_to_finish(int cpus)
 {
+	struct task_ring *ring;
 	int i;
 
 	for (i = 0; i < cpus; i++) {
-		while (tasks[i]) {
+		ring = &task_rings[i];
+		while (!task_ring_is_empty(ring)) {
 			wait_event_interruptible_timeout(finish_wq, false,
 							msecs_to_jiffies(1));
 		}
