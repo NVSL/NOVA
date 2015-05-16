@@ -2,6 +2,8 @@
 
 const char *Timingstring[TIMING_NUM] = 
 {
+	"init",
+	"mount",
 	"ioremap",
 
 	"create",

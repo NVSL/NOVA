@@ -653,6 +653,9 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	unsigned long blocksize, initsize = 0;
 	u32 random = 0;
 	int retval = -EINVAL;
+	timing_t mount_time;
+
+	PMFS_START_TIMING(mount_t, mount_time);
 
 	BUILD_BUG_ON(sizeof(struct pmfs_super_block) > PMFS_SB_SIZE);
 	BUILD_BUG_ON(sizeof(struct pmfs_inode) > PMFS_INODE_SIZE);
@@ -817,6 +820,7 @@ setup_sb:
 				sizeof(struct pmfs_inode_log_page),
 				sizeof(struct pmfs_direntry),
 				sizeof(struct pmfs_log_direntry));
+	PMFS_END_TIMING(mount_t, mount_time);
 	return retval;
 out:
 	if (sbi->virt_addr) {
@@ -1236,7 +1240,9 @@ static const struct export_operations pmfs_export_ops = {
 static int __init init_pmfs_fs(void)
 {
 	int rc = 0;
+	timing_t init_time;
 
+	PMFS_START_TIMING(init_t, init_time);
 	rc = init_blocknode_cache();
 	if (rc)
 		return rc;
@@ -1261,6 +1267,7 @@ static int __init init_pmfs_fs(void)
 	if (rc)
 		goto out5;
 
+	PMFS_END_TIMING(init_t, init_time);
 	return 0;
 
 out5:
