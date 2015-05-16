@@ -462,6 +462,32 @@ static void pmfs_build_blocknode_map(struct super_block *sb,
 		PAGE_SHIFT_1G - 12);
 }
 
+static void free_bm(struct scan_bitmap *bm)
+{
+	kfree(bm->bitmap_4k);
+	kfree(bm->bitmap_2M);
+	kfree(bm->bitmap_1G);
+}
+
+static int alloc_bm(struct scan_bitmap *bm, unsigned long initsize)
+{
+	bm->bitmap_4k_size = (initsize >> (PAGE_SHIFT + 0x3)) + 1;
+	bm->bitmap_2M_size = (initsize >> (PAGE_SHIFT_2M + 0x3)) + 1;
+	bm->bitmap_1G_size = (initsize >> (PAGE_SHIFT_1G + 0x3)) + 1;
+
+	/* Alloc memory to hold the block alloc bitmap */
+	bm->bitmap_4k = kzalloc(bm->bitmap_4k_size, GFP_KERNEL);
+	bm->bitmap_2M = kzalloc(bm->bitmap_2M_size, GFP_KERNEL);
+	bm->bitmap_1G = kzalloc(bm->bitmap_1G_size, GFP_KERNEL);
+
+	if (!bm->bitmap_4k || !bm->bitmap_2M || !bm->bitmap_1G) {
+		free_bm(bm);
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
 int pmfs_setup_blocknode_map(struct super_block *sb)
 {
 	struct pmfs_super_block *super = pmfs_get_super(sb);
@@ -471,6 +497,7 @@ int pmfs_setup_blocknode_map(struct super_block *sb)
 	struct scan_bitmap bm;
 	unsigned long initsize = le64_to_cpu(super->s_size);
 	bool value = false;
+	int ret;
 
 	mutex_init(&sbi->inode_table_mutex);
 	sbi->block_start = (unsigned long)0;
@@ -482,18 +509,10 @@ int pmfs_setup_blocknode_map(struct super_block *sb)
 		return 0;
 	}
 
-	bm.bitmap_4k_size = (initsize >> (PAGE_SHIFT + 0x3)) + 1;
-	bm.bitmap_2M_size = (initsize >> (PAGE_SHIFT_2M + 0x3)) + 1;
-	bm.bitmap_1G_size = (initsize >> (PAGE_SHIFT_1G + 0x3)) + 1;
+	ret = alloc_bm(&bm, initsize);
+	if (ret)
+		return ret;
 
-	/* Alloc memory to hold the block alloc bitmap */
-	bm.bitmap_4k = kzalloc(bm.bitmap_4k_size, GFP_KERNEL);
-	bm.bitmap_2M = kzalloc(bm.bitmap_2M_size, GFP_KERNEL);
-	bm.bitmap_1G = kzalloc(bm.bitmap_1G_size, GFP_KERNEL);
-
-	if (!bm.bitmap_4k || !bm.bitmap_2M || !bm.bitmap_1G)
-		goto skip;
-	
 	/* Clearing the datablock inode */
 	pmfs_clear_datablock_inode(sb);
 
@@ -513,14 +532,17 @@ int pmfs_setup_blocknode_map(struct super_block *sb)
 
 	pmfs_build_blocknode_map(sb, &bm);
 
-skip:
-	
-	kfree(bm.bitmap_4k);
-	kfree(bm.bitmap_2M);
-	kfree(bm.bitmap_1G);
+	free_bm(&bm);
 
 	return 0;
 }
+
+
+/************************** CoolFS recovery ****************************/
+
+struct scan_bitmap bm;
+
+
 
 /*********************** Singlethread recovery *************************/
 
