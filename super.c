@@ -1142,6 +1142,11 @@ static void destroy_transaction_cache(void)
 
 static void destroy_inodecache(void)
 {
+	/*
+	 * Make sure all delayed rcu free inodes are flushed before
+	 * we destroy cache.
+	 */
+	rcu_barrier();
 	kmem_cache_destroy(pmfs_inode_cachep);
 }
 
