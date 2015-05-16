@@ -542,6 +542,7 @@ static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 		break;
 	}
 
+//	udelay(10);
 	return 0;
 }
 
@@ -609,7 +610,7 @@ struct task_ring {
 
 static inline void init_ring(struct task_ring *ring)
 {
-	memset(ring, '0', sizeof(struct task_ring));
+	ring->enqueue = ring->dequeue = 0;
 	init_waitqueue_head(&ring->assign_wq);
 }
 
@@ -626,6 +627,7 @@ static inline bool task_ring_is_full(struct task_ring *ring)
 static inline void task_ring_enqueue(struct task_ring *ring,
 	struct pmfs_inode *pi)
 {
+	pmfs_dbg_verbose("Enqueue at %d\n", ring->enqueue);
 	ring->tasks[ring->enqueue] = pi;
 	ring->enqueue = (ring->enqueue + 1) % 512;
 }
@@ -715,6 +717,7 @@ static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
 							msecs_to_jiffies(1));
 			}
 
+			pmfs_dbg_verbose("Get ring %p, pi %p\n", ring, pi);
 			task_ring_enqueue(ring, pi);
 			wake_up_interruptible(&ring->assign_wq);
 		}

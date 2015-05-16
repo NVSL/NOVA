@@ -50,6 +50,7 @@ const char *Timingstring[TIMING_NUM] =
 	"evict_inode",
 	"mmap_page_fault",
 	"malloc_test",
+	"Recovery",
 };
 
 unsigned long long Timingstats[TIMING_NUM];

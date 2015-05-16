@@ -177,6 +177,7 @@ enum timing_category {
 	evict_inode_t,
 	mmap_fault_t,
 	malloc_test_t,
+	recovery_t,
 
 	/* Sentinel */
 	TIMING_NUM,
