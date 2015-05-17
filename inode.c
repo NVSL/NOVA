@@ -1363,13 +1363,10 @@ fail:
 	return errval;
 }
 
-static int __pmfs_assign_blocks(struct super_block *sb, struct inode *inode,
-	struct pmfs_inode_entry *data, u64 address, bool nvmm,
-	bool free, bool alloc_dram)
+static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
+	struct pmfs_inode_info *si, struct pmfs_inode_entry *data,
+	u64 address, bool nvmm, bool free, bool alloc_dram)
 {
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	int errval;
 	unsigned long max_blocks;
 	unsigned int height;
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
@@ -1377,6 +1374,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct inode *inode,
 	unsigned long first_blocknr, last_blocknr, total_blocks;
 	unsigned int file_blocknr = data->pgoff;
 	unsigned int num = data->num_pages;
+	int errval;
 	/* convert the 4K blocks into the actual blocks the inode is using */
 	blk_shift = data_bits - sb->s_blocksize_bits;
 
@@ -1538,11 +1536,13 @@ inline int pmfs_assign_blocks(struct inode *inode,
 	bool free, bool alloc_dram)
 {
 	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	int errval;
 	timing_t assign_time;
 
 	PMFS_START_TIMING(assign_t, assign_time);
-	errval = __pmfs_assign_blocks(sb, inode, data, address,
+	errval = __pmfs_assign_blocks(sb, pi, si, data, address,
 					nvmm, free, alloc_dram);
 	PMFS_END_TIMING(assign_t, assign_time);
 
