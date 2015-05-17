@@ -540,7 +540,7 @@ int pmfs_setup_blocknode_map(struct super_block *sb)
 
 /************************** CoolFS recovery ****************************/
 
-struct scan_bitmap bm;
+struct scan_bitmap recovery_bm;
 
 
 
@@ -617,13 +617,38 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 	}
 }
 
-void pmfs_singlethread_recovery(struct super_block *sb)
+int pmfs_singlethread_recovery(struct super_block *sb)
 {
 	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
+	struct pmfs_super_block *super = pmfs_get_super(sb);
+	pmfs_journal_t *journal = pmfs_get_journal(sb);
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	unsigned long initsize = le64_to_cpu(super->s_size);
+	bool value = false;
 	int cpus = num_online_cpus();
 	int i;
+	int ret = 0;
+
+	sbi->block_start = (unsigned long)0;
+	sbi->block_end = ((unsigned long)(initsize) >> PAGE_SHIFT);
 
 	processed = kzalloc(cpus * sizeof(int), GFP_KERNEL);
+	if (!processed)
+		return -ENOMEM;
+
+	value = pmfs_can_skip_full_scan(sb);
+	if (value) {
+		pmfs_dbg_verbose("PMFS: Skipping full scan of inodes...\n");
+		ret = 0;
+		goto out;
+	}
+
+	ret = alloc_bm(&recovery_bm, initsize);
+	if (ret)
+		goto out;
+
+	/* Clearing the datablock inode */
+	pmfs_clear_datablock_inode(sb);
 
 	pmfs_dbg("%s\n", __func__);
 	pmfs_inode_table_singlethread_crawl(sb, NULL,
@@ -631,8 +656,24 @@ void pmfs_singlethread_recovery(struct super_block *sb)
 
 	for (i = 0; i < cpus; i++)
 		pmfs_dbg("CPU %d: recovered %d\n", i, processed[i]);
+
+	/* Reserving tow inodes - Inode 0 and Inode for datablock */
+	sbi->s_free_inodes_count = sbi->s_inodes_count -
+			(sbi->s_inodes_used_count + 2);
+
+	/* set the block 0 as this is used */
+	sbi->s_free_inode_hint = PMFS_FREE_INODE_HINT_START;
+
+	/* initialize the num_free_blocks to */
+	sbi->num_free_blocks = ((unsigned long)(initsize) >> PAGE_SHIFT);
+	pmfs_init_blockmap(sb, le64_to_cpu(journal->base) + sbi->jsize);
+
+	pmfs_build_blocknode_map(sb, &recovery_bm);
+
+	free_bm(&recovery_bm);
+out:
 	kfree(processed);
-	return;
+	return ret;
 }
 
 /*********************** Multithread recovery *************************/

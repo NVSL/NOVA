@@ -1016,7 +1016,7 @@ struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);
 void pmfs_mutithread_recovery(struct super_block *sb);
-void pmfs_singlethread_recovery(struct super_block *sb);
+int pmfs_singlethread_recovery(struct super_block *sb);
 
 /* namei.c */
 extern const struct inode_operations pmfs_dir_inode_operations;
