@@ -345,7 +345,7 @@ void pmfs_rebuild_dir_time_and_size(struct super_block *sb,
 }
 
 int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
-			struct pmfs_inode *pi)
+	struct pmfs_inode *pi, struct scan_bitmap *bm)
 {
 	struct pmfs_log_direntry *entry;
 	struct pmfs_inode_info *si = PMFS_I(inode);
@@ -362,6 +362,10 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 		BUG();
 	}
 
+	if (bm) {
+		BUG_ON(curr_p & (PAGE_SIZE - 1));
+		set_bit(curr_p >> PAGE_SHIFT, bm->bitmap_4k);
+	}
 	si->log_pages = 1;
 	while (curr_p != pi->log_tail) {
 		if (curr_p == 0) {
@@ -372,6 +376,10 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 		if (is_last_dir_entry(sb, curr_p)) {
 			si->log_pages++;
 			curr_p = next_log_page(sb, curr_p);
+			if (bm) {
+				BUG_ON(curr_p & (PAGE_SIZE - 1));
+				set_bit(curr_p >> PAGE_SHIFT, bm->bitmap_4k);
+			}
 		}
 
 		pmfs_dbg_verbose("curr_p: 0x%llx\n", curr_p);
@@ -402,6 +410,10 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 	while ((next = curr_page->page_tail.next_page) != 0) {
 		si->log_pages++;
 		curr_p = next;
+		if (bm) {
+			BUG_ON(curr_p & (PAGE_SIZE - 1));
+			set_bit(curr_p >> PAGE_SHIFT, bm->bitmap_4k);
+		}
 		curr_page = (struct pmfs_inode_log_page *)
 			pmfs_get_block(sb, curr_p);
 	}

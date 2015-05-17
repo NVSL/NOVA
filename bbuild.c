@@ -26,15 +26,6 @@
 #include <linux/delay.h>
 #include "pmfs.h"
 
-struct scan_bitmap {
-	unsigned long bitmap_4k_size;
-	unsigned long bitmap_2M_size;
-	unsigned long bitmap_1G_size;
-	unsigned long *bitmap_4k;
-	unsigned long *bitmap_2M;
-	unsigned long *bitmap_1G;
-};
-
 static void pmfs_clear_datablock_inode(struct super_block *sb)
 {
 	struct pmfs_inode *pi =  pmfs_get_inode(sb, PMFS_BLOCKNODE_IN0);

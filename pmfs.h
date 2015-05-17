@@ -305,8 +305,6 @@ extern int pmfs_add_entry(pmfs_transaction_t *trans,
 		struct dentry *dentry, struct inode *inode, int inc_link);
 extern int pmfs_remove_entry(pmfs_transaction_t *trans,
 		struct dentry *dentry, struct inode *inode, int dec_link);
-int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
-			struct pmfs_inode *pi);
 
 /* namei.c */
 extern struct dentry *pmfs_get_parent(struct dentry *child);
@@ -465,6 +463,15 @@ struct pmfs_inode_info {
 	u32	low_dirty;		/* Dirty low range */
 	u32	high_dirty;		/* Dirty high range */
 	u32	log_pages;		/* Num of log pages */
+};
+
+struct scan_bitmap {
+	unsigned long bitmap_4k_size;
+	unsigned long bitmap_2M_size;
+	unsigned long bitmap_1G_size;
+	unsigned long *bitmap_4k;
+	unsigned long *bitmap_2M;
+	unsigned long *bitmap_1G;
 };
 
 /*
@@ -952,6 +959,8 @@ int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, const char *name,
 	unsigned long name_len);
+int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
+	struct pmfs_inode *pi, struct scan_bitmap *bm);
 
 /* file.c */
 extern const struct inode_operations pmfs_file_inode_operations;
@@ -1008,7 +1017,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	struct pmfs_inode *pi, u64 self_ino, u64 parent_ino);
 void pmfs_free_dram_pages(struct super_block *sb);
 int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
-	struct pmfs_inode *pi);
+	struct pmfs_inode *pi, struct scan_bitmap *bm);
 struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info *si,
 	unsigned long file_blocknr);
