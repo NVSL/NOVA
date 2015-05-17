@@ -534,18 +534,18 @@ int pmfs_setup_blocknode_map(struct super_block *sb)
 struct scan_bitmap recovery_bm;
 
 static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
-	struct scan_bitmap *bm, int cpuid)
+	unsigned long ino, struct scan_bitmap *bm, int cpuid)
 {
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:
 		pmfs_dbg("This is thread %d, processing file %p, "
-				"head 0x%llx, tail 0x%llx\n",
-				cpuid, pi, pi->log_head, pi->log_tail);
+				"ino %lu, head 0x%llx, tail 0x%llx\n",
+				cpuid, pi, ino, pi->log_head, pi->log_tail);
 		break;
 	case S_IFDIR:
 		pmfs_dbg("This is thread %d, processing dir %p, "
-				"head 0x%llx, tail 0x%llx\n",
-				cpuid, pi, pi->log_head, pi->log_tail);
+				"ino %lu, head 0x%llx, tail 0x%llx\n",
+				cpuid, pi, ino, pi->log_head, pi->log_tail);
 		break;
 	case S_IFLNK:
 		break;
@@ -599,8 +599,8 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 			}
 //			sbi->s_inodes_used_count++;
 //			pmfs_inode_crawl(sb, bm, pi);
-			pmfs_dbg("ino: %lu\n", start_ino + i);
-			pmfs_recover_inode(sb, pi, bm, smp_processor_id());
+			pmfs_recover_inode(sb, pi, start_ino + i,
+						bm, smp_processor_id());
 			processed[smp_processor_id()]++;
 		}
 		return;
@@ -647,7 +647,7 @@ int pmfs_singlethread_recovery(struct super_block *sb)
 		goto out;
 
 	/* Clearing the datablock inode */
-	pmfs_clear_datablock_inode(sb);
+//	pmfs_clear_datablock_inode(sb);
 
 	pmfs_dbg("%s\n", __func__);
 	pmfs_inode_table_singlethread_crawl(sb, NULL,
@@ -657,17 +657,17 @@ int pmfs_singlethread_recovery(struct super_block *sb)
 		pmfs_dbg("CPU %d: recovered %d\n", i, processed[i]);
 
 	/* Reserving tow inodes - Inode 0 and Inode for datablock */
-	sbi->s_free_inodes_count = sbi->s_inodes_count -
-			(sbi->s_inodes_used_count + 2);
+//	sbi->s_free_inodes_count = sbi->s_inodes_count -
+//			(sbi->s_inodes_used_count + 2);
 
 	/* set the block 0 as this is used */
-	sbi->s_free_inode_hint = PMFS_FREE_INODE_HINT_START;
+//	sbi->s_free_inode_hint = PMFS_FREE_INODE_HINT_START;
 
 	/* initialize the num_free_blocks to */
-	sbi->num_free_blocks = ((unsigned long)(initsize) >> PAGE_SHIFT);
-	pmfs_init_blockmap(sb, le64_to_cpu(journal->base) + sbi->jsize);
+//	sbi->num_free_blocks = ((unsigned long)(initsize) >> PAGE_SHIFT);
+//	pmfs_init_blockmap(sb, le64_to_cpu(journal->base) + sbi->jsize);
 
-	pmfs_build_blocknode_map(sb, &recovery_bm);
+//	pmfs_build_blocknode_map(sb, &recovery_bm);
 
 	free_bm(&recovery_bm);
 out:
@@ -679,6 +679,7 @@ out:
 
 struct task_ring {
 	struct pmfs_inode *tasks[512];
+	unsigned long ino[512];
 	int id;
 	int enqueue;
 	int dequeue;
@@ -705,21 +706,28 @@ static inline bool task_ring_is_full(struct task_ring *ring)
 }
 
 static inline void task_ring_enqueue(struct task_ring *ring,
-	struct pmfs_inode *pi)
+	struct pmfs_inode *pi, unsigned long ino)
 {
 	pmfs_dbg_verbose("Enqueue at %d\n", ring->enqueue);
+	if (ring->tasks[ring->enqueue] || ring->ino[ring->enqueue])
+		pmfs_dbg("%s: ERROR existing entry %lu\n", __func__,
+				ring->ino[ring->enqueue]);
 	ring->tasks[ring->enqueue] = pi;
+	ring->ino[ring->enqueue] = ino;
 	ring->enqueue = (ring->enqueue + 1) % 512;
 }
 
-static inline struct pmfs_inode *task_ring_dequeue(struct task_ring *ring)
+static inline struct pmfs_inode *task_ring_dequeue(struct task_ring *ring,
+	unsigned long *ino)
 {
 	struct pmfs_inode *pi = ring->tasks[ring->dequeue];
 
+	*ino = ring->ino[ring->dequeue];
 	if (!pi)
 		BUG();
 
 	ring->tasks[ring->dequeue] = 0;
+	ring->ino[ring->dequeue] = 0;
 	ring->dequeue = (ring->dequeue + 1) % 512;
 	ring->processed++;
 
@@ -736,11 +744,12 @@ static int thread_func(void *data)
 	struct pmfs_inode *pi;
 	int cpuid = smp_processor_id();
 	struct task_ring *ring = &task_rings[cpuid];
+	unsigned long ino = 0;
 
 	while (!kthread_should_stop()) {
 		while(!task_ring_is_empty(ring)) {
-			pi = task_ring_dequeue(ring);
-			pmfs_recover_inode(sb, pi, &recovery_bm, cpuid);
+			pi = task_ring_dequeue(ring, &ino);
+			pmfs_recover_inode(sb, pi, ino, &recovery_bm, cpuid);
 			wake_up_interruptible(&finish_wq);
 		}
 		wait_event_interruptible_timeout(ring->assign_wq, false,
@@ -817,7 +826,7 @@ static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
 			}
 
 			pmfs_dbg_verbose("Get ring %p, pi %p\n", ring, pi);
-			task_ring_enqueue(ring, pi);
+			task_ring_enqueue(ring, pi, start_ino + i);
 			wake_up_interruptible(&ring->assign_wq);
 		}
 		return;
