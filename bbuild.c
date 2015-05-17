@@ -563,14 +563,22 @@ int *processed;
 
 static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 	struct scan_bitmap *bm, unsigned long block,
-	u32 height, u32 btype)
+	u32 height, unsigned long start_ino, u32 btype)
 {
 	__le64 *node;
 	unsigned int i;
 	struct pmfs_inode *pi;
 //	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	unsigned int meta_bits = blk_type_to_shift[btype] - PMFS_INODE_BITS;
+	unsigned int node_bits;
+	unsigned long ino_off;
+//	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 
 	node = pmfs_get_block(sb, block);
+	if (height == 0)
+		node_bits = 0;
+	else
+		node_bits = meta_bits + (height - 1) * META_BLK_SHIFT;
 
 	if (height == 0) {
 		unsigned int inodes_per_block = INODES_PER_BLOCK(btype);
@@ -591,6 +599,7 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 			}
 //			sbi->s_inodes_used_count++;
 //			pmfs_inode_crawl(sb, bm, pi);
+			pmfs_dbg("ino: %lu\n", start_ino + i);
 			pmfs_recover_inode(sb, pi, bm, smp_processor_id());
 			processed[smp_processor_id()]++;
 		}
@@ -601,8 +610,9 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 	for (i = 0; i < (1 << META_BLK_SHIFT); i++) {
 		if (node[i] == 0)
 			continue;
+		ino_off = start_ino + (i << node_bits);
 		pmfs_inode_table_singlethread_crawl(sb, NULL,
-			le64_to_cpu(node[i]), height - 1, btype);
+			le64_to_cpu(node[i]), height - 1, ino_off, btype);
 	}
 }
 
@@ -641,7 +651,7 @@ int pmfs_singlethread_recovery(struct super_block *sb)
 
 	pmfs_dbg("%s\n", __func__);
 	pmfs_inode_table_singlethread_crawl(sb, NULL,
-			le64_to_cpu(pi->root), pi->height, pi->i_blk_type);
+			le64_to_cpu(pi->root), pi->height, 0, pi->i_blk_type);
 
 	for (i = 0; i < cpus; i++)
 		pmfs_dbg("CPU %d: recovered %d\n", i, processed[i]);
@@ -764,15 +774,22 @@ static inline struct task_ring *get_free_ring(int cpus, struct task_ring *ring)
 
 static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
 	struct scan_bitmap *bm, int cpus, unsigned long block,
-	u32 height, u32 btype)
+	u32 height, unsigned long start_ino, u32 btype)
 {
 	__le64 *node;
 	unsigned int i;
+	unsigned long ino_off;
 	struct task_ring *ring = NULL;
 	struct pmfs_inode *pi;
+	unsigned int meta_bits = blk_type_to_shift[btype] - PMFS_INODE_BITS;
+	unsigned int node_bits;
 //	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 
 	node = pmfs_get_block(sb, block);
+	if (height == 0)
+		node_bits = 0;
+	else
+		node_bits = meta_bits + (height - 1) * META_BLK_SHIFT;
 
 	if (height == 0) {
 		unsigned int inodes_per_block = INODES_PER_BLOCK(btype);
@@ -810,8 +827,9 @@ static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
 	for (i = 0; i < (1 << META_BLK_SHIFT); i++) {
 		if (node[i] == 0)
 			continue;
+		ino_off = start_ino + (i << node_bits);
 		pmfs_inode_table_multithread_crawl(sb, NULL, cpus,
-			le64_to_cpu(node[i]), height - 1, btype);
+			le64_to_cpu(node[i]), height - 1, ino_off, btype);
 	}
 }
 
@@ -888,7 +906,7 @@ void pmfs_mutithread_recovery(struct super_block *sb)
 		return;
 
 	pmfs_inode_table_multithread_crawl(sb, NULL, cpus,
-			le64_to_cpu(pi->root), pi->height, pi->i_blk_type);
+			le64_to_cpu(pi->root), pi->height, 0, pi->i_blk_type);
 
 	wait_to_finish(cpus);
 	free_resources();

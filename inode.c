@@ -1291,8 +1291,8 @@ int __pmfs_alloc_blocks(pmfs_transaction_t *trans, struct super_block *sb,
 	first_blocknr = file_blocknr >> blk_shift;
 	last_blocknr = (file_blocknr + num - 1) >> blk_shift;
 
-	pmfs_dbg_verbose("alloc_blocks height %d file_blocknr %lx num %x, "
-		   "first blocknr 0x%lx, last_blocknr 0x%lx\n",
+	pmfs_dbg_verbose("alloc_blocks height %d file_blocknr %lu num %u, "
+		   "first blocknr %lu, last_blocknr %lu\n",
 		   pi->height, file_blocknr, num, first_blocknr, last_blocknr);
 
 	height = pi->height;
