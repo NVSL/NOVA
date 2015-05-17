@@ -542,12 +542,8 @@ int pmfs_setup_blocknode_map(struct super_block *sb)
 
 struct scan_bitmap recovery_bm;
 
-
-
-/*********************** Singlethread recovery *************************/
-
 static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
-	int cpuid)
+	struct scan_bitmap *bm, int cpuid)
 {
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:
@@ -569,6 +565,8 @@ static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 //	udelay(10);
 	return 0;
 }
+
+/*********************** Singlethread recovery *************************/
 
 int *processed;
 
@@ -602,7 +600,7 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 			}
 //			sbi->s_inodes_used_count++;
 //			pmfs_inode_crawl(sb, bm, pi);
-			pmfs_recover_inode(sb, pi, smp_processor_id());
+			pmfs_recover_inode(sb, pi, bm, smp_processor_id());
 			processed[smp_processor_id()]++;
 		}
 		return;
@@ -741,7 +739,7 @@ static int thread_func(void *data)
 	while (!kthread_should_stop()) {
 		while(!task_ring_is_empty(ring)) {
 			pi = task_ring_dequeue(ring);
-			pmfs_recover_inode(sb, pi, cpuid);
+			pmfs_recover_inode(sb, pi, &recovery_bm, cpuid);
 			wake_up_interruptible(&finish_wq);
 		}
 		wait_event_interruptible_timeout(ring->assign_wq, false,
