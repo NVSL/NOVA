@@ -320,9 +320,6 @@ extern int __pmfs_alloc_blocks(pmfs_transaction_t *trans,
 extern int pmfs_init_inode_table(struct super_block *sb);
 extern int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
 		unsigned long file_blocknr, unsigned int num, bool zero);
-extern int pmfs_assign_blocks(struct inode *inode,
-		struct pmfs_inode_entry *data, u64 curr_entry,
-		bool nvmm, bool free, bool alloc_dram);
 extern u64 pmfs_find_data_block(struct inode *inode,
 		unsigned long file_blocknr, bool nvmm);
 extern u64 pmfs_find_inode(struct inode *inode,
@@ -1021,6 +1018,9 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info *si,
 	unsigned long file_blocknr);
+extern int pmfs_assign_blocks(struct inode *inode,
+	struct pmfs_inode_entry *data, struct scan_bitmap *bm, u64 curr_entry,
+	bool nvmm, bool free, bool alloc_dram);
 
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);

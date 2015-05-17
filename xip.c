@@ -708,7 +708,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 			goto out;
 		}
 
-		pmfs_assign_blocks(inode, &entry_data,
+		pmfs_assign_blocks(inode, &entry_data, NULL,
 					curr_entry, true, true, false);
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
@@ -861,7 +861,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	start_blk = pos >> sb->s_blocksize_bits;
 	entry_data.pgoff = start_blk;
 	entry_data.num_pages = num_blocks;
-	pmfs_assign_blocks(inode, &entry_data, 0, false, false, true);
+	pmfs_assign_blocks(inode, &entry_data, NULL, 0, false, false, true);
 
 	while (num_blocks > 0) {
 		struct mem_addr *pair = NULL;
@@ -918,7 +918,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 			page_addr |= DIRTY_BIT;
 			entry_data.pgoff = start_blk;
 			entry_data.num_pages = allocated;
-			pmfs_assign_blocks(inode, &entry_data,
+			pmfs_assign_blocks(inode, &entry_data, NULL,
 					page_addr, false, false, false);
 		}
 
@@ -1056,7 +1056,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		 * Yeah, we have to assign the blocks to NVMM otherwise
 		 * they cannot be freed
 		 */
-		pmfs_assign_blocks(inode, &entry_data,
+		pmfs_assign_blocks(inode, &entry_data, NULL,
 					curr_entry, true, true, false);
 
 		if (copied > 0) {
@@ -1436,7 +1436,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 		page_addr |= DIRTY_BIT;
 		entry_data.pgoff = pgoff;
 		entry_data.num_pages = allocated;
-		pmfs_assign_blocks(inode, &entry_data,
+		pmfs_assign_blocks(inode, &entry_data, NULL,
 					page_addr, false, false, false);
 	}
 

@@ -1153,7 +1153,7 @@ fail:
 }
 
 static void assign_nvmm(struct pmfs_inode_entry *data,
-	struct mem_addr *leaf, unsigned long pgoff)
+	struct mem_addr *leaf, struct scan_bitmap *bm, unsigned long pgoff)
 {
 	if (data->pgoff > pgoff || data->pgoff +
 			data->num_pages <= pgoff) {
@@ -1163,11 +1163,14 @@ static void assign_nvmm(struct pmfs_inode_entry *data,
 	}
 
 	leaf->nvmm = (data->block >> PAGE_SHIFT) + pgoff - data->pgoff;
+	if (bm)
+		set_bit(leaf->nvmm, bm->bitmap_4k);
 }
 
 static int recursive_assign_blocks(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_inode_entry *data, __le64 block,
-	u32 height, unsigned long first_blocknr, unsigned long last_blocknr,
+	struct pmfs_inode *pi, struct pmfs_inode_entry *data,
+	struct scan_bitmap *bm, __le64 block, u32 height,
+	unsigned long first_blocknr, unsigned long last_blocknr,
 	u64 address, unsigned long start_pgoff, bool nvmm,
 	bool free, bool alloc_dram)
 {
@@ -1208,11 +1211,14 @@ static int recursive_assign_blocks(struct super_block *sb,
 			pmfs_dbg_verbose("node[%d] @ 0x%llx\n", i, node[i]);
 			leaf = (struct mem_addr *)node[i];
 			pgoff = start_pgoff + i;
-			if (leaf->nvmm_entry && free && nvmm) {
+			if (leaf->nvmm_entry && nvmm) {
 				entry = pmfs_get_block(sb, leaf->nvmm_entry);
 				if (GET_INVALID(entry->block) < 4000)
 					entry->block++;
-				pmfs_free_data_block(sb, leaf->nvmm,
+				if (bm)
+					clear_bit(leaf->nvmm, bm->bitmap_4k);
+				if (free)
+					pmfs_free_data_block(sb, leaf->nvmm,
 						pi->i_blk_type);
 				pmfs_dbg_verbose("Free block @ %lu\n",
 							leaf->nvmm);
@@ -1231,7 +1237,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 			} else {
 				if (nvmm) {
 					leaf->nvmm_entry = address;
-					assign_nvmm(data, leaf, pgoff);
+					assign_nvmm(data, leaf, bm, pgoff);
 				} else {
 					leaf->dram = address;
 				}
@@ -1256,7 +1262,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 				((1 << node_bits) - 1)) : (1 << node_bits) - 1;
 
 			pgoff = start_pgoff + (i << node_bits);
-			errval = recursive_assign_blocks(sb, pi, data,
+			errval = recursive_assign_blocks(sb, pi, data, bm,
 				DRAM_ADDR(node[i]), height - 1, first_blk,
 				last_blk, address, pgoff, nvmm,
 				free, alloc_dram);
@@ -1365,7 +1371,8 @@ fail:
 
 static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_info *si, struct pmfs_inode_entry *data,
-	u64 address, bool nvmm, bool free, bool alloc_dram)
+	struct scan_bitmap *bm,	u64 address, bool nvmm, bool free,
+	bool alloc_dram)
 {
 	unsigned long max_blocks;
 	unsigned int height;
@@ -1424,7 +1431,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			} else {
 				if (nvmm) {
 					root->nvmm_entry = address;
-					assign_nvmm(data, root, 0);
+					assign_nvmm(data, root, bm, 0);
 				} else {
 					root->dram = address;
 				}
@@ -1441,7 +1448,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 					" height\n", __func__, __LINE__);
 				goto fail;
 			}
-			errval = recursive_assign_blocks(sb, pi, data,
+			errval = recursive_assign_blocks(sb, pi, data, bm,
 					DRAM_ADDR(si->root), si->height,
 					first_blocknr, last_blocknr,
 					address, 0, nvmm, free, alloc_dram);
@@ -1451,7 +1458,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 	} else {
 		if (height == 0) {
 			struct mem_addr *root = (struct mem_addr *)si->root;
-			if (root->nvmm_entry && free && nvmm) {
+			if (root->nvmm_entry && nvmm) {
 				/* With cow we need to re-assign the root */
 				struct pmfs_inode_entry *entry;
 
@@ -1459,8 +1466,11 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 					pmfs_get_block(sb, root->nvmm_entry);
 				if (GET_INVALID(entry->block) < 4000)
 					entry->block++;
-				pmfs_free_data_block(sb, root->nvmm,
-						pi->i_blk_type);
+				if (bm)
+					clear_bit(root->nvmm, bm->bitmap_4k);
+				if (free)
+					pmfs_free_data_block(sb, root->nvmm,
+							pi->i_blk_type);
 				pmfs_dbg_verbose("Free root block @ %lu\n",
 						root->nvmm);
 				pi->i_blocks--;
@@ -1478,7 +1488,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			} else {
 				if (nvmm) {
 					root->nvmm_entry = address;
-					assign_nvmm(data, root, 0);
+					assign_nvmm(data, root, bm, 0);
 				} else {
 					root->dram = address;
 				}
@@ -1497,7 +1507,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 				goto fail;
 			}
 		}
-		errval = recursive_assign_blocks(sb, pi, data,
+		errval = recursive_assign_blocks(sb, pi, data, bm,
 				DRAM_ADDR(si->root), height, first_blocknr,
 				last_blocknr, address, 0, nvmm, free,
 				alloc_dram);
@@ -1532,8 +1542,8 @@ inline int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
  * Assign inode to point to the blocks start from alloc_blocknr.
  */
 inline int pmfs_assign_blocks(struct inode *inode,
-	struct pmfs_inode_entry *data, u64 address, bool nvmm,
-	bool free, bool alloc_dram)
+	struct pmfs_inode_entry *data, struct scan_bitmap *bm,
+	u64 address, bool nvmm, bool free, bool alloc_dram)
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
@@ -1542,7 +1552,7 @@ inline int pmfs_assign_blocks(struct inode *inode,
 	timing_t assign_time;
 
 	PMFS_START_TIMING(assign_t, assign_time);
-	errval = __pmfs_assign_blocks(sb, pi, si, data, address,
+	errval = __pmfs_assign_blocks(sb, pi, si, data, bm, address,
 					nvmm, free, alloc_dram);
 	PMFS_END_TIMING(assign_t, assign_time);
 
@@ -3197,7 +3207,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 			 * The overlaped blocks are already freed.
 			 * Don't double free them, just re-assign the pointers.
 			 */
-			pmfs_assign_blocks(inode, entry, curr_p, true,
+			pmfs_assign_blocks(inode, entry, bm, curr_p, true,
 					false, false);
 		}
 
