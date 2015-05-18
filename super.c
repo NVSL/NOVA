@@ -1030,11 +1030,11 @@ static struct inode *pmfs_alloc_inode(struct super_block *sb)
 	if (!vi)
 		return NULL;
 
-	vi->root = 0;
-	vi->height = 0;
+	vi->header.root = 0;
+	vi->header.height = 0;
+	vi->header.log_pages = 0;
 	vi->low_dirty = MAX_BLOCK;
 	vi->high_dirty = 0;
-	vi->log_pages = 0;
 	vi->vfs_inode.i_version = 1;
 
 	spin_lock_irqsave(&inode_list_lock, flags);
@@ -1066,12 +1066,12 @@ static void init_once(void *foo)
 {
 	struct pmfs_inode_info *vi = foo;
 
+	vi->header.dir_tree = RB_ROOT;
+	vi->header.root = 0;
+	vi->header.height = 0;
 	vi->i_dir_start_lookup = 0;
 	INIT_LIST_HEAD(&vi->i_truncated);
-	vi->dir_tree = RB_ROOT;
 	INIT_LIST_HEAD(&vi->link);
-	vi->root = 0;
-	vi->height = 0;
 	inode_init_once(&vi->vfs_inode);
 }
 

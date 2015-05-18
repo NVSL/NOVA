@@ -427,12 +427,13 @@ static int pmfs_empty_dir(struct inode *inode)
 {
 	struct super_block *sb;
 	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = &si->header;
 	struct pmfs_dir_node *curr;
 	struct pmfs_log_direntry *entry;
 	struct rb_node *temp;
 
 	sb = inode->i_sb;
-	temp = rb_first(&si->dir_tree);
+	temp = rb_first(&sih->dir_tree);
 	while (temp) {
 		curr = container_of(temp, struct pmfs_dir_node, node);
 

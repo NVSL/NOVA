@@ -57,11 +57,12 @@ struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
 	unsigned long name_len)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = &si->header;
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
 	int compVal;
 
-	temp = si->dir_tree.rb_node;
+	temp = sih->dir_tree.rb_node;
 	while (temp) {
 		curr = container_of(temp, struct pmfs_dir_node, node);
 		compVal = pmfs_rbtree_compare_find_by_name(sb, curr,
@@ -92,13 +93,14 @@ int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, const char *name, int namelen, u64 dir_entry)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = &si->header;
 	struct pmfs_dir_node *curr, *new;
 	struct rb_node **temp, *parent;
 	int compVal;
 
 	pmfs_dbg_verbose("%s: insert %s @ 0x%llx\n", __func__, name, dir_entry);
 
-	temp = &(si->dir_tree.rb_node);
+	temp = &(sih->dir_tree.rb_node);
 	parent = NULL;
 
 	while (*temp) {
@@ -124,7 +126,7 @@ int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 
 	new->nvmm = dir_entry;
 	rb_link_node(&new->node, parent, temp);
-	rb_insert_color(&new->node, &si->dir_tree);
+	rb_insert_color(&new->node, &sih->dir_tree);
 //	pmfs_print_dir_tree(sb, inode);
 
 	return 0;
@@ -145,11 +147,12 @@ void pmfs_remove_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, const char *name, int namelen)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = &si->header;
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
 	int compVal;
 
-	temp = si->dir_tree.rb_node;
+	temp = sih->dir_tree.rb_node;
 	while (temp) {
 		curr = container_of(temp, struct pmfs_dir_node, node);
 		compVal = pmfs_rbtree_compare_find_by_name(sb, curr, name,
@@ -160,7 +163,7 @@ void pmfs_remove_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 		} else if (compVal == 1) {
 			temp = temp->rb_right;
 		} else {
-			rb_erase(&curr->node, &si->dir_tree);
+			rb_erase(&curr->node, &sih->dir_tree);
 			pmfs_free_dirnode(sb, curr);
 			break;
 		}
@@ -181,12 +184,13 @@ static inline void pmfs_remove_dir_node(struct super_block *sb,
 void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = &si->header;
 	struct pmfs_dir_node *curr;
 	struct pmfs_log_direntry *entry;
 	struct rb_node *temp;
 
 	pmfs_dbg("%s: dir ino %lu\n", __func__, inode->i_ino);
-	temp = rb_first(&si->dir_tree);
+	temp = rb_first(&sih->dir_tree);
 	while (temp) {
 		curr = container_of(temp, struct pmfs_dir_node, node);
 
@@ -205,14 +209,15 @@ void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
 void pmfs_delete_dir_tree(struct super_block *sb, struct inode *inode)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = &si->header;
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
 
-	temp = rb_first(&si->dir_tree);
+	temp = rb_first(&sih->dir_tree);
 	while (temp) {
 		curr = container_of(temp, struct pmfs_dir_node, node);
 		temp = rb_next(temp);
-		rb_erase(&curr->node, &si->dir_tree);
+		rb_erase(&curr->node, &sih->dir_tree);
 		pmfs_free_dirnode(sb, curr);
 	}
 	return;
@@ -349,13 +354,12 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 {
 	struct pmfs_log_direntry *entry;
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih;
+	struct pmfs_inode_info_header *sih = &si->header;
 	struct pmfs_inode_log_page *curr_page;
 	u64 curr_p = pi->log_head;
 	u64 next;
 	int ret;
 
-	sih = (struct pmfs_inode_info_header *)si;
 	pmfs_dbg("Rebuild dir %lu tree\n", inode->i_ino);
 	sih->dir_tree = RB_ROOT;
 
@@ -429,6 +433,7 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi, *pidir;
 	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = &si->header;
 	struct pmfs_dir_node *curr;
 	struct pmfs_log_direntry *entry;
 	struct rb_node *temp;
@@ -442,7 +447,7 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 				pidir->i_size, ctx->pos);
 
 	if (ctx->pos == 0) {
-		temp = rb_first(&si->dir_tree);
+		temp = rb_first(&sih->dir_tree);
 	} else if (ctx->pos == READDIR_END) {
 		goto out;
 	} else if (ctx->pos) {

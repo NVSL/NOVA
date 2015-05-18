@@ -202,6 +202,7 @@ void pmfs_print_inode_log_page(struct super_block *sb, struct inode *inode)
 {
 	struct pmfs_inode *pi;
 	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = &si->header;
 	struct pmfs_inode_log_page *curr_page;
 	u64 curr, next;
 	int count = 1;
@@ -231,7 +232,7 @@ void pmfs_print_inode_log_page(struct super_block *sb, struct inode *inode)
 		used = count;
 	pmfs_dbg("Pi %lu: log used %d pages, has %d pages, "
 			"si reports %d pages\n", inode->i_ino, used, count,
-			si->log_pages);
+			sih->log_pages);
 }
 
 void pmfs_print_inode_log_blocknode(struct super_block *sb,

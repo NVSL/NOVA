@@ -457,12 +457,7 @@ struct pmfs_inode_info_header {
 };
 
 struct pmfs_inode_info {
-	/* The following fields comply with header */
-	u64	root;			/* File Btree root */
-	u8	height;			/* File Btree height */
-	u32	log_pages;		/* Num of log pages */
-	struct rb_root	dir_tree;	/* Dir name entry tree root */
-
+	struct pmfs_inode_info_header header;
 	__u32   i_dir_start_lookup;
 	struct list_head i_truncated;
 	struct inode	vfs_inode;
@@ -726,14 +721,15 @@ struct mem_addr {
 static inline u64 __pmfs_find_data_block(struct super_block *sb,
 		struct pmfs_inode_info *si, unsigned long blocknr, bool nvmm)
 {
+	struct pmfs_inode_info_header *sih = &si->header;
 	__le64 *level_ptr;
 	u64 bp = 0;
 	u32 height, bit_shift;
 	unsigned int idx;
 	struct mem_addr *pair;
 
-	height = si->height;
-	bp = si->root;
+	height = sih->height;
+	bp = sih->root;
 	if (bp == 0)
 		return 0;
 
@@ -760,13 +756,14 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 static inline u64 __pmfs_find_dir_block(struct super_block *sb,
 		struct pmfs_inode_info *si, unsigned long blocknr)
 {
+	struct pmfs_inode_info_header *sih = &si->header;
 	__le64 *level_ptr;
 	u64 bp = 0;
 	u32 height, bit_shift;
 	unsigned int idx;
 
-	height = si->height;
-	bp = si->root;
+	height = sih->height;
+	bp = sih->root;
 	if (bp == 0)
 		return 0;
 
@@ -788,14 +785,15 @@ static inline u64 __pmfs_find_dir_block(struct super_block *sb,
 static inline int pmfs_find_dram_page_and_clean(struct super_block *sb,
 	struct pmfs_inode_info *si, unsigned long blocknr, u64 *dram_addr)
 {
+	struct pmfs_inode_info_header *sih = &si->header;
 	__le64 *level_ptr;
 	u64 bp = 0;
 	u32 height, bit_shift;
 	unsigned int idx;
 	struct mem_addr *pair;
 
-	height = si->height;
-	bp = si->root;
+	height = sih->height;
+	bp = sih->root;
 	if (bp == 0)
 		return 0;
 
@@ -823,13 +821,14 @@ static inline int pmfs_find_dram_page_and_clean(struct super_block *sb,
 static inline struct mem_addr *__pmfs_get_entry(struct super_block *sb,
 		struct pmfs_inode_info *si, unsigned long blocknr)
 {
+	struct pmfs_inode_info_header *sih = &si->header;
 	__le64 *level_ptr;
 	u64 bp = 0;
 	u32 height, bit_shift;
 	unsigned int idx;
 
-	height = si->height;
-	bp = si->root;
+	height = sih->height;
+	bp = sih->root;
 	if (bp == 0)
 		return NULL;
 
