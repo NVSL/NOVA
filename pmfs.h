@@ -962,12 +962,14 @@ extern const struct file_operations pmfs_dir_operations;
 void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode);
 void pmfs_delete_dir_tree(struct super_block *sb, struct inode *inode);
 int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, const char *name, int namelen, u64 dir_entry);
+	struct pmfs_inode_info_header *sih, const char *name, int namelen,
+	u64 dir_entry);
 struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, const char *name,
 	unsigned long name_len);
-int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
-	struct pmfs_inode *pi, struct scan_bitmap *bm);
+int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
+	struct pmfs_inode_info_header *sih, unsigned long ino,
+	struct scan_bitmap *bm);
 
 /* file.c */
 extern const struct inode_operations pmfs_file_inode_operations;
@@ -1023,8 +1025,9 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 int pmfs_append_dir_init_entries(struct super_block *sb,
 	struct pmfs_inode *pi, u64 self_ino, u64 parent_ino);
 void pmfs_free_dram_pages(struct super_block *sb);
-int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
-	struct pmfs_inode *pi, struct scan_bitmap *bm);
+int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct pmfs_inode *p,
+	struct pmfs_inode_info_header *sih, unsigned long ino,
+	struct scan_bitmap *bm);
 struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info *si,
 	unsigned long file_blocknr);

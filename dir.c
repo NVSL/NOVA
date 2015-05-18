@@ -90,10 +90,9 @@ static inline struct pmfs_dir_node *pmfs_find_dir_node(struct super_block *sb,
 }
 
 int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, const char *name, int namelen, u64 dir_entry)
+	struct pmfs_inode_info_header *sih, const char *name, int namelen,
+	u64 dir_entry)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = &si->header;
 	struct pmfs_dir_node *curr, *new;
 	struct rb_node **temp, *parent;
 	int compVal;
@@ -136,18 +135,18 @@ static inline int pmfs_insert_dir_node(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, struct dentry *dentry,
 	u64 dir_entry)
 {
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = &si->header;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
 
-	return pmfs_insert_dir_node_by_name(sb, pi, inode, name,
+	return pmfs_insert_dir_node_by_name(sb, pi, sih, name,
 						namelen, dir_entry);
 }
 
 void pmfs_remove_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, const char *name, int namelen)
+	struct pmfs_inode_info_header *sih, const char *name, int namelen)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = &si->header;
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
 	int compVal;
@@ -175,10 +174,12 @@ void pmfs_remove_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 static inline void pmfs_remove_dir_node(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, struct dentry *dentry)
 {
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = &si->header;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
 
-	return pmfs_remove_dir_node_by_name(sb, pi, inode, name, namelen);
+	return pmfs_remove_dir_node_by_name(sb, pi, sih, name, namelen);
 }
 
 void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
@@ -322,20 +323,21 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 }
 
 inline int pmfs_replay_add_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, struct pmfs_log_direntry *entry, u64 curr_p)
+	struct pmfs_inode_info_header *sih, struct pmfs_log_direntry *entry,
+	u64 curr_p)
 {
 	if (!entry->name_len)
 		return -EINVAL;
 
-	return pmfs_insert_dir_node_by_name(sb, pi, inode, entry->name,
+	return pmfs_insert_dir_node_by_name(sb, pi, sih, entry->name,
 					entry->name_len, curr_p);
 }
 
 inline int pmfs_replay_remove_entry(struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode,
+	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
 	struct pmfs_log_direntry *entry)
 {
-	pmfs_remove_dir_node_by_name(sb, pi, inode, entry->name,
+	pmfs_remove_dir_node_by_name(sb, pi, sih, entry->name,
 					entry->name_len);
 	return 0;
 }
@@ -349,22 +351,21 @@ void pmfs_rebuild_dir_time_and_size(struct super_block *sb,
 	pi->i_links_count = entry->links_count;
 }
 
-int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
-	struct pmfs_inode *pi, struct scan_bitmap *bm)
+int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
+	struct pmfs_inode_info_header *sih, unsigned long ino,
+	struct scan_bitmap *bm)
 {
 	struct pmfs_log_direntry *entry;
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = &si->header;
 	struct pmfs_inode_log_page *curr_page;
 	u64 curr_p = pi->log_head;
 	u64 next;
 	int ret;
 
-	pmfs_dbg("Rebuild dir %lu tree\n", inode->i_ino);
+	pmfs_dbg("Rebuild dir %lu tree\n", ino);
 	sih->dir_tree = RB_ROOT;
 
 	if (curr_p == 0) {
-		pmfs_err(sb, "Dir %lu log is NULL!\n", inode->i_ino);
+		pmfs_err(sb, "Dir %lu log is NULL!\n", ino);
 		BUG();
 	}
 
@@ -375,7 +376,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 	sih->log_pages = 1;
 	while (curr_p != pi->log_tail) {
 		if (curr_p == 0) {
-			pmfs_err(sb, "Dir %lu log is NULL!\n", inode->i_ino);
+			pmfs_err(sb, "Dir %lu log is NULL!\n", ino);
 			BUG();
 		}
 
@@ -396,11 +397,11 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 
 		if (entry->ino > 0) {
 			/* A valid entry to add */
-			ret = pmfs_replay_add_entry(sb, pi, inode,
+			ret = pmfs_replay_add_entry(sb, pi, sih,
 							entry, curr_p);
 		} else {
 			/* Delete the entry */
-			ret = pmfs_replay_remove_entry(sb, pi, inode, entry);
+			ret = pmfs_replay_remove_entry(sb, pi, sih, entry);
 		}
 		pmfs_rebuild_dir_time_and_size(sb, pi, entry);
 		curr_p += entry->de_len;

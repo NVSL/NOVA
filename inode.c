@@ -1629,6 +1629,8 @@ int pmfs_init_inode_table(struct super_block *sb)
 static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode *pi, int rebuild)
 {
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = &si->header;
 	int ret = -EIO;
 
 #if 0
@@ -1661,13 +1663,15 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 		inode->i_op = &pmfs_file_inode_operations;
 		inode->i_fop = &pmfs_xip_file_operations;
 		if (rebuild)
-			pmfs_rebuild_file_inode_tree(sb, inode, pi, NULL);
+			pmfs_rebuild_file_inode_tree(sb, pi, sih,
+							inode->i_ino, NULL);
 		break;
 	case S_IFDIR:
 		inode->i_op = &pmfs_dir_inode_operations;
 		inode->i_fop = &pmfs_dir_operations;
 		if (rebuild)
-			pmfs_rebuild_dir_inode_tree(sb, inode, pi, NULL);
+			pmfs_rebuild_dir_inode_tree(sb, pi, sih,
+							inode->i_ino, NULL);
 		break;
 	case S_IFLNK:
 		inode->i_op = &pmfs_symlink_inode_operations;
@@ -3178,17 +3182,16 @@ void pmfs_rebuild_file_time_and_size(struct super_block *sb,
 	pi->i_size = cpu_to_le64(entry->size);
 }
 
-int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
-	struct pmfs_inode *pi, struct scan_bitmap *bm)
+int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
+	struct pmfs_inode_info_header *sih, unsigned long ino,
+	struct scan_bitmap *bm)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = &si->header;
 	struct pmfs_inode_entry *entry;
 	struct pmfs_inode_log_page *curr_page;
 	u64 curr_p = pi->log_head;
 	u64 next;
 
-	pmfs_dbg_verbose("Rebuild file inode %lu tree\n", inode->i_ino);
+	pmfs_dbg_verbose("Rebuild file inode %lu tree\n", ino);
 	pmfs_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
 				curr_p, pi->log_tail);
 	/*
@@ -3208,8 +3211,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 	}
 	while (curr_p != pi->log_tail) {
 		if (curr_p == 0) {
-			pmfs_err(sb, "File inode %lu log is NULL!\n",
-					inode->i_ino);
+			pmfs_err(sb, "File inode %lu log is NULL!\n", ino);
 			BUG();
 		}
 
