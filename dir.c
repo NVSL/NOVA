@@ -349,13 +349,15 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 {
 	struct pmfs_log_direntry *entry;
 	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih;
 	struct pmfs_inode_log_page *curr_page;
 	u64 curr_p = pi->log_head;
 	u64 next;
 	int ret;
 
+	sih = (struct pmfs_inode_info_header *)si;
 	pmfs_dbg("Rebuild dir %lu tree\n", inode->i_ino);
-	si->dir_tree = RB_ROOT;
+	sih->dir_tree = RB_ROOT;
 
 	if (curr_p == 0) {
 		pmfs_err(sb, "Dir %lu log is NULL!\n", inode->i_ino);
@@ -366,7 +368,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 		BUG_ON(curr_p & (PAGE_SIZE - 1));
 		set_bit(curr_p >> PAGE_SHIFT, bm->bitmap_4k);
 	}
-	si->log_pages = 1;
+	sih->log_pages = 1;
 	while (curr_p != pi->log_tail) {
 		if (curr_p == 0) {
 			pmfs_err(sb, "Dir %lu log is NULL!\n", inode->i_ino);
@@ -374,7 +376,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 		}
 
 		if (is_last_dir_entry(sb, curr_p)) {
-			si->log_pages++;
+			sih->log_pages++;
 			curr_p = next_log_page(sb, curr_p);
 			if (bm) {
 				BUG_ON(curr_p & (PAGE_SIZE - 1));
@@ -408,7 +410,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct inode *inode,
 	curr_p &= PAGE_MASK;
 	curr_page = (struct pmfs_inode_log_page *)pmfs_get_block(sb, curr_p);
 	while ((next = curr_page->page_tail.next_page) != 0) {
-		si->log_pages++;
+		sih->log_pages++;
 		curr_p = next;
 		if (bm) {
 			BUG_ON(curr_p & (PAGE_SIZE - 1));

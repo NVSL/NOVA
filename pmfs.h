@@ -449,17 +449,26 @@ struct pmfs_blocknode {
 	unsigned long block_high;
 };
 
+struct pmfs_inode_info_header {
+	u64	root;			/* File Btree root */
+	u8	height;			/* File Btree height */
+	u32	log_pages;		/* Num of log pages */
+	struct rb_root	dir_tree;	/* Dir name entry tree root */
+};
+
 struct pmfs_inode_info {
+	/* The following fields comply with header */
+	u64	root;			/* File Btree root */
+	u8	height;			/* File Btree height */
+	u32	log_pages;		/* Num of log pages */
+	struct rb_root	dir_tree;	/* Dir name entry tree root */
+
 	__u32   i_dir_start_lookup;
 	struct list_head i_truncated;
 	struct inode	vfs_inode;
-	struct rb_root	dir_tree;	/* Dir name entry tree root */
 	struct list_head link;		/* Activate inode list */
-	u64	root;			/* File Btree root */
-	u8	height;			/* File Btree height */
 	u32	low_dirty;		/* Dirty low range */
 	u32	high_dirty;		/* Dirty high range */
-	u32	log_pages;		/* Num of log pages */
 };
 
 struct scan_bitmap {
@@ -1018,9 +1027,10 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct inode *inode,
 struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info *si,
 	unsigned long file_blocknr);
-extern int pmfs_assign_blocks(struct inode *inode,
-	struct pmfs_inode_entry *data, struct scan_bitmap *bm, u64 curr_entry,
-	bool nvmm, bool free, bool alloc_dram);
+extern int pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
+	struct pmfs_inode_info_header *sih, struct pmfs_inode_entry *data,
+	struct scan_bitmap *bm,	u64 address, bool nvmm, bool free,
+	bool alloc_dram);
 
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);
