@@ -449,6 +449,8 @@ struct pmfs_blocknode {
 	unsigned long block_high;
 };
 
+extern struct kmem_cache *pmfs_header_cachep;
+
 struct pmfs_inode_info_header {
 	u64	root;			/* File Btree root */
 	u8	height;			/* File Btree height */

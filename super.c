@@ -1121,6 +1121,17 @@ static int __init init_mempair_cache(void)
 	return 0;
 }
 
+static int __init init_header_cache(void)
+{
+	pmfs_header_cachep = kmem_cache_create("pmfs_header_cache",
+					sizeof(struct pmfs_inode_info_header),
+					0, (SLAB_RECLAIM_ACCOUNT |
+					SLAB_MEM_SPREAD), NULL);
+	if (pmfs_header_cachep == NULL)
+		return -ENOMEM;
+	return 0;
+}
+
 static int __init init_transaction_cache(void)
 {
 	pmfs_transaction_cachep = kmem_cache_create("pmfs_journal_transaction",
@@ -1158,6 +1169,11 @@ static void destroy_dirnode_cache(void)
 static void destroy_mempair_cache(void)
 {
 	kmem_cache_destroy(pmfs_mempair_cachep);
+}
+
+static void destroy_header_cache(void)
+{
+	kmem_cache_destroy(pmfs_header_cachep);
 }
 
 static void destroy_blocknode_cache(void)
@@ -1268,13 +1284,19 @@ static int __init init_pmfs_fs(void)
 	if (rc)
 		goto out4;
 
-	rc = register_filesystem(&pmfs_fs_type);
+	rc = init_header_cache();
 	if (rc)
 		goto out5;
+
+	rc = register_filesystem(&pmfs_fs_type);
+	if (rc)
+		goto out6;
 
 	PMFS_END_TIMING(init_t, init_time);
 	return 0;
 
+out6:
+	destroy_header_cache();
 out5:
 	destroy_mempair_cache();
 out4:
@@ -1296,6 +1318,7 @@ static void __exit exit_pmfs_fs(void)
 	destroy_mempair_cache();
 	destroy_blocknode_cache();
 	destroy_transaction_cache();
+	destroy_header_cache();
 }
 
 MODULE_AUTHOR("Intel Corporation <linux-pmfs@intel.com>");

@@ -532,6 +532,21 @@ int pmfs_setup_blocknode_map(struct super_block *sb)
 /************************** CoolFS recovery ****************************/
 
 struct scan_bitmap recovery_bm;
+struct kmem_cache *pmfs_header_cachep;
+
+struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb)
+{
+	struct pmfs_inode_info_header *p;
+	p = (struct pmfs_inode_info_header *)
+		kmem_cache_alloc(pmfs_header_cachep, GFP_NOFS);
+
+	p->root = 0;
+	p->height = 0;
+	p->log_pages = 0;
+	p->dir_tree = RB_ROOT;
+
+	return p;
+}
 
 static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 	unsigned long ino, struct scan_bitmap *bm, int cpuid)
