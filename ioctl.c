@@ -267,10 +267,7 @@ setversion_out:
 		copy_from_user(&multithread, (void *)arg,
 					sizeof(int));
 		PMFS_START_TIMING(recovery_t, recovery_time);
-		if (multithread)
-			pmfs_mutithread_recovery(sb);
-		else
-			pmfs_singlethread_recovery(sb);
+		pmfs_inode_log_recovery(sb, multithread);
 		PMFS_END_TIMING(recovery_t, recovery_time);
 		return 0;
 	}

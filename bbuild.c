@@ -540,6 +540,9 @@ struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb)
 	p = (struct pmfs_inode_info_header *)
 		kmem_cache_alloc(pmfs_header_cachep, GFP_NOFS);
 
+	if (!p)
+		BUG();
+
 	p->root = 0;
 	p->height = 0;
 	p->log_pages = 0;
@@ -548,21 +551,252 @@ struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb)
 	return p;
 }
 
-static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
-	unsigned long ino, struct scan_bitmap *bm, int cpuid)
+static int pmfs_increase_header_tree_height(struct super_block *sb,
+	u32 new_height)
 {
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	u32 height = sbi->height;
+	__le64 *root, prev_root = sbi->root;
+	unsigned long page_addr;
+	int errval = 0;
+
+	pmfs_dbg_verbose("increasing tree height %x:%x, prev root 0x%llx\n",
+						height, new_height, prev_root);
+	while (height < new_height) {
+		/* allocate the meta block */
+		errval = pmfs_new_meta_block(sb, &page_addr, 1);
+		if (errval) {
+			pmfs_err(sb, "failed to increase btree height\n");
+			break;
+		}
+		root = (__le64 *)DRAM_ADDR(page_addr);
+		root[0] = prev_root;
+		prev_root = page_addr;
+		height++;
+	}
+	sbi->root = prev_root;
+	sbi->height = height;
+	pmfs_dbg_verbose("increased tree height, new root 0x%llx\n",
+							prev_root);
+	return errval;
+}
+
+static int recursive_truncate_header_tree(struct super_block *sb, __le64 block,
+	u32 height, unsigned long first_blocknr)
+{
+	unsigned long first_blk, page_addr;
+	unsigned int node_bits, first_index, last_index, i;
+	__le64 *node;
+	unsigned int freed = 0;
+
+	node = (__le64 *)block;
+
+	node_bits = (height - 1) * META_BLK_SHIFT;
+
+	first_index = first_blocknr >> node_bits;
+	last_index = (1 << META_BLK_SHIFT) - 1;
+
+	if (height == 1) {
+		for (i = first_index; i <= last_index; i++) {
+			if (unlikely(!node[i]))
+				continue;
+			kmem_cache_free(pmfs_header_cachep, (void *)node[i]);
+			node[i] = 0;
+			freed++;
+		}
+	} else {
+		for (i = first_index; i <= last_index; i++) {
+			if (unlikely(!node[i]))
+				continue;
+			first_blk = (i == first_index) ? (first_blocknr &
+				((1 << node_bits) - 1)) : 0;
+
+			freed += recursive_truncate_header_tree(sb,
+				DRAM_ADDR(node[i]), height - 1,
+				first_blk);
+			/* Freeing the meta-data block */
+			page_addr = node[i];
+			pmfs_free_meta_block(sb, page_addr);
+		}
+	}
+	return freed;
+}
+
+unsigned int pmfs_free_header_tree(struct super_block *sb)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	unsigned long root = sbi->root;
+	unsigned long first_blocknr;
+	unsigned int freed;
+
+	if (!root)
+		return 0;
+
+	if (sbi->height == 0) {
+		kmem_cache_free(pmfs_header_cachep, (void *)root);
+		freed = 1;
+	} else {
+		first_blocknr = 0;
+
+		freed = recursive_truncate_header_tree(sb, DRAM_ADDR(root),
+			sbi->height, first_blocknr);
+		first_blocknr = root;
+		pmfs_free_meta_block(sb, first_blocknr);
+	}
+
+	sbi->root = sbi->height = 0;
+	return freed;
+}
+
+static int recursive_assign_info_header(struct super_block *sb,
+	unsigned long blocknr, struct pmfs_inode_info_header *sih,
+	__le64 block, u32 height)
+{
+	int errval;
+	unsigned int meta_bits = META_BLK_SHIFT, node_bits;
+	__le64 *node;
+	unsigned long index;
+
+	node = (__le64 *)block;
+	node_bits = (height - 1) * meta_bits;
+	index = blocknr >> node_bits;
+
+	pmfs_dbg_verbose("%s: node 0x%llx, height %u\n",
+				__func__, block, height);
+
+	if (height == 1) {
+		if (node[index])
+			pmfs_dbg("%s: node %lu exists!\n", __func__, index);
+		node[index] = (unsigned long)sih;
+	} else {
+		if (node[index] == 0) {
+			/* allocate the meta block */
+			errval = pmfs_new_meta_block(sb, &blocknr, 1);
+			if (errval) {
+				pmfs_dbg("alloc meta blk failed\n");
+				goto fail;
+			}
+			node[index] = blocknr;
+		}
+
+		blocknr = blocknr & ((1 << node_bits) - 1);
+		errval = recursive_assign_info_header(sb, blocknr, sih,
+			DRAM_ADDR(node[index]), height - 1);
+		if (errval < 0)
+			goto fail;
+	}
+	errval = 0;
+fail:
+	return errval;
+}
+
+static int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
+	struct pmfs_inode_info_header *sih, int multithread)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	unsigned long max_blocks;
+	unsigned int height;
+	unsigned int blk_shift, meta_bits = META_BLK_SHIFT;
+	unsigned long total_blocks;
+	int errval;
+	unsigned long flags;
+
+	if (multithread)
+		spin_lock_irqsave(&sbi->header_tree_lock, flags);
+
+	pmfs_dbg_verbose("assign_header root 0x%lx height %d ino %lu\n",
+			sbi->root, sbi->height, ino);
+
+	height = sbi->height;
+
+	blk_shift = height * meta_bits;
+
+	max_blocks = 0x1UL << blk_shift;
+
+	if (ino > max_blocks - 1) {
+		/* B-tree height increases as a result of this allocation */
+		total_blocks = ino >> blk_shift;
+		while (total_blocks > 0) {
+			total_blocks = total_blocks >> meta_bits;
+			height++;
+		}
+		if (height > 3) {
+			pmfs_dbg("[%s:%d] Max file size. Cant grow the file\n",
+				__func__, __LINE__);
+			errval = -ENOSPC;
+			goto out;
+		}
+	}
+
+	if (!sbi->root) {
+		if (height == 0) {
+			pmfs_dbg_verbose("Set root @%p\n", sih);
+			sbi->root = (unsigned long)sih;
+			sih->height = height;
+		} else {
+			errval = pmfs_increase_header_tree_height(sb, height);
+			if (errval) {
+				pmfs_dbg("[%s:%d] failed: inc btree"
+					" height\n", __func__, __LINE__);
+				goto out;
+			}
+			errval = recursive_assign_info_header(sb, ino, sih,
+					DRAM_ADDR(sbi->root), sbi->height);
+			if (errval < 0)
+				goto out;
+		}
+	} else {
+		if (height == 0) {
+			pmfs_dbg("root @0x%lx but height is 0\n", sbi->root);
+			errval = 0;
+			goto out;
+		}
+
+		if (height > sbi->height) {
+			errval = pmfs_increase_header_tree_height(sb, height);
+			if (errval) {
+				pmfs_dbg_verbose("Err: inc height %x:%x tot %lx"
+					"\n", sbi->height, height, total_blocks);
+				goto out;
+			}
+		}
+		errval = recursive_assign_info_header(sb, ino, sih,
+						DRAM_ADDR(sbi->root), height);
+		if (errval < 0)
+			goto out;
+	}
+	errval = 0;
+out:
+	if (multithread)
+		spin_unlock_irqrestore(&sbi->header_tree_lock, flags);
+
+	return errval;
+}
+
+static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
+	unsigned long ino, struct scan_bitmap *bm, int cpuid, int multithread)
+{
+	struct pmfs_inode_info_header *sih;
+
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:
 		pmfs_dbg("This is thread %d, processing file %p, "
 				"ino %lu, head 0x%llx, tail 0x%llx\n",
 				cpuid, pi, ino, pi->log_head, pi->log_tail);
+		sih = pmfs_alloc_header(sb);
+		pmfs_rebuild_file_inode_tree(sb, pi, sih, ino, bm);
+		pmfs_assign_info_header(sb, ino, sih, multithread);
 		break;
 	case S_IFDIR:
 		pmfs_dbg("This is thread %d, processing dir %p, "
 				"ino %lu, head 0x%llx, tail 0x%llx\n",
 				cpuid, pi, ino, pi->log_head, pi->log_tail);
+		sih = pmfs_alloc_header(sb);
+		pmfs_rebuild_dir_inode_tree(sb, pi, sih, ino, bm);
+		pmfs_assign_info_header(sb, ino, sih, multithread);
 		break;
 	case S_IFLNK:
+		/* FIXME: Symlink files use direct store */
 		break;
 	default:
 		break;
@@ -587,7 +821,6 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 	unsigned int meta_bits = blk_type_to_shift[btype] - PMFS_INODE_BITS;
 	unsigned int node_bits;
 	unsigned long ino_off;
-//	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 
 	node = pmfs_get_block(sb, block);
 	if (height == 0)
@@ -615,7 +848,7 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 //			sbi->s_inodes_used_count++;
 //			pmfs_inode_crawl(sb, bm, pi);
 			pmfs_recover_inode(sb, pi, start_ino + i,
-						bm, smp_processor_id());
+						bm, smp_processor_id(), 0);
 			processed[smp_processor_id()]++;
 		}
 		return;
@@ -634,58 +867,20 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 int pmfs_singlethread_recovery(struct super_block *sb)
 {
 	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
-	struct pmfs_super_block *super = pmfs_get_super(sb);
-	pmfs_journal_t *journal = pmfs_get_journal(sb);
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	unsigned long initsize = le64_to_cpu(super->s_size);
-	bool value = false;
 	int cpus = num_online_cpus();
 	int i;
 	int ret = 0;
-
-	sbi->block_start = (unsigned long)0;
-	sbi->block_end = ((unsigned long)(initsize) >> PAGE_SHIFT);
 
 	processed = kzalloc(cpus * sizeof(int), GFP_KERNEL);
 	if (!processed)
 		return -ENOMEM;
 
-	value = pmfs_can_skip_full_scan(sb);
-	if (value) {
-		pmfs_dbg_verbose("PMFS: Skipping full scan of inodes...\n");
-		ret = 0;
-		goto out;
-	}
-
-	ret = alloc_bm(&recovery_bm, initsize);
-	if (ret)
-		goto out;
-
-	/* Clearing the datablock inode */
-//	pmfs_clear_datablock_inode(sb);
-
-	pmfs_dbg("%s\n", __func__);
 	pmfs_inode_table_singlethread_crawl(sb, NULL,
 			le64_to_cpu(pi->root), pi->height, 0, pi->i_blk_type);
 
 	for (i = 0; i < cpus; i++)
 		pmfs_dbg("CPU %d: recovered %d\n", i, processed[i]);
 
-	/* Reserving tow inodes - Inode 0 and Inode for datablock */
-//	sbi->s_free_inodes_count = sbi->s_inodes_count -
-//			(sbi->s_inodes_used_count + 2);
-
-	/* set the block 0 as this is used */
-//	sbi->s_free_inode_hint = PMFS_FREE_INODE_HINT_START;
-
-	/* initialize the num_free_blocks to */
-//	sbi->num_free_blocks = ((unsigned long)(initsize) >> PAGE_SHIFT);
-//	pmfs_init_blockmap(sb, le64_to_cpu(journal->base) + sbi->jsize);
-
-//	pmfs_build_blocknode_map(sb, &recovery_bm);
-
-	free_bm(&recovery_bm);
-out:
 	kfree(processed);
 	return ret;
 }
@@ -764,7 +959,7 @@ static int thread_func(void *data)
 	while (!kthread_should_stop()) {
 		while(!task_ring_is_empty(ring)) {
 			pi = task_ring_dequeue(ring, &ino);
-			pmfs_recover_inode(sb, pi, ino, &recovery_bm, cpuid);
+			pmfs_recover_inode(sb, pi, ino, &recovery_bm, cpuid, 1);
 			wake_up_interruptible(&finish_wq);
 		}
 		wait_event_interruptible_timeout(ring->assign_wq, false,
@@ -916,7 +1111,7 @@ static void wait_to_finish(int cpus)
 	pmfs_dbg("Total recovered %d\n", total);
 }
 
-void pmfs_mutithread_recovery(struct super_block *sb)
+int pmfs_multithread_recovery(struct super_block *sb)
 {
 	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
 	int cpus;
@@ -927,12 +1122,65 @@ void pmfs_mutithread_recovery(struct super_block *sb)
 
 	ret = allocate_resources(sb, cpus);
 	if (ret)
-		return;
+		return ret;
 
 	pmfs_inode_table_multithread_crawl(sb, NULL, cpus,
 			le64_to_cpu(pi->root), pi->height, 0, pi->i_blk_type);
 
 	wait_to_finish(cpus);
 	free_resources();
-	return;
+	return ret;
+}
+
+/*********************** Recovery entrance *************************/
+
+int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct pmfs_super_block *super = pmfs_get_super(sb);
+	unsigned long initsize = le64_to_cpu(super->s_size);
+	bool value = false;
+	int ret;
+
+	sbi->block_start = (unsigned long)0;
+	sbi->block_end = ((unsigned long)(initsize) >> PAGE_SHIFT);
+
+	value = pmfs_can_skip_full_scan(sb);
+	if (value) {
+		pmfs_dbg_verbose("PMFS: Skipping full scan of inodes...\n");
+		ret = 0;
+		goto out;
+	}
+
+	ret = alloc_bm(&recovery_bm, initsize);
+	if (ret)
+		goto out;
+
+	/* Clearing the datablock inode */
+//	pmfs_clear_datablock_inode(sb);
+
+	pmfs_dbg("%s\n", __func__);
+	sbi->btype = PMFS_BLOCK_TYPE_4K;
+
+	if (multithread)
+		ret = pmfs_multithread_recovery(sb);
+	else
+		ret = pmfs_singlethread_recovery(sb);
+
+	/* Reserving tow inodes - Inode 0 and Inode for datablock */
+//	sbi->s_free_inodes_count = sbi->s_inodes_count -
+//			(sbi->s_inodes_used_count + 2);
+
+	/* set the block 0 as this is used */
+//	sbi->s_free_inode_hint = PMFS_FREE_INODE_HINT_START;
+
+	/* initialize the num_free_blocks to */
+//	sbi->num_free_blocks = ((unsigned long)(initsize) >> PAGE_SHIFT);
+//	pmfs_init_blockmap(sb, le64_to_cpu(journal->base) + sbi->jsize);
+
+//	pmfs_build_blocknode_map(sb, &recovery_bm);
+
+	free_bm(&recovery_bm);
+out:
+	return ret;
 }

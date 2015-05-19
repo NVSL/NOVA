@@ -532,6 +532,12 @@ struct pmfs_sb_info {
 	/* truncate list related structures */
 	struct list_head s_truncate;
 	struct mutex s_truncate_lock;
+
+	/* Header tree */
+	unsigned long root;
+	unsigned int height;
+	u8 btype;
+	spinlock_t header_tree_lock;
 };
 
 static inline struct pmfs_sb_info *PMFS_SB(struct super_block *sb)
@@ -1038,8 +1044,8 @@ extern int pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);
-void pmfs_mutithread_recovery(struct super_block *sb);
-int pmfs_singlethread_recovery(struct super_block *sb);
+unsigned int pmfs_free_header_tree(struct super_block *sb);
+int pmfs_inode_log_recovery(struct super_block *sb, int multithread);
 
 /* namei.c */
 extern const struct inode_operations pmfs_dir_inode_operations;

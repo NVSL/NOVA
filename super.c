@@ -178,7 +178,7 @@ enum {
 	Opt_num_inodes, Opt_mode, Opt_uid,
 	Opt_gid, Opt_blocksize, Opt_wprotect, Opt_wprotectold,
 	Opt_err_cont, Opt_err_panic, Opt_err_ro,
-	Opt_hugemmap, Opt_nohugeioremap, Opt_dbgmask, Opt_bs, Opt_err
+	Opt_hugemmap, Opt_nohugeioremap, Opt_dbgmask, Opt_err
 };
 
 static const match_table_t tokens = {
@@ -198,7 +198,6 @@ static const match_table_t tokens = {
 	{ Opt_hugemmap,	     "hugemmap"		  },
 	{ Opt_nohugeioremap, "nohugeioremap"	  },
 	{ Opt_dbgmask,	     "dbgmask=%u"	  },
-	{ Opt_bs,	     "backing_dev=%s"	  },
 	{ Opt_err,	     NULL		  },
 };
 
@@ -691,6 +690,7 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	mutex_init(&sbi->s_lock);
 	INIT_LIST_HEAD(&pmfs_inode_info_list);
 	spin_lock_init(&inode_list_lock);
+	spin_lock_init(&sbi->header_tree_lock);
 
 	if (pmfs_parse_options(data, sbi, 0))
 		goto out;
@@ -954,6 +954,7 @@ static void pmfs_put_super(struct super_block *sb)
 	/* It's unmount time, so unmap the pmfs memory */
 	if (sbi->virt_addr) {
 		pmfs_free_dram_pages(sb);
+		pmfs_free_header_tree(sb);
 		pmfs_detect_memory_leak(sb);
 		pmfs_save_blocknode_mappings(sb);
 		pmfs_journal_uninit(sb);
