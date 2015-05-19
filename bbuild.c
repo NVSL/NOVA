@@ -796,7 +796,7 @@ static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 		pmfs_assign_info_header(sb, ino, sih, multithread);
 		break;
 	case S_IFLNK:
-		/* FIXME: Symlink files use direct store */
+		pmfs_inode_crawl(sb, bm, pi);
 		break;
 	default:
 		break;
