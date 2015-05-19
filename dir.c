@@ -361,7 +361,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
 	u64 next;
 	int ret;
 
-	pmfs_dbg("Rebuild dir %lu tree\n", ino);
+	pmfs_dbg_verbose("Rebuild dir %lu tree\n", ino);
 	sih->dir_tree = RB_ROOT;
 
 	if (curr_p == 0) {
