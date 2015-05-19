@@ -650,6 +650,7 @@ unsigned int pmfs_free_header_tree(struct super_block *sb)
 	}
 
 	sbi->root = sbi->height = 0;
+	pmfs_dbg("%s: freed %u\n", __func__, freed);
 	return freed;
 }
 
