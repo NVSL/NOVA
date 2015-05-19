@@ -654,38 +654,42 @@ unsigned int pmfs_free_header_tree(struct super_block *sb)
 }
 
 static int recursive_assign_info_header(struct super_block *sb,
-	unsigned long blocknr, struct pmfs_inode_info_header *sih,
+	unsigned long blocknr, unsigned long ino,
+	struct pmfs_inode_info_header *sih,
 	__le64 block, u32 height)
 {
 	int errval;
 	unsigned int meta_bits = META_BLK_SHIFT, node_bits;
 	__le64 *node;
 	unsigned long index;
+	unsigned long new_page;
 
 	node = (__le64 *)block;
 	node_bits = (height - 1) * meta_bits;
 	index = blocknr >> node_bits;
 
-	pmfs_dbg_verbose("%s: node 0x%llx, height %u\n",
-				__func__, block, height);
+	pmfs_dbg_verbose("%s: node 0x%llx, height %u, index %lu\n",
+				__func__, block, height, index);
 
 	if (height == 1) {
 		if (node[index])
-			pmfs_dbg("%s: node %lu exists!\n", __func__, index);
+			pmfs_dbg("%s: node %lu %lu exists! 0x%llx, 0x%lx\n",
+					__func__, index, ino,
+					node[index], (unsigned long)sih);
 		node[index] = (unsigned long)sih;
 	} else {
 		if (node[index] == 0) {
 			/* allocate the meta block */
-			errval = pmfs_new_meta_block(sb, &blocknr, 1, 1);
+			errval = pmfs_new_meta_block(sb, &new_page, 1, 1);
 			if (errval) {
 				pmfs_dbg("alloc meta blk failed\n");
 				goto fail;
 			}
-			node[index] = blocknr;
+			node[index] = new_page;
 		}
 
 		blocknr = blocknr & ((1 << node_bits) - 1);
-		errval = recursive_assign_info_header(sb, blocknr, sih,
+		errval = recursive_assign_info_header(sb, blocknr, ino, sih,
 			DRAM_ADDR(node[index]), height - 1);
 		if (errval < 0)
 			goto fail;
@@ -709,8 +713,8 @@ static int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 	if (multithread)
 		spin_lock_irqsave(&sbi->header_tree_lock, flags);
 
-	pmfs_dbg_verbose("assign_header root 0x%lx height %d ino %lu\n",
-			sbi->root, sbi->height, ino);
+	pmfs_dbg_verbose("assign_header root 0x%lx height %d ino %lu, %p\n",
+			sbi->root, sbi->height, ino, sih);
 
 	height = sbi->height;
 
@@ -737,7 +741,7 @@ static int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 		if (height == 0) {
 			pmfs_dbg_verbose("Set root @%p\n", sih);
 			sbi->root = (unsigned long)sih;
-			sih->height = height;
+			sbi->height = height;
 		} else {
 			errval = pmfs_increase_header_tree_height(sb, height);
 			if (errval) {
@@ -745,8 +749,8 @@ static int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 					" height\n", __func__, __LINE__);
 				goto out;
 			}
-			errval = recursive_assign_info_header(sb, ino, sih,
-					DRAM_ADDR(sbi->root), sbi->height);
+			errval = recursive_assign_info_header(sb, ino, ino,
+					sih, DRAM_ADDR(sbi->root), sbi->height);
 			if (errval < 0)
 				goto out;
 		}
@@ -765,7 +769,7 @@ static int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 				goto out;
 			}
 		}
-		errval = recursive_assign_info_header(sb, ino, sih,
+		errval = recursive_assign_info_header(sb, ino, ino, sih,
 						DRAM_ADDR(sbi->root), height);
 		if (errval < 0)
 			goto out;
@@ -877,7 +881,7 @@ int pmfs_singlethread_recovery(struct super_block *sb, struct scan_bitmap *bm)
 {
 	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
 	int cpus = num_online_cpus();
-	int i;
+	int i, total = 0;
 	int ret = 0;
 
 	processed = kzalloc(cpus * sizeof(int), GFP_KERNEL);
@@ -887,10 +891,13 @@ int pmfs_singlethread_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	pmfs_inode_table_singlethread_crawl(sb, bm,
 			le64_to_cpu(pi->root), pi->height, 0, pi->i_blk_type);
 
-	for (i = 0; i < cpus; i++)
-		pmfs_dbg("CPU %d: recovered %d\n", i, processed[i]);
+	for (i = 0; i < cpus; i++) {
+		total += processed[i];
+		pmfs_dbg_verbose("CPU %d: recovered %d\n", i, processed[i]);
+	}
 
 	kfree(processed);
+	pmfs_dbg("Singlethread total recovered %d\n", total);
 	return ret;
 }
 
@@ -1117,11 +1124,11 @@ static void wait_to_finish(int cpus)
 
 	for (i = 0; i < cpus; i++) {
 		ring = &task_rings[i];
-		pmfs_dbg("Ring %d recovered %d\n", i, ring->processed);
+		pmfs_dbg_verbose("Ring %d recovered %d\n", i, ring->processed);
 		total += ring->processed;
 	}
 
-	pmfs_dbg("Total recovered %d\n", total);
+	pmfs_dbg("Multithread total recovered %d\n", total);
 }
 
 int pmfs_multithread_recovery(struct super_block *sb, struct scan_bitmap *bm)
@@ -1146,6 +1153,13 @@ int pmfs_multithread_recovery(struct super_block *sb, struct scan_bitmap *bm)
 }
 
 /*********************** Recovery entrance *************************/
+
+void pmfs_assign_bogus_header_info(struct super_block *sb)
+{
+	pmfs_assign_info_header(sb, 0, NULL, 0);
+	pmfs_assign_info_header(sb, 1, NULL, 0);
+	pmfs_assign_info_header(sb, 2, NULL, 0);
+}
 
 int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 {
@@ -1180,6 +1194,7 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	pmfs_dbg("%s\n", __func__);
 	sbi->btype = PMFS_BLOCK_TYPE_4K;
 
+	pmfs_assign_bogus_header_info(sb);
 	if (multithread)
 		ret = pmfs_multithread_recovery(sb, bm);
 	else
