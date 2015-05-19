@@ -1631,6 +1631,7 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *recovered_sih;
 	int ret = -EIO;
 
 #if 0
@@ -1662,16 +1663,36 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 	case S_IFREG:
 		inode->i_op = &pmfs_file_inode_operations;
 		inode->i_fop = &pmfs_xip_file_operations;
-		if (rebuild)
-			pmfs_rebuild_file_inode_tree(sb, pi, sih,
+		if (rebuild) {
+			recovered_sih = pmfs_find_info_header(sb,
+					inode->i_ino >> PMFS_INODE_BITS);
+			if (recovered_sih) {
+				pmfs_dbg_verbose("Recovered file %lu\n",
+							inode->i_ino);
+				memcpy(sih, recovered_sih,
+					sizeof(struct pmfs_inode_info_header));
+			} else {
+				pmfs_rebuild_file_inode_tree(sb, pi, sih,
 							inode->i_ino, NULL);
+			}
+		}
 		break;
 	case S_IFDIR:
 		inode->i_op = &pmfs_dir_inode_operations;
 		inode->i_fop = &pmfs_dir_operations;
-		if (rebuild)
-			pmfs_rebuild_dir_inode_tree(sb, pi, sih,
+		if (rebuild) {
+			recovered_sih = pmfs_find_info_header(sb,
+					inode->i_ino >> PMFS_INODE_BITS);
+			if (recovered_sih) {
+				pmfs_dbg_verbose("Recovered dir %lu\n",
+							inode->i_ino);
+				memcpy(sih, recovered_sih,
+					sizeof(struct pmfs_inode_info_header));
+			} else {
+				pmfs_rebuild_dir_inode_tree(sb, pi, sih,
 							inode->i_ino, NULL);
+			}
+		}
 		break;
 	case S_IFLNK:
 		inode->i_op = &pmfs_symlink_inode_operations;

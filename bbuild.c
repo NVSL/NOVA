@@ -780,7 +780,7 @@ static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:
-		pmfs_dbg("This is thread %d, processing file %p, "
+		pmfs_dbg_verbose("This is thread %d, processing file %p, "
 				"ino %lu, head 0x%llx, tail 0x%llx\n",
 				cpuid, pi, ino, pi->log_head, pi->log_tail);
 		sih = pmfs_alloc_header(sb);
@@ -788,7 +788,7 @@ static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 		pmfs_assign_info_header(sb, ino, sih, multithread);
 		break;
 	case S_IFDIR:
-		pmfs_dbg("This is thread %d, processing dir %p, "
+		pmfs_dbg_verbose("This is thread %d, processing dir %p, "
 				"ino %lu, head 0x%llx, tail 0x%llx\n",
 				cpuid, pi, ino, pi->log_head, pi->log_tail);
 		sih = pmfs_alloc_header(sb);
@@ -1149,7 +1149,7 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	if (value) {
 		pmfs_dbg_verbose("PMFS: Skipping full scan of inodes...\n");
 		ret = 0;
-		goto out;
+//		goto out;
 	}
 
 	ret = alloc_bm(&recovery_bm, initsize);
