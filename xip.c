@@ -792,7 +792,7 @@ int pmfs_find_alloc_dram_pages(struct super_block *sb, struct inode *inode,
 	}
 
 alloc:
-	dram_addr = pmfs_new_cache_block(sb, 0);
+	dram_addr = pmfs_new_cache_block(sb, 0, 0);
 	if (dram_addr == 0)
 		return 0;
 

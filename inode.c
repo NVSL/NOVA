@@ -1024,7 +1024,7 @@ static int pmfs_increase_file_btree_height(struct super_block *sb,
 						height, new_height, prev_root);
 	while (height < new_height) {
 		/* allocate the meta block */
-		errval = pmfs_new_meta_block(sb, &page_addr, 1);
+		errval = pmfs_new_meta_block(sb, &page_addr, 1, 0);
 		if (errval) {
 			pmfs_err(sb, "failed to increase btree height\n");
 			break;
@@ -1235,7 +1235,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 			if (alloc_dram) {
 				unsigned long dram;
 				if (!leaf->dram) {
-					dram = pmfs_new_cache_block(sb, 0);
+					dram = pmfs_new_cache_block(sb, 0, 0);
 					if (leaf->nvmm_entry)
 						/* Outdate with NVMM */
 						dram |= OUTDATE_BIT;
@@ -1254,7 +1254,8 @@ static int recursive_assign_blocks(struct super_block *sb,
 		} else {
 			if (node[i] == 0) {
 				/* allocate the meta block */
-				errval = pmfs_new_meta_block(sb, &blocknr, 1);
+				errval = pmfs_new_meta_block(sb,
+							&blocknr, 1, 0);
 				if (errval) {
 					pmfs_dbg("alloc meta blk failed\n");
 					goto fail;
@@ -1434,7 +1435,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 
 			root->dram = root->nvmm = root->nvmm_entry = 0;
 			if (alloc_dram) {
-				root->dram = pmfs_new_cache_block(sb, 0);
+				root->dram = pmfs_new_cache_block(sb, 0, 0);
 			} else {
 				if (nvmm) {
 					root->nvmm_entry = address;
@@ -1486,7 +1487,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			if (alloc_dram) {
 				unsigned long dram;
 				if (!root->dram) {
-					dram = pmfs_new_cache_block(sb, 0);
+					dram = pmfs_new_cache_block(sb, 0, 0);
 					if (root->nvmm_entry)
 						/* Outdate with NVMM */
 						dram |= OUTDATE_BIT;

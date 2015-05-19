@@ -295,8 +295,9 @@ extern void __pmfs_free_log_block(struct super_block *sb,
 extern int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned int num, unsigned short btype, int zero);
 extern int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
-	int zero);
-extern unsigned long pmfs_new_cache_block(struct super_block *sb, int zero);
+	int zero, int nosleep);
+extern unsigned long pmfs_new_cache_block(struct super_block *sb, int zero,
+	int nosleep);
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
 void pmfs_free_cache_block(unsigned long page_addr);
 

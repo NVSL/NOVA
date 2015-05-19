@@ -68,18 +68,24 @@ static inline void pmfs_free_dram_page(unsigned long page_addr)
 }
 
 static unsigned long pmfs_alloc_dram_page(struct super_block *sb,
-	enum alloc_type type, int zero)
+	enum alloc_type type, int zero, int nosleep)
 {
 	unsigned long addr = 0;
+	int flags;
+
+	if (nosleep)
+		flags = GFP_ATOMIC;
+	else
+		flags = GFP_KERNEL;
 
 	switch (type) {
 		case KMALLOC:
 			if (zero == 1)
 				addr = (unsigned long)kzalloc(PAGE_SIZE,
-								GFP_KERNEL);
+							flags);
 			else
 				addr = (unsigned long)kmalloc(PAGE_SIZE,
-								GFP_KERNEL);
+							flags);
 			if (addr && addr == DRAM_ADDR(addr)) {
 				addr |= DRAM_BIT | KMALLOC_BIT;
 				pmfs_dbg_verbose("Kmalloc DRAM page 0x%lx\n", addr);
@@ -92,9 +98,9 @@ static unsigned long pmfs_alloc_dram_page(struct super_block *sb,
 			/* Fall through */
 		case VMALLOC:
 			if (zero == 1)
-				addr = (unsigned long)vzalloc(GFP_KERNEL);
+				addr = (unsigned long)vzalloc(flags);
 			else
-				addr = (unsigned long)vmalloc(GFP_KERNEL);
+				addr = (unsigned long)vmalloc(flags);
 			if (addr && addr == DRAM_ADDR(addr)) {
 				addr |= DRAM_BIT | VMALLOC_BIT;
 				pmfs_dbg_verbose("vmalloc DRAM page 0x%lx\n", addr);
@@ -107,9 +113,9 @@ static unsigned long pmfs_alloc_dram_page(struct super_block *sb,
 			/* Fall through */
 		case GETPAGE:
 			if (zero == 1)
-				addr = get_zeroed_page(GFP_KERNEL);
+				addr = get_zeroed_page(flags);
 			else
-				addr = __get_free_page(GFP_KERNEL);
+				addr = __get_free_page(flags);
 			if (addr && addr == DRAM_ADDR(addr)) {
 				addr |= DRAM_BIT | GETPAGE_BIT;
 				pmfs_dbg_verbose("Get DRAM page 0x%lx\n", addr);
@@ -278,13 +284,13 @@ void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,
 }
 
 int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
-	int zero)
+	int zero, int nosleep)
 {
 	unsigned long page_addr;
 	timing_t alloc_time;
 
 	PMFS_START_TIMING(new_meta_block_t, alloc_time);
-	page_addr = pmfs_alloc_dram_page(sb, KMALLOC, zero);
+	page_addr = pmfs_alloc_dram_page(sb, KMALLOC, zero, nosleep);
 	if (page_addr == 0) {
 		PMFS_END_TIMING(new_meta_block_t, alloc_time);
 		return -EINVAL;
@@ -296,13 +302,14 @@ int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
 	return 0;
 }
 
-unsigned long pmfs_new_cache_block(struct super_block *sb, int zero)
+unsigned long pmfs_new_cache_block(struct super_block *sb,
+	int zero, int nosleep)
 {
 	unsigned long page_addr;
 	timing_t alloc_time;
 
 	PMFS_START_TIMING(new_cache_page_t, alloc_time);
-	page_addr = pmfs_alloc_dram_page(sb, KMALLOC, zero);
+	page_addr = pmfs_alloc_dram_page(sb, KMALLOC, zero, nosleep);
 	if (page_addr == 0) {
 		PMFS_END_TIMING(new_cache_page_t, alloc_time);
 		pmfs_dbg("%s: allocation failed\n", __func__);
