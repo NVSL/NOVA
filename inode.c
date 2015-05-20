@@ -649,9 +649,13 @@ unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
 	unsigned long first_blocknr;
 	unsigned int freed;
 	bool mpty;
+	timing_t delete_time;
 
-	if (!root)
+	PMFS_START_TIMING(delete_file_tree_t, delete_time);
+	if (!root) {
+		PMFS_END_TIMING(delete_file_tree_t, delete_time);
 		return 0;
+	}
 
 	if (height == 0) {
 		pmfs_free_mem_addr(sb, root, btype);
@@ -665,6 +669,7 @@ unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
 		first_blocknr = root;
 		pmfs_free_meta_block(sb, first_blocknr);
 	}
+	PMFS_END_TIMING(delete_file_tree_t, delete_time);
 	return freed;
 }
 
@@ -1760,7 +1765,9 @@ static int pmfs_free_inode(struct inode *inode)
 	unsigned long inode_nr;
 	pmfs_transaction_t *trans;
 	int err = 0;
+	timing_t free_time;
 
+	PMFS_START_TIMING(free_inode_t, free_time);
 	mutex_lock(&PMFS_SB(sb)->inode_table_mutex);
 
 	pmfs_dbg_verbose("free_inode: %lx free_nodes %x tot nodes %x hint %x\n",
@@ -1807,6 +1814,7 @@ static int pmfs_free_inode(struct inode *inode)
 		   sbi->s_free_inode_hint);
 out:
 	mutex_unlock(&PMFS_SB(sb)->inode_table_mutex);
+	PMFS_END_TIMING(free_inode_t, free_time);
 	return err;
 }
 

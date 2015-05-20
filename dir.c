@@ -213,7 +213,9 @@ void pmfs_delete_dir_tree(struct super_block *sb, struct inode *inode)
 	struct pmfs_inode_info_header *sih = &si->header;
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
+	timing_t delete_time;
 
+	PMFS_START_TIMING(delete_dir_tree_t, delete_time);
 	temp = rb_first(&sih->dir_tree);
 	while (temp) {
 		curr = container_of(temp, struct pmfs_dir_node, node);
@@ -221,6 +223,7 @@ void pmfs_delete_dir_tree(struct super_block *sb, struct inode *inode)
 		rb_erase(&curr->node, &sih->dir_tree);
 		pmfs_free_dirnode(sb, curr);
 	}
+	PMFS_END_TIMING(delete_dir_tree_t, delete_time);
 	return;
 }
 
