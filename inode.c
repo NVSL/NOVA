@@ -2780,7 +2780,7 @@ static void free_curr_page(struct super_block *sb, struct pmfs_inode *pi,
 
 	last_page->page_tail.next_page = curr_page->page_tail.next_page;
 	pmfs_flush_buffer(&last_page->page_tail.next_page, CACHELINE_SIZE, 1);
-	pmfs_free_data_block(sb, pmfs_get_blocknr(sb, curr_head, btype),
+	pmfs_free_log_block(sb, pmfs_get_blocknr(sb, curr_head, btype),
 					btype, NULL, 1);
 }
 
@@ -2860,7 +2860,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 	if (first_need_free) {
 		pmfs_dbg_verbose("Free log head block 0x%llx\n",
 					curr >> PAGE_SHIFT);
-		pmfs_free_data_block(sb, pmfs_get_blocknr(sb, curr, btype),
+		pmfs_free_log_block(sb, pmfs_get_blocknr(sb, curr, btype),
 					btype, NULL, 1);
 	}
 	PMFS_END_TIMING(log_gc_t, gc_time);
@@ -3147,7 +3147,7 @@ static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 				    btype);
 		pmfs_dbg_verbose("%s: free page %llu\n", __func__, curr_block);
 		curr_block = curr_page->page_tail.next_page;
-		__pmfs_free_log_block(sb, blocknr, btype, &start_hint);
+		pmfs_free_log_block(sb, blocknr, btype, &start_hint, 0);
 	}
 	mutex_unlock(&sbi->s_lock);
 
