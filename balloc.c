@@ -324,7 +324,7 @@ unsigned long pmfs_new_cache_block(struct super_block *sb,
 }
 
 /* Return how many blocks allocated */
-int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
+static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 		unsigned int num, unsigned short btype, int zero)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
@@ -339,7 +339,6 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned long next_block_low;
 	unsigned long new_block_low;
 	unsigned long new_block_high;
-	timing_t alloc_time;
 	unsigned long step = 0;
 
 	num_blocks = num * pmfs_get_numblocks(btype);
@@ -349,7 +348,6 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	if (sbi->num_free_blocks < num_blocks)
 		return -ENOSPC;
 
-	PMFS_START_TIMING(new_data_blocks_t, alloc_time);
 	mutex_lock(&sbi->s_lock);
 
 	list_for_each_entry(i, head, link) {
@@ -458,7 +456,6 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 		__pmfs_free_blocknode(free_blocknode);
 
 	if (found == 0) {
-		PMFS_END_TIMING(new_data_blocks_t, alloc_time);
 		alloc_steps += step;
 		return -ENOSPC;
 	}
@@ -480,9 +477,19 @@ int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	*blocknr = new_block_low;
 
 	pmfs_dbg_verbose("Alloc %u data blocks %lu\n", num, *blocknr);
-	PMFS_END_TIMING(new_data_blocks_t, alloc_time);
 	alloc_steps += step;
 	return num_blocks / pmfs_get_numblocks(btype);
+}
+
+inline int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
+		unsigned int num, unsigned short btype, int zero)
+{
+	int allocated;
+	timing_t alloc_time;
+	PMFS_START_TIMING(new_data_blocks_t, alloc_time);
+	allocated = pmfs_new_blocks(sb, blocknr, num, btype, zero);
+	PMFS_END_TIMING(new_data_blocks_t, alloc_time);
+	return allocated;
 }
 
 unsigned long pmfs_count_free_blocks(struct super_block *sb)
