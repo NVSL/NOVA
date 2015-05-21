@@ -270,7 +270,7 @@ void pmfs_free_data_blocks(struct super_block *sb, unsigned long blocknr,
 	if (needlock)
 		mutex_lock(&sbi->s_lock);
 	__pmfs_free_blocks(sb, blocknr, num, btype, start_hint, 0);
-	free_data_pages++;
+	free_data_pages += num;
 	if (needlock)
 		mutex_unlock(&sbi->s_lock);
 	PMFS_END_TIMING(free_data_t, free_time);
@@ -288,7 +288,7 @@ void pmfs_free_log_blocks(struct super_block *sb, unsigned long blocknr,
 	if (needlock)
 		mutex_lock(&sbi->s_lock);
 	__pmfs_free_blocks(sb, blocknr, num, btype, start_hint, 1);
-	free_log_pages++;
+	free_log_pages += num;
 	if (needlock)
 		mutex_unlock(&sbi->s_lock);
 	PMFS_END_TIMING(free_log_t, free_time);

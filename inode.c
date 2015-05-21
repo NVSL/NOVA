@@ -403,10 +403,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 		/* Zero-out the freed range if the meta-block in not empty */
 		if (start <= end) {
 			bzero = (end - start + 1) * sizeof(u64);
-			pmfs_memunlock_block(sb, node);
 			memset(&node[start], 0, bzero);
-			pmfs_memlock_block(sb, node);
-			pmfs_flush_buffer(&node[start], bzero, false);
 		}
 		*meta_empty = false;
 	}
@@ -3133,7 +3130,8 @@ static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode_log_page *curr_page;
 	u64 curr_block;
-	unsigned long blocknr;
+	unsigned long blocknr, start_blocknr = 0;
+	int num_free = 0;
 	u32 btype = pi->i_blk_type;
 	struct pmfs_blocknode *start_hint = NULL;
 
@@ -3149,8 +3147,24 @@ static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 				    btype);
 		pmfs_dbg_verbose("%s: free page %llu\n", __func__, curr_block);
 		curr_block = curr_page->page_tail.next_page;
-		pmfs_free_log_blocks(sb, blocknr, 1, btype, &start_hint, 0);
+
+		if (start_blocknr == 0) {
+			start_blocknr = blocknr;
+			num_free = 1;
+		} else {
+			if (blocknr == start_blocknr + num_free) {
+				num_free++;
+			} else {
+				/* A new start */
+				pmfs_free_log_blocks(sb, start_blocknr,
+					num_free, btype, &start_hint, 0);
+				start_blocknr = blocknr;
+				num_free = 1;
+			}
+		}
 	}
+	pmfs_free_log_blocks(sb, start_blocknr,	num_free, btype,
+					&start_hint, 0);
 	mutex_unlock(&sbi->s_lock);
 
 	/* FIXME: make this atomic */
