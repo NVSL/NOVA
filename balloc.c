@@ -138,9 +138,9 @@ static unsigned long pmfs_alloc_dram_page(struct super_block *sb,
 
 /* Caller must hold the super_block lock.  If start_hint is provided, it is
  * only valid until the caller releases the super_block lock. */
-void __pmfs_free_block(struct super_block *sb, unsigned long blocknr,
-		unsigned short btype, struct pmfs_blocknode **start_hint,
-		int log_block)
+static void __pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
+	int num, unsigned short btype, struct pmfs_blocknode **start_hint,
+	int log_block)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct list_head *head = &(sbi->block_inuse_head);
@@ -152,7 +152,12 @@ void __pmfs_free_block(struct super_block *sb, unsigned long blocknr,
 	struct pmfs_blocknode *curr_node;
 	unsigned long step = 0;
 
-	num_blocks = pmfs_get_numblocks(btype);
+	if (num <= 0) {
+		pmfs_dbg("%s ERROR: free %d\n", __func__, num);
+		return;
+	}
+
+	num_blocks = pmfs_get_numblocks(btype) * num;
 	new_block_low = blocknr;
 	new_block_high = blocknr + num_blocks - 1;
 
@@ -253,8 +258,9 @@ void pmfs_free_cache_block(unsigned long page_addr)
 	PMFS_END_TIMING(free_cache_t, free_time);
 }
 
-void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,
-	unsigned short btype, struct pmfs_blocknode **start_hint, int needlock)
+void pmfs_free_data_blocks(struct super_block *sb, unsigned long blocknr,
+	int num, unsigned short btype, struct pmfs_blocknode **start_hint,
+	int needlock)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	timing_t free_time;
@@ -263,15 +269,16 @@ void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,
 	PMFS_START_TIMING(free_data_t, free_time);
 	if (needlock)
 		mutex_lock(&sbi->s_lock);
-	__pmfs_free_block(sb, blocknr, btype, start_hint, 0);
+	__pmfs_free_blocks(sb, blocknr, num, btype, start_hint, 0);
 	free_data_pages++;
 	if (needlock)
 		mutex_unlock(&sbi->s_lock);
 	PMFS_END_TIMING(free_data_t, free_time);
 }
 
-void pmfs_free_log_block(struct super_block *sb, unsigned long blocknr,
-	unsigned short btype, struct pmfs_blocknode **start_hint, int needlock)
+void pmfs_free_log_blocks(struct super_block *sb, unsigned long blocknr,
+	int num, unsigned short btype, struct pmfs_blocknode **start_hint,
+	int needlock)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	timing_t free_time;
@@ -280,7 +287,7 @@ void pmfs_free_log_block(struct super_block *sb, unsigned long blocknr,
 	PMFS_START_TIMING(free_log_t, free_time);
 	if (needlock)
 		mutex_lock(&sbi->s_lock);
-	__pmfs_free_block(sb, blocknr, btype, start_hint, 1);
+	__pmfs_free_blocks(sb, blocknr, num, btype, start_hint, 1);
 	free_log_pages++;
 	if (needlock)
 		mutex_unlock(&sbi->s_lock);
