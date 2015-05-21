@@ -356,8 +356,8 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 				entry = pmfs_get_block(sb, pair->nvmm_entry);
 				if (GET_INVALID(entry->block) < 4000)
 					entry->block++;
-				__pmfs_free_data_block(sb, pair->nvmm, btype,
-							&start_hint);
+				pmfs_free_data_block(sb, pair->nvmm, btype,
+							&start_hint, 0);
 				pmfs_dbg_verbose("Free block @ %lu\n",
 						pair->nvmm);
 				pair->nvmm_entry = 0;
@@ -473,7 +473,8 @@ static int recursive_truncate_blocks(struct super_block *sb, __le64 block,
 				/* Dir files are using NVMM meta blocks */
 				blocknr = pmfs_get_blocknr(sb, le64_to_cpu(
 					    node[i]), PMFS_BLOCK_TYPE_4K);
-				pmfs_free_data_block(sb, blocknr,PMFS_BLOCK_TYPE_4K);
+				pmfs_free_data_block(sb, blocknr,
+					PMFS_BLOCK_TYPE_4K, NULL, 1);
 			} else {
 				if (i == first_index)
 				    start++;
@@ -602,7 +603,7 @@ unsigned int pmfs_free_inode_subtree(struct super_block *sb,
 	if (height == 0) {
 		first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
 			btype);
-		pmfs_free_data_block(sb, first_blocknr, btype);
+		pmfs_free_data_block(sb, first_blocknr, btype, NULL, 1);
 		freed = 1;
 	} else {
 		first_blocknr = 0;
@@ -612,7 +613,8 @@ unsigned int pmfs_free_inode_subtree(struct super_block *sb,
 		BUG_ON(!mpty);
 		first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
 			PMFS_BLOCK_TYPE_4K);
-		pmfs_free_data_block(sb, first_blocknr, PMFS_BLOCK_TYPE_4K);
+		pmfs_free_data_block(sb, first_blocknr,
+					PMFS_BLOCK_TYPE_4K, NULL, 1);
 	}
 	return freed;
 }
@@ -630,7 +632,7 @@ void pmfs_free_mem_addr(struct super_block *sb, __le64 addr, u32 btype)
 				pmfs_get_block(sb, pair->nvmm_entry);
 		if (GET_INVALID(entry->block) < 4000)
 			entry->block++;
-		pmfs_free_data_block(sb, pair->nvmm, btype);
+		pmfs_free_data_block(sb, pair->nvmm, btype, NULL, 1);
 		pair->nvmm_entry = 0;
 		pair->nvmm = 0;
 	}
@@ -779,7 +781,7 @@ static void pmfs_decrease_btree_height(struct super_block *sb,
 		blocknr = pmfs_get_blocknr(sb, le64_to_cpu(newroot),
 			PMFS_BLOCK_TYPE_4K);
 		newroot = root[0];
-		pmfs_free_data_block(sb, blocknr, PMFS_BLOCK_TYPE_4K);
+		pmfs_free_data_block(sb, blocknr, PMFS_BLOCK_TYPE_4K, NULL, 1);
 		height--;
 	}
 update_root_and_height:
@@ -973,7 +975,8 @@ static void __pmfs_truncate_blocks(struct inode *inode, loff_t start,
 	if (pi->height == 0) {
 		first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
 			pi->i_blk_type);
-		pmfs_free_data_block(sb, first_blocknr, pi->i_blk_type);
+		pmfs_free_data_block(sb, first_blocknr,
+					pi->i_blk_type, NULL, 1);
 		root = 0;
 		freed = 1;
 	} else {
@@ -983,7 +986,7 @@ static void __pmfs_truncate_blocks(struct inode *inode, loff_t start,
 			first_blocknr = pmfs_get_blocknr(sb, le64_to_cpu(root),
 				PMFS_BLOCK_TYPE_4K);
 			pmfs_free_data_block(sb, first_blocknr,
-					PMFS_BLOCK_TYPE_4K);
+					PMFS_BLOCK_TYPE_4K, NULL, 1);
 			root = 0;
 		}
 	}
@@ -1231,7 +1234,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 					clear_bit(leaf->nvmm, bm->bitmap_4k);
 				if (free)
 					pmfs_free_data_block(sb, leaf->nvmm,
-						pi->i_blk_type);
+						pi->i_blk_type, NULL, 1);
 				pmfs_dbg_verbose("Free block @ %lu\n",
 							leaf->nvmm);
 				//FIXME: garbage collection
@@ -1483,7 +1486,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 					clear_bit(root->nvmm, bm->bitmap_4k);
 				if (free)
 					pmfs_free_data_block(sb, root->nvmm,
-							pi->i_blk_type);
+						pi->i_blk_type, NULL, 1);
 				pmfs_dbg_verbose("Free root block @ %lu\n",
 						root->nvmm);
 				pi->i_blocks--;
@@ -2777,7 +2780,8 @@ static void free_curr_page(struct super_block *sb, struct pmfs_inode *pi,
 
 	last_page->page_tail.next_page = curr_page->page_tail.next_page;
 	pmfs_flush_buffer(&last_page->page_tail.next_page, CACHELINE_SIZE, 1);
-	pmfs_free_data_block(sb, pmfs_get_blocknr(sb, curr_head, btype), btype);
+	pmfs_free_data_block(sb, pmfs_get_blocknr(sb, curr_head, btype),
+					btype, NULL, 1);
 }
 
 int pmfs_inode_log_garbage_collection(struct super_block *sb,
@@ -2857,7 +2861,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 		pmfs_dbg_verbose("Free log head block 0x%llx\n",
 					curr >> PAGE_SHIFT);
 		pmfs_free_data_block(sb, pmfs_get_blocknr(sb, curr, btype),
-					btype);
+					btype, NULL, 1);
 	}
 	PMFS_END_TIMING(log_gc_t, gc_time);
 	return 0;

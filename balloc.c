@@ -233,14 +233,6 @@ block_found:
 	free_steps += step;
 }
 
-inline void __pmfs_free_data_block(struct super_block *sb,
-	unsigned long blocknr, unsigned short btype,
-	struct pmfs_blocknode **start_hint)
-{
-	pmfs_dbg_verbose("Free data block %lu\n", blocknr);
-	__pmfs_free_block(sb, blocknr, btype, start_hint, 0);
-}
-
 inline void __pmfs_free_log_block(struct super_block *sb,
 	unsigned long blocknr, unsigned short btype,
 	struct pmfs_blocknode **start_hint)
@@ -270,12 +262,28 @@ void pmfs_free_cache_block(unsigned long page_addr)
 }
 
 void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,
-		      unsigned short btype)
+	unsigned short btype, struct pmfs_blocknode **start_hint, int needlock)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	timing_t free_time;
 
 	pmfs_dbg_verbose("Free data block %lu\n", blocknr);
+	PMFS_START_TIMING(free_data_t, free_time);
+	if (needlock)
+		mutex_lock(&sbi->s_lock);
+	__pmfs_free_block(sb, blocknr, btype, start_hint, 0);
+	if (needlock)
+		mutex_unlock(&sbi->s_lock);
+	PMFS_END_TIMING(free_data_t, free_time);
+}
+
+void pmfs_free_log_block(struct super_block *sb, unsigned long blocknr,
+		      unsigned short btype)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	timing_t free_time;
+
+	pmfs_dbg_verbose("Free log block %lu\n", blocknr);
 	PMFS_START_TIMING(free_data_t, free_time);
 	mutex_lock(&sbi->s_lock);
 	__pmfs_free_block(sb, blocknr, btype, NULL, 0);
