@@ -264,6 +264,7 @@ void pmfs_free_data_block(struct super_block *sb, unsigned long blocknr,
 	if (needlock)
 		mutex_lock(&sbi->s_lock);
 	__pmfs_free_block(sb, blocknr, btype, start_hint, 0);
+	free_data_pages++;
 	if (needlock)
 		mutex_unlock(&sbi->s_lock);
 	PMFS_END_TIMING(free_data_t, free_time);
@@ -280,6 +281,7 @@ void pmfs_free_log_block(struct super_block *sb, unsigned long blocknr,
 	if (needlock)
 		mutex_lock(&sbi->s_lock);
 	__pmfs_free_block(sb, blocknr, btype, start_hint, 1);
+	free_log_pages++;
 	if (needlock)
 		mutex_unlock(&sbi->s_lock);
 	PMFS_END_TIMING(free_log_t, free_time);
@@ -325,7 +327,7 @@ unsigned long pmfs_new_cache_block(struct super_block *sb,
 
 /* Return how many blocks allocated */
 static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
-		unsigned int num, unsigned short btype, int zero)
+		unsigned int num, unsigned short btype, int zero, int log_page)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct list_head *head = &(sbi->block_inuse_head);
@@ -448,6 +450,10 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	
 	if (found == 1) {
 		sbi->num_free_blocks -= num_blocks;
+		if (log_page)
+			alloc_log_pages += num_blocks;
+		else
+			alloc_data_pages += num_blocks;
 	}	
 
 	mutex_unlock(&sbi->s_lock);
@@ -487,7 +493,7 @@ inline int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	int allocated;
 	timing_t alloc_time;
 	PMFS_START_TIMING(new_data_blocks_t, alloc_time);
-	allocated = pmfs_new_blocks(sb, blocknr, num, btype, zero);
+	allocated = pmfs_new_blocks(sb, blocknr, num, btype, zero, 0);
 	PMFS_END_TIMING(new_data_blocks_t, alloc_time);
 	return allocated;
 }
@@ -498,7 +504,7 @@ inline int pmfs_new_log_blocks(struct super_block *sb, unsigned long *blocknr,
 	int allocated;
 	timing_t alloc_time;
 	PMFS_START_TIMING(new_log_blocks_t, alloc_time);
-	allocated = pmfs_new_blocks(sb, blocknr, num, btype, zero);
+	allocated = pmfs_new_blocks(sb, blocknr, num, btype, zero, 1);
 	PMFS_END_TIMING(new_log_blocks_t, alloc_time);
 	return allocated;
 }

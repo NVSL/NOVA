@@ -200,6 +200,10 @@ extern unsigned long long page_cache_write_bytes;
 extern unsigned long long fsync_bytes;
 extern unsigned long long checked_pages;
 extern unsigned long gc_pages;
+extern unsigned long alloc_data_pages;
+extern unsigned long free_data_pages;
+extern unsigned long alloc_log_pages;
+extern unsigned long free_log_pages;
 
 extern int measure_timing;
 extern int contiguous_allocation;

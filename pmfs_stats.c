@@ -71,6 +71,10 @@ unsigned long long page_cache_write_bytes;
 unsigned long long fsync_bytes;
 unsigned long long checked_pages;
 unsigned long gc_pages;
+unsigned long alloc_data_pages;
+unsigned long free_data_pages;
+unsigned long alloc_log_pages;
+unsigned long free_log_pages;
 
 void pmfs_print_blocknode_list(struct super_block *sb)
 {
@@ -104,6 +108,15 @@ void pmfs_print_blocknode_list(struct super_block *sb)
 			checked_pages / Countstats[log_gc_t] : 0,
 		gc_pages, Countstats[log_gc_t] ?
 			gc_pages / Countstats[log_gc_t] : 0);
+}
+
+void pmfs_print_malloc_stats(struct super_block *sb)
+{
+	printk("======== PMFS NVMM malloc stats ========\n");
+	printk("Allocated %lu data pages\n", alloc_data_pages);
+	printk("Freed %lu data pages\n", free_data_pages);
+	printk("Allocated %lu log pages\n", alloc_log_pages);
+	printk("Freed %lu log pages\n", free_log_pages);
 }
 
 void pmfs_print_IO_stats(struct super_block *sb)
@@ -154,6 +167,7 @@ void pmfs_print_timing_stats(struct super_block *sb)
 	}
 
 	pmfs_print_blocknode_list(sb);
+	pmfs_print_malloc_stats(sb);
 	pmfs_print_IO_stats(sb);
 }
 
@@ -273,11 +287,11 @@ out:
 
 void pmfs_detect_memory_leak(struct super_block *sb)
 {
-	if (Countstats[new_meta_block_t] != Countstats[free_meta_t])
+	if (Countstats[new_meta_block_t] > Countstats[free_meta_t])
 		pmfs_dbg("%s: meta block memory leak! "
 			"allocated %llu, freed %llu\n", __func__,
 			Countstats[new_meta_block_t], Countstats[free_meta_t]);
-	if (Countstats[new_cache_page_t] != Countstats[free_cache_t])
+	if (Countstats[new_cache_page_t] > Countstats[free_cache_t])
 		pmfs_dbg("%s: cache block memory leak! "
 			"allocated %llu, freed %llu\n", __func__,
 			Countstats[new_cache_page_t], Countstats[free_cache_t]);
