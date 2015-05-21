@@ -691,6 +691,7 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	INIT_LIST_HEAD(&pmfs_inode_info_list);
 	spin_lock_init(&inode_list_lock);
 	spin_lock_init(&sbi->header_tree_lock);
+	sbi->block_inuse_tree = RB_ROOT;
 
 	if (pmfs_parse_options(data, sbi, 0))
 		goto out;

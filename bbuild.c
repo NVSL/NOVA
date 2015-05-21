@@ -74,6 +74,7 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 		blknode->block_low = le64_to_cpu(p[index].block_low);
 		blknode->block_high = le64_to_cpu(p[index].block_high);
 		list_add_tail(&blknode->link, &sbi->block_inuse_head);
+		pmfs_insert_blocknode(sbi, blknode);
 	}
 }
 
@@ -348,6 +349,8 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 			/* Fill the gap completely */
 			if (next_i) {
 				i->block_high = next_i->block_high;
+				rb_erase(&next_i->node,
+					&sbi->block_inuse_tree);
 				list_del(&next_i->link);
 				free_blocknode = next_i;
 			} else {
@@ -382,6 +385,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 				curr_node->block_low = new_block_low;
 				curr_node->block_high = new_block_high;
 				list_add(&curr_node->link, &i->link);
+				pmfs_insert_blocknode(sbi, curr_node);
 			}
 			found = 1;
 			break;
@@ -399,6 +403,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 			curr_node->block_low = new_block_low;
 			curr_node->block_high = new_block_high;
 			list_add(&curr_node->link, &i->link);
+			pmfs_insert_blocknode(sbi, curr_node);
 			found = 1;
 			break;
 		}

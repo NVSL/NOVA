@@ -452,6 +452,7 @@ struct pmfs_blocknode_lowhigh {
                
 struct pmfs_blocknode {
 	struct list_head link;
+	struct rb_node node;
 	unsigned long block_low;
 	unsigned long block_high;
 };
@@ -495,6 +496,7 @@ struct pmfs_sb_info {
 	phys_addr_t	phys_addr;
 	void		*virt_addr;
 	struct list_head block_inuse_head;
+	struct rb_root	block_inuse_tree;
 	unsigned long	block_start;
 	unsigned long	block_end;
 	unsigned long	num_free_blocks;
@@ -1076,6 +1078,10 @@ extern int pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih, struct pmfs_inode_entry *data,
 	struct scan_bitmap *bm,	u64 address, bool nvmm, bool free,
 	bool alloc_dram);
+
+/* balloc.c */
+int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
+	struct pmfs_blocknode *new_node);
 
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);
