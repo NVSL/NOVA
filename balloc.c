@@ -276,13 +276,13 @@ void pmfs_free_log_block(struct super_block *sb, unsigned long blocknr,
 	timing_t free_time;
 
 	pmfs_dbg_verbose("Free log block %lu\n", blocknr);
-	PMFS_START_TIMING(free_data_t, free_time);
+	PMFS_START_TIMING(free_log_t, free_time);
 	if (needlock)
 		mutex_lock(&sbi->s_lock);
 	__pmfs_free_block(sb, blocknr, btype, start_hint, 1);
 	if (needlock)
 		mutex_unlock(&sbi->s_lock);
-	PMFS_END_TIMING(free_data_t, free_time);
+	PMFS_END_TIMING(free_log_t, free_time);
 }
 
 int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
@@ -489,6 +489,17 @@ inline int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	PMFS_START_TIMING(new_data_blocks_t, alloc_time);
 	allocated = pmfs_new_blocks(sb, blocknr, num, btype, zero);
 	PMFS_END_TIMING(new_data_blocks_t, alloc_time);
+	return allocated;
+}
+
+inline int pmfs_new_log_blocks(struct super_block *sb, unsigned long *blocknr,
+		unsigned int num, unsigned short btype, int zero)
+{
+	int allocated;
+	timing_t alloc_time;
+	PMFS_START_TIMING(new_log_blocks_t, alloc_time);
+	allocated = pmfs_new_blocks(sb, blocknr, num, btype, zero);
+	PMFS_END_TIMING(new_log_blocks_t, alloc_time);
 	return allocated;
 }
 

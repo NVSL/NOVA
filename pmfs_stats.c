@@ -34,9 +34,11 @@ const char *Timingstring[TIMING_NUM] =
 	"handle_partial_block",
 
 	"new_data_blocks",
+	"new_log_blocks",
 	"new_meta_block",
 	"new_cache_page",
 	"free_data_blocks",
+	"free_log_blocks",
 	"free_meta_blocks",
 	"free_cache_blocks",
 
