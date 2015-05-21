@@ -247,6 +247,9 @@ static void __pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 				goto Found;
 			}
 
+			if (new_block_high < i->block_low)
+				break;
+
 			if (i->link.next == head)
 				break;
 			else
