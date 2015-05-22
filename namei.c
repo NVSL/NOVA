@@ -461,6 +461,7 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 	pmfs_transaction_t *trans;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino), *pidir;
+	struct pmfs_inode_info *si = PMFS_I(inode);
 	int err = -ENOTEMPTY;
 	timing_t rmdir_time;
 
@@ -509,7 +510,7 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 
 	pmfs_commit_transaction(sb, trans);
 
-	pmfs_delete_dir_tree(sb, inode);
+	pmfs_delete_dir_tree(sb, si);
 	PMFS_END_TIMING(rmdir_t, rmdir_time);
 	return err;
 end_rmdir:
