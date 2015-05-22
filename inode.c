@@ -3296,6 +3296,8 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
 
 		curr_p += sizeof(struct pmfs_inode_entry);
 		if (is_last_entry(curr_p, sizeof(struct pmfs_inode_entry))) {
+			if (curr_p == pi->log_tail)
+				break;
 			sih->log_pages++;
 			curr_p = next_log_page(sb, curr_p);
 			if (bm) {
