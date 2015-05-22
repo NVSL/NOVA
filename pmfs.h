@@ -462,6 +462,7 @@ extern struct kmem_cache *pmfs_header_cachep;
 struct pmfs_inode_info_header {
 	u64	root;			/* File Btree root */
 	u8	height;			/* File Btree height */
+	u16	i_mode;			/* Dir or file? */
 	u32	log_pages;		/* Num of log pages */
 	struct rb_root	dir_tree;	/* Dir name entry tree root */
 };

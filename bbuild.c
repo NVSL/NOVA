@@ -544,7 +544,8 @@ int pmfs_setup_blocknode_map(struct super_block *sb)
 
 struct kmem_cache *pmfs_header_cachep;
 
-struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb)
+struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
+	u16 i_mode)
 {
 	struct pmfs_inode_info_header *p;
 	p = (struct pmfs_inode_info_header *)
@@ -557,6 +558,7 @@ struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb)
 	p->height = 0;
 	p->log_pages = 0;
 	p->dir_tree = RB_ROOT;
+	p->i_mode = i_mode;
 
 	return p;
 }
@@ -798,7 +800,7 @@ static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 		pmfs_dbg_verbose("This is thread %d, processing file %p, "
 				"ino %lu, head 0x%llx, tail 0x%llx\n",
 				cpuid, pi, ino, pi->log_head, pi->log_tail);
-		sih = pmfs_alloc_header(sb);
+		sih = pmfs_alloc_header(sb, __le16_to_cpu(pi->i_mode));
 		pmfs_rebuild_file_inode_tree(sb, pi, sih, ino, bm);
 		pmfs_assign_info_header(sb, ino, sih, multithread);
 		break;
@@ -806,7 +808,7 @@ static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 		pmfs_dbg_verbose("This is thread %d, processing dir %p, "
 				"ino %lu, head 0x%llx, tail 0x%llx\n",
 				cpuid, pi, ino, pi->log_head, pi->log_tail);
-		sih = pmfs_alloc_header(sb);
+		sih = pmfs_alloc_header(sb, __le16_to_cpu(pi->i_mode));
 		pmfs_rebuild_dir_inode_tree(sb, pi, sih, ino, bm);
 		pmfs_assign_info_header(sb, ino, sih, multithread);
 		break;
