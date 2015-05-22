@@ -347,6 +347,9 @@ inline int pmfs_replay_remove_entry(struct super_block *sb,
 void pmfs_rebuild_dir_time_and_size(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_log_direntry *entry)
 {
+	if (!entry || !pi)
+		return;
+
 	pi->i_ctime = cpu_to_le32(entry->ctime);
 	pi->i_mtime = cpu_to_le32(entry->mtime);
 	pi->i_size = cpu_to_le64(entry->size);
@@ -357,7 +360,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih, unsigned long ino,
 	struct scan_bitmap *bm)
 {
-	struct pmfs_log_direntry *entry;
+	struct pmfs_log_direntry *entry = NULL;
 	struct pmfs_inode_log_page *curr_page;
 	u64 curr_p = pi->log_head;
 	u64 next;
@@ -407,13 +410,14 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
 			/* Delete the entry */
 			ret = pmfs_replay_remove_entry(sb, pi, sih, entry);
 		}
-		pmfs_rebuild_dir_time_and_size(sb, pi, entry);
 		curr_p += entry->de_len;
 		if (ret) {
 			pmfs_err(sb, "%s ERROR %d\n", __func__, ret);
 			break;
 		}
 	}
+
+	pmfs_rebuild_dir_time_and_size(sb, pi, entry);
 
 	/* Keep traversing until log ends */
 	curr_p &= PAGE_MASK;
