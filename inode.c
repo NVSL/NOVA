@@ -524,9 +524,8 @@ static int recursive_truncate_blocks(struct super_block *sb, __le64 block,
  * end: last byte offset of the range
  */
 static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
-	u32 height, u32 btype, unsigned long first_blocknr,
-	unsigned long last_blocknr, unsigned long start_pgoff,
-	bool *meta_empty)
+	u32 height, unsigned long first_blocknr, unsigned long last_blocknr,
+	unsigned long start_pgoff, bool *meta_empty)
 {
 	unsigned long first_blk, last_blk, page_addr;
 	unsigned int node_bits, first_index, last_index, i;
@@ -571,7 +570,7 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 
 			pgoff = start_pgoff + (i << node_bits);
 			freed += recursive_truncate_meta_blocks(sb,
-				DRAM_ADDR(node[i]), height - 1, btype,
+				DRAM_ADDR(node[i]), height - 1,
 				first_blk, last_blk, pgoff, &mpty);
 			/* cond_resched(); */
 			if (mpty) {
@@ -689,8 +688,7 @@ unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
 }
 
 unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_inode_info *si,
-	unsigned long last_blocknr)
+	struct pmfs_inode_info *si, unsigned long last_blocknr)
 {
 	struct pmfs_inode_info_header *sih = &si->header;
 	unsigned long first_blocknr;
@@ -698,7 +696,6 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 	bool mpty;
 	__le64 root = sih->root;
 	u32 height = sih->height;
-	u32 btype = pi->i_blk_type;
 
 	if (!root)
 		return 0;
@@ -718,7 +715,7 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 	first_blocknr = 0;
 
 	freed = recursive_truncate_meta_blocks(sb, DRAM_ADDR(root),
-			height, btype, first_blocknr, last_blocknr, 0, &mpty);
+			height, first_blocknr, last_blocknr, 0, &mpty);
 	BUG_ON(!mpty);
 	first_blocknr = root;
 	pmfs_free_meta_block(sb, first_blocknr);
@@ -3225,7 +3222,7 @@ void pmfs_free_dram_pages(struct super_block *sb)
 				"last block %lu\n", __func__, inode->i_ino,
 				sih->height, sih->root, last_blocknr);
 		if (S_ISREG(pi->i_mode)) {
-			freed = pmfs_free_file_meta_blocks(sb, pi, si,
+			freed = pmfs_free_file_meta_blocks(sb, si,
 							last_blocknr);
 		} else {
 			pmfs_delete_dir_tree(sb, inode);
