@@ -259,8 +259,11 @@ static void __pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	}
 
 	i = pmfs_find_blocknode(sbi, new_block_low, &step);
-	if (!i)
-		BUG();
+	if (!i) {
+		pmfs_dbg("%s ERROR: %lu - %lu not found\n", __func__,
+				new_block_low, new_block_high);
+		return;
+	}
 
 Found:
 	if ((new_block_low == i->block_low) &&

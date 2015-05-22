@@ -306,25 +306,6 @@ static inline bool is_empty_meta_block(__le64 *node, unsigned int start_idx,
 	return true;
 }
 
-void pmfs_free_contiguous_data_blocks(struct super_block *sb,
-	struct pmfs_inode_entry *entry, unsigned long nvmm,
-	unsigned long pgoff, unsigned int i, unsigned int first,
-	unsigned last, u32 btype, struct pmfs_blocknode **start_hint)
-{
-	int wanted, able;
-	int num;
-
-	if (i != first && pgoff != entry->pgoff)
-		return;
-
-	wanted = last - i + 1;
-	able = entry->num_pages - (pgoff - entry->pgoff);
-	num = wanted > able ? able : wanted;
-
-	pmfs_free_data_blocks(sb, nvmm, num, btype, start_hint, 0);
-	pmfs_dbg_verbose("Free %d blocks from @ %lu\n", num, nvmm);
-}
-
 /* recursive_truncate_file_blocks: recursively deallocate a range of blocks from
  * first_blocknr to last_blocknr in the inode's btree.
  * Input:
@@ -349,6 +330,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 	unsigned long pgoff;
 	struct pmfs_inode_entry *entry;
 	struct mem_addr *pair;
+	unsigned long start_blocknr = 0, num_free = 0;
 
 	node = (__le64 *)block;
 
@@ -376,9 +358,20 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 				if (GET_INVALID(entry->block) < 4000)
 					entry->block++;
 
-				pmfs_free_contiguous_data_blocks(sb, entry,
-					pair->nvmm, pgoff, i, first_index,
-					last_index, btype, &start_hint);
+				if (start_blocknr == 0) {
+					start_blocknr = pair->nvmm;
+					num_free = 1;
+				} else {
+					if (pair->nvmm == start_blocknr + num_free) {
+						num_free++;
+					} else {
+						/* A new start */
+						pmfs_free_data_blocks(sb, start_blocknr,
+							num_free, btype, &start_hint, 0);
+						start_blocknr = pair->nvmm;
+						num_free = 1;
+					}
+				}
 				pair->nvmm_entry = 0;
 				pair->nvmm = 0;
 			}
@@ -387,6 +380,9 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 			node[i] = 0;
 			freed++;
 		}
+		if (start_blocknr)
+			pmfs_free_data_blocks(sb, start_blocknr,
+				num_free, btype, &start_hint, 0);
 		mutex_unlock(&sbi->s_lock);
 	} else {
 		for (i = first_index; i <= last_index; i++) {
