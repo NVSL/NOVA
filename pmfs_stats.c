@@ -75,6 +75,10 @@ unsigned long alloc_data_pages;
 unsigned long free_data_pages;
 unsigned long alloc_log_pages;
 unsigned long free_log_pages;
+atomic64_t meta_alloc = ATOMIC_INIT(0);
+atomic64_t meta_free = ATOMIC_INIT(0);
+atomic64_t cache_alloc = ATOMIC_INIT(0);
+atomic64_t cache_free = ATOMIC_INIT(0);
 
 void pmfs_print_blocknode_list(struct super_block *sb)
 {
@@ -287,12 +291,12 @@ out:
 
 void pmfs_detect_memory_leak(struct super_block *sb)
 {
-	if (Countstats[new_meta_block_t] > Countstats[free_meta_t])
+	if (atomic64_read(&meta_alloc) != atomic64_read(&meta_free))
 		pmfs_dbg("%s: meta block memory leak! "
-			"allocated %llu, freed %llu\n", __func__,
-			Countstats[new_meta_block_t], Countstats[free_meta_t]);
-	if (Countstats[new_cache_page_t] > Countstats[free_cache_t])
+			"allocated %ld, freed %ld\n", __func__,
+			atomic64_read(&meta_alloc), atomic64_read(&meta_free));
+	if (atomic64_read(&cache_alloc) != atomic64_read(&cache_free))
 		pmfs_dbg("%s: cache block memory leak! "
-			"allocated %llu, freed %llu\n", __func__,
-			Countstats[new_cache_page_t], Countstats[free_cache_t]);
+			"allocated %ld, freed %ld\n", __func__,
+			atomic64_read(&cache_alloc), atomic64_read(&cache_free));
 }

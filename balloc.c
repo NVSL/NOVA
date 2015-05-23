@@ -341,6 +341,7 @@ void pmfs_free_meta_block(struct super_block *sb, unsigned long page_addr)
 	pmfs_dbg_verbose("Free meta block 0x%lx\n", page_addr);
 	pmfs_free_dram_page(page_addr);
 	PMFS_END_TIMING(free_meta_t, free_time);
+	atomic64_inc(&meta_free);
 }
 
 void pmfs_free_cache_block(unsigned long page_addr)
@@ -351,6 +352,7 @@ void pmfs_free_cache_block(unsigned long page_addr)
 	pmfs_dbg_verbose("Free cache block 0x%lx\n", page_addr);
 	pmfs_free_dram_page(page_addr);
 	PMFS_END_TIMING(free_cache_t, free_time);
+	atomic64_inc(&cache_free);
 }
 
 void pmfs_free_data_blocks(struct super_block *sb, unsigned long blocknr,
@@ -405,6 +407,7 @@ int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
 	*blocknr = page_addr;
 	pmfs_dbg_verbose("%s: 0x%lx\n", __func__, page_addr);
 	PMFS_END_TIMING(new_meta_block_t, alloc_time);
+	atomic64_inc(&meta_alloc);
 	return 0;
 }
 
@@ -424,6 +427,7 @@ unsigned long pmfs_new_cache_block(struct super_block *sb,
 	}
 
 	PMFS_END_TIMING(new_cache_page_t, alloc_time);
+	atomic64_inc(&cache_alloc);
 	return page_addr;
 }
 
