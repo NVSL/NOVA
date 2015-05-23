@@ -996,7 +996,7 @@ void pmfs_free_blocknode(struct super_block *sb, struct pmfs_blocknode *bnode)
 void pmfs_free_dirnode(struct super_block *sb, struct pmfs_dir_node *node)
 {
 	kmem_cache_free(pmfs_dirnode_cachep, node);
-//	atomic64_inc(&dirnode_free);
+	atomic64_inc(&dirnode_free);
 }
 
 inline pmfs_transaction_t *pmfs_alloc_transaction(void)
@@ -1022,7 +1022,7 @@ struct pmfs_dir_node *pmfs_alloc_dirnode(struct super_block *sb)
 	struct pmfs_dir_node *p;
 	p = (struct pmfs_dir_node *)
 		kmem_cache_alloc(pmfs_dirnode_cachep, GFP_NOFS);
-//	atomic64_inc(&dirnode_alloc);
+	atomic64_inc(&dirnode_alloc);
 	return p;
 }
 

@@ -81,6 +81,8 @@ atomic64_t cache_alloc = ATOMIC_INIT(0);
 atomic64_t cache_free = ATOMIC_INIT(0);
 atomic64_t mempair_alloc = ATOMIC_INIT(0);
 atomic64_t mempair_free = ATOMIC_INIT(0);
+atomic64_t dirnode_alloc = ATOMIC_INIT(0);
+atomic64_t dirnode_free = ATOMIC_INIT(0);
 
 void pmfs_print_blocknode_list(struct super_block *sb)
 {
@@ -307,4 +309,9 @@ void pmfs_detect_memory_leak(struct super_block *sb)
 			"allocated %ld, freed %ld\n", __func__,
 			atomic64_read(&mempair_alloc),
 			atomic64_read(&mempair_free));
+	if (atomic64_read(&dirnode_alloc) != atomic64_read(&dirnode_free))
+		pmfs_dbg("%s: dirnode memory leak! "
+			"allocated %ld, freed %ld\n", __func__,
+			atomic64_read(&dirnode_alloc),
+			atomic64_read(&dirnode_free));
 }
