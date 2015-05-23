@@ -5,6 +5,7 @@ const char *Timingstring[TIMING_NUM] =
 	"init",
 	"mount",
 	"ioremap",
+	"recovery",
 
 	"create",
 	"lookup",
@@ -57,7 +58,6 @@ const char *Timingstring[TIMING_NUM] =
 	"evict_inode",
 	"mmap_page_fault",
 	"malloc_test",
-	"Recovery",
 };
 
 unsigned long long Timingstats[TIMING_NUM];

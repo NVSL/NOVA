@@ -1197,7 +1197,9 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	bool value = false;
 	bool set_bm = true;
 	int ret;
+	timing_t recovery_time;
 
+	PMFS_START_TIMING(recovery_t, recovery_time);
 	sbi->block_start = (unsigned long)0;
 	sbi->block_end = ((unsigned long)(initsize) >> PAGE_SHIFT);
 
@@ -1244,5 +1246,6 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 		free_bm(bm);
 	}
 
+	PMFS_END_TIMING(recovery_t, recovery_time);
 	return ret;
 }

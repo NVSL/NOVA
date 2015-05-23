@@ -263,12 +263,9 @@ setversion_out:
 	}
 	case PMFS_TEST_MULTITHREAD_RECOVERY: {
 		int multithread;
-		timing_t recovery_time;
 		copy_from_user(&multithread, (void *)arg,
 					sizeof(int));
-		PMFS_START_TIMING(recovery_t, recovery_time);
 		pmfs_inode_log_recovery(sb, multithread);
-		PMFS_END_TIMING(recovery_t, recovery_time);
 		return 0;
 	}
 	default:

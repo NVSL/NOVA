@@ -127,6 +127,7 @@ enum timing_category {
 	init_t,
 	mount_t,
 	ioremap_t,
+	recovery_t,
 
 	/* Namei operations */
 	create_t,
@@ -185,7 +186,6 @@ enum timing_category {
 	evict_inode_t,
 	mmap_fault_t,
 	malloc_test_t,
-	recovery_t,
 
 	/* Sentinel */
 	TIMING_NUM,
