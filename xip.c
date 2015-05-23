@@ -741,6 +741,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	if (pos > inode->i_size) {
 		i_size_write(inode, pos);
+		sih->i_size = pos;
 //		pmfs_update_isize(inode, pi);
 	}
 
@@ -950,6 +951,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	if (pos > inode->i_size) {
 		i_size_write(inode, pos);
+		sih->i_size = pos;
 		/* Don't update the actual size for pi */
 //		pmfs_update_isize(inode, pi);
 	}

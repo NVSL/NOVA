@@ -418,6 +418,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
 	}
 
 	pmfs_rebuild_dir_time_and_size(sb, pi, entry);
+	sih->i_size = entry->size;
 
 	/* Keep traversing until log ends */
 	curr_p &= PAGE_MASK;
