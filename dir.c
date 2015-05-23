@@ -207,9 +207,9 @@ void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
 	return;
 }
 
-void pmfs_delete_dir_tree(struct super_block *sb, struct pmfs_inode_info *si)
+void pmfs_delete_dir_tree(struct super_block *sb,
+	struct pmfs_inode_info_header *sih)
 {
-	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
 	timing_t delete_time;

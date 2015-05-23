@@ -704,9 +704,8 @@ unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
 }
 
 unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
-	struct pmfs_inode_info *si, unsigned long last_blocknr)
+	struct pmfs_inode_info_header *sih, unsigned long last_blocknr)
 {
-	struct pmfs_inode_info_header *sih = si->header;
 	unsigned long first_blocknr;
 	unsigned int freed = 0;
 	bool mpty;
@@ -1932,7 +1931,7 @@ void pmfs_evict_inode(struct inode *inode)
 		case S_IFDIR:
 			pmfs_dbg_verbose("%s: dir ino %lu\n",
 					__func__, inode->i_ino);
-			pmfs_delete_dir_tree(sb, si);
+			pmfs_delete_dir_tree(sb, sih);
 			break;
 		case S_IFLNK:
 			freed = pmfs_free_inode_subtree(sb, root, height,
@@ -3247,10 +3246,10 @@ void pmfs_free_dram_pages(struct super_block *sb)
 				"last block %lu\n", __func__, inode->i_ino,
 				sih->height, sih->root, last_blocknr);
 		if (S_ISREG(pi->i_mode)) {
-			freed = pmfs_free_file_meta_blocks(sb, si,
+			freed = pmfs_free_file_meta_blocks(sb, sih,
 							last_blocknr);
 		} else {
-			pmfs_delete_dir_tree(sb, si);
+			pmfs_delete_dir_tree(sb, sih);
 			freed = 1;
 		}
 		pmfs_dbg_verbose("%s after: inode %lu, height %u, root 0x%llx, "
