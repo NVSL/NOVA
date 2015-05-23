@@ -3237,32 +3237,6 @@ int pmfs_free_dram_resource(struct super_block *sb,
 	return freed;
 }
 
-/* When fs is umount, free all dram pages */
-void pmfs_free_dram_pages(struct super_block *sb)
-{
-	struct pmfs_inode_info *si;
-	struct pmfs_inode_info_header *sih;
-	struct inode *inode;
-	unsigned int freed;
-	unsigned long flags;
-
-	spin_lock_irqsave(&inode_list_lock, flags);
-	list_for_each_entry(si, &pmfs_inode_info_list, link) {
-		inode = &si->vfs_inode;
-		sih = si->header;
-		if (inode->i_ino <= 1) {
-			pmfs_dbg("%s error: ino %lu\n", __func__, inode->i_ino);
-			continue;
-		}
-		freed = pmfs_free_dram_resource(sb, sih);
-		pmfs_dbg_verbose("%s after: inode %lu, height %u, root 0x%llx, "
-				"freed %u\n", __func__, inode->i_ino, sih->height,
-				sih->root, freed);
-	}
-
-	spin_unlock_irqrestore(&inode_list_lock, flags);
-}
-
 void pmfs_rebuild_file_time_and_size(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_entry *entry)
 {

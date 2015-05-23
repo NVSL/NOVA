@@ -571,9 +571,6 @@ static inline struct pmfs_inode_info *PMFS_I(struct inode *inode)
 	return container_of(inode, struct pmfs_inode_info, vfs_inode);
 }
 
-extern struct list_head pmfs_inode_info_list;
-extern spinlock_t inode_list_lock;
-
 /* If this is part of a read-modify-write of the super block,
  * pmfs_memunlock_super() before calling! */
 static inline struct pmfs_super_block *pmfs_get_super(struct super_block *sb)
@@ -1080,7 +1077,6 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	unsigned short de_len, u64 tail, int link_change);
 int pmfs_append_dir_init_entries(struct super_block *sb,
 	struct pmfs_inode *pi, u64 self_ino, u64 parent_ino);
-void pmfs_free_dram_pages(struct super_block *sb);
 int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct pmfs_inode *p,
 	struct pmfs_inode_info_header *sih, unsigned long ino,
 	struct scan_bitmap *bm);
