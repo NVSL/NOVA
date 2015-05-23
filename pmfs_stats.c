@@ -79,6 +79,8 @@ atomic64_t meta_alloc = ATOMIC_INIT(0);
 atomic64_t meta_free = ATOMIC_INIT(0);
 atomic64_t cache_alloc = ATOMIC_INIT(0);
 atomic64_t cache_free = ATOMIC_INIT(0);
+atomic64_t mempair_alloc = ATOMIC_INIT(0);
+atomic64_t mempair_free = ATOMIC_INIT(0);
 
 void pmfs_print_blocknode_list(struct super_block *sb)
 {
@@ -298,5 +300,11 @@ void pmfs_detect_memory_leak(struct super_block *sb)
 	if (atomic64_read(&cache_alloc) != atomic64_read(&cache_free))
 		pmfs_dbg("%s: cache block memory leak! "
 			"allocated %ld, freed %ld\n", __func__,
-			atomic64_read(&cache_alloc), atomic64_read(&cache_free));
+			atomic64_read(&cache_alloc),
+			atomic64_read(&cache_free));
+	if (atomic64_read(&mempair_alloc) != atomic64_read(&mempair_free))
+		pmfs_dbg("%s: mempair memory leak! "
+			"allocated %ld, freed %ld\n", __func__,
+			atomic64_read(&mempair_alloc),
+			atomic64_read(&mempair_free));
 }

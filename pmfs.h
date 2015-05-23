@@ -208,6 +208,8 @@ extern atomic64_t meta_alloc;
 extern atomic64_t meta_free;
 extern atomic64_t cache_alloc;
 extern atomic64_t cache_free;
+extern atomic64_t mempair_alloc;
+extern atomic64_t mempair_free;
 
 extern int measure_timing;
 extern int contiguous_allocation;

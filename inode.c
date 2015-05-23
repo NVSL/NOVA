@@ -30,6 +30,22 @@ uint32_t blk_type_to_size[PMFS_BLOCK_TYPE_MAX] = {0x1000, 0x200000, 0x40000000};
 
 struct kmem_cache *pmfs_mempair_cachep;
 
+static inline struct mem_addr *pmfs_alloc_mempair(struct super_block *sb)
+{
+	struct mem_addr *p;
+	p = (struct mem_addr *)
+		kmem_cache_alloc(pmfs_mempair_cachep, GFP_NOFS);
+	atomic64_inc(&mempair_alloc);
+	return p;
+}
+
+static inline void pmfs_free_mempair(struct super_block *sb,
+	struct mem_addr *pair)
+{
+	kmem_cache_free(pmfs_mempair_cachep, pair);
+	atomic64_inc(&mempair_free);
+}
+
 void pmfs_print_inode_entry(struct pmfs_inode_entry *entry)
 {
 	pmfs_dbg("entry @%p: pgoff %u, num_pages %u, block 0x%llx, "
@@ -376,7 +392,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 				pair->nvmm = 0;
 			}
 
-			kmem_cache_free(pmfs_mempair_cachep, pair);
+			pmfs_free_mempair(sb, pair);
 			node[i] = 0;
 			freed++;
 		}
@@ -554,7 +570,7 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 				pair->dram = 0;
 				freed++;
 			}
-			kmem_cache_free(pmfs_mempair_cachep, pair);
+			pmfs_free_mempair(sb, pair);
 		}
 		*meta_empty = true;
 		return freed;
@@ -654,7 +670,7 @@ void pmfs_free_mem_addr(struct super_block *sb, __le64 addr, u32 btype)
 		pair->dram = 0;
 	}
 
-	kmem_cache_free(pmfs_mempair_cachep, pair);
+	pmfs_free_mempair(sb, pair);
 }
 
 unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
@@ -707,7 +723,7 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 			pair->dram = 0;
 			freed = 1;
 		}
-		kmem_cache_free(pmfs_mempair_cachep, pair);
+		pmfs_free_mempair(sb, pair);
 		sih->root = 0;
 		return freed;
 	}
@@ -1224,8 +1240,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 	for (i = first_index; i <= last_index; i++) {
 		if (height == 1) {
 			if (node[i] == 0) {
-				node[i] = (unsigned long)kmem_cache_alloc(
-						pmfs_mempair_cachep, GFP_NOFS);
+				node[i] = (unsigned long)pmfs_alloc_mempair(sb);
 				if (node[i] == 0) {
 					pmfs_dbg("%s: alloc failed\n",
 						__func__);
@@ -1445,7 +1460,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 	if (!sih->root) {
 		if (height == 0) {
 			struct mem_addr *root;
-			root = kmem_cache_alloc(pmfs_mempair_cachep, GFP_NOFS);
+			root = pmfs_alloc_mempair(sb);
 			if (!root) {
 				pmfs_dbg("%s: root allocation failed\n",
 					__func__);
