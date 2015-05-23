@@ -694,10 +694,15 @@ static int recursive_assign_info_header(struct super_block *sb,
 				__func__, block, height, index);
 
 	if (height == 1) {
-		if (node[index])
-			pmfs_dbg("%s: node %lu %lu exists! 0x%llx, 0x%lx\n",
-					__func__, index, ino,
+		if (node[index]) {
+			struct pmfs_inode_info_header *old_sih;
+			old_sih = (struct pmfs_inode_info_header *)node[index];
+			if (old_sih->root || old_sih->height)
+				pmfs_dbg("%s: node %lu %lu exists! 0x%llx, "
+					"0x%lx\n", __func__, index, ino,
 					node[index], (unsigned long)sih);
+			pmfs_free_header(sb, old_sih);
+		}
 		node[index] = (unsigned long)sih;
 	} else {
 		if (node[index] == 0) {
