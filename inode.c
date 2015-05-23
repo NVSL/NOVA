@@ -3207,31 +3207,26 @@ static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 	pi->log_head = pi->log_tail = 0;
 }
 
-int pmfs_free_dram_resource(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, struct pmfs_inode_info_header *sih)
+int pmfs_free_dram_resource(struct super_block *sb,
+	struct pmfs_inode_info_header *sih)
 {
 	int freed = 0;
 	unsigned long last_blocknr;
 
-	if (!(S_ISREG(pi->i_mode)) && !(S_ISDIR(pi->i_mode)))
+	if (!(S_ISREG(sih->i_mode)) && !(S_ISDIR(sih->i_mode)))
 		return 0;
 
-	if (pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL)) {
-		last_blocknr = (1UL << (sih->height * META_BLK_SHIFT))
-			    - 1;
-	} else {
-		if (likely(inode->i_size))
-			last_blocknr = (inode->i_size - 1) >>
-				pmfs_inode_blk_shift(pi);
-		else
-			last_blocknr = 0;
-		last_blocknr = pmfs_sparse_last_blocknr(sih->height,
-			last_blocknr);
-	}
-	pmfs_dbg_verbose("%s: inode %lu, height %u, root 0x%llx, "
-				"last block %lu\n", __func__, inode->i_ino,
+	if (likely(sih->i_size))
+		last_blocknr = (sih->i_size - 1) >> PAGE_SHIFT;
+	else
+		last_blocknr = 0;
+
+	last_blocknr = pmfs_sparse_last_blocknr(sih->height,
+		last_blocknr);
+	pmfs_dbg_verbose("%s: height %u, root 0x%llx, "
+				"last block %lu\n", __func__,
 				sih->height, sih->root, last_blocknr);
-	if (S_ISREG(pi->i_mode)) {
+	if (S_ISREG(sih->i_mode)) {
 		freed = pmfs_free_file_meta_blocks(sb, sih,
 						last_blocknr);
 	} else {
@@ -3245,7 +3240,6 @@ int pmfs_free_dram_resource(struct super_block *sb, struct pmfs_inode *pi,
 /* When fs is umount, free all dram pages */
 void pmfs_free_dram_pages(struct super_block *sb)
 {
-	struct pmfs_inode *pi;
 	struct pmfs_inode_info *si;
 	struct pmfs_inode_info_header *sih;
 	struct inode *inode;
@@ -3260,8 +3254,7 @@ void pmfs_free_dram_pages(struct super_block *sb)
 			pmfs_dbg("%s error: ino %lu\n", __func__, inode->i_ino);
 			continue;
 		}
-		pi = pmfs_get_inode(sb, inode->i_ino);
-		freed = pmfs_free_dram_resource(sb, pi, inode, sih);
+		freed = pmfs_free_dram_resource(sb, sih);
 		pmfs_dbg_verbose("%s after: inode %lu, height %u, root 0x%llx, "
 				"freed %u\n", __func__, inode->i_ino, sih->height,
 				sih->root, freed);

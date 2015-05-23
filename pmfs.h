@@ -1091,6 +1091,8 @@ extern int pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih, struct pmfs_inode_entry *data,
 	struct scan_bitmap *bm,	u64 address, bool nvmm, bool free,
 	bool alloc_dram);
+int pmfs_free_dram_resource(struct super_block *sb,
+	struct pmfs_inode_info_header *sih);
 
 /* balloc.c */
 int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,

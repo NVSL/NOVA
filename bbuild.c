@@ -564,7 +564,8 @@ struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
 	return p;
 }
 
-static void pmfs_free_header(struct super_block *sb, void *p)
+static void pmfs_free_header(struct super_block *sb,
+	struct pmfs_inode_info_header *p)
 {
 	kmem_cache_free(pmfs_header_cachep, p);
 	atomic64_inc(&header_free);
@@ -603,6 +604,7 @@ static int pmfs_increase_header_tree_height(struct super_block *sb,
 static int recursive_truncate_header_tree(struct super_block *sb, __le64 block,
 	u32 height, unsigned long first_blocknr)
 {
+	struct pmfs_inode_info_header *sih;
 	unsigned long first_blk, page_addr;
 	unsigned int node_bits, first_index, last_index, i;
 	__le64 *node;
@@ -619,7 +621,9 @@ static int recursive_truncate_header_tree(struct super_block *sb, __le64 block,
 		for (i = first_index; i <= last_index; i++) {
 			if (unlikely(!node[i]))
 				continue;
-			pmfs_free_header(sb, (void *)node[i]);
+			sih = (struct pmfs_inode_info_header *)node[i];
+			pmfs_free_dram_resource(sb, sih);
+			pmfs_free_header(sb, sih);
 			node[i] = 0;
 			freed++;
 		}
@@ -643,6 +647,7 @@ static int recursive_truncate_header_tree(struct super_block *sb, __le64 block,
 
 unsigned int pmfs_free_header_tree(struct super_block *sb)
 {
+	struct pmfs_inode_info_header *sih;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	unsigned long root = sbi->root;
 	unsigned long first_blocknr;
@@ -652,6 +657,8 @@ unsigned int pmfs_free_header_tree(struct super_block *sb)
 		return 0;
 
 	if (sbi->height == 0) {
+		sih = (struct pmfs_inode_info_header *)root;
+		pmfs_free_dram_resource(sb, sih);
 		pmfs_free_header(sb, (void *)root);
 		freed = 1;
 	} else {
