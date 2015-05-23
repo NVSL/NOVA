@@ -387,9 +387,10 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	pi = pmfs_get_inode(sb, inode->i_ino);
 	pmfs_append_dir_init_entries(sb, pi, inode->i_ino, dir->i_ino);
+
 	/* Build the dir tree */
 	si = PMFS_I(inode);
-	sih = &si->header;
+	sih = si->header;
 	pmfs_rebuild_dir_inode_tree(sb, pi, sih, inode->i_ino, NULL);
 
 	set_nlink(inode, 2);
@@ -431,7 +432,7 @@ static int pmfs_empty_dir(struct inode *inode)
 {
 	struct super_block *sb;
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_dir_node *curr;
 	struct pmfs_log_direntry *entry;
 	struct rb_node *temp;

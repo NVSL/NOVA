@@ -597,7 +597,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	struct address_space *mapping = filp->f_mapping;
 	struct inode    *inode = mapping->host;
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi;
 	struct pmfs_inode_entry entry_data;
@@ -809,7 +809,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	struct address_space *mapping = filp->f_mapping;
 	struct inode    *inode = mapping->host;
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi;
 	struct pmfs_inode_entry entry_data;
@@ -974,7 +974,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_inode *pi;
 	struct pmfs_inode_entry entry_data;
 	unsigned long num_blocks;
@@ -1419,7 +1419,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	struct inode *inode = mapping->host;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_inode *pi;
 	struct mem_addr *pair = NULL;
 	struct pmfs_inode_entry entry_data;

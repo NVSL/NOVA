@@ -479,7 +479,7 @@ struct pmfs_inode_info_header {
 };
 
 struct pmfs_inode_info {
-	struct pmfs_inode_info_header header;
+	struct pmfs_inode_info_header *header;
 	__u32   i_dir_start_lookup;
 	struct list_head i_truncated;
 	struct inode	vfs_inode;
@@ -750,7 +750,7 @@ struct mem_addr {
 static inline u64 __pmfs_find_data_block(struct super_block *sb,
 		struct pmfs_inode_info *si, unsigned long blocknr, bool nvmm)
 {
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	__le64 *level_ptr;
 	u64 bp = 0;
 	u32 height, bit_shift;
@@ -813,7 +813,7 @@ pmfs_find_info_header(struct super_block *sb, unsigned long ino)
 static inline u64 __pmfs_find_dir_block(struct super_block *sb,
 		struct pmfs_inode_info *si, unsigned long blocknr)
 {
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	__le64 *level_ptr;
 	u64 bp = 0;
 	u32 height, bit_shift;
@@ -842,7 +842,7 @@ static inline u64 __pmfs_find_dir_block(struct super_block *sb,
 static inline int pmfs_find_dram_page_and_clean(struct super_block *sb,
 	struct pmfs_inode_info *si, unsigned long blocknr, u64 *dram_addr)
 {
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	__le64 *level_ptr;
 	u64 bp = 0;
 	u32 height, bit_shift;
@@ -878,7 +878,7 @@ static inline int pmfs_find_dram_page_and_clean(struct super_block *sb,
 static inline struct mem_addr *__pmfs_get_entry(struct super_block *sb,
 		struct pmfs_inode_info *si, unsigned long blocknr)
 {
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	__le64 *level_ptr;
 	u64 bp = 0;
 	u32 height, bit_shift;
@@ -1098,6 +1098,10 @@ int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);
 unsigned int pmfs_free_header_tree(struct super_block *sb);
+struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
+	u16 i_mode);
+int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
+	struct pmfs_inode_info_header *sih, int multithread);
 int pmfs_inode_log_recovery(struct super_block *sb, int multithread);
 
 /* namei.c */

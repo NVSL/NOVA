@@ -57,7 +57,7 @@ struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
 	unsigned long name_len)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
 	int compVal;
@@ -136,7 +136,7 @@ static inline int pmfs_insert_dir_node(struct super_block *sb,
 	u64 dir_entry)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
 
@@ -175,7 +175,7 @@ static inline void pmfs_remove_dir_node(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, struct dentry *dentry)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
 
@@ -185,7 +185,7 @@ static inline void pmfs_remove_dir_node(struct super_block *sb,
 void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_dir_node *curr;
 	struct pmfs_log_direntry *entry;
 	struct rb_node *temp;
@@ -209,7 +209,7 @@ void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
 
 void pmfs_delete_dir_tree(struct super_block *sb, struct pmfs_inode_info *si)
 {
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
 	timing_t delete_time;
@@ -443,7 +443,7 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi, *pidir;
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = &si->header;
+	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_dir_node *curr;
 	struct pmfs_log_direntry *entry;
 	struct rb_node *temp;

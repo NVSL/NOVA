@@ -544,7 +544,7 @@ int pmfs_setup_blocknode_map(struct super_block *sb)
 
 struct kmem_cache *pmfs_header_cachep;
 
-static struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
+struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
 	u16 i_mode)
 {
 	struct pmfs_inode_info_header *p;
@@ -714,7 +714,8 @@ fail:
 	return errval;
 }
 
-static int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
+/* Ino is divided by INODE_BITS */
+int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 	struct pmfs_inode_info_header *sih, int multithread)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);

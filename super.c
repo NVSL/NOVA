@@ -1035,9 +1035,7 @@ static struct inode *pmfs_alloc_inode(struct super_block *sb)
 	if (!vi)
 		return NULL;
 
-	vi->header.root = 0;
-	vi->header.height = 0;
-	vi->header.log_pages = 0;
+	vi->header = NULL;
 	vi->low_dirty = MAX_BLOCK;
 	vi->high_dirty = 0;
 	vi->vfs_inode.i_version = 1;
@@ -1071,9 +1069,7 @@ static void init_once(void *foo)
 {
 	struct pmfs_inode_info *vi = foo;
 
-	vi->header.dir_tree = RB_ROOT;
-	vi->header.root = 0;
-	vi->header.height = 0;
+	vi->header = NULL;
 	vi->i_dir_start_lookup = 0;
 	INIT_LIST_HEAD(&vi->i_truncated);
 	INIT_LIST_HEAD(&vi->link);
