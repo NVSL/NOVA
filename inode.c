@@ -1718,7 +1718,9 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 		if (rebuild) {
 			recovered_sih = pmfs_find_info_header(sb, ino);
 			if (!recovered_sih) {
-				pmfs_dbg("%s: dir %lu not recovered?\n",
+				/* Not root dir? */
+				if (inode->i_ino != PMFS_ROOT_INO)
+					pmfs_dbg("%s: dir %lu not recovered?\n",
 						__func__, inode->i_ino);
 				recovered_sih = pmfs_alloc_header(sb,
 							inode->i_mode);
