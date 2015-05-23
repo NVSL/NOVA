@@ -1169,11 +1169,9 @@ int pmfs_multithread_recovery(struct super_block *sb, struct scan_bitmap *bm)
 
 /*********************** Recovery entrance *************************/
 
-void pmfs_assign_bogus_header_info(struct super_block *sb)
+static inline void pmfs_assign_bogus_header_info(struct super_block *sb)
 {
 	pmfs_assign_info_header(sb, 0, NULL, 0);
-	pmfs_assign_info_header(sb, 1, NULL, 0);
-	pmfs_assign_info_header(sb, 2, NULL, 0);
 }
 
 int pmfs_inode_log_recovery(struct super_block *sb, int multithread)

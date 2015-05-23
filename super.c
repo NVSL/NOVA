@@ -781,6 +781,13 @@ setup_sb:
 	sb->s_xattr = NULL;
 	sb->s_flags |= MS_NOSEC;
 
+	pmfs_recover_truncate_list(sb);
+	/* If the FS was not formatted on this mount, scan the meta-data after
+	 * truncate list has been processed */
+	if ((sbi->s_mount_opt & PMFS_MOUNT_FORMAT) == 0)
+//		pmfs_setup_blocknode_map(sb);
+		pmfs_inode_log_recovery(sb, 1);
+
 	root_i = pmfs_iget(sb, PMFS_ROOT_INO, 1);
 	if (IS_ERR(root_i)) {
 		retval = PTR_ERR(root_i);
@@ -793,13 +800,6 @@ setup_sb:
 		retval = -ENOMEM;
 		goto out;
 	}
-
-	pmfs_recover_truncate_list(sb);
-	/* If the FS was not formatted on this mount, scan the meta-data after
-	 * truncate list has been processed */
-	if ((sbi->s_mount_opt & PMFS_MOUNT_FORMAT) == 0)
-//		pmfs_setup_blocknode_map(sb);
-		pmfs_inode_log_recovery(sb, 1);
 
 	if (!(sb->s_flags & MS_RDONLY)) {
 		u64 mnt_write_time;
