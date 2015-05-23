@@ -3207,6 +3207,41 @@ static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 	pi->log_head = pi->log_tail = 0;
 }
 
+int pmfs_free_dram_resource(struct super_block *sb, struct pmfs_inode *pi,
+	struct inode *inode, struct pmfs_inode_info_header *sih)
+{
+	int freed = 0;
+	unsigned long last_blocknr;
+
+	if (!(S_ISREG(pi->i_mode)) && !(S_ISDIR(pi->i_mode)))
+		return 0;
+
+	if (pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL)) {
+		last_blocknr = (1UL << (sih->height * META_BLK_SHIFT))
+			    - 1;
+	} else {
+		if (likely(inode->i_size))
+			last_blocknr = (inode->i_size - 1) >>
+				pmfs_inode_blk_shift(pi);
+		else
+			last_blocknr = 0;
+		last_blocknr = pmfs_sparse_last_blocknr(sih->height,
+			last_blocknr);
+	}
+	pmfs_dbg_verbose("%s: inode %lu, height %u, root 0x%llx, "
+				"last block %lu\n", __func__, inode->i_ino,
+				sih->height, sih->root, last_blocknr);
+	if (S_ISREG(pi->i_mode)) {
+		freed = pmfs_free_file_meta_blocks(sb, sih,
+						last_blocknr);
+	} else {
+		pmfs_delete_dir_tree(sb, sih);
+		freed = 1;
+	}
+
+	return freed;
+}
+
 /* When fs is umount, free all dram pages */
 void pmfs_free_dram_pages(struct super_block *sb)
 {
@@ -3214,7 +3249,6 @@ void pmfs_free_dram_pages(struct super_block *sb)
 	struct pmfs_inode_info *si;
 	struct pmfs_inode_info_header *sih;
 	struct inode *inode;
-	unsigned long last_blocknr;
 	unsigned int freed;
 	unsigned long flags;
 
@@ -3227,31 +3261,7 @@ void pmfs_free_dram_pages(struct super_block *sb)
 			continue;
 		}
 		pi = pmfs_get_inode(sb, inode->i_ino);
-		if (!(S_ISREG(pi->i_mode)) && !(S_ISDIR(pi->i_mode)))
-			continue;
-
-		if (pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL)) {
-			last_blocknr = (1UL << (sih->height * META_BLK_SHIFT))
-			    - 1;
-		} else {
-			if (likely(inode->i_size))
-				last_blocknr = (inode->i_size - 1) >>
-					pmfs_inode_blk_shift(pi);
-			else
-				last_blocknr = 0;
-			last_blocknr = pmfs_sparse_last_blocknr(sih->height,
-				last_blocknr);
-		}
-		pmfs_dbg_verbose("%s: inode %lu, height %u, root 0x%llx, "
-				"last block %lu\n", __func__, inode->i_ino,
-				sih->height, sih->root, last_blocknr);
-		if (S_ISREG(pi->i_mode)) {
-			freed = pmfs_free_file_meta_blocks(sb, sih,
-							last_blocknr);
-		} else {
-			pmfs_delete_dir_tree(sb, sih);
-			freed = 1;
-		}
+		freed = pmfs_free_dram_resource(sb, pi, inode, sih);
 		pmfs_dbg_verbose("%s after: inode %lu, height %u, root 0x%llx, "
 				"freed %u\n", __func__, inode->i_ino, sih->height,
 				sih->root, freed);
