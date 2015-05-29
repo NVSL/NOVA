@@ -2998,15 +2998,18 @@ out:
 
 /*
  * Append a pmfs_direntry to the current pmfs_inode_log_page.
+ * Note unlike append_file_inode_entry(), this method returns the tail pointer
+ * after append.
  */
 u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, u64 ino, struct dentry *dentry,
-	unsigned short de_len, u64 tail, int link_change, int new_inode)
+	unsigned short de_len, u64 tail, int link_change, int new_inode,
+	u64 *curr_tail)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_log_direntry *entry;
-	u64 curr_p, page_tail;
+	u64 curr_p, page_tail, inode_start;
 	unsigned long num_pages;
 	int allocated;
 	size_t size = de_len;
@@ -3100,6 +3103,19 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 			entry->name_len, entry->file_type);
 
 	pmfs_flush_buffer(entry, de_len, 0);
+
+	*curr_tail = curr_p + de_len;
+
+	if (new_inode) {
+		/* Allocate space for the new inode */
+		inode_start = (*curr_tail & (CACHELINE_SIZE - 1)) == 0 ?
+			*curr_tail : CACHE_ALIGN(*curr_tail) + CACHELINE_SIZE;
+
+		if (ENTRY_LOC(inode_start) + PMFS_INODE_SIZE > LAST_ENTRY)
+			inode_start = next_log_page(sb, inode_start);
+
+		*curr_tail = inode_start + PMFS_INODE_SIZE;
+	}
 out:
 	PMFS_END_TIMING(append_entry_t, append_time);
 	return curr_p;

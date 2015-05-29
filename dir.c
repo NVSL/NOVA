@@ -236,7 +236,7 @@ static int pmfs_add_dirent_to_buf(struct dentry *dentry, struct inode *inode,
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
 	unsigned short loglen;
-	u64 curr_entry;
+	u64 curr_entry, curr_tail;
 	u64 ino;
 
 	pmfs_dbg_verbose("%s: %s %d\n", __func__, name, namelen);
@@ -260,10 +260,10 @@ static int pmfs_add_dirent_to_buf(struct dentry *dentry, struct inode *inode,
 
 	loglen = PMFS_DIR_LOG_REC_LEN(namelen);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, ino, dentry,
-					loglen, 0, inc_link, new_inode);
+				loglen, 0, inc_link, new_inode, &curr_tail);
 	pmfs_insert_dir_node(sb, pidir, dir, dentry, curr_entry);
 	/* FIXME: Flush all data before update log_tail */
-	pidir->log_tail = curr_entry + loglen;
+	pidir->log_tail = curr_tail;
 
 	return 0;
 }
@@ -305,7 +305,7 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 	struct pmfs_inode *pidir;
 	struct qstr *entry = &dentry->d_name;
 	unsigned short loglen;
-	u64 curr_entry;
+	u64 curr_tail, curr_entry;
 	timing_t remove_entry_time;
 
 	PMFS_START_TIMING(remove_entry_t, remove_entry_time);
@@ -316,9 +316,9 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 	pidir = pmfs_get_inode(sb, dir->i_ino);
 	loglen = PMFS_DIR_LOG_REC_LEN(entry->len);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir,
-					0, dentry, loglen, 0, dec_link, 0);
+				0, dentry, loglen, 0, dec_link, 0, &curr_tail);
 	/* FIXME: Flush all data before update log_tail */
-	pidir->log_tail = curr_entry + loglen;
+	pidir->log_tail = curr_tail;
 	pmfs_remove_dir_node(sb, pidir, dir, dentry);
 
 	PMFS_END_TIMING(remove_entry_t, remove_entry_time);

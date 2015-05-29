@@ -1088,7 +1088,8 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_inode_entry *data, u64 tail);
 u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, u64 ino, struct dentry *dentry,
-	unsigned short de_len, u64 tail, int link_change, int new_inode);
+	unsigned short de_len, u64 tail, int link_change, int new_inode,
+	u64 *curr_tail);
 int pmfs_append_dir_init_entries(struct super_block *sb,
 	struct pmfs_inode *pi, u64 self_ino, u64 parent_ino);
 int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct pmfs_inode *p,
