@@ -3001,7 +3001,7 @@ out:
  */
 u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, u64 ino, struct dentry *dentry,
-	unsigned short de_len, u64 tail, int link_change)
+	unsigned short de_len, u64 tail, int link_change, int new_inode)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;

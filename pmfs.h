@@ -319,9 +319,10 @@ void pmfs_free_cache_block(unsigned long page_addr);
 
 /* dir.c */
 extern int pmfs_add_entry(pmfs_transaction_t *trans,
-		struct dentry *dentry, struct inode *inode, int inc_link);
+	struct dentry *dentry, struct inode *inode, int inc_link,
+	int new_inode);
 extern int pmfs_remove_entry(pmfs_transaction_t *trans,
-		struct dentry *dentry, struct inode *inode, int dec_link);
+	struct dentry *dentry, struct inode *inode, int dec_link);
 
 /* namei.c */
 extern struct dentry *pmfs_get_parent(struct dentry *child);
@@ -1074,7 +1075,7 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_inode_entry *data, u64 tail);
 u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, u64 ino, struct dentry *dentry,
-	unsigned short de_len, u64 tail, int link_change);
+	unsigned short de_len, u64 tail, int link_change, int new_inode);
 int pmfs_append_dir_init_entries(struct super_block *sb,
 	struct pmfs_inode *pi, u64 self_ino, u64 parent_ino);
 int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct pmfs_inode *p,

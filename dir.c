@@ -229,7 +229,7 @@ void pmfs_delete_dir_tree(struct super_block *sb,
 /* ========================= Entry operations ============================= */
 
 static int pmfs_add_dirent_to_buf(struct dentry *dentry, struct inode *inode,
-	struct pmfs_inode *pidir, int inc_link)
+	struct pmfs_inode *pidir, int inc_link, int new_inode)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -259,8 +259,8 @@ static int pmfs_add_dirent_to_buf(struct dentry *dentry, struct inode *inode,
 //	pmfs_memlock_inode(dir->i_sb, pidir);
 
 	loglen = PMFS_DIR_LOG_REC_LEN(namelen);
-	curr_entry = pmfs_append_dir_inode_entry(sb, pidir,
-					dir, ino, dentry, loglen, 0, inc_link);
+	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, ino, dentry,
+					loglen, 0, inc_link, new_inode);
 	pmfs_insert_dir_node(sb, pidir, dir, dentry, curr_entry);
 	/* FIXME: Flush all data before update log_tail */
 	pidir->log_tail = curr_entry + loglen;
@@ -272,7 +272,7 @@ static int pmfs_add_dirent_to_buf(struct dentry *dentry, struct inode *inode,
  * already been logged for consistency
  */
 int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
-		struct inode *inode, int inc_link)
+		struct inode *inode, int inc_link, int new_inode)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -288,7 +288,8 @@ int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 
 	pidir = pmfs_get_inode(sb, dir->i_ino);
 
-	retval = pmfs_add_dirent_to_buf(dentry, inode, pidir, inc_link);
+	retval = pmfs_add_dirent_to_buf(dentry, inode, pidir,
+					inc_link, new_inode);
 	PMFS_END_TIMING(add_entry_t, add_entry_time);
 	return retval;
 }
@@ -315,7 +316,7 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 	pidir = pmfs_get_inode(sb, dir->i_ino);
 	loglen = PMFS_DIR_LOG_REC_LEN(entry->len);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir,
-					0, dentry, loglen, 0, dec_link);
+					0, dentry, loglen, 0, dec_link, 0);
 	/* FIXME: Flush all data before update log_tail */
 	pidir->log_tail = curr_entry + loglen;
 	pmfs_remove_dir_node(sb, pidir, dir, dentry);
