@@ -1041,9 +1041,22 @@ static inline u64 next_log_page(struct super_block *sb, u64 curr_p)
 	return ((struct pmfs_inode_page_tail *)page_tail)->next_page;
 }
 
-static inline bool is_last_entry(u64 curr_p, size_t size)
+#define	CACHE_ALIGN(p)	((p) & ~(CACHELINE_SIZE - 1))
+
+/* Align inode to CACHELINE_SIZE */
+static inline bool is_last_entry(u64 curr_p, size_t size, int new_inode)
 {
-	return ENTRY_LOC(curr_p) + size > LAST_ENTRY;
+	unsigned int entry_end, inode_start;
+
+	entry_end = ENTRY_LOC(curr_p) + size;
+
+	if (new_inode == 0)
+		return entry_end > LAST_ENTRY;
+
+	inode_start = (entry_end & (CACHELINE_SIZE - 1)) == 0 ?
+			entry_end : CACHE_ALIGN(entry_end) + CACHELINE_SIZE;
+
+	return inode_start + PMFS_INODE_SIZE > LAST_ENTRY;
 }
 
 static inline bool is_last_dir_entry(struct super_block *sb, u64 curr_p)

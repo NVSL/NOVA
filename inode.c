@@ -2928,7 +2928,7 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	else
 		curr_p = pi->log_tail;
 
-	if (curr_p == 0 || (is_last_entry(curr_p, size) &&
+	if (curr_p == 0 || (is_last_entry(curr_p, size, 0) &&
 				next_log_page(sb, curr_p) == 0)) {
 		/* Allocate new inode log page */
 		u64 new_block;
@@ -2974,7 +2974,7 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 		curr_p = new_block;
 	}
 
-	if (is_last_entry(curr_p, size))
+	if (is_last_entry(curr_p, size, 0))
 		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, curr_p);
@@ -3020,7 +3020,7 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	else
 		curr_p = pi->log_tail;
 
-	if (curr_p == 0 || (is_last_entry(curr_p, size) &&
+	if (curr_p == 0 || (is_last_entry(curr_p, size, new_inode) &&
 				next_log_page(sb, curr_p) == 0)) {
 		/* Allocate new inode log page */
 		u64 new_block;
@@ -3071,7 +3071,8 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 		curr_p = new_block;
 	}
 
-	if (is_last_entry(curr_p, size))
+	/* Append the entry, then inode if needed */
+	if (is_last_entry(curr_p, size, 0))
 		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr_p);
@@ -3294,7 +3295,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
 		}
 
 		curr_p += sizeof(struct pmfs_inode_entry);
-		if (is_last_entry(curr_p, sizeof(struct pmfs_inode_entry))) {
+		if (is_last_entry(curr_p, sizeof(struct pmfs_inode_entry), 0)) {
 			if (curr_p == pi->log_tail)
 				break;
 			sih->log_pages++;
