@@ -382,20 +382,18 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
 	}
 	sih->log_pages = 1;
 	while (curr_p != pi->log_tail) {
-		if (curr_p == 0) {
-			pmfs_err(sb, "Dir %lu log is NULL!\n", ino);
-			BUG();
-		}
-
 		if (is_last_dir_entry(sb, curr_p)) {
-			if (curr_p == pi->log_tail)
-				break;
 			sih->log_pages++;
 			curr_p = next_log_page(sb, curr_p);
 			if (bm) {
 				BUG_ON(curr_p & (PAGE_SIZE - 1));
 				set_bit(curr_p >> PAGE_SHIFT, bm->bitmap_4k);
 			}
+		}
+
+		if (curr_p == 0) {
+			pmfs_err(sb, "Dir %lu log is NULL!\n", ino);
+			BUG();
 		}
 
 		entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr_p);

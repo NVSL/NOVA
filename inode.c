@@ -3264,6 +3264,15 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
 		set_bit(curr_p >> PAGE_SHIFT, bm->bitmap_4k);
 	}
 	while (curr_p != pi->log_tail) {
+		if (is_last_entry(curr_p, sizeof(struct pmfs_inode_entry), 0)) {
+			sih->log_pages++;
+			curr_p = next_log_page(sb, curr_p);
+			if (bm) {
+				BUG_ON(curr_p & (PAGE_SIZE - 1));
+				set_bit(curr_p >> PAGE_SHIFT, bm->bitmap_4k);
+			}
+		}
+
 		if (curr_p == 0) {
 			pmfs_err(sb, "File inode %lu log is NULL!\n", ino);
 			BUG();
@@ -3282,16 +3291,6 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
 		}
 
 		curr_p += sizeof(struct pmfs_inode_entry);
-		if (is_last_entry(curr_p, sizeof(struct pmfs_inode_entry), 0)) {
-			if (curr_p == pi->log_tail)
-				break;
-			sih->log_pages++;
-			curr_p = next_log_page(sb, curr_p);
-			if (bm) {
-				BUG_ON(curr_p & (PAGE_SIZE - 1));
-				set_bit(curr_p >> PAGE_SHIFT, bm->bitmap_4k);
-			}
-		}
 	}
 
 	pmfs_rebuild_file_time_and_size(sb, pi, entry);
