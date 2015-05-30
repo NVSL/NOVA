@@ -3078,11 +3078,12 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 
 	if (new_inode) {
 		/* Allocate space for the new inode */
-		inode_start = (*curr_tail & (CACHELINE_SIZE - 1)) == 0 ?
-			*curr_tail : CACHE_ALIGN(*curr_tail) + CACHELINE_SIZE;
-
-		if (ENTRY_LOC(inode_start) ==0 || ENTRY_LOC(inode_start) + PMFS_INODE_SIZE > LAST_ENTRY)
+		if (is_last_entry(curr_p, de_len, new_inode))
 			inode_start = next_log_page(sb, curr_p);
+		else
+			inode_start = (*curr_tail & (CACHELINE_SIZE - 1)) == 0
+				? *curr_tail : CACHE_ALIGN(*curr_tail) +
+						CACHELINE_SIZE;
 
 		*curr_tail = inode_start + PMFS_INODE_SIZE;
 	}
