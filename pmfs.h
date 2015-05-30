@@ -1012,7 +1012,8 @@ static inline void check_eof_blocks(struct super_block *sb,
 
 /* dir.c */
 extern const struct file_operations pmfs_dir_operations;
-void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode);
+void pmfs_print_dir_tree(struct super_block *sb,
+	struct pmfs_inode_info_header *sih, unsigned long ino);
 void pmfs_delete_dir_tree(struct super_block *sb,
 	struct pmfs_inode_info_header *sih);
 int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,

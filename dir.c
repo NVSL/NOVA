@@ -182,15 +182,14 @@ static inline void pmfs_remove_dir_node(struct super_block *sb,
 	return pmfs_remove_dir_node_by_name(sb, pi, sih, name, namelen);
 }
 
-void pmfs_print_dir_tree(struct super_block *sb, struct inode *inode)
+void pmfs_print_dir_tree(struct super_block *sb,
+	struct pmfs_inode_info_header *sih, unsigned long ino)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_dir_node *curr;
 	struct pmfs_log_direntry *entry;
 	struct rb_node *temp;
 
-	pmfs_dbg("%s: dir ino %lu\n", __func__, inode->i_ino);
+	pmfs_dbg("%s: dir ino %lu\n", __func__, ino);
 	temp = rb_first(&sih->dir_tree);
 	while (temp) {
 		curr = container_of(temp, struct pmfs_dir_node, node);
@@ -332,6 +331,7 @@ inline int pmfs_replay_add_entry(struct super_block *sb, struct pmfs_inode *pi,
 	if (!entry->name_len)
 		return -EINVAL;
 
+	pmfs_dbg_verbose("%s: add %s\n", __func__, entry->name);
 	return pmfs_insert_dir_node_by_name(sb, pi, sih, entry->name,
 					entry->name_len, curr_p);
 }
@@ -340,6 +340,7 @@ inline int pmfs_replay_remove_entry(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
 	struct pmfs_log_direntry *entry)
 {
+	pmfs_dbg_verbose("%s: remove %s\n", __func__, entry->name);
 	pmfs_remove_dir_node_by_name(sb, pi, sih, entry->name,
 					entry->name_len);
 	return 0;
@@ -397,10 +398,9 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
 			}
 		}
 
-		pmfs_dbg_verbose("curr_p: 0x%llx\n", curr_p);
 		entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr_p);
-		pmfs_dbg_verbose("entry @%p, ino %llu, name %*.s, namelen %u, "
-			"rec len %u\n", entry, entry->ino, entry->name_len,
+		pmfs_dbg_verbose("curr_p: 0x%llx, ino %llu, name %*.s, namelen %u, "
+			"rec len %u\n", curr_p, entry->ino, entry->name_len,
 			entry->name, entry->name_len, entry->de_len);
 
 		if (entry->ino > 0) {
@@ -460,6 +460,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
 			pmfs_get_block(sb, curr_p);
 	}
 
+//	pmfs_print_dir_tree(sb, sih, ino);
 	return 0;
 }
 
