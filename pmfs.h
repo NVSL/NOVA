@@ -1051,7 +1051,7 @@ static inline bool is_last_entry(u64 curr_p, size_t size, int new_inode)
 
 	entry_end = ENTRY_LOC(curr_p) + size;
 
-	if (new_inode == 0)
+	if (new_inode == 0 || entry_end > LAST_ENTRY)
 		return entry_end > LAST_ENTRY;
 
 	inode_start = (entry_end & (CACHELINE_SIZE - 1)) == 0 ?
