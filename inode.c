@@ -2820,10 +2820,9 @@ static void free_curr_page(struct super_block *sb, struct pmfs_inode *pi,
 }
 
 int pmfs_inode_log_garbage_collection(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_inode_info *si, u64 curr_tail,
-	u64 new_block, int num_pages)
+	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
+	u64 curr_tail, u64 new_block, int num_pages)
 {
-	struct pmfs_inode_info_header *sih = si->header;
 	u64 curr, next, possible_head = 0;
 	int found_head = 0;
 	struct pmfs_inode_log_page *last_page = NULL;
@@ -2902,6 +2901,63 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 	return 0;
 }
 
+static u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
+	struct pmfs_inode_info_header *sih, u64 curr_p, int is_file)
+{
+	u64 new_block;
+	int allocated;
+	unsigned long num_pages;
+	u64 page_tail;
+
+	if (curr_p == 0) {
+		allocated = pmfs_allocate_inode_log_pages(sb, pi,
+					1, &new_block);
+		if (allocated != 1) {
+			pmfs_err(sb, "ERROR: no inode log page "
+					"available\n");
+			return 0;
+		}
+		/* FIXME: Make this atomic */
+		pi->log_head = new_block;
+		pi->log_tail = new_block;
+		sih->log_pages = 1;
+		pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+	} else {
+		num_pages = sih->log_pages >= 256 ?
+				256 : sih->log_pages;
+//		pmfs_dbg("Before append log pages:\n");
+//		pmfs_print_inode_log_page(sb, inode);
+		allocated = pmfs_allocate_inode_log_pages(sb, pi,
+					num_pages, &new_block);
+		pmfs_dbg_verbose("Link block %llu to block %llu\n",
+					curr_p >> PAGE_SHIFT,
+					new_block >> PAGE_SHIFT);
+		if (allocated <= 0) {
+			pmfs_err(sb, "ERROR: no inode log page "
+					"available\n");
+			return 0;
+		}
+
+		if (is_file) {
+			pmfs_inode_log_garbage_collection(sb, pi, sih, curr_p,
+						new_block, allocated);
+		} else {
+			/* FIXME: Disable GC for dir inode by now */
+			page_tail = (curr_p & ~INVALID_MASK) + LAST_ENTRY;
+			((struct pmfs_inode_page_tail *)
+				pmfs_get_block(sb, page_tail))->next_page
+								= new_block;
+			sih->log_pages += num_pages;
+		}
+
+//		pmfs_dbg("After append log pages:\n");
+//		pmfs_print_inode_log_page(sb, inode);
+		/* Atomic switch to new log */
+//		pmfs_switch_to_new_log(sb, pi, new_block, num_pages);
+	}
+	return new_block;
+}
+
 /*
  * Append a pmfs_inode_entry to the current pmfs_inode_log_page.
  * FIXME: Must hold inode->i_mutex. Convert it to lock-free.
@@ -2916,8 +2972,6 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_inode_entry *entry;
 	u64 curr_p;
-	unsigned long num_pages;
-	int allocated;
 	size_t size = sizeof(struct pmfs_inode_entry);
 	timing_t append_time;
 
@@ -2930,48 +2984,9 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 
 	if (curr_p == 0 || (is_last_entry(curr_p, size, 0) &&
 				next_log_page(sb, curr_p) == 0)) {
-		/* Allocate new inode log page */
-		u64 new_block;
-
-		if (curr_p == 0) {
-			allocated = pmfs_allocate_inode_log_pages(sb, pi,
-						1, &new_block);
-			if (allocated != 1) {
-				pmfs_err(sb, "ERROR: no inode log page "
-						"available\n");
-				curr_p = 0;
-				goto out;
-			}
-			/* FIXME: Make this atomic */
-			pi->log_head = new_block;
-			pi->log_tail = new_block;
-			sih->log_pages = 1;
-			pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
-		} else {
-			num_pages = sih->log_pages >= 256 ?
-					256 : sih->log_pages;
-//			pmfs_dbg("Before append log pages:\n");
-//			pmfs_print_inode_log_page(sb, inode);
-			allocated = pmfs_allocate_inode_log_pages(sb, pi,
-						num_pages, &new_block);
-			pmfs_dbg_verbose("Link block %llu to block %llu\n",
-						curr_p >> PAGE_SHIFT,
-						new_block >> PAGE_SHIFT);
-			if (allocated <= 0) {
-				pmfs_err(sb, "ERROR: no inode log page "
-						"available\n");
-				curr_p = 0;
-				goto out;
-			}
-			pmfs_inode_log_garbage_collection(sb, pi, si, curr_p,
-							new_block, allocated);
-
-//			pmfs_dbg("After append log pages:\n");
-//			pmfs_print_inode_log_page(sb, inode);
-			/* Atomic switch to new log */
-//			pmfs_switch_to_new_log(sb, pi, new_block, num_pages);
-		}
-		curr_p = new_block;
+		curr_p = pmfs_extend_inode_log(sb, pi, sih, curr_p, 1);
+		if (curr_p == 0)
+			goto out;
 	}
 
 	if (is_last_entry(curr_p, size, 0))
@@ -3009,9 +3024,7 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_log_direntry *entry;
-	u64 curr_p, page_tail, inode_start;
-	unsigned long num_pages;
-	int allocated;
+	u64 curr_p, inode_start;
 	size_t size = de_len;
 	unsigned short links_count;
 	timing_t append_time;
@@ -3025,53 +3038,9 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 
 	if (curr_p == 0 || (is_last_entry(curr_p, size, new_inode) &&
 				next_log_page(sb, curr_p) == 0)) {
-		/* Allocate new inode log page */
-		u64 new_block;
-
-		if (curr_p == 0) {
-			allocated = pmfs_allocate_inode_log_pages(sb, pi,
-						1, &new_block);
-			if (allocated != 1) {
-				pmfs_err(sb, "ERROR: no inode log page "
-						"available\n");
-				curr_p = 0;
-				goto out;
-			}
-			/* FIXME: make this atomic */
-			pi->log_head = new_block;
-			pi->log_tail = new_block;
-			sih->log_pages = 1;
-			pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
-		} else {
-			num_pages = sih->log_pages >= 256 ?
-						256 : sih->log_pages;
-			pmfs_dbg_verbose("Before append log pages:\n");
-//			pmfs_print_inode_log_page(sb, inode);
-			allocated = pmfs_allocate_inode_log_pages(sb, pi,
-						num_pages, &new_block);
-			pmfs_dbg_verbose("Link block %llu to block %llu\n",
-						curr_p >> PAGE_SHIFT,
-						new_block >> PAGE_SHIFT);
-			if (allocated <= 0) {
-				pmfs_err(sb, "ERROR: no inode log page "
-						"available\n");
-				curr_p = 0;
-				goto out;
-			}
-			/* FIXME: Disable GC by now */
-//			pmfs_inode_log_garbage_collection(sb, pi, new_block,
-//						allocated);
-			page_tail = (curr_p & ~INVALID_MASK) + LAST_ENTRY;
-			((struct pmfs_inode_page_tail *)
-				pmfs_get_block(sb, page_tail))->next_page
-								= new_block;
-			pi->log_tail = new_block;
-			sih->log_pages += num_pages;
-
-			pmfs_dbg_verbose("After append log pages:\n");
-//			pmfs_print_inode_log_page(sb, inode);
-		}
-		curr_p = new_block;
+		curr_p = pmfs_extend_inode_log(sb, pi, sih, curr_p, 0);
+		if (curr_p == 0)
+			goto out;
 	}
 
 	/* Append the entry, then inode if needed */
