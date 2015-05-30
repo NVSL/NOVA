@@ -3087,6 +3087,7 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	entry->mtime = cpu_to_le32(inode->i_mtime.tv_sec);
 	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
 	entry->size = cpu_to_le64(inode->i_size);
+	entry->new_inode = new_inode;
 
 	links_count = cpu_to_le16(inode->i_nlink);
 	if (links_count == 0 && link_change == -1)
@@ -3111,8 +3112,8 @@ u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 		inode_start = (*curr_tail & (CACHELINE_SIZE - 1)) == 0 ?
 			*curr_tail : CACHE_ALIGN(*curr_tail) + CACHELINE_SIZE;
 
-		if (ENTRY_LOC(inode_start) + PMFS_INODE_SIZE > LAST_ENTRY)
-			inode_start = next_log_page(sb, inode_start);
+		if (ENTRY_LOC(inode_start) ==0 || ENTRY_LOC(inode_start) + PMFS_INODE_SIZE > LAST_ENTRY)
+			inode_start = next_log_page(sb, curr_p);
 
 		*curr_tail = inode_start + PMFS_INODE_SIZE;
 	}

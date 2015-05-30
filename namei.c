@@ -38,7 +38,7 @@ static inline int pmfs_add_nondir(pmfs_transaction_t *trans,
 		struct inode *dir, struct dentry *dentry, struct inode *inode)
 {
 	struct pmfs_inode *pi;
-	int err = pmfs_add_entry(trans, dentry, inode, 0, 0);
+	int err = pmfs_add_entry(trans, dentry, inode, 0, 1);
 
 	if (!err) {
 		d_instantiate(dentry, inode);
@@ -395,7 +395,7 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	set_nlink(inode, 2);
 
-	err = pmfs_add_entry(trans, dentry, inode, 0, 0);
+	err = pmfs_add_entry(trans, dentry, inode, 0, 1);
 	if (err) {
 		pmfs_dbg_verbose("failed to add dir entry\n");
 		goto out_clear_inode;

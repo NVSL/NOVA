@@ -411,10 +411,35 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
 			/* Delete the entry */
 			ret = pmfs_replay_remove_entry(sb, pi, sih, entry);
 		}
-		curr_p += entry->de_len;
+
 		if (ret) {
 			pmfs_err(sb, "%s ERROR %d\n", __func__, ret);
 			break;
+		}
+
+		curr_p += entry->de_len;
+
+		/*
+		 * If following by a new inode, find the inode
+		 * and its end first
+		 */
+		if (entry->new_inode) {
+			if (is_last_entry(curr_p - entry->de_len,
+					entry->de_len, 1)) {
+				sih->log_pages++;
+				curr_p = next_log_page(sb, curr_p);
+				if (bm) {
+					BUG_ON(curr_p & (PAGE_SIZE - 1));
+					set_bit(curr_p >> PAGE_SHIFT,
+							bm->bitmap_4k);
+				}
+			} else {
+				curr_p = (curr_p & (CACHELINE_SIZE - 1)) == 0 ?
+					curr_p : CACHE_ALIGN(curr_p) +
+							CACHELINE_SIZE;
+			}
+			/* handle the inode */
+			curr_p += PMFS_INODE_SIZE;
 		}
 	}
 
