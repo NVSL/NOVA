@@ -560,6 +560,10 @@ struct pmfs_sb_info {
 	unsigned int height;
 	u8 btype;
 	spinlock_t header_tree_lock;
+
+	/* Track inuse inodes */
+	struct list_head inode_inuse_head;
+	struct rb_root	inode_inuse_tree;
 };
 
 static inline struct pmfs_sb_info *PMFS_SB(struct super_block *sb)

@@ -674,6 +674,7 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 
 	/* Init with default values */
 	INIT_LIST_HEAD(&sbi->block_inuse_head);
+	sbi->block_inuse_tree = RB_ROOT;
 	sbi->mode = (S_IRUGO | S_IXUGO | S_IWUSR);
 	sbi->uid = current_fsuid();
 	sbi->gid = current_fsgid();
@@ -686,7 +687,9 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	mutex_init(&sbi->inode_table_mutex);
 	mutex_init(&sbi->s_lock);
 	spin_lock_init(&sbi->header_tree_lock);
-	sbi->block_inuse_tree = RB_ROOT;
+
+	INIT_LIST_HEAD(&sbi->inode_inuse_head);
+	sbi->inode_inuse_tree = RB_ROOT;
 
 	if (pmfs_parse_options(data, sbi, 0))
 		goto out;
@@ -941,7 +944,7 @@ static void pmfs_put_super(struct super_block *sb)
 	struct pmfs_super_block *ps = pmfs_get_super(sb);
 	u64 size = le64_to_cpu(ps->s_size);
 	struct pmfs_blocknode *i;
-	struct list_head *head = &(sbi->block_inuse_head);
+	struct list_head *head;
 
 #ifdef CONFIG_PMFS_TEST
 	if (first_pmfs_super == sbi->virt_addr)
@@ -960,11 +963,20 @@ static void pmfs_put_super(struct super_block *sb)
 	}
 
 	/* Free all the pmfs_blocknodes */
+	head = &(sbi->block_inuse_head);
 	while (!list_empty(head)) {
 		i = list_first_entry(head, struct pmfs_blocknode, link);
 		list_del(&i->link);
 		pmfs_free_blocknode(sb, i);
 	}
+
+	head = &(sbi->inode_inuse_head);
+	while (!list_empty(head)) {
+		i = list_first_entry(head, struct pmfs_blocknode, link);
+		list_del(&i->link);
+		pmfs_free_blocknode(sb, i);
+	}
+
 	sb->s_fs_info = NULL;
 	pmfs_dbgmask = 0;
 	kfree(sbi);
