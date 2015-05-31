@@ -460,7 +460,8 @@ struct pmfs_blocknode_lowhigh {
        __le64 block_low;
        __le64 block_high;
 };
-               
+
+/* This is also used for inode inuse */
 struct pmfs_blocknode {
 	struct list_head link;
 	struct rb_node node;
@@ -1111,8 +1112,13 @@ int pmfs_free_dram_resource(struct super_block *sb,
 	struct pmfs_inode_info_header *sih);
 
 /* balloc.c */
-int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
+inline int pmfs_insert_blocknode_blocktree(struct pmfs_sb_info *sbi,
 	struct pmfs_blocknode *new_node);
+inline int pmfs_insert_blocknode_inodetree(struct pmfs_sb_info *sbi,
+	struct pmfs_blocknode *new_node);
+inline struct pmfs_blocknode *
+pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
+	unsigned long new_block_low, unsigned long *step);
 
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);

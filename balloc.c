@@ -38,7 +38,7 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 	blknode->block_low = sbi->block_start;
 	blknode->block_high = sbi->block_start + num_used_block - 1;
 	sbi->num_free_blocks -= num_used_block;
-	pmfs_insert_blocknode(sbi, blknode);
+	pmfs_insert_blocknode_blocktree(sbi, blknode);
 	list_add(&blknode->link, &sbi->block_inuse_head);
 	pmfs_dbg_verbose("Add: %lu %lu\n", blknode->block_low,
 					blknode->block_high);
@@ -151,13 +151,17 @@ static int pmfs_rbtree_compare_blocknode(struct pmfs_blocknode *curr,
 }
 
 static struct pmfs_blocknode *pmfs_find_blocknode(struct pmfs_sb_info *sbi,
-	unsigned long new_block_low, unsigned long *step)
+	unsigned long new_block_low, unsigned long *step, int block_tree)
 {
 	struct pmfs_blocknode *curr;
 	struct rb_node *temp;
 	int compVal;
 
-	temp = sbi->block_inuse_tree.rb_node;
+	if (block_tree)
+		temp = sbi->block_inuse_tree.rb_node;
+	else
+		temp = sbi->inode_inuse_tree.rb_node;
+
 	while (temp) {
 		curr = container_of(temp, struct pmfs_blocknode, node);
 		compVal = pmfs_rbtree_compare_blocknode(curr, new_block_low);
@@ -175,14 +179,31 @@ static struct pmfs_blocknode *pmfs_find_blocknode(struct pmfs_sb_info *sbi,
 	return NULL;
 }
 
-int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
-	struct pmfs_blocknode *new_node)
+inline struct pmfs_blocknode *
+pmfs_find_blocknode_blocktree(struct pmfs_sb_info *sbi,
+	unsigned long new_block_low, unsigned long *step)
+{
+	return pmfs_find_blocknode(sbi, new_block_low, step, 1);
+}
+
+inline struct pmfs_blocknode *
+pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
+	unsigned long new_block_low, unsigned long *step)
+{
+	return pmfs_find_blocknode(sbi, new_block_low, step, 0);
+}
+
+static int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
+	struct pmfs_blocknode *new_node, int block_tree)
 {
 	struct pmfs_blocknode *curr;
 	struct rb_node **temp, *parent;
 	int compVal;
 
-	temp = &(sbi->block_inuse_tree.rb_node);
+	if (block_tree)
+		temp = &(sbi->block_inuse_tree.rb_node);
+	else
+		temp = &(sbi->inode_inuse_tree.rb_node);
 	parent = NULL;
 
 	while (*temp) {
@@ -204,8 +225,24 @@ int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
 	}
 
 	rb_link_node(&new_node->node, parent, temp);
-	rb_insert_color(&new_node->node, &sbi->block_inuse_tree);
+
+	if (block_tree)
+		rb_insert_color(&new_node->node, &sbi->block_inuse_tree);
+	else
+		rb_insert_color(&new_node->node, &sbi->inode_inuse_tree);
 	return 0;
+}
+
+inline int pmfs_insert_blocknode_blocktree(struct pmfs_sb_info *sbi,
+	struct pmfs_blocknode *new_node)
+{
+	return pmfs_insert_blocknode(sbi, new_node, 1);
+}
+
+inline int pmfs_insert_blocknode_inodetree(struct pmfs_sb_info *sbi,
+	struct pmfs_blocknode *new_node)
+{
+	return pmfs_insert_blocknode(sbi, new_node, 0);
 }
 
 /* Caller must hold the super_block lock.  If start_hint is provided, it is
@@ -258,7 +295,7 @@ static void __pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 		}
 	}
 
-	i = pmfs_find_blocknode(sbi, new_block_low, &step);
+	i = pmfs_find_blocknode_blocktree(sbi, new_block_low, &step);
 	if (!i) {
 		pmfs_dbg("%s ERROR: %lu - %lu not found\n", __func__,
 				new_block_low, new_block_high);
@@ -308,7 +345,7 @@ Found:
 		curr_node->block_low = new_block_high + 1;
 		curr_node->block_high = i->block_high;
 		i->block_high = new_block_low - 1;
-		pmfs_insert_blocknode(sbi, curr_node);
+		pmfs_insert_blocknode_blocktree(sbi, curr_node);
 		list_add(&curr_node->link, &i->link);
 		sbi->num_free_blocks += num_blocks;
 		if (start_hint)
