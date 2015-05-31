@@ -28,7 +28,7 @@
 
 static void pmfs_clear_datablock_inode(struct super_block *sb)
 {
-	struct pmfs_inode *pi =  pmfs_get_inode(sb, PMFS_BLOCKNODE_IN0);
+	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_IN0);
 	pmfs_transaction_t *trans;
 
 	/* 2 log entry for inode */
@@ -48,7 +48,7 @@ static void pmfs_clear_datablock_inode(struct super_block *sb)
 static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_inode *pi =  pmfs_get_inode(sb, PMFS_BLOCKNODE_IN0);
+	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_IN0);
 	struct pmfs_blocknode_lowhigh *p = NULL;
 	struct pmfs_blocknode *blknode;
 	unsigned long index;
@@ -80,7 +80,7 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 
 static bool pmfs_can_skip_full_scan(struct super_block *sb)
 {
-	struct pmfs_inode *pi =  pmfs_get_inode(sb, PMFS_BLOCKNODE_IN0);
+	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_IN0);
 	struct pmfs_super_block *super = pmfs_get_super(sb);
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	__le64 root;
@@ -141,7 +141,7 @@ static int pmfs_allocate_datablock_block_inode(pmfs_transaction_t *trans,
 void pmfs_save_blocknode_mappings(struct super_block *sb)
 {
 	unsigned long num_blocks, blocknr;
-	struct pmfs_inode *pi =  pmfs_get_inode(sb, PMFS_BLOCKNODE_IN0);
+	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_IN0);
 	struct pmfs_blocknode_lowhigh *p;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct list_head *head = &(sbi->block_inuse_head);

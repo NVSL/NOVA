@@ -83,7 +83,7 @@ u64 pmfs_find_data_block(struct inode *inode, unsigned long file_blocknr,
 		bool nvmm)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	u32 blk_shift;
@@ -147,7 +147,7 @@ struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 u64 pmfs_find_inode(struct inode *inode, unsigned long file_blocknr)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
 	u32 blk_shift;
 	unsigned long blk_offset, blocknr = file_blocknr;
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
@@ -236,7 +236,7 @@ done:
 unsigned long pmfs_find_region(struct inode *inode, loff_t *offset, int hole)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
@@ -884,7 +884,7 @@ static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 				    loff_t end)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	unsigned long first_blocknr, last_blocknr;
@@ -966,7 +966,7 @@ static void __pmfs_truncate_blocks(struct inode *inode, loff_t start,
 				    loff_t end)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
 	unsigned long first_blocknr, last_blocknr;
 	__le64 root;
 	unsigned int freed = 0;
@@ -1568,7 +1568,7 @@ inline int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
 	unsigned long file_blocknr, unsigned int num, bool zero)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
 	int errval;
 
 	pmfs_dbg_verbose("%s: inode %lu, blocknr %lu, num %u\n",
@@ -1960,7 +1960,7 @@ static int pmfs_free_inode(struct inode *inode)
 		   sbi->s_free_inode_hint);
 	inode_nr = inode->i_ino >> PMFS_INODE_BITS;
 
-	pi = pmfs_get_inode(sb, inode->i_ino);
+	pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
 
 	trans = pmfs_new_transaction(sb, MAX_INODE_LENTRIES);
 	if (IS_ERR(trans)) {
@@ -2016,7 +2016,7 @@ struct inode *pmfs_iget(struct super_block *sb, unsigned long ino, int rebuild)
 	if (!(inode->i_state & I_NEW))
 		return inode;
 
-	pi = pmfs_get_inode(sb, ino);
+	pi = pmfs_get_inode_by_ino(sb, ino);
 	if (!pi) {
 		err = -EACCES;
 		goto fail;
@@ -2036,7 +2036,7 @@ fail:
 void pmfs_evict_inode(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	__le64 root;
@@ -2192,7 +2192,7 @@ struct inode *pmfs_new_inode(pmfs_transaction_t *trans, struct inode *dir,
 		inode, sbi->s_free_inodes_count, sbi->s_inodes_count,
 		sbi->s_free_inode_hint);
 
-	diri = pmfs_get_inode(sb, dir->i_ino);
+	diri = pmfs_get_inode_by_ino(sb, dir->i_ino);
 	if (!diri)
 		return ERR_PTR(-EACCES);
 
@@ -2207,7 +2207,7 @@ retry:
 		u32 end_ino;
 		end_ino = i + (inodes_per_block - (i & (inodes_per_block - 1)));
 		ino = i <<  PMFS_INODE_BITS;
-		pi = pmfs_get_inode(sb, ino);
+		pi = pmfs_get_inode_by_ino(sb, ino);
 		for (; i < end_ino; i++) {
 			/* check if the inode is active. */
 			if (le16_to_cpu(pi->i_links_count) == 0 &&
@@ -2366,7 +2366,7 @@ int pmfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 void pmfs_dirty_inode(struct inode *inode, int flags)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
 
 	/* only i_atime should have changed if at all.
 	 * we can do in-place atomic update */
@@ -2605,7 +2605,7 @@ int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 {
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode->i_ino);
+	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
 	pmfs_transaction_t *trans;
 	int ret;
 	unsigned int ia_valid = attr->ia_valid, attr_mask;

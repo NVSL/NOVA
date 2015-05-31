@@ -127,7 +127,7 @@ long pmfs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	int ret;
 	pmfs_transaction_t *trans;
 
-	pi = pmfs_get_inode(sb, inode->i_ino);
+	pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
 	if (!pi)
 		return -EACCES;
 

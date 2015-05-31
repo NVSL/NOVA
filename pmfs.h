@@ -919,8 +919,8 @@ static inline uint32_t pmfs_inode_blk_size (struct pmfs_inode *pi)
 
 /* If this is part of a read-modify-write of the inode metadata,
  * pmfs_memunlock_inode() before calling! */
-static inline struct pmfs_inode *pmfs_get_inode(struct super_block *sb,
-						  u64	ino)
+static inline struct pmfs_inode *pmfs_get_inode_by_ino(struct super_block *sb,
+						  u64 ino)
 {
 	struct pmfs_super_block *ps = pmfs_get_super(sb);
 	struct pmfs_inode *inode_table = pmfs_get_inode_table(sb);
@@ -989,7 +989,7 @@ static inline int pmfs_is_mounting(struct super_block *sb)
 static inline struct pmfs_inode_truncate_item * pmfs_get_truncate_item (struct 
 		super_block *sb, u64 ino)
 {
-	struct pmfs_inode *pi = pmfs_get_inode(sb, ino);
+	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, ino);
 	return (struct pmfs_inode_truncate_item *)(pi + 1);
 }
 

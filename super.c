@@ -483,7 +483,7 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 //	pmfs_new_data_blocks(sb, &blocknr, 1, PMFS_BLOCK_TYPE_4K, 1);
 
 	pmfs_dbg_verbose("Allocate root inode\n");
-	root_i = pmfs_get_inode(sb, PMFS_ROOT_INO);
+	root_i = pmfs_get_inode_by_ino(sb, PMFS_ROOT_INO);
 
 	pmfs_memunlock_inode(sb, root_i);
 	root_i->i_mode = cpu_to_le16(sbi->mode | S_IFDIR);
@@ -607,7 +607,7 @@ static void pmfs_recover_truncate_list(struct super_block *sb)
 		return;
 
 	while (ino_next != 0) {
-		pi = pmfs_get_inode(sb, ino_next);
+		pi = pmfs_get_inode_by_ino(sb, ino_next);
 		li = (struct pmfs_inode_truncate_item *)(pi + 1);
 		inode = pmfs_iget(sb, ino_next, 0);
 		if (IS_ERR(inode))
@@ -759,7 +759,7 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	pmfs_dbg_verbose("blocksize %lu\n", blocksize);
 
 	/* Read the root inode */
-	root_pi = pmfs_get_inode(sb, PMFS_ROOT_INO);
+	root_pi = pmfs_get_inode_by_ino(sb, PMFS_ROOT_INO);
 
 	/* Check that the root inode is in a sane state */
 	pmfs_root_check(sb, root_pi);

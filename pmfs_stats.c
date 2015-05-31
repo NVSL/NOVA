@@ -198,7 +198,7 @@ void pmfs_print_inode_log(struct super_block *sb, struct inode *inode)
 	size_t entry_size = sizeof(struct pmfs_inode_entry);
 	u64 curr;
 
-	pi = pmfs_get_inode(sb, inode->i_ino);
+	pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
 	if (pi->log_tail == 0)
 		return;
 
@@ -237,7 +237,7 @@ void pmfs_print_inode_log_page(struct super_block *sb, struct inode *inode)
 	int count = 1;
 	int used = count;
 
-	pi = pmfs_get_inode(sb, inode->i_ino);
+	pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
 	if (pi->log_tail == 0) {
 		pmfs_dbg("Pi %lu has no log\n", inode->i_ino);
 		return;
@@ -273,7 +273,7 @@ void pmfs_print_inode_log_blocknode(struct super_block *sb,
 	u64 curr;
 	unsigned long count = 0;
 
-	pi = pmfs_get_inode(sb, inode->i_ino);
+	pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
 
 	if (pi->log_tail == 0)
 		goto out;
