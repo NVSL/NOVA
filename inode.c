@@ -1714,6 +1714,7 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 						__func__, inode->i_ino);
 				recovered_sih = pmfs_alloc_header(sb,
 							inode->i_mode);
+				recovered_sih->pmfs_inode = pi;
 				pmfs_assign_info_header(sb, ino,
 							recovered_sih, 1);
 			}
@@ -3416,6 +3417,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
 	 */
 	sih->root = 0;
 	sih->height = 0;
+	sih->pmfs_inode = pi;
 
 	if (curr_p == 0 && pi->log_tail == 0)
 		return 0;

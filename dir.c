@@ -370,6 +370,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
 
 	pmfs_dbg_verbose("Rebuild dir %lu tree\n", ino);
 	sih->dir_tree = RB_ROOT;
+	sih->pmfs_inode = pi;
 
 	if (curr_p == 0) {
 		pmfs_err(sb, "Dir %lu log is NULL!\n", ino);
