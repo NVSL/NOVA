@@ -1605,7 +1605,6 @@ int pmfs_init_inode_table(struct super_block *sb)
 	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	unsigned long num_blocks = 0, init_inode_table_size;
-	struct pmfs_blocknode *blknode;
 	int errval;
 
 	if (sbi->num_inodes == 0) {
@@ -1658,9 +1657,17 @@ int pmfs_init_inode_table(struct super_block *sb)
 	pmfs_dbg_verbose("%s %u %u\n", __func__, sbi->s_inodes_count,
 				sbi->s_free_inodes_count);
 
+	return 0;
+}
+
+int pmfs_init_inode_inuse_list(struct super_block *sb)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct pmfs_blocknode *blknode;
+
 	blknode = pmfs_alloc_blocknode(sb);
 	if (blknode == NULL)
-		PMFS_ASSERT(0);
+		return -ENOMEM;
 	blknode->block_low = 0;
 	blknode->block_high = PMFS_FREE_INODE_HINT_START - 1;
 	pmfs_insert_blocknode_inodetree(sbi, blknode);

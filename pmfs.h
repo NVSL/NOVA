@@ -336,6 +336,7 @@ extern int __pmfs_alloc_blocks(pmfs_transaction_t *trans,
 		struct super_block *sb, struct pmfs_inode *pi,
 		unsigned long file_blocknr, unsigned int num, bool zero);
 extern int pmfs_init_inode_table(struct super_block *sb);
+int pmfs_init_inode_inuse_list(struct super_block *sb);
 extern int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
 		unsigned long file_blocknr, unsigned int num, bool zero);
 extern u64 pmfs_find_data_block(struct inode *inode,

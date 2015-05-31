@@ -473,6 +473,9 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	if (pmfs_init_inode_table(sb) < 0)
 		return ERR_PTR(-EINVAL);
 
+	if (pmfs_init_inode_inuse_list(sb) < 0)
+		return ERR_PTR(-EINVAL);
+
 	pmfs_memunlock_range(sb, super, PMFS_SB_SIZE*2);
 	pmfs_sync_super(super);
 	pmfs_memlock_range(sb, super, PMFS_SB_SIZE*2);
