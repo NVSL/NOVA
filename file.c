@@ -101,7 +101,7 @@ static long pmfs_fallocate(struct file *file, int mode, loff_t offset,
 			goto out;
 	}
 
-	pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
+	pi = pmfs_get_inode(sb, inode);
 	if (!pi) {
 		ret = -EACCES;
 		goto out;
@@ -278,7 +278,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 //		goto persist;
 
 	/* Check the dirty range */
-	pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
+	pi = pmfs_get_inode(sb, inode);
 	if (si->low_dirty > si->high_dirty)
 		goto persist;
 
@@ -392,7 +392,7 @@ pmfs_get_unmapped_area(struct file *file, unsigned long addr,
 	struct vm_area_struct *vma;
 	struct mm_struct *mm = current->mm;
 	struct inode *inode = file->f_mapping->host;
-	struct pmfs_inode *pi = pmfs_get_inode_by_ino(inode->i_sb, inode->i_ino);
+	struct pmfs_inode *pi = pmfs_get_inode(inode->i_sb, inode);
 	struct vm_unmapped_area_info info;
 
 	if (len > TASK_SIZE)

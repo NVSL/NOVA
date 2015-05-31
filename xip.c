@@ -29,7 +29,7 @@ do_xip_mapping_read(struct address_space *mapping,
 {
 	struct inode *inode = mapping->host;
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_entry *entry;
 	struct mem_addr *pair;
@@ -637,7 +637,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		goto out;
 #endif
 
-	pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
+	pi = pmfs_get_inode(sb, inode);
 
 	offset = pos & (sb->s_blocksize - 1);
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
@@ -843,7 +843,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	if (ret || count == 0)
 		goto out;
 #endif
-	pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
+	pi = pmfs_get_inode(sb, inode);
 
 	offset = pos & (sb->s_blocksize - 1);
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
@@ -998,7 +998,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 	sb_start_write(inode->i_sb);
 	mutex_lock(&inode->i_mutex);
 
-	pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
+	pi = pmfs_get_inode(sb, inode);
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
 	total_blocks = num_blocks;
 	pos = offset + (pgoff << sb->s_blocksize_bits);
@@ -1430,7 +1430,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	void *nvmm;
 	struct page *page;
 
-	pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
+	pi = pmfs_get_inode(sb, inode);
 
 	allocated = pmfs_find_alloc_dram_pages(sb, inode, pi,
 				pgoff, &page_addr, &existed, &pair, 1, 0);
@@ -1474,7 +1474,7 @@ static unsigned long pmfs_data_block_size(struct vm_area_struct *vma,
 	if (addr < vma->vm_start || addr >= vma->vm_end)
 		return -EFAULT;
 
-	pi = pmfs_get_inode_by_ino(inode->i_sb, inode->i_ino);
+	pi = pmfs_get_inode(inode->i_sb, inode);
 
 	map_virt = addr & PUD_MASK;
 

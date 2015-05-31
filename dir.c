@@ -285,7 +285,7 @@ int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 	if (!dentry->d_name.len)
 		return -EINVAL;
 
-	pidir = pmfs_get_inode_by_ino(sb, dir->i_ino);
+	pidir = pmfs_get_inode(sb, dir);
 
 	retval = pmfs_add_dirent_to_buf(dentry, inode, pidir,
 					inc_link, new_inode);
@@ -312,7 +312,7 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 	if (!dentry->d_name.len)
 		return -EINVAL;
 
-	pidir = pmfs_get_inode_by_ino(sb, dir->i_ino);
+	pidir = pmfs_get_inode(sb, dir);
 	loglen = PMFS_DIR_LOG_REC_LEN(entry->len);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir,
 				0, dentry, loglen, 0, dec_link, 0, &curr_tail);
@@ -467,9 +467,10 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi, *pidir;
+	struct pmfs_inode *pidir;
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
+	struct pmfs_inode_info_header *child_sih;
 	struct pmfs_dir_node *curr;
 	struct pmfs_log_direntry *entry;
 	struct rb_node *temp;
@@ -477,7 +478,7 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 	timing_t readdir_time;
 
 	PMFS_START_TIMING(readdir_t, readdir_time);
-	pidir = pmfs_get_inode_by_ino(sb, inode->i_ino);
+	pidir = pmfs_get_inode(sb, inode);
 	pmfs_dbg_verbose("%s: ino %llu, root 0x%llx, size %llu, pos %llu\n",
 				__func__, (u64)inode->i_ino, pidir->root,
 				pidir->i_size, ctx->pos);
@@ -508,13 +509,14 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 				pmfs_get_block(sb, curr->nvmm);
 		if (entry->ino) {
 			ino = le64_to_cpu(entry->ino);
-			pi = pmfs_get_inode_by_ino(sb, ino);
+			ino >>= PMFS_INODE_BITS;
+			child_sih = pmfs_find_info_header(sb, ino);
 			pmfs_dbg_verbose("ctx: ino %llu, name %*.s, "
 					"name_len %u, de_len %u\n",
 					(u64)ino, entry->name_len, entry->name,
 					entry->name_len, entry->de_len);
 			if (!dir_emit(ctx, entry->name, entry->name_len,
-					ino, IF2DT(le16_to_cpu(pi->i_mode)))) {
+				ino, IF2DT(le16_to_cpu(child_sih->i_mode)))) {
 				pmfs_dbg_verbose("Here: pos %llu\n", ctx->pos);
 				ctx->pos = curr->nvmm;
 				return 0;

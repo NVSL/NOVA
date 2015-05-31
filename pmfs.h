@@ -785,6 +785,7 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 		return pair->dram;
 }
 
+/* ino is divided by PMFS_INODE_SIZE */
 static inline struct pmfs_inode_info_header *
 pmfs_find_info_header(struct super_block *sb, unsigned long ino)
 {
