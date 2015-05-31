@@ -2260,6 +2260,7 @@ retry:
 	si = PMFS_I(inode);
 	sih = pmfs_alloc_header(sb, inode->i_mode);
 	pmfs_assign_info_header(sb, i, sih, 0);
+	sih->pmfs_inode = pi;
 	si->header = sih;
 
 	pmfs_alloc_unused_inode(sb, &free_ino);

@@ -478,6 +478,7 @@ struct pmfs_inode_info_header {
 	u32	log_pages;		/* Num of log pages */
 	u64	i_size;
 	struct rb_root	dir_tree;	/* Dir name entry tree root */
+	struct pmfs_inode *pmfs_inode;
 };
 
 struct pmfs_inode_info {
@@ -936,6 +937,15 @@ static inline struct pmfs_inode *pmfs_get_inode_by_ino(struct super_block *sb,
 		return NULL;
 	ino_offset = (ino & (pmfs_inode_blk_size(inode_table) - 1));
 	return (struct pmfs_inode *)((void *)ps + bp + ino_offset);
+}
+
+static inline struct pmfs_inode *pmfs_get_inode(struct super_block *sb,
+	struct inode *inode)
+{
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = si->header;
+
+	return sih->pmfs_inode;
 }
 
 static inline u64
