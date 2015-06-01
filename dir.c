@@ -227,6 +227,144 @@ void pmfs_delete_dir_tree(struct super_block *sb,
 
 /* ========================= Entry operations ============================= */
 
+/*
+ * Append a pmfs_direntry to the current pmfs_inode_log_page.
+ * Note unlike append_file_inode_entry(), this method returns the tail pointer
+ * after append.
+ */
+static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
+	struct pmfs_inode *pi, struct inode *inode, u64 ino,
+	struct dentry *dentry, unsigned short de_len, u64 tail,
+	int link_change, int new_inode,	u64 *curr_tail)
+{
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = si->header;
+	struct pmfs_log_direntry *entry;
+	u64 curr_p, inode_start;
+	size_t size = de_len;
+	unsigned short links_count;
+	timing_t append_time;
+
+	PMFS_START_TIMING(append_entry_t, append_time);
+
+	if (tail)
+		curr_p = tail;
+	else
+		curr_p = pi->log_tail;
+
+	if (curr_p == 0 || (is_last_entry(curr_p, size, new_inode) &&
+				next_log_page(sb, curr_p) == 0)) {
+		curr_p = pmfs_extend_inode_log(sb, pi, sih, curr_p, 0);
+		if (curr_p == 0)
+			goto out;
+	}
+
+	/* Append the entry, then inode if needed */
+	if (is_last_entry(curr_p, size, 0))
+		curr_p = next_log_page(sb, curr_p);
+
+	entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr_p);
+	entry->ino = cpu_to_le64(ino);
+	entry->name_len = dentry->d_name.len;
+	__copy_from_user_inatomic_nocache(entry->name, dentry->d_name.name,
+					dentry->d_name.len);
+	entry->file_type = 0;
+	entry->mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	entry->size = cpu_to_le64(inode->i_size);
+	entry->new_inode = new_inode;
+
+	links_count = cpu_to_le16(inode->i_nlink);
+	if (links_count == 0 && link_change == -1)
+		links_count = 0;
+	else
+		links_count += link_change;
+	entry->links_count = cpu_to_le16(links_count);
+
+	/* Update actual de_len */
+	entry->de_len = de_len;
+	pmfs_dbg_verbose("dir entry @ 0x%llx: ino %llu, entry len %u, "
+			"name len %u, file type %u\n",
+			curr_p, entry->ino, entry->de_len,
+			entry->name_len, entry->file_type);
+
+	pmfs_flush_buffer(entry, de_len, 0);
+
+	*curr_tail = curr_p + de_len;
+
+	if (new_inode) {
+		/* Allocate space for the new inode */
+		if (is_last_entry(curr_p, de_len, new_inode))
+			inode_start = next_log_page(sb, curr_p);
+		else
+			inode_start = (*curr_tail & (CACHELINE_SIZE - 1)) == 0
+				? *curr_tail : CACHE_ALIGN(*curr_tail) +
+						CACHELINE_SIZE;
+
+		*curr_tail = inode_start + PMFS_INODE_SIZE;
+	}
+out:
+	PMFS_END_TIMING(append_entry_t, append_time);
+	return curr_p;
+}
+
+/* Append . and .. entries */
+int pmfs_append_dir_init_entries(struct super_block *sb,
+	struct pmfs_inode *pi, u64 self_ino, u64 parent_ino)
+{
+	int allocated;
+	u64 new_block;
+	u64 curr_p;
+	struct pmfs_log_direntry *de_entry;
+
+	if (pi->log_head) {
+		pmfs_dbg("%s: log head exists @ 0x%llx!\n",
+				__func__, pi->log_head);
+		return - EINVAL;
+	}
+
+	allocated = pmfs_allocate_inode_log_pages(sb, pi, 1, &new_block);
+	if (allocated != 1) {
+		pmfs_err(sb, "ERROR: no inode log page available\n");
+		return - ENOMEM;
+	}
+	pi->log_tail = pi->log_head = new_block;
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+
+	de_entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, new_block);
+	de_entry->ino = cpu_to_le64(self_ino);
+	de_entry->name_len = 1;
+	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(1));
+	de_entry->ctime = de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
+	de_entry->size = sb->s_blocksize;
+	de_entry->links_count = 1;
+	strcpy(de_entry->name, ".");
+	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(1), false);
+
+	curr_p = new_block + PMFS_DIR_LOG_REC_LEN(1);
+
+	de_entry = (struct pmfs_log_direntry *)((char *)de_entry +
+					le16_to_cpu(de_entry->de_len));
+	de_entry->ino = cpu_to_le64(parent_ino);
+	de_entry->name_len = 2;
+	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(2));
+	de_entry->ctime = de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
+	de_entry->size = sb->s_blocksize;
+	de_entry->links_count = 2;
+	strcpy(de_entry->name, "..");
+	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(2), true);
+
+	curr_p += PMFS_DIR_LOG_REC_LEN(2);
+
+//	dram_addr[1] = new_block + PMFS_DIR_REC_LEN(1);
+
+	PERSISTENT_BARRIER();
+	pi->log_tail = curr_p;
+	pmfs_flush_buffer(&pi->log_tail, CACHELINE_SIZE, true);
+
+	return 0;
+}
+
 static int pmfs_add_dirent_to_buf(struct dentry *dentry, struct inode *inode,
 	struct pmfs_inode *pidir, int inc_link, int new_inode)
 {

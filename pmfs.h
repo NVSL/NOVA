@@ -322,6 +322,8 @@ extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
 void pmfs_free_cache_block(unsigned long page_addr);
 
 /* dir.c */
+int pmfs_append_dir_init_entries(struct super_block *sb,
+	struct pmfs_inode *pi, u64 self_ino, u64 parent_ino);
 extern int pmfs_add_entry(pmfs_transaction_t *trans,
 	struct dentry *dentry, struct inode *inode, int inc_link,
 	int new_inode);
@@ -1132,12 +1134,6 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 	u64 *new_block);
 u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_inode_entry *data, u64 tail);
-u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, u64 ino, struct dentry *dentry,
-	unsigned short de_len, u64 tail, int link_change, int new_inode,
-	u64 *curr_tail);
-int pmfs_append_dir_init_entries(struct super_block *sb,
-	struct pmfs_inode *pi, u64 self_ino, u64 parent_ino);
 int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct pmfs_inode *p,
 	struct pmfs_inode_info_header *sih, unsigned long ino,
 	struct scan_bitmap *bm);
