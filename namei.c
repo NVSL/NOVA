@@ -38,7 +38,7 @@ static inline int pmfs_add_nondir(pmfs_transaction_t *trans,
 	struct inode *dir, struct dentry *dentry, struct inode *inode, u64 *tail)
 {
 	struct pmfs_inode *pi;
-	int err = pmfs_add_entry(trans, dentry, inode, 0, 1, 0, tail);
+	int err = pmfs_add_entry(trans, dentry, inode->i_ino, 0, 1, 0, tail);
 
 	if (!err) {
 		d_instantiate(dentry, inode);
@@ -332,7 +332,7 @@ static int pmfs_link(struct dentry *dest_dentry, struct inode *dir,
 	if (!pidir)
 		return -EINVAL;
 
-	err = pmfs_add_entry(NULL, dentry, inode, 1, 0, 0, &tail);
+	err = pmfs_add_entry(NULL, dentry, inode->i_ino, 1, 0, 0, &tail);
 	if (!err) {
 		inode->i_ctime = CURRENT_TIME_SEC;
 		inc_nlink(inode);
@@ -366,7 +366,7 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 		goto out;
 
 	pmfs_dbg_verbose("%s: %s\n", __func__, dentry->d_name.name);
-	retval = pmfs_remove_entry(NULL, dentry, inode, -1, 0, &tail);
+	retval = pmfs_remove_entry(NULL, dentry, -1, 0, &tail);
 	if (retval)
 		goto out;
 
@@ -440,7 +440,7 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	set_nlink(inode, 2);
 
-	err = pmfs_add_entry(trans, dentry, inode, 0, 1, 0, &tail);
+	err = pmfs_add_entry(trans, dentry, inode->i_ino, 0, 1, 0, &tail);
 	if (err) {
 		pmfs_dbg_verbose("failed to add dir entry\n");
 		goto out_clear_inode;
@@ -540,7 +540,7 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 	}
 	pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
 
-	err = pmfs_remove_entry(trans, dentry, inode, 0, 0, &tail);
+	err = pmfs_remove_entry(trans, dentry, 0, 0, &tail);
 	if (err)
 		goto end_rmdir;
 
@@ -620,8 +620,8 @@ static int pmfs_rename(struct inode *old_dir,
 
 	if (!new_de) {
 		/* link it into the new directory. */
-		err = pmfs_add_entry(trans, new_dentry, old_inode, 0, 0, 0,
-						&new_tail);
+		err = pmfs_add_entry(trans, new_dentry, old_inode->i_ino,
+					0, 0, 0, &new_tail);
 		if (err)
 			goto out;
 	} else {
@@ -646,7 +646,7 @@ static int pmfs_rename(struct inode *old_dir,
 	else
 		tail = 0;
 
-	err = pmfs_remove_entry(trans, old_dentry, old_inode, 0, tail, &old_tail);
+	err = pmfs_remove_entry(trans, old_dentry, 0, tail, &old_tail);
 	if (err)
 		goto out;
 

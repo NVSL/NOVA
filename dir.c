@@ -369,8 +369,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
  * already been logged for consistency
  */
 int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
-	struct inode *inode, int inc_link, int new_inode, u64 tail,
-	u64 *new_tail)
+	u64 ino, int inc_link, int new_inode, u64 tail, u64 *new_tail)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -380,10 +379,9 @@ int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 	unsigned short loglen;
 	u64 curr_entry, curr_tail;
 	timing_t add_entry_time;
-	u64 ino;
 
-	pmfs_dbg_verbose("%s: dir %lu new inode %lu\n", __func__, dir->i_ino,
-				inode->i_ino);
+	pmfs_dbg_verbose("%s: dir %lu new inode %llu\n",
+				__func__, dir->i_ino, ino);
 	pmfs_dbg_verbose("%s: %s %d\n", __func__, name, namelen);
 	PMFS_START_TIMING(add_entry_t, add_entry_time);
 	if (namelen == 0)
@@ -391,11 +389,6 @@ int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 
 	pidir = pmfs_get_inode(sb, dir);
 
-	if (inode) {
-		ino = inode->i_ino;
-	} else {
-		ino = 0;
-	}
 	/*
 	 * XXX shouldn't update any times until successful
 	 * completion of syscall, but too many callers depend
@@ -423,10 +416,10 @@ int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
  * already been logged for consistency
  */
 int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *dentry,
-	struct inode *inode, int dec_link, u64 tail, u64 *new_tail)
+	int dec_link, u64 tail, u64 *new_tail)
 {
-	struct super_block *sb = inode->i_sb;
 	struct inode *dir = dentry->d_parent->d_inode;
+	struct super_block *sb = dir->i_sb;
 	struct pmfs_inode *pidir;
 	struct qstr *entry = &dentry->d_name;
 	unsigned short loglen;
