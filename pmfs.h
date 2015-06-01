@@ -1127,6 +1127,9 @@ static inline int is_dir_init_entry(struct super_block *sb,
 extern const struct address_space_operations pmfs_aops_xip;
 u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih, u64 curr_p, int is_file);
+int pmfs_allocate_inode_log_pages(struct super_block *sb,
+	struct pmfs_inode *pi, unsigned long num_pages,
+	u64 *new_block);
 u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_inode_entry *data, u64 tail);
 u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
@@ -1159,6 +1162,7 @@ pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
 
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);
+void pmfs_save_blocknode_mappings_to_log(struct super_block *sb);
 unsigned int pmfs_free_header_tree(struct super_block *sb);
 struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
 	u16 i_mode);

@@ -52,16 +52,21 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_IN0);
-	struct pmfs_blocknode_lowhigh *p = NULL;
+	struct pmfs_blocknode_lowhigh *p = NULL, *entry;
 	struct pmfs_blocknode *blknode;
+	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
 	unsigned long index;
 	unsigned long blocknr;
 	unsigned long i;
 	unsigned long num_blocknode;
-	u64 bp;
+	u64 bp, curr_p;
 
 	num_blocknode = sbi->num_blocknode_block;
 	sbi->num_blocknode_block = 0;
+	curr_p = pi->log_head;
+	if (curr_p == 0)
+		pmfs_dbg("%s: pi head is 0!\n", __func__);
+
 	for (i = 0; i < num_blocknode; i++) {
 		index = i & 0xFF;
 		if (index == 0) {
@@ -78,7 +83,30 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 		blknode->block_high = le64_to_cpu(p[index].block_high);
 		list_add_tail(&blknode->link, &sbi->block_inuse_head);
 		pmfs_insert_blocknode_blocktree(sbi, blknode);
+
+		if (is_last_entry(curr_p, size, 0)) {
+			curr_p = next_log_page(sb, curr_p);
+		}
+
+		if (curr_p == 0) {
+			pmfs_dbg("%s: curr_p is NULL!\n", __func__);
+			BUG();
+		}
+
+		entry = (struct pmfs_blocknode_lowhigh *)pmfs_get_block(sb,
+							curr_p);
+		if (entry->block_low != blknode->block_low ||
+				entry->block_high != blknode->block_high)
+			pmfs_dbg("%s: entry blocknode %lu mismatch, "
+				"%lu %lu, %llu %llu\n", __func__, i,
+				blknode->block_low, blknode->block_high,
+				entry->block_low, entry->block_high);
+		curr_p += sizeof(struct pmfs_blocknode_lowhigh);
 	}
+
+	if (curr_p != pi->log_tail)
+		pmfs_dbg("%s: curr_p 0x%llx, tail 0x%llx, %lu blocknodes\n",
+			__func__, curr_p, pi->log_tail, num_blocknode);
 }
 
 static bool pmfs_can_skip_full_scan(struct super_block *sb)
@@ -154,7 +182,10 @@ void pmfs_save_blocknode_mappings(struct super_block *sb)
 	struct pmfs_super_block *super;
 	pmfs_transaction_t *trans;
 	u64 bp;
+	u64 new_block = 0;
+	int step = 0;
 	int j, k;
+	int allocated;
 	int errval;
 	
 	num_blocks = ((sbi->num_blocknode_block * sizeof(struct
@@ -175,6 +206,21 @@ void pmfs_save_blocknode_mappings(struct super_block *sb)
 		return;
 	}
 
+	/* Allocate log pages before save blocknode mappings */
+	/* Move this to correct place later */
+	num_blocks = sbi->num_blocknode_block / BLOCKNODE_PER_PAGE;
+	if (sbi->num_blocknode_block % BLOCKNODE_PER_PAGE)
+		num_blocks++;
+	allocated = pmfs_allocate_inode_log_pages(sb, pi, num_blocks,
+						&new_block);
+	if (allocated != num_blocks) {
+		pmfs_dbg("Error saving blocknode mappings: %d\n", allocated);
+		pmfs_abort_transaction(sb, trans);
+		return;
+	}
+
+	pi->log_head = pi->log_tail = new_block;
+
 	j = 0;
 	k = 0;
 	p = NULL;
@@ -190,6 +236,8 @@ void pmfs_save_blocknode_mappings(struct super_block *sb)
 		p[j].block_high = cpu_to_le64(i->block_high);
 		j++;
 
+		pmfs_dbg_verbose("%s: save blocknode %d, %lu %lu\n",
+				__func__, step,	i->block_low, i->block_high);
 		if (j == 256) {
 			j = 0;
 			/* Lock the data block */
@@ -198,8 +246,12 @@ void pmfs_save_blocknode_mappings(struct super_block *sb)
 		}
 		
 		k++;
+		step++;
 	}
-	
+
+	pmfs_dbg("%s: %lu blocknodes, step %d\n",
+		__func__, sbi->num_blocknode_block, step);
+
 	/* Lock the block */	
 	if (j) {
 		pmfs_flush_buffer(p, j << 4, false);
@@ -247,9 +299,8 @@ u64 pmfs_append_blocknode_entry(struct super_block *sb, struct pmfs_inode *pi,
 
 	if (curr_p == 0 || (is_last_entry(curr_p, size, 0) &&
 				next_log_page(sb, curr_p) == 0)) {
-		curr_p = pmfs_extend_inode_log(sb, pi, sih, curr_p, 0);
-		if (curr_p == 0)
-			goto out;
+		pmfs_dbg("%s: inode log reaches end?\n", __func__);
+		goto out;
 	}
 
 	if (is_last_entry(curr_p, size, 0))
@@ -258,7 +309,7 @@ u64 pmfs_append_blocknode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	entry = (struct pmfs_blocknode_lowhigh *)pmfs_get_block(sb, curr_p);
 	entry->block_low = i->block_low;
 	entry->block_high = i->block_high;
-	pmfs_dbg_verbose("entry block low %lu, high %lu\n",
+	pmfs_dbg_verbose("append entry block low %lu, high %lu\n",
 			i->block_low, i->block_high);
 
 	pmfs_flush_buffer(entry, sizeof(struct pmfs_blocknode_lowhigh), 0);
@@ -272,24 +323,19 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	unsigned long num_blocks;
 	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_IN0);
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_inode_info_header *sih;
 	struct list_head *head = &(sbi->block_inuse_head);
 	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
 	struct pmfs_blocknode *i;
 	struct pmfs_super_block *super;
+	int step = 0;
 	pmfs_transaction_t *trans;
 	u64 curr_entry = 0;
-	u64 temp_tail = 0;
+	u64 temp_tail = pi->log_tail;
 
 	num_blocks = sbi->num_blocknode_block / BLOCKNODE_PER_PAGE;
 	if (sbi->num_blocknode_block % BLOCKNODE_PER_PAGE)
 		num_blocks++;
 
-	sih = pmfs_alloc_header(sb, __le16_to_cpu(pi->i_mode));
-	if (!sih)
-		BUG();
-
-	pi->log_head = pi->log_tail = 0;
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 
 	/* 2 entries for super-block */
@@ -298,7 +344,8 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 		return;
 
 	list_for_each_entry(i, head, link) {
-		curr_entry = pmfs_append_blocknode_entry(sb, pi, sih,
+		step++;
+		curr_entry = pmfs_append_blocknode_entry(sb, pi, NULL,
 							i, temp_tail);
 		temp_tail = curr_entry + size;
 	}
@@ -307,13 +354,9 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	pi->log_tail = temp_tail;
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 
-	/* Check pages */
-	if (num_blocks != sih->log_pages)
-		pmfs_dbg("%s: %lu blocknodes, %lu pages, actually %u pages\n",
-			__func__, sbi->num_blocknode_block, num_blocks,
-			sih->log_pages);
-
-	pmfs_free_header(sb, sih);
+	pmfs_dbg("%s: %lu blocknodes, step %d, pi head 0x%llx, tail 0x%llx\n",
+		__func__, sbi->num_blocknode_block, step, pi->log_head,
+		pi->log_tail);
 
 	/*
 	 * save the total allocated blocknode mappings
