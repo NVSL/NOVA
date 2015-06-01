@@ -442,7 +442,7 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 		return ERR_PTR(-EINVAL);
 	}
 
-	journal_data_start = PMFS_SB_SIZE * 2;
+	journal_data_start = PMFS_SB_SIZE * 3;
 	journal_data_start = (journal_data_start + blocksize - 1) &
 		~(blocksize - 1);
 

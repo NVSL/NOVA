@@ -162,7 +162,6 @@ struct pmfs_inode_truncate_item {
  *         i_d.d_name) - 1)
  */
 
-/* #define PMFS_SB_SIZE 128 */ /* must be power of two */
 #define PMFS_SB_SIZE 512       /* must be power of two */
 
 typedef struct pmfs_journal {

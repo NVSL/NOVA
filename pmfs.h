@@ -611,6 +611,19 @@ static inline struct pmfs_super_block *pmfs_get_redund_super(struct super_block 
 	return (struct pmfs_super_block *)(sbi->virt_addr + PMFS_SB_SIZE);
 }
 
+/*
+ * ROOT_INO: Start from PMFS_SB_SIZE * 2
+ * BLOCKNODE_INO: PMFS_SB_SIZE * 2 + PMFS_INODE_SIZE
+ */
+static inline struct pmfs_inode *pmfs_get_basic_inode(struct super_block *sb,
+	u64 inode_number)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+
+	return (struct pmfs_inode *)(sbi->virt_addr + PMFS_SB_SIZE * 2 +
+				 inode_number - PMFS_INODE_SIZE);
+}
+
 /* If this is part of a read-modify-write of the block,
  * pmfs_memunlock_block() before calling! */
 static inline void *pmfs_get_block(struct super_block *sb, u64 block)
@@ -931,6 +944,9 @@ static inline struct pmfs_inode *pmfs_get_inode_by_ino(struct super_block *sb,
 
 	if (ino == 0)
 		return NULL;
+
+	if (ino < 384)
+		return pmfs_get_basic_inode(sb, ino);
 
 	block = ino >> pmfs_inode_blk_shift(inode_table);
 	bp = __pmfs_find_inode(sb, inode_table, block);
