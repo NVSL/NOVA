@@ -2140,46 +2140,11 @@ out:
 	PMFS_END_TIMING(evict_inode_t, evict_time);
 }
 
-static int pmfs_increase_inode_table_size(struct super_block *sb)
-{
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
-	pmfs_transaction_t *trans;
-	int errval;
-
-	/* 1 log entry for inode-table inode, 1 lentry for inode-table b-tree */
-	trans = pmfs_new_transaction(sb, MAX_INODE_LENTRIES);
-	if (IS_ERR(trans))
-		return PTR_ERR(trans);
-
-	pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
-
-	errval = __pmfs_alloc_blocks(trans, sb, pi,
-			le64_to_cpup(&pi->i_size) >> sb->s_blocksize_bits,
-			1, true);
-
-	if (errval == 0) {
-		u64 i_size = le64_to_cpu(pi->i_size);
-
-		sbi->s_free_inode_hint = i_size >> PMFS_INODE_BITS;
-		i_size += pmfs_inode_blk_size(pi);
-
-		pmfs_memunlock_inode(sb, pi);
-		pi->i_size = cpu_to_le64(i_size);
-		pmfs_memlock_inode(sb, pi);
-
-		sbi->s_free_inodes_count += INODES_PER_BLOCK(pi->i_blk_type);
-		sbi->s_inodes_count = i_size >> PMFS_INODE_BITS;
-	} else
-		pmfs_dbg_verbose("no space left to inc inode table!\n");
-	/* commit the transaction */
-	pmfs_commit_transaction(sb, trans);
-	return errval;
-}
-
 /* Returns 0 on failure */
-u64 pmfs_get_new_inode_number(struct super_block *sb)
+u64 pmfs_new_pmfs_inode(struct super_block *sb,
+	struct pmfs_inode_info_header **return_sih)
 {
+	struct pmfs_inode_info_header *sih;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	unsigned long free_ino = 0;
 	u64 ino = 0;
@@ -2204,20 +2169,24 @@ u64 pmfs_get_new_inode_number(struct super_block *sb)
 	if (i > sbi->s_max_inode)
 		sbi->s_max_inode = i;
 
+	sih = pmfs_alloc_header(sb, 0);
+	pmfs_assign_info_header(sb, free_ino, sih, 0);
+
 	mutex_unlock(&sbi->inode_table_mutex);
 	ino = free_ino << PMFS_INODE_BITS;
+	*return_sih = sih;
 	return ino;
 }
 
-struct inode *pmfs_new_inode(pmfs_transaction_t *trans, struct inode *dir,
-	struct pmfs_inode *pi, u64 ino, umode_t mode, const struct qstr *qstr)
+struct inode *pmfs_new_vfs_inode(pmfs_transaction_t *trans, struct inode *dir,
+	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih, u64 ino,
+	umode_t mode, const struct qstr *qstr)
 {
 	struct super_block *sb;
 	struct pmfs_sb_info *sbi;
 	struct inode *inode;
 	struct pmfs_inode *diri = NULL;
 	struct pmfs_inode_info *si;
-	struct pmfs_inode_info_header *sih;
 	int i, errval;
 	timing_t new_inode_time;
 
@@ -2259,13 +2228,10 @@ struct inode *pmfs_new_inode(pmfs_transaction_t *trans, struct inode *dir,
 	pi->log_tail = 0;
 	pmfs_memlock_inode(sb, pi);
 
-	mutex_lock(&sbi->inode_table_mutex);
 	si = PMFS_I(inode);
-	sih = pmfs_alloc_header(sb, inode->i_mode);
-	pmfs_assign_info_header(sb, i, sih, 0);
+	sih->i_mode = inode->i_mode;
 	sih->pmfs_inode = pi;
 	si->header = sih;
-	mutex_unlock(&sbi->inode_table_mutex);
 
 	pmfs_update_inode(inode, pi);
 
