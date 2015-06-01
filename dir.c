@@ -365,18 +365,31 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	return 0;
 }
 
-static int pmfs_add_dirent_to_buf(struct dentry *dentry, struct inode *inode,
-	struct pmfs_inode *pidir, int inc_link, int new_inode)
+/* adds a directory entry pointing to the inode. assumes the inode has
+ * already been logged for consistency
+ */
+int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
+		struct inode *inode, int inc_link, int new_inode)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
+	struct pmfs_inode *pidir;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
 	unsigned short loglen;
 	u64 curr_entry, curr_tail;
+	timing_t add_entry_time;
 	u64 ino;
 
+	pmfs_dbg_verbose("%s: dir %lu new inode %lu\n", __func__, dir->i_ino,
+				inode->i_ino);
 	pmfs_dbg_verbose("%s: %s %d\n", __func__, name, namelen);
+	PMFS_START_TIMING(add_entry_t, add_entry_time);
+	if (namelen == 0)
+		return -EINVAL;
+
+	pidir = pmfs_get_inode(sb, dir);
+
 	if (inode) {
 		ino = inode->i_ino;
 	} else {
@@ -388,7 +401,6 @@ static int pmfs_add_dirent_to_buf(struct dentry *dentry, struct inode *inode,
 	 * on this.
 	 */
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
-	/*dir->i_version++; */
 
 //	pmfs_memunlock_inode(dir->i_sb, pidir);
 //	pidir->i_mtime = cpu_to_le32(dir->i_mtime.tv_sec);
@@ -401,34 +413,8 @@ static int pmfs_add_dirent_to_buf(struct dentry *dentry, struct inode *inode,
 	pmfs_insert_dir_node(sb, pidir, dir, dentry, curr_entry);
 	/* FIXME: Flush all data before update log_tail */
 	pidir->log_tail = curr_tail;
-
-	return 0;
-}
-
-/* adds a directory entry pointing to the inode. assumes the inode has
- * already been logged for consistency
- */
-int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
-		struct inode *inode, int inc_link, int new_inode)
-{
-	struct inode *dir = dentry->d_parent->d_inode;
-	struct super_block *sb = dir->i_sb;
-	int retval = -EINVAL;
-	struct pmfs_inode *pidir;
-	timing_t add_entry_time;
-
-	pmfs_dbg_verbose("%s: dir %lu new inode %lu\n", __func__, dir->i_ino,
-				inode->i_ino);
-	PMFS_START_TIMING(add_entry_t, add_entry_time);
-	if (!dentry->d_name.len)
-		return -EINVAL;
-
-	pidir = pmfs_get_inode(sb, dir);
-
-	retval = pmfs_add_dirent_to_buf(dentry, inode, pidir,
-					inc_link, new_inode);
 	PMFS_END_TIMING(add_entry_t, add_entry_time);
-	return retval;
+	return 0;
 }
 
 /* removes a directory entry pointing to the inode. assumes the inode has
@@ -454,9 +440,9 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 	loglen = PMFS_DIR_LOG_REC_LEN(entry->len);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir,
 				0, dentry, loglen, 0, dec_link, 0, &curr_tail);
+	pmfs_remove_dir_node(sb, pidir, dir, dentry);
 	/* FIXME: Flush all data before update log_tail */
 	pidir->log_tail = curr_tail;
-	pmfs_remove_dir_node(sb, pidir, dir, dentry);
 
 	PMFS_END_TIMING(remove_entry_t, remove_entry_time);
 	return 0;
