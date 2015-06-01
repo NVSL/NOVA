@@ -325,8 +325,8 @@ void pmfs_free_cache_block(unsigned long page_addr);
 int pmfs_append_dir_init_entries(struct super_block *sb,
 	struct pmfs_inode *pi, u64 self_ino, u64 parent_ino);
 extern int pmfs_add_entry(pmfs_transaction_t *trans,
-	struct dentry *dentry, u64 ino, int inc_link, int new_inode,
-	u64 tail, u64 *new_tail);
+	struct dentry *dentry, struct pmfs_inode **pi, u64 ino, int inc_link,
+	int new_inode, u64 tail, u64 *new_tail);
 extern int pmfs_remove_entry(pmfs_transaction_t *trans,
 	struct dentry *dentry, int dec_link, u64 tail, u64 *new_tail);
 
@@ -358,7 +358,8 @@ extern struct inode *pmfs_iget(struct super_block *sb, unsigned long ino,
 extern void pmfs_put_inode(struct inode *inode);
 extern void pmfs_evict_inode(struct inode *inode);
 extern struct inode *pmfs_new_inode(pmfs_transaction_t *trans,
-	struct inode *dir, u64 ino, umode_t mode, const struct qstr *qstr);
+	struct inode *dir, struct pmfs_inode *pi,
+	u64 ino, umode_t mode, const struct qstr *qstr);
 extern void pmfs_update_isize(struct inode *inode, struct pmfs_inode *pi);
 extern void pmfs_update_nlink(struct inode *inode, struct pmfs_inode *pi);
 extern void pmfs_update_time(struct inode *inode, struct pmfs_inode *pi);

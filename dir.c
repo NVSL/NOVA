@@ -233,8 +233,8 @@ void pmfs_delete_dir_tree(struct super_block *sb,
  * after append.
  */
 static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode, u64 ino,
-	struct dentry *dentry, unsigned short de_len, u64 tail,
+	struct pmfs_inode *pidir, struct inode *inode, struct pmfs_inode **pi,
+	u64 ino, struct dentry *dentry, unsigned short de_len, u64 tail,
 	int link_change, int new_inode,	u64 *curr_tail)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
@@ -250,11 +250,11 @@ static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
 	if (tail)
 		curr_p = tail;
 	else
-		curr_p = pi->log_tail;
+		curr_p = pidir->log_tail;
 
 	if (curr_p == 0 || (is_last_entry(curr_p, size, new_inode) &&
 				next_log_page(sb, curr_p) == 0)) {
-		curr_p = pmfs_extend_inode_log(sb, pi, sih, curr_p, 0);
+		curr_p = pmfs_extend_inode_log(sb, pidir, sih, curr_p, 0);
 		if (curr_p == 0)
 			goto out;
 	}
@@ -301,6 +301,9 @@ static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
 				? *curr_tail : CACHE_ALIGN(*curr_tail) +
 						CACHELINE_SIZE;
 
+		if (pi)
+			*pi = (struct pmfs_inode *)pmfs_get_block(sb,
+								inode_start);
 		*curr_tail = inode_start + PMFS_INODE_SIZE;
 	}
 out:
@@ -369,7 +372,8 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
  * already been logged for consistency
  */
 int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
-	u64 ino, int inc_link, int new_inode, u64 tail, u64 *new_tail)
+	struct pmfs_inode **pi, u64 ino, int inc_link, int new_inode,
+	u64 tail, u64 *new_tail)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -402,8 +406,9 @@ int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 //	pmfs_memlock_inode(dir->i_sb, pidir);
 
 	loglen = PMFS_DIR_LOG_REC_LEN(namelen);
-	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, ino, dentry,
-				loglen, tail, inc_link, new_inode, &curr_tail);
+	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, pi, ino,
+				dentry,	loglen, tail, inc_link, new_inode,
+				&curr_tail);
 	pmfs_insert_dir_node(sb, pidir, dir, dentry, curr_entry);
 	/* FIXME: Flush all data before update log_tail */
 	*new_tail = curr_tail;
@@ -433,7 +438,7 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 
 	pidir = pmfs_get_inode(sb, dir);
 	loglen = PMFS_DIR_LOG_REC_LEN(entry->len);
-	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, 0,
+	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, NULL, 0,
 				dentry, loglen, tail, dec_link, 0, &curr_tail);
 	pmfs_remove_dir_node(sb, pidir, dir, dentry);
 	/* FIXME: Flush all data before update log_tail */

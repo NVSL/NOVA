@@ -2210,17 +2210,15 @@ u64 pmfs_get_new_inode_number(struct super_block *sb)
 }
 
 struct inode *pmfs_new_inode(pmfs_transaction_t *trans, struct inode *dir,
-	u64 ino, umode_t mode, const struct qstr *qstr)
+	struct pmfs_inode *pi, u64 ino, umode_t mode, const struct qstr *qstr)
 {
 	struct super_block *sb;
 	struct pmfs_sb_info *sbi;
 	struct inode *inode;
-	struct pmfs_inode *pi = NULL, *inode_table;
 	struct pmfs_inode *diri = NULL;
 	struct pmfs_inode_info *si;
 	struct pmfs_inode_info_header *sih;
 	int i, errval;
-	u32 num_inodes;
 	timing_t new_inode_time;
 
 	PMFS_START_TIMING(new_inode_t, new_inode_time);
@@ -2236,8 +2234,6 @@ struct inode *pmfs_new_inode(pmfs_transaction_t *trans, struct inode *dir,
 
 	inode->i_generation = atomic_add_return(1, &sbi->next_generation);
 
-	inode_table = pmfs_get_inode_table(sb);
-
 	pmfs_dbg_verbose("inode: %p free_inodes %x total_inodes %x hint %x\n",
 		inode, sbi->s_free_inodes_count, sbi->s_inodes_count,
 		sbi->s_free_inode_hint);
@@ -2246,19 +2242,7 @@ struct inode *pmfs_new_inode(pmfs_transaction_t *trans, struct inode *dir,
 	if (!diri)
 		return ERR_PTR(-EACCES);
 
-	mutex_lock(&sbi->inode_table_mutex);
-
 	i = ino >> PMFS_INODE_BITS;
-	num_inodes = sbi->s_inodes_count;
-	if (unlikely(i >= num_inodes)) {
-		errval = pmfs_increase_inode_table_size(sb);
-		if (errval) {
-			mutex_unlock(&sbi->inode_table_mutex);
-			goto fail1;
-		}
-	}
-
-	pi = pmfs_get_inode_by_ino(sb, ino);
 
 	pmfs_dbg_verbose("allocating inode %llu @ %p\n", ino, pi);
 
@@ -2275,13 +2259,14 @@ struct inode *pmfs_new_inode(pmfs_transaction_t *trans, struct inode *dir,
 	pi->log_tail = 0;
 	pmfs_memlock_inode(sb, pi);
 
+	mutex_lock(&sbi->inode_table_mutex);
 	si = PMFS_I(inode);
 	sih = pmfs_alloc_header(sb, inode->i_mode);
 	pmfs_assign_info_header(sb, i, sih, 0);
 	sih->pmfs_inode = pi;
 	si->header = sih;
-
 	mutex_unlock(&sbi->inode_table_mutex);
+
 	pmfs_update_inode(inode, pi);
 
 	pmfs_set_inode_flags(inode, pi);
