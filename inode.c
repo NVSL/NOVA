@@ -2210,7 +2210,7 @@ u64 pmfs_get_new_inode_number(struct super_block *sb)
 }
 
 struct inode *pmfs_new_inode(pmfs_transaction_t *trans, struct inode *dir,
-		umode_t mode, const struct qstr *qstr)
+	u64 ino, umode_t mode, const struct qstr *qstr)
 {
 	struct super_block *sb;
 	struct pmfs_sb_info *sbi;
@@ -2220,9 +2220,7 @@ struct inode *pmfs_new_inode(pmfs_transaction_t *trans, struct inode *dir,
 	struct pmfs_inode_info *si;
 	struct pmfs_inode_info_header *sih;
 	int i, errval;
-	u32 num_inodes, inodes_per_block;
-	ino_t ino = 0;
-	unsigned long free_ino = 0;
+	u32 num_inodes;
 	timing_t new_inode_time;
 
 	PMFS_START_TIMING(new_inode_t, new_inode_time);
@@ -2250,41 +2248,19 @@ struct inode *pmfs_new_inode(pmfs_transaction_t *trans, struct inode *dir,
 
 	mutex_lock(&sbi->inode_table_mutex);
 
-	/* find the oldest unused pmfs inode */
-	i = (sbi->s_free_inode_hint);
-	inodes_per_block = INODES_PER_BLOCK(inode_table->i_blk_type);
-retry:
-	num_inodes = (sbi->s_inodes_count);
-	while (i < num_inodes) {
-		u32 end_ino;
-		end_ino = i + (inodes_per_block - (i & (inodes_per_block - 1)));
-		ino = i <<  PMFS_INODE_BITS;
-		pi = pmfs_get_inode_by_ino(sb, ino);
-		for (; i < end_ino; i++) {
-			/* check if the inode is active. */
-			if (le16_to_cpu(pi->i_links_count) == 0 &&
-			(le16_to_cpu(pi->i_mode) == 0 ||
-			 le32_to_cpu(pi->i_dtime)))
-				/* this inode is free */
-				break;
-			pi = (struct pmfs_inode *)((void *)pi +
-							PMFS_INODE_SIZE);
-		}
-		/* found a free inode */
-		if (i < end_ino)
-			break;
-	}
+	i = ino >> PMFS_INODE_BITS;
+	num_inodes = sbi->s_inodes_count;
 	if (unlikely(i >= num_inodes)) {
 		errval = pmfs_increase_inode_table_size(sb);
-		if (errval == 0)
-			goto retry;
-		mutex_unlock(&PMFS_SB(sb)->inode_table_mutex);
-		pmfs_dbg("PMFS: could not find a free inode\n");
-		goto fail1;
+		if (errval) {
+			mutex_unlock(&sbi->inode_table_mutex);
+			goto fail1;
+		}
 	}
 
-	ino = i << PMFS_INODE_BITS;
-	pmfs_dbg_verbose("allocating inode %lu @ %p\n", ino, pi);
+	pi = pmfs_get_inode_by_ino(sb, ino);
+
+	pmfs_dbg_verbose("allocating inode %llu @ %p\n", ino, pi);
 
 	/* chosen inode is in ino */
 	inode->i_ino = ino;
@@ -2299,27 +2275,11 @@ retry:
 	pi->log_tail = 0;
 	pmfs_memlock_inode(sb, pi);
 
-	sbi->s_free_inodes_count -= 1;
-
-	if (i < (sbi->s_inodes_count) - 1)
-		sbi->s_free_inode_hint = (i + 1);
-	else
-		sbi->s_free_inode_hint = (PMFS_FREE_INODE_HINT_START);
-
-	if (i > sbi->s_max_inode)
-		sbi->s_max_inode = i;
-
 	si = PMFS_I(inode);
 	sih = pmfs_alloc_header(sb, inode->i_mode);
 	pmfs_assign_info_header(sb, i, sih, 0);
 	sih->pmfs_inode = pi;
 	si->header = sih;
-
-	pmfs_alloc_unused_inode(sb, &free_ino);
-
-	if (i != free_ino)
-		pmfs_dbg("%s: free ino %lu, alloc %d\n",
-				__func__, free_ino, i);
 
 	mutex_unlock(&sbi->inode_table_mutex);
 	pmfs_update_inode(inode, pi);
