@@ -369,7 +369,8 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
  * already been logged for consistency
  */
 int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
-		struct inode *inode, int inc_link, int new_inode)
+	struct inode *inode, int inc_link, int new_inode, u64 tail,
+	u64 *new_tail)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -409,10 +410,11 @@ int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 
 	loglen = PMFS_DIR_LOG_REC_LEN(namelen);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, ino, dentry,
-				loglen, 0, inc_link, new_inode, &curr_tail);
+				loglen, tail, inc_link, new_inode, &curr_tail);
 	pmfs_insert_dir_node(sb, pidir, dir, dentry, curr_entry);
 	/* FIXME: Flush all data before update log_tail */
-	pidir->log_tail = curr_tail;
+	*new_tail = curr_tail;
+//	pidir->log_tail = curr_tail;
 	PMFS_END_TIMING(add_entry_t, add_entry_time);
 	return 0;
 }
@@ -421,7 +423,7 @@ int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
  * already been logged for consistency
  */
 int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *dentry,
-		struct inode *inode, int dec_link)
+	struct inode *inode, int dec_link, u64 tail, u64 *new_tail)
 {
 	struct super_block *sb = inode->i_sb;
 	struct inode *dir = dentry->d_parent->d_inode;
@@ -438,11 +440,12 @@ int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 
 	pidir = pmfs_get_inode(sb, dir);
 	loglen = PMFS_DIR_LOG_REC_LEN(entry->len);
-	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir,
-				0, dentry, loglen, 0, dec_link, 0, &curr_tail);
+	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, 0,
+				dentry, loglen, tail, dec_link, 0, &curr_tail);
 	pmfs_remove_dir_node(sb, pidir, dir, dentry);
 	/* FIXME: Flush all data before update log_tail */
-	pidir->log_tail = curr_tail;
+	*new_tail = curr_tail;
+//	pidir->log_tail = curr_tail;
 
 	PMFS_END_TIMING(remove_entry_t, remove_entry_time);
 	return 0;

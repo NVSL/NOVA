@@ -326,9 +326,10 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	struct pmfs_inode *pi, u64 self_ino, u64 parent_ino);
 extern int pmfs_add_entry(pmfs_transaction_t *trans,
 	struct dentry *dentry, struct inode *inode, int inc_link,
-	int new_inode);
+	int new_inode, u64 tail, u64 *new_tail);
 extern int pmfs_remove_entry(pmfs_transaction_t *trans,
-	struct dentry *dentry, struct inode *inode, int dec_link);
+	struct dentry *dentry, struct inode *inode, int dec_link,
+	u64 tail, u64 *new_tail);
 
 /* namei.c */
 extern struct dentry *pmfs_get_parent(struct dentry *child);
