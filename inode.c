@@ -1794,7 +1794,6 @@ static int pmfs_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
 	struct list_head *head = &(sbi->inode_inuse_head);
 	struct pmfs_blocknode *i, *next_i;
 	struct pmfs_blocknode *free_blocknode = NULL;
-	unsigned long num = 1;
 	bool found = 0;
 	unsigned long next_block_low;
 	unsigned long new_block_low;
@@ -1853,7 +1852,7 @@ static int pmfs_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
 	*ino = new_block_low;
 
 	pmfs_dbg_verbose("Alloc ino %lu\n", *ino);
-	return num;
+	return 0;
 }
 
 static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
@@ -2176,6 +2175,38 @@ static int pmfs_increase_inode_table_size(struct super_block *sb)
 	/* commit the transaction */
 	pmfs_commit_transaction(sb, trans);
 	return errval;
+}
+
+/* Returns 0 on failure */
+u64 pmfs_get_new_inode_number(struct super_block *sb)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	unsigned long free_ino = 0;
+	u64 ino = 0;
+	int i, ret;
+
+	mutex_lock(&sbi->inode_table_mutex);
+	ret = pmfs_alloc_unused_inode(sb, &free_ino);
+	if (ret) {
+		pmfs_dbg("%s: alloc inode failed %d\n", __func__, ret);
+		mutex_unlock(&sbi->inode_table_mutex);
+		return 0;
+	}
+
+	sbi->s_free_inodes_count -= 1;
+
+	i = (sbi->s_free_inode_hint);
+	if (i < (sbi->s_inodes_count) - 1)
+		sbi->s_free_inode_hint = (i + 1);
+	else
+		sbi->s_free_inode_hint = (PMFS_FREE_INODE_HINT_START);
+
+	if (i > sbi->s_max_inode)
+		sbi->s_max_inode = i;
+
+	mutex_unlock(&sbi->inode_table_mutex);
+	ino = free_ino << PMFS_INODE_BITS;
+	return ino;
 }
 
 struct inode *pmfs_new_inode(pmfs_transaction_t *trans, struct inode *dir,
