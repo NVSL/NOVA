@@ -3079,7 +3079,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 	return 0;
 }
 
-static u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
+u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih, u64 curr_p, int is_file)
 {
 	u64 new_block;

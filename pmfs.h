@@ -462,6 +462,8 @@ struct pmfs_blocknode_lowhigh {
        __le64 block_high;
 };
 
+#define	BLOCKNODE_PER_PAGE	254
+
 /* This is also used for inode inuse */
 struct pmfs_blocknode {
 	struct list_head link;
@@ -1118,6 +1120,8 @@ static inline int is_dir_init_entry(struct super_block *sb,
 }
 
 extern const struct address_space_operations pmfs_aops_xip;
+u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
+	struct pmfs_inode_info_header *sih, u64 curr_p, int is_file);
 u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_inode_entry *data, u64 tail);
 u64 pmfs_append_dir_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
