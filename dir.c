@@ -355,7 +355,7 @@ void pmfs_rebuild_dir_time_and_size(struct super_block *sb,
 	pi->i_ctime = cpu_to_le32(entry->ctime);
 	pi->i_mtime = cpu_to_le32(entry->mtime);
 	pi->i_size = cpu_to_le64(entry->size);
-	pi->i_links_count = entry->links_count;
+//	pi->i_links_count = entry->links_count;
 }
 
 int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
