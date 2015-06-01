@@ -60,9 +60,9 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 	unsigned long num_blocknode;
 	u64 bp;
 
-	num_blocknode = sbi->num_blocknode_allocated;
-	sbi->num_blocknode_allocated = 0;
-	for (i=0; i<num_blocknode; i++) {
+	num_blocknode = sbi->num_blocknode_block;
+	sbi->num_blocknode_block = 0;
+	for (i = 0; i < num_blocknode; i++) {
 		index = i & 0xFF;
 		if (index == 0) {
 			/* Find and get new data block */
@@ -71,7 +71,7 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 			p = pmfs_get_block(sb, bp);
 		}
 		PMFS_ASSERT(p);
-		blknode = pmfs_alloc_blocknode(sb);
+		blknode = pmfs_alloc_block_node(sb);
 		if (blknode == NULL)
                 	PMFS_ASSERT(0);
 		blknode->block_low = le64_to_cpu(p[index].block_low);
@@ -93,8 +93,10 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 	if (!pi->root)
 		return false;
 
-	sbi->num_blocknode_allocated =
-		le64_to_cpu(super->s_num_blocknode_allocated);
+	sbi->num_blocknode_block =
+		le64_to_cpu(super->s_num_blocknode_block);
+	sbi->num_blocknode_inode =
+		le64_to_cpu(super->s_num_blocknode_inode);
 	sbi->num_free_blocks = le64_to_cpu(super->s_num_free_blocks);
 	sbi->s_inodes_count = le32_to_cpu(super->s_inodes_count);
 	sbi->s_free_inodes_count = le32_to_cpu(super->s_free_inodes_count);
@@ -155,7 +157,7 @@ void pmfs_save_blocknode_mappings(struct super_block *sb)
 	int j, k;
 	int errval;
 	
-	num_blocks = ((sbi->num_blocknode_allocated * sizeof(struct 
+	num_blocks = ((sbi->num_blocknode_block * sizeof(struct
 		pmfs_blocknode_lowhigh) - 1) >> sb->s_blocksize_bits) + 1;
 
 	/* 2 log entry for inode, 2 lentry for super-block */
@@ -215,8 +217,10 @@ void pmfs_save_blocknode_mappings(struct super_block *sb)
 	pmfs_memunlock_range(sb, &super->s_wtime, PMFS_FAST_MOUNT_FIELD_SIZE);
 
 	super->s_wtime = cpu_to_le32(get_seconds());
-	super->s_num_blocknode_allocated = 
-			cpu_to_le64(sbi->num_blocknode_allocated);
+	super->s_num_blocknode_block =
+			cpu_to_le64(sbi->num_blocknode_block);
+	super->s_num_blocknode_inode =
+			cpu_to_le64(sbi->num_blocknode_inode);
 	super->s_num_free_blocks = cpu_to_le64(sbi->num_free_blocks);
 	super->s_inodes_count = cpu_to_le32(sbi->s_inodes_count);
 	super->s_free_inodes_count = cpu_to_le32(sbi->s_free_inodes_count);
@@ -277,8 +281,8 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	u64 curr_entry = 0;
 	u64 temp_tail = 0;
 
-	num_blocks = sbi->num_blocknode_allocated / BLOCKNODE_PER_PAGE;
-	if (sbi->num_blocknode_allocated % BLOCKNODE_PER_PAGE)
+	num_blocks = sbi->num_blocknode_block / BLOCKNODE_PER_PAGE;
+	if (sbi->num_blocknode_block % BLOCKNODE_PER_PAGE)
 		num_blocks++;
 
 	sih = pmfs_alloc_header(sb, __le16_to_cpu(pi->i_mode));
@@ -306,7 +310,7 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	/* Check pages */
 	if (num_blocks != sih->log_pages)
 		pmfs_dbg("%s: %lu blocknodes, %lu pages, actually %u pages\n",
-			__func__, sbi->num_blocknode_allocated, num_blocks,
+			__func__, sbi->num_blocknode_block, num_blocks,
 			sih->log_pages);
 
 	pmfs_free_header(sb, sih);
@@ -322,8 +326,10 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	pmfs_memunlock_range(sb, &super->s_wtime, PMFS_FAST_MOUNT_FIELD_SIZE);
 
 	super->s_wtime = cpu_to_le32(get_seconds());
-	super->s_num_blocknode_allocated =
-			cpu_to_le64(sbi->num_blocknode_allocated);
+	super->s_num_blocknode_block =
+			cpu_to_le64(sbi->num_blocknode_block);
+	super->s_num_blocknode_inode =
+			cpu_to_le64(sbi->num_blocknode_inode);
 	super->s_num_free_blocks = cpu_to_le64(sbi->num_free_blocks);
 	super->s_inodes_count = cpu_to_le32(sbi->s_inodes_count);
 	super->s_free_inodes_count = cpu_to_le32(sbi->s_free_inodes_count);
@@ -486,7 +492,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 				next_i->block_low = new_block_low;
 			} else {
 				/* right node does NOT exist */
-				curr_node = pmfs_alloc_blocknode(sb);
+				curr_node = pmfs_alloc_block_node(sb);
 				PMFS_ASSERT(curr_node);
 				if (curr_node == NULL) {
 					errval = -ENOSPC;
@@ -504,7 +510,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 		if ((new_block_low > (i->block_high + 1)) &&
 			(new_block_high < (next_block_low - 1))) {
 			/* Aligns somewhere in the middle */
-			curr_node = pmfs_alloc_blocknode(sb);
+			curr_node = pmfs_alloc_block_node(sb);
 			PMFS_ASSERT(curr_node);
 			if (curr_node == NULL) {
 				errval = -ENOSPC;
@@ -524,7 +530,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 	}	
 
 	if (free_blocknode)
-		pmfs_free_blocknode(sb, free_blocknode);
+		pmfs_free_block_node(sb, free_blocknode);
 
 	if (found == 0) {
 		return -ENOSPC;

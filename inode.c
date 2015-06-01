@@ -1665,7 +1665,7 @@ int pmfs_init_inode_inuse_list(struct super_block *sb)
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_blocknode *blknode;
 
-	blknode = pmfs_alloc_blocknode(sb);
+	blknode = pmfs_alloc_inode_node(sb);
 	if (blknode == NULL)
 		return -ENOMEM;
 	blknode->block_low = 0;
@@ -1823,7 +1823,7 @@ static int pmfs_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
 					&sbi->inode_inuse_tree);
 				list_del(&next_i->link);
 				free_blocknode = next_i;
-				sbi->num_blocknode_allocated--;
+				sbi->num_blocknode_inode--;
 			} else {
 				i->block_high = new_block_high;
 			}
@@ -1888,7 +1888,7 @@ static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
 		rb_erase(&i->node, &sbi->inode_inuse_tree);
 		list_del(&i->link);
 		free_blocknode = i;
-		sbi->num_blocknode_allocated--;
+		sbi->num_blocknode_inode--;
 		goto block_found;
 	}
 	if ((new_block_low == i->block_low) &&
@@ -1906,7 +1906,7 @@ static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
 	if ((new_block_low > i->block_low) &&
 		(new_block_high < i->block_high)) {
 		/* Aligns somewhere in the middle */
-		curr_node = pmfs_alloc_blocknode(sb);
+		curr_node = pmfs_alloc_inode_node(sb);
 		PMFS_ASSERT(curr_node);
 		if (curr_node == NULL) {
 			/* returning without freeing the block*/

@@ -295,8 +295,12 @@ extern int pmfs_mmap(struct file *file, struct vm_area_struct *vma);
 
 /* balloc.c */
 int pmfs_setup_blocknode_map(struct super_block *sb);
-extern struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb);
-extern void pmfs_free_blocknode(struct super_block *sb, struct pmfs_blocknode *bnode);
+extern struct pmfs_blocknode *pmfs_alloc_block_node(struct super_block *sb);
+extern struct pmfs_blocknode *pmfs_alloc_inode_node(struct super_block *sb);
+extern void pmfs_free_block_node(struct super_block *sb,
+	struct pmfs_blocknode *bnode);
+extern void pmfs_free_inode_node(struct super_block *sb,
+	struct pmfs_blocknode *bnode);
 extern void pmfs_init_blockmap(struct super_block *sb,
 		unsigned long init_used_size);
 extern void pmfs_free_meta_block(struct super_block *sb, unsigned long blocknr);
@@ -545,7 +549,8 @@ struct pmfs_sb_info {
 	unsigned int	s_free_inode_hint;
 	unsigned int	s_max_inode;
 
-	unsigned long num_blocknode_allocated;
+	unsigned long num_blocknode_block;
+	unsigned long num_blocknode_inode;
 
 	/* Journaling related structures */
 	uint32_t    next_transaction_id;

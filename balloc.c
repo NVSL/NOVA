@@ -32,7 +32,7 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 	num_used_block = (init_used_size + sb->s_blocksize - 1) >>
 		sb->s_blocksize_bits;
 
-	blknode = pmfs_alloc_blocknode(sb);
+	blknode = pmfs_alloc_block_node(sb);
 	if (blknode == NULL)
 		PMFS_ASSERT(0);
 	blknode->block_low = sbi->block_start;
@@ -311,7 +311,7 @@ Found:
 		rb_erase(&i->node, &sbi->block_inuse_tree);
 		list_del(&i->link);
 		free_blocknode = i;
-		sbi->num_blocknode_allocated--;
+		sbi->num_blocknode_block--;
 		sbi->num_free_blocks += num_blocks;
 		goto block_found;
 	}
@@ -336,7 +336,7 @@ Found:
 	if ((new_block_low > i->block_low) &&
 		(new_block_high < i->block_high)) {
 		/* Aligns somewhere in the middle */
-		curr_node = pmfs_alloc_blocknode(sb);
+		curr_node = pmfs_alloc_block_node(sb);
 		PMFS_ASSERT(curr_node);
 		if (curr_node == NULL) {
 			/* returning without freeing the block*/
@@ -518,7 +518,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 					&sbi->block_inuse_tree);
 				list_del(&next_i->link);
 				free_blocknode = next_i;
-				sbi->num_blocknode_allocated--;
+				sbi->num_blocknode_block--;
 			} else {
 				i->block_high = new_block_high;
 			}
@@ -537,7 +537,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 					&sbi->block_inuse_tree);
 				list_del(&next_i->link);
 				free_blocknode = next_i;
-				sbi->num_blocknode_allocated--;
+				sbi->num_blocknode_block--;
 			} else {
 				i->block_high = new_block_high;
 			}

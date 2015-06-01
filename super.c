@@ -853,8 +853,9 @@ int pmfs_statfs(struct dentry *d, struct kstatfs *buf)
 	pmfs_dbg_verbose("pmfs_stats: total 4k free blocks 0x%llx\n",
 		buf->f_bfree);
 	pmfs_dbg_verbose("total inodes 0x%x, free inodes 0x%x, "
-		"blocknodes 0x%lx\n", (sbi->s_inodes_count),
-		(sbi->s_free_inodes_count), (sbi->num_blocknode_allocated));
+		"blocknodes 0x%lx, inode blocknodes 0x%lx\n",
+		(sbi->s_inodes_count), (sbi->s_free_inodes_count),
+		(sbi->num_blocknode_block), (sbi->num_blocknode_inode));
 	return 0;
 }
 
@@ -970,14 +971,14 @@ static void pmfs_put_super(struct super_block *sb)
 	while (!list_empty(head)) {
 		i = list_first_entry(head, struct pmfs_blocknode, link);
 		list_del(&i->link);
-		pmfs_free_blocknode(sb, i);
+		pmfs_free_block_node(sb, i);
 	}
 
 	head = &(sbi->inode_inuse_head);
 	while (!list_empty(head)) {
 		i = list_first_entry(head, struct pmfs_blocknode, link);
 		list_del(&i->link);
-		pmfs_free_blocknode(sb, i);
+		pmfs_free_inode_node(sb, i);
 	}
 
 	sb->s_fs_info = NULL;
@@ -995,10 +996,17 @@ void __pmfs_free_blocknode(struct pmfs_blocknode *bnode)
 	kmem_cache_free(pmfs_blocknode_cachep, bnode);
 }
 
-void pmfs_free_blocknode(struct super_block *sb, struct pmfs_blocknode *bnode)
+void pmfs_free_block_node(struct super_block *sb, struct pmfs_blocknode *bnode)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	sbi->num_blocknode_allocated--;
+	sbi->num_blocknode_block--;
+	__pmfs_free_blocknode(bnode);
+}
+
+void pmfs_free_inode_node(struct super_block *sb, struct pmfs_blocknode *bnode)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	sbi->num_blocknode_inode--;
 	__pmfs_free_blocknode(bnode);
 }
 
@@ -1014,14 +1022,26 @@ inline pmfs_transaction_t *pmfs_alloc_transaction(void)
 		kmem_cache_alloc(pmfs_transaction_cachep, GFP_NOFS);
 }
 
-struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb)
+struct pmfs_blocknode *pmfs_alloc_block_node(struct super_block *sb)
 {
 	struct pmfs_blocknode *p;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	p = (struct pmfs_blocknode *)
 		kmem_cache_alloc(pmfs_blocknode_cachep, GFP_NOFS);
 	if (p) {
-		sbi->num_blocknode_allocated++;
+		sbi->num_blocknode_block++;
+	}
+	return p;
+}
+
+struct pmfs_blocknode *pmfs_alloc_inode_node(struct super_block *sb)
+{
+	struct pmfs_blocknode *p;
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	p = (struct pmfs_blocknode *)
+		kmem_cache_alloc(pmfs_blocknode_cachep, GFP_NOFS);
+	if (p) {
+		sbi->num_blocknode_inode++;
 	}
 	return p;
 }
