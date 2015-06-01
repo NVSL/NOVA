@@ -232,4 +232,7 @@ struct pmfs_super_block {
 /* INODE HINT START at 4 */
 #define PMFS_FREE_INODE_HINT_START      (4)
 
+#define	PMFS_NORMAL_INODE_START	\
+	(PMFS_FREE_INODE_HINT_START << PMFS_INODE_BITS)
+
 #endif /* _LINUX_PMFS_DEF_H */

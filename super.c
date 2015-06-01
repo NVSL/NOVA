@@ -959,6 +959,8 @@ static void pmfs_put_super(struct super_block *sb)
 	if (sbi->virt_addr) {
 		pmfs_free_header_tree(sb);
 		pmfs_detect_memory_leak(sb);
+		/* Save inode list before blocknode mapping! */
+		pmfs_save_inode_list_to_log(sb);
 		pmfs_save_blocknode_mappings(sb);
 		pmfs_save_blocknode_mappings_to_log(sb);
 		pmfs_journal_uninit(sb);

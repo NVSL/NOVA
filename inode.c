@@ -2062,6 +2062,11 @@ void pmfs_evict_inode(struct inode *inode)
 	int err = 0;
 	int freed = 0;
 
+	if (!sih) {
+		pmfs_dbg("%s: ino %lu sih is NULL!\n", __func__, inode->i_ino);
+		BUG();
+	}
+
 	PMFS_START_TIMING(evict_inode_t, evict_time);
 	pmfs_dbg_verbose("%s: %lu\n", __func__, inode->i_ino);
 	if (!inode->i_nlink && !is_bad_inode(inode)) {

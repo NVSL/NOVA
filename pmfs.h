@@ -952,7 +952,7 @@ static inline struct pmfs_inode *pmfs_get_inode_by_ino(struct super_block *sb,
 	if (ino == 0)
 		return NULL;
 
-	if (ino < 384)
+	if (ino < PMFS_NORMAL_INODE_START)
 		return pmfs_get_basic_inode(sb, ino);
 
 	block = ino >> pmfs_inode_blk_shift(inode_table);
@@ -1163,6 +1163,7 @@ pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
 /* bbuild.c */
 void pmfs_save_blocknode_mappings(struct super_block *sb);
 void pmfs_save_blocknode_mappings_to_log(struct super_block *sb);
+void pmfs_save_inode_list_to_log(struct super_block *sb);
 unsigned int pmfs_free_header_tree(struct super_block *sb);
 struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
 	u16 i_mode);
