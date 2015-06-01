@@ -129,7 +129,7 @@ static int pmfs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	struct inode *inode = NULL;
 	int err = PTR_ERR(inode);
 	struct super_block *sb = dir->i_sb;
-	struct pmfs_inode *pidir, *pi;
+	struct pmfs_inode *pidir;
 	u64 tail = 0;
 	u64 ino;
 	pmfs_transaction_t *trans;
@@ -148,24 +148,24 @@ static int pmfs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	pidir = pmfs_get_inode(sb, dir);
 	if (!pidir)
-		goto out;
+		goto out_err;
 
 	ino = pmfs_get_new_inode_number(sb);
 	if (ino == 0)
-		goto out;
+		goto out_err;
 
-	pmfs_dbg_verbose("%s: %s\n", __func__, dentry->d_name.name);
-	inode = pmfs_new_inode(trans, dir, ino, mode, &dentry->d_name);
-	if (IS_ERR(inode))
-		goto out;
-
-	inode->i_op = &pmfs_file_inode_operations;
-	inode->i_mapping->a_ops = &pmfs_aops_xip;
-	inode->i_fop = &pmfs_xip_file_operations;
 	err = pmfs_add_entry(trans, dentry, ino, 0, 1, 0, &tail);
 	if (err)
 		goto out_err;
 
+	pmfs_dbg_verbose("%s: %s\n", __func__, dentry->d_name.name);
+	inode = pmfs_new_inode(trans, dir, ino, mode, &dentry->d_name);
+	if (IS_ERR(inode))
+		goto out_err;
+
+	inode->i_op = &pmfs_file_inode_operations;
+	inode->i_mapping->a_ops = &pmfs_aops_xip;
+	inode->i_fop = &pmfs_xip_file_operations;
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
 	pmfs_commit_transaction(sb, trans);
@@ -175,10 +175,6 @@ out:
 	PMFS_END_TIMING(create_t, create_time);
 	return err;
 out_err:
-	pi = pmfs_get_inode(sb, inode);
-	pmfs_dec_count(inode, pi);
-	unlock_new_inode(inode);
-	iput(inode);
 	pmfs_abort_transaction(sb, trans);
 	pmfs_err(sb, "%s return %d\n", __func__, err);
 	PMFS_END_TIMING(create_t, create_time);
@@ -211,15 +207,19 @@ static int pmfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	pidir = pmfs_get_inode(sb, dir);
 	if (!pidir)
-		goto out;
+		goto out_err;
 
 	ino = pmfs_get_new_inode_number(sb);
 	if (ino == 0)
-		goto out;
+		goto out_err;
+
+	err = pmfs_add_entry(trans, dentry, ino, 0, 1, 0, &tail);
+	if (err)
+		goto out_err;
 
 	inode = pmfs_new_inode(trans, dir, ino, mode, &dentry->d_name);
 	if (IS_ERR(inode))
-		goto out;
+		goto out_err;
 
 	init_special_inode(inode, mode, rdev);
 	inode->i_op = &pmfs_special_inode_operations;
@@ -227,9 +227,6 @@ static int pmfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	pi = pmfs_get_inode(sb, inode);
 	if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
 		pi->dev.rdev = cpu_to_le32(inode->i_rdev);
-	err = pmfs_add_entry(trans, dentry, ino, 0, 1, 0, &tail);
-	if (err)
-		goto out_err;
 
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
@@ -241,9 +238,6 @@ out:
 	PMFS_END_TIMING(mknod_t, mknod_time);
 	return err;
 out_err:
-	pmfs_dec_count(inode, pi);
-	unlock_new_inode(inode);
-	iput(inode);
 	pmfs_abort_transaction(sb, trans);
 	pmfs_err(sb, "%s return %d\n", __func__, err);
 	PMFS_END_TIMING(mknod_t, mknod_time);
@@ -280,18 +274,22 @@ static int pmfs_symlink(struct inode *dir, struct dentry *dentry,
 
 	pidir = pmfs_get_inode(sb, dir);
 	if (!pidir)
-		goto out;
+		goto out_fail1;
 
 	ino = pmfs_get_new_inode_number(sb);
 	if (ino == 0)
-		goto out;
+		goto out_fail1;
+
+	err = pmfs_add_entry(trans, dentry, ino, 0, 1, 0, &tail);
+	if (err)
+		goto out_fail1;
 
 	inode = pmfs_new_inode(trans, dir, ino, S_IFLNK|S_IRWXUGO,
 					&dentry->d_name);
 	err = PTR_ERR(inode);
 	if (IS_ERR(inode)) {
 		pmfs_abort_transaction(sb, trans);
-		goto out;
+		goto out_fail1;
 	}
 
 	inode->i_op = &pmfs_symlink_inode_operations;
@@ -300,14 +298,10 @@ static int pmfs_symlink(struct inode *dir, struct dentry *dentry,
 	pi = pmfs_get_inode(sb, inode);
 	err = pmfs_block_symlink(inode, symname, len);
 	if (err)
-		goto out_fail;
+		goto out_fail2;
 
 	inode->i_size = len;
 	pmfs_update_isize(inode, pi);
-
-	err = pmfs_add_entry(trans, dentry, ino, 0, 1, 0, &tail);
-	if (err)
-		goto out_fail;
 
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
@@ -319,13 +313,16 @@ out:
 	PMFS_END_TIMING(symlink_t, symlink_time);
 	return err;
 
-out_fail:
-	pmfs_dec_count(inode, pi);
-	unlock_new_inode(inode);
-	iput(inode);
+out_fail1:
 	pmfs_abort_transaction(sb, trans);
 	pmfs_err(sb, "%s return %d\n", __func__, err);
 	goto out;
+
+out_fail2:
+	pmfs_dec_count(inode, pi);
+	unlock_new_inode(inode);
+	iput(inode);
+	goto out_fail1;
 }
 
 static int pmfs_link(struct dentry *dest_dentry, struct inode *dir,
@@ -431,14 +428,20 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	ino = pmfs_get_new_inode_number(sb);
 	if (ino == 0)
-		goto out;
+		goto out_err;
+
+	err = pmfs_add_entry(trans, dentry, ino, 0, 1, 0, &tail);
+	if (err) {
+		pmfs_dbg_verbose("failed to add dir entry\n");
+		goto out_err;
+	}
 
 	inode = pmfs_new_inode(trans, dir, ino, S_IFDIR | mode,
 					&dentry->d_name);
 	err = PTR_ERR(inode);
 	if (IS_ERR(inode)) {
 		pmfs_abort_transaction(sb, trans);
-		goto out;
+		goto out_err;
 	}
 
 	inode->i_op = &pmfs_dir_inode_operations;
@@ -460,11 +463,6 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	set_nlink(inode, 2);
 
-	err = pmfs_add_entry(trans, dentry, ino, 0, 1, 0, &tail);
-	if (err) {
-		pmfs_dbg_verbose("failed to add dir entry\n");
-		goto out_clear_inode;
-	}
 	pmfs_memunlock_inode(sb, pi);
 	pi->i_links_count = cpu_to_le16(inode->i_nlink);
 	pi->i_size = cpu_to_le64(inode->i_size);
@@ -483,10 +481,8 @@ out:
 	PMFS_END_TIMING(mkdir_t, mkdir_time);
 	return err;
 
-out_clear_inode:
-	clear_nlink(inode);
-	unlock_new_inode(inode);
-	iput(inode);
+out_err:
+//	clear_nlink(inode);
 	pmfs_abort_transaction(sb, trans);
 	pmfs_err(sb, "%s return %d\n", __func__, err);
 	goto out;
