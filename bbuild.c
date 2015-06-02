@@ -1085,6 +1085,7 @@ int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 		if (errval < 0)
 			goto out;
 	}
+	sih->ino = ino << PMFS_INODE_BITS;
 	errval = 0;
 out:
 	if (multithread)

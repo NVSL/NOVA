@@ -484,6 +484,7 @@ struct pmfs_inode_info_header {
 	u16	i_mode;			/* Dir or file? */
 	u32	log_pages;		/* Num of log pages */
 	u64	i_size;
+	u64	ino;			/* Times of PMFS_INODE_SIZE */
 	struct rb_root	dir_tree;	/* Dir name entry tree root */
 	struct pmfs_inode *pmfs_inode;
 };
