@@ -102,7 +102,7 @@ static struct dentry *pmfs_lookup(struct inode *dir, struct dentry *dentry,
 	ino = pmfs_inode_by_name(dir, &dentry->d_name, &de);
 	pmfs_dbg_verbose("%s: ino %lu\n", __func__, ino);
 	if (ino) {
-		inode = pmfs_iget(dir->i_sb, ino, 1);
+		inode = pmfs_iget(dir->i_sb, ino);
 		if (inode == ERR_PTR(-ESTALE)) {
 			pmfs_err(dir->i_sb, __func__,
 				  "deleted inode referenced: %lu",
@@ -731,7 +731,7 @@ struct dentry *pmfs_get_parent(struct dentry *child)
 	ino = le64_to_cpu(de->ino);
 
 	if (ino)
-		inode = pmfs_iget(child->d_inode->i_sb, ino, 1);
+		inode = pmfs_iget(child->d_inode->i_sb, ino);
 	else
 		return ERR_PTR(-ENOENT);
 

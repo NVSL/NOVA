@@ -2010,11 +2010,12 @@ out:
 	return err;
 }
 
-struct inode *pmfs_iget(struct super_block *sb, unsigned long ino, int rebuild)
+struct inode *pmfs_iget(struct super_block *sb, unsigned long ino)
 {
 	struct pmfs_inode_info *si;
 	struct pmfs_inode_info_header *sih = NULL;
 	struct inode *inode;
+	int rebuild = 0;
 	u64 pi_addr;
 	int err;
 
@@ -2025,6 +2026,12 @@ struct inode *pmfs_iget(struct super_block *sb, unsigned long ino, int rebuild)
 		return inode;
 
 	if (ino == PMFS_ROOT_INO) {
+		si = PMFS_I(inode);
+		sih = pmfs_find_info_header(sb, ino >> PMFS_INODE_BITS);
+		if (sih)
+			si->header = sih;
+		else
+			rebuild = 1;
 		pi_addr = PMFS_ROOT_INO_START;
 	} else {
 		si = PMFS_I(inode);
