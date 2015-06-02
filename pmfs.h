@@ -325,7 +325,7 @@ void pmfs_free_cache_block(unsigned long page_addr);
 int pmfs_append_dir_init_entries(struct super_block *sb,
 	struct pmfs_inode *pi, u64 self_ino, u64 parent_ino);
 extern int pmfs_add_entry(pmfs_transaction_t *trans,
-	struct dentry *dentry, struct pmfs_inode **pi, u64 ino, int inc_link,
+	struct dentry *dentry, u64 *pi_addr, u64 ino, int inc_link,
 	int new_inode, u64 tail, u64 *new_tail);
 extern int pmfs_remove_entry(pmfs_transaction_t *trans,
 	struct dentry *dentry, int dec_link, u64 tail, u64 *new_tail);
@@ -468,7 +468,7 @@ struct pmfs_blocknode_lowhigh {
 
 struct pmfs_alive_inode_entry {
        __le64 ino;
-       void *pmfs_inode;
+       __le64 pi_addr;
 };
 
 #define	BLOCKNODE_PER_PAGE	254
@@ -490,8 +490,8 @@ struct pmfs_inode_info_header {
 	u32	log_pages;		/* Num of log pages */
 	u64	i_size;
 	u64	ino;			/* Times of PMFS_INODE_SIZE */
+	u64	pi_addr;
 	struct rb_root	dir_tree;	/* Dir name entry tree root */
-	struct pmfs_inode *pmfs_inode;
 };
 
 struct pmfs_inode_info {
@@ -951,23 +951,10 @@ static inline uint32_t pmfs_inode_blk_size (struct pmfs_inode *pi)
 static inline struct pmfs_inode *pmfs_get_inode_by_ino(struct super_block *sb,
 						  u64 ino)
 {
-	struct pmfs_super_block *ps = pmfs_get_super(sb);
-	struct pmfs_inode *inode_table = pmfs_get_inode_table(sb);
-	u64 bp, block, ino_offset;
-
-	if (ino == 0)
+	if (ino == 0 || ino >= PMFS_NORMAL_INODE_START)
 		return NULL;
 
-	if (ino < PMFS_NORMAL_INODE_START)
-		return pmfs_get_basic_inode(sb, ino);
-
-	block = ino >> pmfs_inode_blk_shift(inode_table);
-	bp = __pmfs_find_inode(sb, inode_table, block);
-
-	if (bp == 0)
-		return NULL;
-	ino_offset = (ino & (pmfs_inode_blk_size(inode_table) - 1));
-	return (struct pmfs_inode *)((void *)ps + bp + ino_offset);
+	return pmfs_get_basic_inode(sb, ino);
 }
 
 static inline struct pmfs_inode *pmfs_get_inode(struct super_block *sb,
@@ -976,7 +963,7 @@ static inline struct pmfs_inode *pmfs_get_inode(struct super_block *sb,
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 
-	return sih->pmfs_inode;
+	return (struct pmfs_inode *)pmfs_get_block(sb, sih->pi_addr);
 }
 
 static inline u64
@@ -1068,7 +1055,7 @@ int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, const char *name,
 	unsigned long name_len);
-int pmfs_rebuild_dir_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
+int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 	struct pmfs_inode_info_header *sih, unsigned long ino,
 	struct scan_bitmap *bm);
 
@@ -1133,20 +1120,20 @@ static inline int is_dir_init_entry(struct super_block *sb,
 extern const struct address_space_operations pmfs_aops_xip;
 u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih, u64 curr_p, int is_file);
+void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi);
 int pmfs_allocate_inode_log_pages(struct super_block *sb,
 	struct pmfs_inode *pi, unsigned long num_pages,
 	u64 *new_block);
 u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_inode_entry *data, u64 tail);
-int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct pmfs_inode *p,
+int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 	struct pmfs_inode_info_header *sih, unsigned long ino,
 	struct scan_bitmap *bm);
 u64 pmfs_new_pmfs_inode(struct super_block *sb,
 	struct pmfs_inode_info_header **return_sih);
 extern struct inode *pmfs_new_vfs_inode(pmfs_transaction_t *trans,
-	struct inode *dir, struct pmfs_inode *pi,
-	struct pmfs_inode_info_header *sih, u64 ino,
-	umode_t mode, const struct qstr *qstr);
+	struct inode *dir, u64 pi_addr, struct pmfs_inode_info_header *sih,
+	u64 ino, umode_t mode, const struct qstr *qstr);
 struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info *si,
 	unsigned long file_blocknr);

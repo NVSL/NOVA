@@ -1677,9 +1677,10 @@ int pmfs_init_inode_inuse_list(struct super_block *sb)
 }
 
 static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
-	struct pmfs_inode *pi, int rebuild)
+	u64 pi_addr, int rebuild)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode *pi;
 	struct pmfs_inode_info_header *sih;
 	int ret = -EIO;
 	unsigned long ino;
@@ -1692,6 +1693,7 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 	}
 #endif
 
+	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
 	inode->i_mode = le16_to_cpu(pi->i_mode);
 	i_uid_write(inode, le32_to_cpu(pi->i_uid));
 	i_gid_write(inode, le32_to_cpu(pi->i_gid));
@@ -1736,7 +1738,7 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 		if (rebuild && inode->i_ino == PMFS_ROOT_INO) {
 			sih = pmfs_alloc_header(sb, inode->i_mode);
 			pmfs_assign_info_header(sb, ino, sih, 1);
-			pmfs_rebuild_dir_inode_tree(sb, pi,
+			pmfs_rebuild_dir_inode_tree(sb, pi_addr,
 					sih, inode->i_ino, NULL);
 			si->header = sih;
 		}
@@ -1932,8 +1934,6 @@ block_found:
 	free_steps += step;
 }
 
-static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi);
-
 /*
  * NOTE! When we get the inode, we're the only people
  * that have access to it, and as such there are no
@@ -1981,7 +1981,7 @@ static int pmfs_free_inode(struct inode *inode,
 	pmfs_memlock_inode(sb, pi);
 
 	pmfs_commit_transaction(sb, trans);
-	sih->pmfs_inode = NULL;
+	sih->pi_addr = 0;
 
 	/* increment s_free_inodes_count */
 	if (inode_nr < (sbi->s_free_inode_hint))
@@ -2011,7 +2011,7 @@ struct inode *pmfs_iget(struct super_block *sb, unsigned long ino, int rebuild)
 	struct pmfs_inode_info *si;
 	struct pmfs_inode_info_header *sih = NULL;
 	struct inode *inode;
-	struct pmfs_inode *pi = NULL;
+	u64 pi_addr;
 	int err;
 
 	inode = iget_locked(sb, ino);
@@ -2021,7 +2021,7 @@ struct inode *pmfs_iget(struct super_block *sb, unsigned long ino, int rebuild)
 		return inode;
 
 	if (ino == PMFS_ROOT_INO) {
-		pi = pmfs_get_inode_by_ino(sb, ino);
+		pi_addr = PMFS_ROOT_INO_START;
 	} else {
 		si = PMFS_I(inode);
 		sih = pmfs_find_info_header(sb, ino >> PMFS_INODE_BITS);
@@ -2031,14 +2031,14 @@ struct inode *pmfs_iget(struct super_block *sb, unsigned long ino, int rebuild)
 			err = -EACCES;
 			goto fail;
 		}
-		pi = sih->pmfs_inode;
+		pi_addr = sih->pi_addr;
 		si->header = sih;
 	}
-	if (!pi) {
+	if (pi_addr == 0) {
 		err = -EACCES;
 		goto fail;
 	}
-	err = pmfs_read_inode(sb, inode, pi, rebuild);
+	err = pmfs_read_inode(sb, inode, pi_addr, rebuild);
 	if (unlikely(err))
 		goto fail;
 	inode->i_ino = ino;
@@ -2181,7 +2181,7 @@ u64 pmfs_new_pmfs_inode(struct super_block *sb,
 }
 
 struct inode *pmfs_new_vfs_inode(pmfs_transaction_t *trans, struct inode *dir,
-	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih, u64 ino,
+	u64 pi_addr, struct pmfs_inode_info_header *sih, u64 ino,
 	umode_t mode, const struct qstr *qstr)
 {
 	struct super_block *sb;
@@ -2189,6 +2189,7 @@ struct inode *pmfs_new_vfs_inode(pmfs_transaction_t *trans, struct inode *dir,
 	struct inode *inode;
 	struct pmfs_inode *diri = NULL;
 	struct pmfs_inode_info *si;
+	struct pmfs_inode *pi;
 	int i, errval;
 	timing_t new_inode_time;
 
@@ -2215,6 +2216,7 @@ struct inode *pmfs_new_vfs_inode(pmfs_transaction_t *trans, struct inode *dir,
 
 	i = ino >> PMFS_INODE_BITS;
 
+	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
 	pmfs_dbg_verbose("allocating inode %llu @ %p\n", ino, pi);
 
 	/* chosen inode is in ino */
@@ -2232,7 +2234,7 @@ struct inode *pmfs_new_vfs_inode(pmfs_transaction_t *trans, struct inode *dir,
 
 	si = PMFS_I(inode);
 	sih->i_mode = inode->i_mode;
-	sih->pmfs_inode = pi;
+	sih->pi_addr = pi_addr;
 	si->header = sih;
 
 	pmfs_update_inode(inode, pi);
@@ -3138,7 +3140,7 @@ out:
 	return curr_p;
 }
 
-static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
+void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode_log_page *curr_page;
@@ -3225,26 +3227,34 @@ void pmfs_rebuild_file_time_and_size(struct super_block *sb,
 	pi->i_size = cpu_to_le64(entry->size);
 }
 
-int pmfs_rebuild_file_inode_tree(struct super_block *sb, struct pmfs_inode *pi,
+int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 	struct pmfs_inode_info_header *sih, unsigned long ino,
 	struct scan_bitmap *bm)
 {
+	struct pmfs_inode *pi;
 	struct pmfs_inode_entry *entry = NULL;
 	struct pmfs_inode_log_page *curr_page;
-	u64 curr_p = pi->log_head;
+	u64 curr_p;
 	u64 next;
 
 	pmfs_dbg_verbose("Rebuild file inode %lu tree\n", ino);
-	pmfs_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
-				curr_p, pi->log_tail);
 	/*
 	 * We will regenerate the tree during blocks assignment.
 	 * Set height to 0.
 	 */
 	sih->root = 0;
 	sih->height = 0;
-	sih->pmfs_inode = pi;
+	sih->pi_addr = pi_addr;
 
+	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
+	if (!pi) {
+		pmfs_dbg("%s: pi is NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	curr_p = pi->log_head;
+	pmfs_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
+				curr_p, pi->log_tail);
 	if (curr_p == 0 && pi->log_tail == 0)
 		return 0;
 
