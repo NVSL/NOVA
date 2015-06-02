@@ -608,6 +608,13 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 				__func__, (u64)inode->i_ino, pidir->root,
 				pidir->i_size, ctx->pos);
 
+	if (!sih) {
+		pmfs_dbg("%s: inode %lu sih does not exist!\n",
+				__func__, inode->i_ino);
+		ctx->pos = READDIR_END;
+		return 0;
+	}
+
 	if (ctx->pos == 0) {
 		temp = rb_first(&sih->dir_tree);
 	} else if (ctx->pos == READDIR_END) {
@@ -640,6 +647,12 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 					"name_len %u, de_len %u\n",
 					(u64)ino, entry->name_len, entry->name,
 					entry->name_len, entry->de_len);
+			if (!child_sih) {
+				pmfs_dbg("%s: child inode %lu sih does not exist!\n",
+					__func__, ino);
+				ctx->pos = READDIR_END;
+				return 0;
+			}
 			if (!dir_emit(ctx, entry->name, entry->name_len,
 				ino, IF2DT(le16_to_cpu(child_sih->i_mode)))) {
 				pmfs_dbg_verbose("Here: pos %llu\n", ctx->pos);
