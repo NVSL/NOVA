@@ -1741,6 +1741,7 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 		if (rebuild && inode->i_ino == PMFS_ROOT_INO) {
 			sih = pmfs_alloc_header(sb, inode->i_mode);
 			pmfs_assign_info_header(sb, ino, sih, 1);
+			pmfs_dbg_verbose("%s: rebuild root dir\n", __func__);
 			pmfs_rebuild_dir_inode_tree(sb, pi_addr,
 					sih, inode->i_ino, NULL);
 			si->header = sih;
@@ -3233,7 +3234,7 @@ void pmfs_rebuild_file_time_and_size(struct super_block *sb,
 }
 
 int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
-	struct pmfs_inode_info_header *sih, unsigned long ino,
+	struct pmfs_inode_info_header *sih, u64 ino,
 	struct scan_bitmap *bm)
 {
 	struct pmfs_inode *pi;
@@ -3242,7 +3243,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 	u64 curr_p;
 	u64 next;
 
-	pmfs_dbg_verbose("Rebuild file inode %lu tree\n", ino);
+	pmfs_dbg_verbose("Rebuild file inode %llu tree\n", ino);
 	/*
 	 * We will regenerate the tree during blocks assignment.
 	 * Set height to 0.
@@ -3279,7 +3280,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 		}
 
 		if (curr_p == 0) {
-			pmfs_err(sb, "File inode %lu log is NULL!\n", ino);
+			pmfs_err(sb, "File inode %llu log is NULL!\n", ino);
 			BUG();
 		}
 

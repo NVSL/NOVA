@@ -89,9 +89,9 @@ static inline struct pmfs_dir_node *pmfs_find_dir_node(struct super_block *sb,
 	return pmfs_find_dir_node_by_name(sb, pi, inode, name, namelen);
 }
 
-int pmfs_insert_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
-	struct pmfs_inode_info_header *sih, const char *name, int namelen,
-	u64 dir_entry)
+static int pmfs_insert_dir_node_by_name(struct super_block *sb,
+	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
+	const char *name, int namelen, u64 dir_entry)
 {
 	struct pmfs_dir_node *curr, *new;
 	struct rb_node **temp, *parent;
@@ -484,7 +484,7 @@ void pmfs_rebuild_dir_time_and_size(struct super_block *sb,
 }
 
 int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
-	struct pmfs_inode_info_header *sih, unsigned long ino,
+	struct pmfs_inode_info_header *sih, u64 ino,
 	struct scan_bitmap *bm)
 {
 	struct pmfs_log_direntry *entry = NULL;
@@ -494,7 +494,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 	u64 next;
 	int ret;
 
-	pmfs_dbg_verbose("Rebuild dir %lu tree\n", ino);
+	pmfs_dbg_verbose("Rebuild dir %llu tree\n", ino);
 	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
 	if (!pi) {
 		pmfs_dbg("%s: pi is NULL\n", __func__);
@@ -506,7 +506,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 
 	curr_p = pi->log_head;
 	if (curr_p == 0) {
-		pmfs_err(sb, "Dir %lu log is NULL!\n", ino);
+		pmfs_err(sb, "Dir %llu log is NULL!\n", ino);
 		BUG();
 	}
 
@@ -526,7 +526,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 		}
 
 		if (curr_p == 0) {
-			pmfs_err(sb, "Dir %lu log is NULL!\n", ino);
+			pmfs_err(sb, "Dir %llu log is NULL!\n", ino);
 			BUG();
 		}
 
