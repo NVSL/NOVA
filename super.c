@@ -958,9 +958,8 @@ static void pmfs_put_super(struct super_block *sb)
 	/* It's unmount time, so unmap the pmfs memory */
 	if (sbi->virt_addr) {
 		pmfs_free_header_tree(sb);
-		pmfs_detect_memory_leak(sb);
-		/* Save inode list before blocknode mapping! */
 		pmfs_save_inode_list_to_log(sb);
+		/* Save everything before blocknode mapping! */
 		pmfs_save_blocknode_mappings(sb);
 		pmfs_save_blocknode_mappings_to_log(sb);
 		pmfs_journal_uninit(sb);
@@ -984,6 +983,7 @@ static void pmfs_put_super(struct super_block *sb)
 		pmfs_free_inode_node(sb, i);
 	}
 
+	pmfs_detect_memory_leak(sb);
 	sb->s_fs_info = NULL;
 	pmfs_dbgmask = 0;
 	kfree(sbi);
