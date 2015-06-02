@@ -2136,7 +2136,7 @@ void pmfs_evict_inode(struct inode *inode)
 	}
 out:
 	/* now it is safe to remove the inode from the truncate list */
-	pmfs_truncate_del(inode);
+//	pmfs_truncate_del(inode);
 	/* TODO: Since we don't use page-cache, do we really need the following
 	 * call? */
 	truncate_inode_pages(&inode->i_data, 0);
@@ -2389,6 +2389,7 @@ static void pmfs_block_truncate_page(struct inode *inode, loff_t newsize)
 	pmfs_memlock_block(sb, bp);
 }
 
+#if 0
 void pmfs_truncate_del(struct inode *inode)
 {
 	struct list_head *prev;
@@ -2493,6 +2494,7 @@ void pmfs_truncate_add(struct inode *inode, u64 truncate_size)
 out_unlock:
 	mutex_unlock(&PMFS_SB(sb)->s_truncate_lock);
 }
+#endif
 
 void pmfs_setsize(struct inode *inode, loff_t newsize)
 {
@@ -2593,7 +2595,7 @@ int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 	if ((ia_valid & ATTR_SIZE) && (attr->ia_size != inode->i_size ||
 			pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL))) {
 
-		pmfs_truncate_add(inode, attr->ia_size);
+//		pmfs_truncate_add(inode, attr->ia_size);
 		/* set allocation hint */
 		pmfs_set_blocksize_hint(sb, pi, attr->ia_size);
 
@@ -2605,7 +2607,7 @@ int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 		 * need to update them again */
 		ia_valid = ia_valid & ~(ATTR_CTIME | ATTR_MTIME);
 		/* now it is safe to remove the inode from the truncate list */
-		pmfs_truncate_del(inode);
+//		pmfs_truncate_del(inode);
 	}
 	setattr_copy(inode, attr);
 

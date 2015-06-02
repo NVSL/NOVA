@@ -387,8 +387,8 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 	if (retval)
 		goto out;
 
-	if (inode->i_nlink == 1)
-		pmfs_truncate_add(inode, inode->i_size);
+//	if (inode->i_nlink == 1)
+//		pmfs_truncate_add(inode, inode->i_size);
 	inode->i_ctime = dir->i_ctime;
 
 	if (inode->i_nlink) {
@@ -577,7 +577,7 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 	 * subsequent evict_inode is called. It will be deleted from the
 	 * truncate list during evict_inode.
 	 */
-	pmfs_truncate_add(inode, inode->i_size);
+//	pmfs_truncate_add(inode, inode->i_size);
 
 	pmfs_dec_count(dir, pidir);
 
@@ -686,8 +686,8 @@ static int pmfs_rename(struct inode *old_dir,
 		pi->i_links_count = cpu_to_le16(new_inode->i_nlink);
 		pmfs_memlock_inode(sb, pi);
 
-		if (!new_inode->i_nlink)
-			pmfs_truncate_add(new_inode, new_inode->i_size);
+//		if (!new_inode->i_nlink)
+//			pmfs_truncate_add(new_inode, new_inode->i_size);
 	} else {
 		if (S_ISDIR(old_inode->i_mode)) {
 			pmfs_inc_count(new_dir, new_pidir);
