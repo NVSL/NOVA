@@ -1150,7 +1150,6 @@ pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
 	unsigned long new_block_low, unsigned long *step);
 
 /* bbuild.c */
-void pmfs_save_blocknode_mappings(struct super_block *sb);
 void pmfs_save_blocknode_mappings_to_log(struct super_block *sb);
 void pmfs_save_inode_list_to_log(struct super_block *sb);
 unsigned int pmfs_free_header_tree(struct super_block *sb);
