@@ -438,7 +438,7 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	err = pmfs_add_entry(trans, dentry, &pi_addr, ino, 0, 1, 0, &tail);
 	if (err) {
-		pmfs_dbg_verbose("failed to add dir entry\n");
+		pmfs_dbg("failed to add dir entry\n");
 		goto out_err;
 	}
 
@@ -450,6 +450,7 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		goto out_err;
 	}
 
+	err = 0;
 	inode->i_op = &pmfs_dir_inode_operations;
 	inode->i_fop = &pmfs_dir_operations;
 	inode->i_mapping->a_ops = &pmfs_aops_xip;
