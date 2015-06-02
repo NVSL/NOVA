@@ -466,6 +466,11 @@ struct pmfs_blocknode_lowhigh {
        __le64 block_high;
 };
 
+struct pmfs_alive_inode_entry {
+       __le64 ino;
+       void *pmfs_inode;
+};
+
 #define	BLOCKNODE_PER_PAGE	254
 
 /* This is also used for inode inuse */
