@@ -1942,7 +1942,8 @@ static void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi);
  * through the filesystem because the directory entry
  * has been deleted earlier.
  */
-static int pmfs_free_inode(struct inode *inode)
+static int pmfs_free_inode(struct inode *inode,
+	struct pmfs_inode_info_header *sih)
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
@@ -1980,6 +1981,7 @@ static int pmfs_free_inode(struct inode *inode)
 	pmfs_memlock_inode(sb, pi);
 
 	pmfs_commit_transaction(sb, trans);
+	sih->pmfs_inode = NULL;
 
 	/* increment s_free_inodes_count */
 	if (inode_nr < (sbi->s_free_inode_hint))
@@ -2121,7 +2123,7 @@ void pmfs_evict_inode(struct inode *inode)
 		sih->height = 0;
 		pmfs_dbg_verbose("%s: Freed %d\n", __func__, freed);
 		/* Then we can free the inode */
-		err = pmfs_free_inode(inode);
+		err = pmfs_free_inode(inode, sih);
 		if (err)
 			goto out;
 		pi = NULL; /* we no longer own the pmfs_inode */
