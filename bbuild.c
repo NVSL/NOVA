@@ -145,9 +145,6 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_IN0);
 	struct pmfs_super_block *super = pmfs_get_super(sb);
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	__le64 root;
-	unsigned int height, btype;
-	unsigned long last_blocknr;
 
 	if (pi->log_head == 0 || pi->log_tail == 0)
 		return false;
@@ -166,18 +163,8 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 	pmfs_init_blockmap_from_inode(sb);
 	pmfs_init_inode_list_from_inode(sb);
 
-	root = pi->root;
-	height = pi->height;
-	btype = pi->i_blk_type;
-	/* pi->i_size can not be zero */
-	last_blocknr = (le64_to_cpu(pi->i_size) - 1) >>
-					pmfs_inode_blk_shift(pi);
-
 	/* Clearing the datablock inode */
 	pmfs_clear_datablock_inode(sb);
-
-	pmfs_free_inode_subtree(sb, root, height, btype,
-						last_blocknr);
 
 	return true;
 }
@@ -1468,6 +1455,7 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	sbi->block_start = (unsigned long)0;
 	sbi->block_end = ((unsigned long)(initsize) >> PAGE_SHIFT);
 
+	/* FIXME: The whole part needs re-written if returns false */
 	value = pmfs_can_skip_full_scan(sb);
 	if (value) {
 		pmfs_dbg_verbose("PMFS: Skipping build blocknode map\n");
