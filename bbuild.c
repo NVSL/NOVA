@@ -331,8 +331,8 @@ void pmfs_save_blocknode_mappings(struct super_block *sb)
 	pmfs_commit_transaction(sb, trans);
 }
 
-u64 pmfs_append_blocknode_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct pmfs_inode_info_header *sih, struct pmfs_blocknode *i, u64 tail)
+static u64 pmfs_append_blocknode_entry(struct super_block *sb,
+	struct pmfs_blocknode *i, u64 tail)
 {
 	u64 curr_p;
 	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
@@ -402,8 +402,7 @@ void pmfs_save_inode_list_to_log(struct super_block *sb)
 	temp_tail = pi->log_tail;
 	list_for_each_entry(i, head, link) {
 		step++;
-		curr_entry = pmfs_append_blocknode_entry(sb, pi, NULL,
-							i, temp_tail);
+		curr_entry = pmfs_append_blocknode_entry(sb, i, temp_tail);
 		temp_tail = curr_entry + size;
 	}
 
@@ -469,8 +468,7 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 
 	list_for_each_entry(i, head, link) {
 		step++;
-		curr_entry = pmfs_append_blocknode_entry(sb, pi, NULL,
-							i, temp_tail);
+		curr_entry = pmfs_append_blocknode_entry(sb, i, temp_tail);
 		temp_tail = curr_entry + size;
 	}
 
