@@ -107,12 +107,13 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 	if (curr_p != pi->log_tail)
 		pmfs_dbg("%s: curr_p 0x%llx, tail 0x%llx, %lu blocknodes\n",
 			__func__, curr_p, pi->log_tail, num_blocknode);
+	pmfs_free_inode_log(sb, pi);
 }
 
 static void pmfs_init_inode_list_from_inode(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_INODELIST_IN0);
+	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, PMFS_INODELIST_IN0);
 	struct pmfs_blocknode_lowhigh *entry;
 	struct pmfs_blocknode *blknode;
 	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
@@ -152,6 +153,7 @@ static void pmfs_init_inode_list_from_inode(struct super_block *sb)
 	if (curr_p != pi->log_tail)
 		pmfs_dbg("%s: curr_p 0x%llx, tail 0x%llx, %lu blocknodes\n",
 			__func__, curr_p, pi->log_tail, num_blocknode);
+	pmfs_free_inode_log(sb, pi);
 }
 
 static bool pmfs_can_skip_full_scan(struct super_block *sb)
