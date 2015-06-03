@@ -388,7 +388,7 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	if (ino == 0)
 		goto out_err;
 
-	err = pmfs_add_entry(dentry, &pi_addr, ino, 0, 1, 0, &tail);
+	err = pmfs_add_entry(dentry, &pi_addr, ino, 1, 1, 0, &tail);
 	if (err) {
 		pmfs_dbg("failed to add dir entry\n");
 		goto out_err;
@@ -425,7 +425,7 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	pmfs_memlock_inode(sb, pi);
 
 	pidir = pmfs_get_inode(sb, dir);
-	pmfs_inc_count(dir, pidir);
+	inc_nlink(dir);
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
 
@@ -510,7 +510,7 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 	}
 	pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
 
-	err = pmfs_remove_entry(dentry, 0, 0, &tail);
+	err = pmfs_remove_entry(dentry, -1, 0, &tail);
 	if (err)
 		goto end_rmdir;
 
@@ -529,7 +529,8 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 	 */
 //	pmfs_truncate_add(inode, inode->i_size);
 
-	pmfs_dec_count(dir, pidir);
+	if (dir->i_nlink)
+		drop_nlink(dir);
 
 	pmfs_commit_transaction(sb, trans);
 

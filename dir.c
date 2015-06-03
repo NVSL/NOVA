@@ -233,11 +233,11 @@ void pmfs_delete_dir_tree(struct super_block *sb,
  * after append.
  */
 static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
-	struct pmfs_inode *pidir, struct inode *inode, u64 *pi_addr,
+	struct pmfs_inode *pidir, struct inode *dir, u64 *pi_addr,
 	u64 ino, struct dentry *dentry, unsigned short de_len, u64 tail,
 	int link_change, int new_inode,	u64 *curr_tail)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info *si = PMFS_I(dir);
 	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_log_direntry *entry;
 	u64 curr_p, inode_start;
@@ -269,12 +269,12 @@ static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
 	__copy_from_user_inatomic_nocache(entry->name, dentry->d_name.name,
 					dentry->d_name.len);
 	entry->file_type = 0;
-	entry->mtime = cpu_to_le32(inode->i_mtime.tv_sec);
-	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-	entry->size = cpu_to_le64(inode->i_size);
+	entry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
+	entry->ctime = cpu_to_le32(dir->i_ctime.tv_sec);
+	entry->size = cpu_to_le64(dir->i_size);
 	entry->new_inode = new_inode;
 
-	links_count = cpu_to_le16(inode->i_nlink);
+	links_count = cpu_to_le16(dir->i_nlink);
 	if (links_count == 0 && link_change == -1)
 		links_count = 0;
 	else
@@ -474,7 +474,7 @@ void pmfs_rebuild_dir_time_and_size(struct super_block *sb,
 	pi->i_ctime = cpu_to_le32(entry->ctime);
 	pi->i_mtime = cpu_to_le32(entry->mtime);
 	pi->i_size = cpu_to_le64(entry->size);
-//	pi->i_links_count = entry->links_count;
+	pi->i_links_count = entry->links_count;
 }
 
 int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
