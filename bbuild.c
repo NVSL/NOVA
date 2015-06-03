@@ -395,9 +395,7 @@ void pmfs_save_inode_list_to_log(struct super_block *sb)
 		temp_tail = curr_entry + size;
 	}
 
-	PERSISTENT_BARRIER();
-	pi->log_tail = temp_tail;
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+	pmfs_update_tail(pi, temp_tail);
 
 	pmfs_dbg("%s: %lu inode nodes, step %d, pi head 0x%llx, tail 0x%llx\n",
 		__func__, sbi->num_blocknode_inode, step, pi->log_head,
@@ -448,9 +446,7 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 		temp_tail = curr_entry + size;
 	}
 
-	PERSISTENT_BARRIER();
-	pi->log_tail = temp_tail;
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+	pmfs_update_tail(pi, temp_tail);
 
 	pmfs_dbg("%s: %lu blocknodes, step %d, pi head 0x%llx, tail 0x%llx\n",
 		__func__, sbi->num_blocknode_block, step, pi->log_head,

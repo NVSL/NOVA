@@ -489,9 +489,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 //		pmfs_update_isize(inode, pi);
 	}
 
-	PERSISTENT_BARRIER();
-	pi->log_tail = temp_tail;
-	pmfs_flush_buffer(&pi->log_tail, CACHELINE_SIZE, 1);
+	pmfs_update_tail(pi, temp_tail);
 
 	ret = written;
 	write_breaks += step;
@@ -836,11 +834,8 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 	pmfs_memlock_inode(sb, pi);
 
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
-	//FIXME
-//	pmfs_update_isize(inode, pi);
-	PERSISTENT_BARRIER();
-	pi->log_tail = temp_tail;
-	pmfs_flush_buffer(&pi->log_tail, CACHELINE_SIZE, 1);
+
+	pmfs_update_tail(pi, temp_tail);
 
 	ret = 0;
 out:

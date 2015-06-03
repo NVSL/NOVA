@@ -358,12 +358,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(2), true);
 
 	curr_p += PMFS_DIR_LOG_REC_LEN(2);
-
-//	dram_addr[1] = new_block + PMFS_DIR_REC_LEN(1);
-
-	PERSISTENT_BARRIER();
-	pi->log_tail = curr_p;
-	pmfs_flush_buffer(&pi->log_tail, CACHELINE_SIZE, true);
+	pmfs_update_tail(pi, curr_p);
 
 	return 0;
 }
@@ -404,9 +399,7 @@ int pmfs_add_entry(struct dentry *dentry, u64 *pi_addr, u64 ino, int inc_link,
 				dentry,	loglen, tail, inc_link, new_inode,
 				&curr_tail);
 	pmfs_insert_dir_node(sb, pidir, dir, dentry, curr_entry);
-	/* FIXME: Flush all data before update log_tail */
 	*new_tail = curr_tail;
-//	pidir->log_tail = curr_tail;
 	PMFS_END_TIMING(add_entry_t, add_entry_time);
 	return 0;
 }
@@ -435,9 +428,7 @@ int pmfs_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, NULL, 0,
 				dentry, loglen, tail, dec_link, 0, &curr_tail);
 	pmfs_remove_dir_node(sb, pidir, dir, dentry);
-	/* FIXME: Flush all data before update log_tail */
 	*new_tail = curr_tail;
-//	pidir->log_tail = curr_tail;
 
 	PMFS_END_TIMING(remove_entry_t, remove_entry_time);
 	return 0;

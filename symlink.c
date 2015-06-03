@@ -39,8 +39,8 @@ int pmfs_block_symlink(struct super_block *sb, struct pmfs_inode *pi,
 	__copy_from_user_inatomic_nocache(blockp, symname, len);
 	blockp[len] = '\0';
 	pmfs_memlock_block(sb, blockp);
-	pi->log_tail = block + len + 1;
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+
+	pmfs_update_tail(pi, block + len + 1);
 	return 0;
 }
 

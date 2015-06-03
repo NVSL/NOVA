@@ -430,6 +430,13 @@ static inline void pmfs_flush_buffer(void *buf, uint32_t len, bool fence)
 		PERSISTENT_BARRIER();
 }
 
+static inline void pmfs_update_tail(struct pmfs_inode *pi, u64 new_tail)
+{
+	PERSISTENT_BARRIER();
+	pi->log_tail = new_tail;
+	pmfs_flush_buffer(&pi->log_tail, CACHELINE_SIZE, 1);
+}
+
 /* symlink.c */
 int pmfs_block_symlink(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, const char *symname, int len);

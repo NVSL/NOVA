@@ -158,8 +158,8 @@ static int pmfs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
-	pidir->log_tail = tail;
-	pmfs_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 1);
+
+	pmfs_update_tail(pidir, tail);
 	PMFS_END_TIMING(create_t, create_time);
 	return err;
 out_err:
@@ -203,8 +203,7 @@ static int pmfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
 
-	pidir->log_tail = tail;
-	pmfs_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 1);
+	pmfs_update_tail(pidir, tail);
 	PMFS_END_TIMING(mknod_t, mknod_time);
 	return err;
 out_err:
@@ -259,8 +258,7 @@ static int pmfs_symlink(struct inode *dir, struct dentry *dentry,
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
 
-	pidir->log_tail = tail;
-	pmfs_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 1);
+	pmfs_update_tail(pidir, tail);
 out:
 	PMFS_END_TIMING(symlink_t, symlink_time);
 	return err;
@@ -304,8 +302,7 @@ static int pmfs_link(struct dentry *dest_dentry, struct inode *dir,
 		iput(inode);
 	}
 
-	pidir->log_tail = tail;
-	pmfs_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 1);
+	pmfs_update_tail(pidir, tail);
 
 	PMFS_END_TIMING(link_t, link_time);
 	return err;
@@ -342,8 +339,7 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 		pi->i_links_count = cpu_to_le16(inode->i_nlink);
 	}
 
-	pidir->log_tail = tail;
-	pmfs_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 1);
+	pmfs_update_tail(pidir, tail);
 
 	PMFS_END_TIMING(unlink_t, unlink_time);
 	return 0;
@@ -398,8 +394,7 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
 
-	pidir->log_tail = tail;
-	pmfs_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 1);
+	pmfs_update_tail(pidir, tail);
 
 out:
 	PMFS_END_TIMING(mkdir_t, mkdir_time);
@@ -504,8 +499,8 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 	pmfs_commit_transaction(sb, trans);
 
 	pmfs_delete_dir_tree(sb, sih);
-	pidir->log_tail = tail;
-	pmfs_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 1);
+
+	pmfs_update_tail(pidir, tail);
 
 	PMFS_END_TIMING(rmdir_t, rmdir_time);
 	return err;
@@ -618,14 +613,11 @@ static int pmfs_rename(struct inode *old_dir,
 	pmfs_commit_transaction(sb, trans);
 
 	if (old_pidir == new_pidir) {
-		new_pidir->log_tail = old_tail;
-		pmfs_flush_buffer(&new_pidir->log_tail, CACHELINE_SIZE, 1);
+		pmfs_update_tail(new_pidir, old_tail);
 	} else {
 		/* FIXME: transaction here */
-		old_pidir->log_tail = old_tail;
-		pmfs_flush_buffer(&old_pidir->log_tail, CACHELINE_SIZE, 1);
-		new_pidir->log_tail = new_tail;
-		pmfs_flush_buffer(&new_pidir->log_tail, CACHELINE_SIZE, 1);
+		pmfs_update_tail(old_pidir, old_tail);
+		pmfs_update_tail(new_pidir, new_tail);
 	}
 
 	PMFS_END_TIMING(rename_t, rename_time);
