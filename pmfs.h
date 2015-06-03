@@ -439,7 +439,8 @@ static inline void pmfs_update_tail(struct pmfs_inode *pi, u64 new_tail)
 
 /* symlink.c */
 int pmfs_block_symlink(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, const char *symname, int len);
+	struct inode *inode, unsigned long blocknr, const char *symname,
+	int len);
 
 /* Inline functions start here */
 

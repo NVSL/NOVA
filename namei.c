@@ -222,6 +222,8 @@ static int pmfs_symlink(struct inode *dir, struct dentry *dentry,
 	u64 pi_addr = 0;
 	struct pmfs_inode *pidir, *pi;
 	struct pmfs_inode_info_header *sih;
+	unsigned long blocknr = 0;
+	int allocated;
 	u64 tail = 0;
 	u64 ino;
 	timing_t symlink_time;
@@ -242,18 +244,24 @@ static int pmfs_symlink(struct inode *dir, struct dentry *dentry,
 	if (err)
 		goto out_fail1;
 
+	/* Pre-allocate symlink log page before allocating inode */
+	allocated = pmfs_new_log_blocks(sb, &blocknr, 1,
+						PMFS_BLOCK_TYPE_4K, 1);
+	if (allocated != 1 || blocknr == 0)
+		goto out_fail1;
+
 	inode = pmfs_new_vfs_inode(TYPE_SYMLINK, dir, pi_addr, sih, ino,
 					S_IFLNK|S_IRWXUGO, len, 0,
 					&dentry->d_name);
-	err = PTR_ERR(inode);
 	if (IS_ERR(inode)) {
+		err = PTR_ERR(inode);
+		pmfs_free_log_blocks(sb, blocknr, 1,
+					PMFS_BLOCK_TYPE_4K, NULL, 1);
 		goto out_fail1;
 	}
 
 	pi = pmfs_get_inode(sb, inode);
-	err = pmfs_block_symlink(sb, pi, inode, symname, len);
-	if (err)
-		goto out_fail2;
+	pmfs_block_symlink(sb, pi, inode, blocknr, symname, len);
 
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
@@ -266,12 +274,6 @@ out:
 out_fail1:
 	pmfs_err(sb, "%s return %d\n", __func__, err);
 	goto out;
-
-out_fail2:
-	pmfs_dec_count(inode, pi);
-	unlock_new_inode(inode);
-	iput(inode);
-	goto out_fail1;
 }
 
 static int pmfs_link(struct dentry *dest_dentry, struct inode *dir,

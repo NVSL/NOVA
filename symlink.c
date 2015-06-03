@@ -19,26 +19,24 @@
 
 /* symname is always written at the beginning of log page */
 int pmfs_block_symlink(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, const char *symname, int len)
+	struct inode *inode, unsigned long blocknr, const char *symname,
+	int len)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	u64 block;
 	char *blockp;
 
-	block = pmfs_extend_inode_log(sb, pi, sih, 0, 1);
-	if (block == 0)
-		return -ENOMEM;
-
+	block = pmfs_get_block_off(sb, blocknr,	PMFS_BLOCK_TYPE_4K);
 	blockp = (char *)pmfs_get_block(sb, block);
-
-	if (len >= PAGE_SIZE - 1)
-		return -EINVAL;
 
 	pmfs_memunlock_block(sb, blockp);
 	__copy_from_user_inatomic_nocache(blockp, symname, len);
 	blockp[len] = '\0';
 	pmfs_memlock_block(sb, blockp);
+
+	sih->log_pages = 1;
+	pi->log_head = block;
 
 	pmfs_update_tail(pi, block + len + 1);
 	return 0;
