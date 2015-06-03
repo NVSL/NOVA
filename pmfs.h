@@ -432,8 +432,8 @@ static inline void pmfs_flush_buffer(void *buf, uint32_t len, bool fence)
 }
 
 /* symlink.c */
-extern int pmfs_block_symlink(struct inode *inode, const char *symname,
-	int len);
+int pmfs_block_symlink(struct super_block *sb, struct pmfs_inode *pi,
+	struct inode *inode, const char *symname, int len);
 
 /* Inline functions start here */
 

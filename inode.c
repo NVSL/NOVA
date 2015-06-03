@@ -2122,8 +2122,7 @@ void pmfs_evict_inode(struct inode *inode)
 			pmfs_delete_dir_tree(sb, sih);
 			break;
 		case S_IFLNK:
-			freed = pmfs_free_inode_subtree(sb, root, height,
-					btype, last_blocknr);
+			/* Log will be freed later */
 			break;
 		default:
 			pmfs_dbg("%s: unknown\n", __func__);

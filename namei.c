@@ -302,7 +302,7 @@ static int pmfs_symlink(struct inode *dir, struct dentry *dentry,
 	inode->i_mapping->a_ops = &pmfs_aops_xip;
 
 	pi = pmfs_get_inode(sb, inode);
-	err = pmfs_block_symlink(inode, symname, len);
+	err = pmfs_block_symlink(sb, pi, inode, symname, len);
 	if (err)
 		goto out_fail2;
 

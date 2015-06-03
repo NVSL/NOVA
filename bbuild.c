@@ -1106,7 +1106,10 @@ static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 		pmfs_assign_info_header(sb, pmfs_ino, sih, multithread);
 		break;
 	case S_IFLNK:
-		pmfs_inode_crawl(sb, bm, pi);
+		/* No need to rebuild tree for symlink files */
+		sih = pmfs_alloc_header(sb, __le16_to_cpu(pi->i_mode));
+		sih->pi_addr = pi_addr;
+		pmfs_assign_info_header(sb, pmfs_ino, sih, multithread);
 		break;
 	default:
 		break;

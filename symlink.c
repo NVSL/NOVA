@@ -17,25 +17,30 @@
 #include <linux/namei.h>
 #include "pmfs.h"
 
-int pmfs_block_symlink(struct inode *inode, const char *symname, int len)
+/* symname is always written at the beginning of log page */
+int pmfs_block_symlink(struct super_block *sb, struct pmfs_inode *pi,
+	struct inode *inode, const char *symname, int len)
 {
-	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = si->header;
 	u64 block;
 	char *blockp;
-	int err;
 
-	err = pmfs_alloc_blocks(NULL, inode, 0, 1, false);
-	if (err)
-		return err;
+	block = pmfs_extend_inode_log(sb, pi, sih, 0, 1);
+	if (block == 0)
+		return -ENOMEM;
 
-	block = pmfs_find_inode(inode, 0);
-	blockp = pmfs_get_block(sb, block);
+	blockp = (char *)pmfs_get_block(sb, block);
+
+	if (len >= PAGE_SIZE - 1)
+		return -EINVAL;
 
 	pmfs_memunlock_block(sb, blockp);
-	memcpy(blockp, symname, len);
+	__copy_from_user_inatomic_nocache(blockp, symname, len);
 	blockp[len] = '\0';
 	pmfs_memlock_block(sb, blockp);
-	pmfs_flush_buffer(blockp, len+1, false);
+	pi->log_tail = block + len + 1;
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 	return 0;
 }
 
@@ -43,11 +48,10 @@ static int pmfs_readlink(struct dentry *dentry, char __user *buffer, int buflen)
 {
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
-	u64 block;
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
 	char *blockp;
 
-	block = pmfs_find_inode(inode, 0);
-	blockp = pmfs_get_block(sb, block);
+	blockp = (char *)pmfs_get_block(sb, pi->log_head);
 	return readlink_copy(buffer, buflen, blockp);
 }
 
@@ -55,11 +59,10 @@ static void *pmfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
-	off_t block;
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
 	char *blockp;
 
-	block = pmfs_find_inode(inode, 0);
-	blockp = pmfs_get_block(sb, block);
+	blockp = (char *)pmfs_get_block(sb, pi->log_head);
 	nd_set_link(nd, blockp);
 	return NULL;
 }
