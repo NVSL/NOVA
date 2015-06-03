@@ -371,9 +371,8 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 /* adds a directory entry pointing to the inode. assumes the inode has
  * already been logged for consistency
  */
-int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
-	u64 *pi_addr, u64 ino, int inc_link, int new_inode,
-	u64 tail, u64 *new_tail)
+int pmfs_add_entry(struct dentry *dentry, u64 *pi_addr, u64 ino, int inc_link,
+	int new_inode, u64 tail, u64 *new_tail)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -420,8 +419,8 @@ int pmfs_add_entry(pmfs_transaction_t *trans, struct dentry *dentry,
 /* removes a directory entry pointing to the inode. assumes the inode has
  * already been logged for consistency
  */
-int pmfs_remove_entry(pmfs_transaction_t *trans, struct dentry *dentry,
-	int dec_link, u64 tail, u64 *new_tail)
+int pmfs_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
+	u64 *new_tail)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
