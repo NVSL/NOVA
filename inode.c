@@ -2190,8 +2190,8 @@ u64 pmfs_new_pmfs_inode(struct super_block *sb,
 	return ino;
 }
 
-struct inode *pmfs_new_vfs_inode(pmfs_transaction_t *trans, struct inode *dir,
-	u64 pi_addr, struct pmfs_inode_info_header *sih, u64 ino,
+struct inode *pmfs_new_vfs_inode(struct inode *dir, u64 pi_addr,
+	struct pmfs_inode_info_header *sih, u64 ino,
 	umode_t mode, const struct qstr *qstr)
 {
 	struct super_block *sb;
@@ -2231,8 +2231,8 @@ struct inode *pmfs_new_vfs_inode(pmfs_transaction_t *trans, struct inode *dir,
 
 	/* chosen inode is in ino */
 	inode->i_ino = ino;
-	pmfs_add_logentry(sb, trans, pi, sizeof(*pi), LE_DATA);
 
+	/* pi is part of the dir log. No transaction is needed. */
 	pmfs_memunlock_inode(sb, pi);
 	pi->i_blk_type = PMFS_DEFAULT_BLOCK_TYPE;
 	pi->i_flags = pmfs_mask_flags(mode, diri->i_flags);

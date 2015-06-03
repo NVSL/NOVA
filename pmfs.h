@@ -1126,9 +1126,9 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 	struct scan_bitmap *bm);
 u64 pmfs_new_pmfs_inode(struct super_block *sb,
 	struct pmfs_inode_info_header **return_sih);
-extern struct inode *pmfs_new_vfs_inode(pmfs_transaction_t *trans,
-	struct inode *dir, u64 pi_addr, struct pmfs_inode_info_header *sih,
-	u64 ino, umode_t mode, const struct qstr *qstr);
+extern struct inode *pmfs_new_vfs_inode(struct inode *dir, u64 pi_addr,
+	struct pmfs_inode_info_header *sih, u64 ino, umode_t mode,
+	const struct qstr *qstr);
 struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info *si,
 	unsigned long file_blocknr);

@@ -161,7 +161,7 @@ static int pmfs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 		goto out_err;
 
 	pmfs_dbg_verbose("%s: %s\n", __func__, dentry->d_name.name);
-	inode = pmfs_new_vfs_inode(trans, dir, pi_addr, sih, ino, mode,
+	inode = pmfs_new_vfs_inode(dir, pi_addr, sih, ino, mode,
 					&dentry->d_name);
 	if (IS_ERR(inode))
 		goto out_err;
@@ -221,7 +221,7 @@ static int pmfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (err)
 		goto out_err;
 
-	inode = pmfs_new_vfs_inode(trans, dir, pi_addr, sih, ino, mode,
+	inode = pmfs_new_vfs_inode(dir, pi_addr, sih, ino, mode,
 					&dentry->d_name);
 	if (IS_ERR(inode))
 		goto out_err;
@@ -290,7 +290,7 @@ static int pmfs_symlink(struct inode *dir, struct dentry *dentry,
 	if (err)
 		goto out_fail1;
 
-	inode = pmfs_new_vfs_inode(trans, dir, pi_addr, sih, ino,
+	inode = pmfs_new_vfs_inode(dir, pi_addr, sih, ino,
 					S_IFLNK|S_IRWXUGO, &dentry->d_name);
 	err = PTR_ERR(inode);
 	if (IS_ERR(inode)) {
@@ -442,7 +442,7 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		goto out_err;
 	}
 
-	inode = pmfs_new_vfs_inode(trans, dir, pi_addr, sih, ino,
+	inode = pmfs_new_vfs_inode(dir, pi_addr, sih, ino,
 					S_IFDIR | mode,	&dentry->d_name);
 	err = PTR_ERR(inode);
 	if (IS_ERR(inode)) {
