@@ -2190,9 +2190,10 @@ u64 pmfs_new_pmfs_inode(struct super_block *sb,
 	return ino;
 }
 
-struct inode *pmfs_new_vfs_inode(struct inode *dir, u64 pi_addr,
-	struct pmfs_inode_info_header *sih, u64 ino,
-	umode_t mode, const struct qstr *qstr)
+struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
+	struct inode *dir, u64 pi_addr,
+	struct pmfs_inode_info_header *sih, u64 ino, umode_t mode,
+	size_t size, dev_t rdev, const struct qstr *qstr)
 {
 	struct super_block *sb;
 	struct pmfs_sb_info *sbi;
@@ -2215,6 +2216,7 @@ struct inode *pmfs_new_vfs_inode(struct inode *dir, u64 pi_addr,
 	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
 
 	inode->i_generation = atomic_add_return(1, &sbi->next_generation);
+	inode->i_size = size;
 
 	pmfs_dbg_verbose("inode: %p free_inodes %x total_inodes %x hint %x\n",
 		inode, sbi->s_free_inodes_count, sbi->s_inodes_count,
@@ -2232,7 +2234,35 @@ struct inode *pmfs_new_vfs_inode(struct inode *dir, u64 pi_addr,
 	/* chosen inode is in ino */
 	inode->i_ino = ino;
 
-	/* pi is part of the dir log. No transaction is needed. */
+	switch (type) {
+		case TYPE_CREATE:
+			inode->i_op = &pmfs_file_inode_operations;
+			inode->i_mapping->a_ops = &pmfs_aops_xip;
+			inode->i_fop = &pmfs_xip_file_operations;
+			break;
+		case TYPE_MKNOD:
+			init_special_inode(inode, mode, rdev);
+			inode->i_op = &pmfs_special_inode_operations;
+			break;
+		case TYPE_SYMLINK:
+			inode->i_op = &pmfs_symlink_inode_operations;
+			inode->i_mapping->a_ops = &pmfs_aops_xip;
+			break;
+		case TYPE_MKDIR:
+			inode->i_op = &pmfs_dir_inode_operations;
+			inode->i_fop = &pmfs_dir_operations;
+			inode->i_mapping->a_ops = &pmfs_aops_xip;
+			set_nlink(inode, 2);
+			break;
+		default:
+			pmfs_dbg("Unknown new inode type %d\n", type);
+			break;
+	}
+
+	/*
+	 * pi is part of the dir log. No transaction is needed,
+	 * but we need to flush to NVMM.
+	 */
 	pmfs_memunlock_inode(sb, pi);
 	pi->i_blk_type = PMFS_DEFAULT_BLOCK_TYPE;
 	pi->i_flags = pmfs_mask_flags(mode, diri->i_flags);
@@ -2257,6 +2287,7 @@ struct inode *pmfs_new_vfs_inode(struct inode *dir, u64 pi_addr,
 		goto fail1;
 	}
 
+	pmfs_flush_buffer(&pi, PMFS_INODE_SIZE, 0);
 	PMFS_END_TIMING(new_inode_t, new_inode_time);
 	return inode;
 fail1:

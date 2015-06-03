@@ -1112,6 +1112,13 @@ static inline int is_dir_init_entry(struct super_block *sb,
 	return 0;
 }
 
+enum pmfs_new_inode_type {
+	TYPE_CREATE = 0,
+	TYPE_MKNOD,
+	TYPE_SYMLINK,
+	TYPE_MKDIR
+};
+
 extern const struct address_space_operations pmfs_aops_xip;
 u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih, u64 curr_p, int is_file);
@@ -1126,9 +1133,10 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 	struct scan_bitmap *bm);
 u64 pmfs_new_pmfs_inode(struct super_block *sb,
 	struct pmfs_inode_info_header **return_sih);
-extern struct inode *pmfs_new_vfs_inode(struct inode *dir, u64 pi_addr,
+extern struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type,
+	struct inode *dir, u64 pi_addr,
 	struct pmfs_inode_info_header *sih, u64 ino, umode_t mode,
-	const struct qstr *qstr);
+	size_t size, dev_t rdev, const struct qstr *qstr);
 struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info *si,
 	unsigned long file_blocknr);
