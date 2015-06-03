@@ -399,11 +399,6 @@ int pmfs_add_entry(struct dentry *dentry, u64 *pi_addr, u64 ino, int inc_link,
 	 */
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
 
-//	pmfs_memunlock_inode(dir->i_sb, pidir);
-//	pidir->i_mtime = cpu_to_le32(dir->i_mtime.tv_sec);
-//	pidir->i_ctime = cpu_to_le32(dir->i_ctime.tv_sec);
-//	pmfs_memlock_inode(dir->i_sb, pidir);
-
 	loglen = PMFS_DIR_LOG_REC_LEN(namelen);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, pi_addr, ino,
 				dentry,	loglen, tail, inc_link, new_inode,

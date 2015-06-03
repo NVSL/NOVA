@@ -309,7 +309,7 @@ static int pmfs_link(struct dentry *dest_dentry, struct inode *dir,
 	if (!pidir)
 		return -EINVAL;
 
-	err = pmfs_add_entry(dentry, NULL, inode->i_ino, 1, 0, 0, &tail);
+	err = pmfs_add_entry(dentry, NULL, inode->i_ino, 0, 0, 0, &tail);
 	if (!err) {
 		inode->i_ctime = CURRENT_TIME_SEC;
 		inc_nlink(inode);
@@ -343,7 +343,7 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 		goto out;
 
 	pmfs_dbg_verbose("%s: %s\n", __func__, dentry->d_name.name);
-	retval = pmfs_remove_entry(dentry, -1, 0, &tail);
+	retval = pmfs_remove_entry(dentry, 0, 0, &tail);
 	if (retval)
 		goto out;
 
