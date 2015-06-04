@@ -66,88 +66,6 @@ hint_set:
 	return 0;
 }
 
-/*
- * We do not suppoer fallocate as pre-allocation does not make sense
- * for a copy-on-write file system.
- */
-#if 0
-static long pmfs_fallocate(struct file *file, int mode, loff_t offset,
-			    loff_t len)
-{
-	struct inode *inode = file->f_path.dentry->d_inode;
-	struct super_block *sb = inode->i_sb;
-	long ret = 0;
-	unsigned long blocknr, blockoff;
-	int num_blocks, blocksize_mask;
-	struct pmfs_inode *pi;
-	pmfs_transaction_t *trans;
-	loff_t new_size;
-
-	pmfs_dbg_verbose("%s: inode %lu, offset %lld, len %lld\n",
-			__func__, inode->i_ino, offset, len);
-	/* We only support the FALLOC_FL_KEEP_SIZE mode */
-	if (mode & ~FALLOC_FL_KEEP_SIZE)
-		return -EOPNOTSUPP;
-
-	if (S_ISDIR(inode->i_mode))
-		return -ENODEV;
-
-	mutex_lock(&inode->i_mutex);
-
-	new_size = len + offset;
-	if (!(mode & FALLOC_FL_KEEP_SIZE) && new_size > inode->i_size) {
-		ret = inode_newsize_ok(inode, new_size);
-		if (ret)
-			goto out;
-	}
-
-	pi = pmfs_get_inode(sb, inode);
-	if (!pi) {
-		ret = -EACCES;
-		goto out;
-	}
-	trans = pmfs_new_transaction(sb, MAX_INODE_LENTRIES +
-			MAX_METABLOCK_LENTRIES);
-	if (IS_ERR(trans)) {
-		ret = PTR_ERR(trans);
-		goto out;
-	}
-	pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
-
-	/* Set the block size hint */
-	pmfs_set_blocksize_hint(sb, pi, new_size);
-
-	blocksize_mask = sb->s_blocksize - 1;
-	blocknr = offset >> sb->s_blocksize_bits;
-	blockoff = offset & blocksize_mask;
-	num_blocks = (blockoff + len + blocksize_mask) >> sb->s_blocksize_bits;
-
-	/* FIXME */
-	ret = pmfs_alloc_blocks(trans, inode, blocknr, num_blocks, true);
-
-	inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
-
-	pmfs_memunlock_inode(sb, pi);
-	if (ret || (mode & FALLOC_FL_KEEP_SIZE)) {
-		pi->i_flags |= cpu_to_le32(PMFS_EOFBLOCKS_FL);
-	}
-
-	if (!(mode & FALLOC_FL_KEEP_SIZE) && new_size > inode->i_size) {
-		inode->i_size = new_size;
-		pi->i_size = cpu_to_le64(inode->i_size);
-	}
-	pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
-	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-	pmfs_memlock_inode(sb, pi);
-
-	pmfs_commit_transaction(sb, trans);
-
-out:
-	mutex_unlock(&inode->i_mutex);
-	return ret;
-}
-#endif
-
 static loff_t pmfs_llseek(struct file *file, loff_t offset, int origin)
 {
 	struct inode *inode = file->f_path.dentry->d_inode;
@@ -450,7 +368,6 @@ const struct file_operations pmfs_xip_file_operations = {
 	.flush			= pmfs_flush,
 	.get_unmapped_area	= pmfs_get_unmapped_area,
 	.unlocked_ioctl		= pmfs_ioctl,
-//	.fallocate		= pmfs_fallocate,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl		= pmfs_compat_ioctl,
 #endif
