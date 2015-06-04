@@ -342,7 +342,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 1;
-	strcpy(de_entry->name, ".");
+	strncpy(de_entry->name, ".", 1);
 	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(1), false);
 
 	curr_p = new_block + PMFS_DIR_LOG_REC_LEN(1);
@@ -356,7 +356,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 2;
-	strcpy(de_entry->name, "..");
+	strncpy(de_entry->name, "..", 2);
 	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(2), true);
 
 	curr_p += PMFS_DIR_LOG_REC_LEN(2);
@@ -522,10 +522,11 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 		}
 
 		entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, curr_p);
-		pmfs_dbg_verbose("curr_p: 0x%llx, ino %llu, name %*.s, namelen %u, "
-			"rec len %u\n", curr_p, le64_to_cpu(entry->ino),
-			entry->name_len, entry->name, entry->name_len,
-			le16_to_cpu(entry->de_len));
+		pmfs_dbg_verbose("curr_p: 0x%llx, type %d, ino %llu, "
+			"name %*.s, namelen %u, rec len %u\n", curr_p,
+			entry->entry_type, le64_to_cpu(entry->ino),
+			entry->name_len, entry->name,
+			entry->name_len, le16_to_cpu(entry->de_len));
 
 		if (entry->ino > 0) {
 			/* A valid entry to add */

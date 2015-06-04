@@ -265,14 +265,14 @@ struct	pmfs_file_write_entry {
 	/* ret of find_data_block, last 12 bits are invalid count */
 	__le64	block;
 	__le64	size;
-};
+} __attribute((__packed__));
 
 struct	pmfs_inode_page_tail {
 	u64	padding1;
 	u64	padding2;
 	u64	padding3;
 	u64	next_page;
-};
+} __attribute((__packed__));
 
 #define	ENTRIES_PER_PAGE	127
 
@@ -280,7 +280,7 @@ struct	pmfs_inode_page_tail {
 struct	pmfs_inode_log_page {
 	struct pmfs_file_write_entry entries[ENTRIES_PER_PAGE];
 	struct pmfs_inode_page_tail page_tail;
-};
+} __attribute((__packed__));
 
 #define	LAST_ENTRY	4064
 #define	PAGE_TAIL(p)	(((p) & ~INVALID_MASK) + LAST_ENTRY)
@@ -300,7 +300,12 @@ struct pmfs_dir_logentry {
 	__le64	ino;                    /* inode no pointed to by this entry */
 	__le64	size;
 	char	name[PMFS_NAME_LEN];   /* File name */
-};
+} __attribute((__packed__));
+
+#define PMFS_DIR_PAD            4
+#define PMFS_DIR_ROUND          (PMFS_DIR_PAD - 1)
+#define PMFS_DIR_LOG_REC_LEN(name_len)  (((name_len) + 28 + PMFS_DIR_ROUND) & \
+				      ~PMFS_DIR_ROUND)
 
 /*
  * Struct of inode attributes change log (setattr)
@@ -316,12 +321,7 @@ struct pmfs_setattr_logentry {
 	__le32	mtime;
 	__le32	ctime;
 	__le64	size;
-};
-
-#define PMFS_DIR_PAD            4
-#define PMFS_DIR_ROUND          (PMFS_DIR_PAD - 1)
-#define PMFS_DIR_LOG_REC_LEN(name_len)  (((name_len) + 28 + PMFS_DIR_ROUND) & \
-				      ~PMFS_DIR_ROUND)
+} __attribute((__packed__));
 
 struct pmfs_dir_node {
 	struct rb_node node;
