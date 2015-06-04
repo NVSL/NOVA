@@ -866,10 +866,9 @@ int pmfs_recover_journal(struct super_block *sb)
 /**************************** Lite journal ******************************/
 
 struct pmfs_lite_journal_entry {
+	/* The highest byte of addr is type */
 	u64 addrs[4];
 	u64 values[4];
-	u64 types[4];
-	u64 paddings[4];
 };
 
 static u64 next_lite_journal(u64 curr_p)
@@ -884,7 +883,7 @@ static u64 next_lite_journal(u64 curr_p)
 }
 
 static void pmfs_recover_lite_journal_entry(struct super_block *sb,
-	u64 addr, u64 value, u64 type)
+	u64 addr, u64 value, u8 type)
 {
 	switch (type) {
 		case 1:
@@ -900,7 +899,7 @@ static void pmfs_recover_lite_journal_entry(struct super_block *sb,
 			*(u64 *)pmfs_get_block(sb, addr) = (u64)value;
 			break;
 		default:
-			pmfs_dbg("%s: unknown data type %llu\n",
+			pmfs_dbg("%s: unknown data type %u\n",
 					__func__, type);
 			break;
 	}
@@ -910,7 +909,7 @@ static void pmfs_recover_lite_journal_entry(struct super_block *sb,
 
 /* Caller needs to grab the lock until commit. */
 /* Do not fail, do not sleep. Make it fast! */
-u64 pmfs_new_lite_transaction(struct super_block *sb,
+u64 pmfs_create_lite_transaction(struct super_block *sb,
 	struct pmfs_lite_journal_entry *dram_entry)
 {
 	struct pmfs_inode *pi;
@@ -948,14 +947,16 @@ static int pmfs_recover_lite_journal(struct super_block *sb,
 {
 	struct pmfs_lite_journal_entry *entry;
 	int i;
+	u8 type;
 
 	entry = (struct pmfs_lite_journal_entry *)pmfs_get_block(sb,
 							pi->log_head);
 
 	for (i = 0; i < 4; i++) {
-		if (entry->addrs[i] && entry->types[i])
+		type = entry->addrs[i] >> 56;
+		if (entry->addrs[i] && type)
 			pmfs_recover_lite_journal_entry(sb, entry->addrs[i],
-					entry->values[i], entry->types[i]);
+					entry->values[i], type);
 	}
 
 	PERSISTENT_BARRIER();
