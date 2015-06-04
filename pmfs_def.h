@@ -54,28 +54,6 @@
 
 #define PMFS_NAME_LEN 255
 
-/*
- * Structure of a directory log entry in PMFS.
- * Update DIR_LOG_REC_LEN if modify this struct!
- */
-struct pmfs_log_direntry {
-	u8	entry_type;
-	u8	name_len;               /* length of the directory entry name */
-	u8	file_type;              /* file type */
-	u8	new_inode;		/* Followed by a new inode? */
-	__le16	de_len;                 /* length of this directory entry */
-	__le16	links_count;
-	__le32	mtime;			/* For both mtime and ctime */
-	__le64	ino;                    /* inode no pointed to by this entry */
-	__le64	size;
-	char	name[PMFS_NAME_LEN];   /* File name */
-};
-
-#define PMFS_DIR_PAD            4
-#define PMFS_DIR_ROUND          (PMFS_DIR_PAD - 1)
-#define PMFS_DIR_LOG_REC_LEN(name_len)  (((name_len) + 28 + PMFS_DIR_ROUND) & \
-				      ~PMFS_DIR_ROUND)
-
 /* PMFS supported data blocks */
 #define PMFS_BLOCK_TYPE_4K     0
 #define PMFS_BLOCK_TYPE_2M     1

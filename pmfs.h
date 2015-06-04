@@ -239,8 +239,8 @@ extern unsigned long alloc_steps;
 extern unsigned long free_steps;
 extern unsigned long write_breaks;
 
-/* ======================= Inode log ========================= */
-/* Inode entry in th log */
+/* ======================= Log entry ========================= */
+/* Inode entry in the log */
 
 #define	INVALID_MASK	4095
 #define	BLOCK_OFF(p)	((p) & ~INVALID_MASK)
@@ -252,13 +252,13 @@ extern unsigned long write_breaks;
 struct	pmfs_file_write_entry {
 	u8	entry_type;
 	u8	paddings[3];
-	u32	pgoff;
-	u32	num_pages;
+	__le32	pgoff;
+	__le32	num_pages;
 	/* For both ctime and mtime */
-	u32	mtime;
+	__le32	mtime;
 	/* ret of find_data_block, last 12 bits are invalid count */
-	u64	block;
-	u64	size;
+	__le64	block;
+	__le64	size;
 };
 
 struct	pmfs_inode_page_tail {
@@ -278,6 +278,28 @@ struct	pmfs_inode_log_page {
 
 #define	LAST_ENTRY	4064
 #define	PAGE_TAIL(p)	(((p) & ~INVALID_MASK) + LAST_ENTRY)
+
+/*
+ * Structure of a directory log entry in PMFS.
+ * Update DIR_LOG_REC_LEN if modify this struct!
+ */
+struct pmfs_log_direntry {
+	u8	entry_type;
+	u8	name_len;               /* length of the directory entry name */
+	u8	file_type;              /* file type */
+	u8	new_inode;		/* Followed by a new inode? */
+	__le16	de_len;                 /* length of this directory entry */
+	__le16	links_count;
+	__le32	mtime;			/* For both mtime and ctime */
+	__le64	ino;                    /* inode no pointed to by this entry */
+	__le64	size;
+	char	name[PMFS_NAME_LEN];   /* File name */
+};
+
+#define PMFS_DIR_PAD            4
+#define PMFS_DIR_ROUND          (PMFS_DIR_PAD - 1)
+#define PMFS_DIR_LOG_REC_LEN(name_len)  (((name_len) + 28 + PMFS_DIR_ROUND) & \
+				      ~PMFS_DIR_ROUND)
 
 struct pmfs_dir_node {
 	struct rb_node node;
