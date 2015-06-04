@@ -2621,16 +2621,33 @@ static void pmfs_update_setattr_entry(struct inode *inode,
 	attr_mask = ATTR_MODE | ATTR_UID | ATTR_GID | ATTR_SIZE |
 			ATTR_ATIME | ATTR_MTIME | ATTR_CTIME;
 
-	entry->entry_type = SETATTR;
-	entry->attr = ia_valid & attr_mask;
-	entry->mode = cpu_to_le16(inode->i_mode);
-	entry->uid = cpu_to_le32(i_uid_read(inode));
-	entry->gid = cpu_to_le32(i_gid_read(inode));
-	entry->size = cpu_to_le64(inode->i_size);
-	entry->atime = cpu_to_le32(inode->i_atime.tv_sec);
-	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-	entry->mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+	entry->entry_type	= SETATTR;
+	entry->attr	= ia_valid & attr_mask;
+	entry->mode	= cpu_to_le16(inode->i_mode);
+	entry->uid	= cpu_to_le32(i_uid_read(inode));
+	entry->gid	= cpu_to_le32(i_gid_read(inode));
+	entry->size	= cpu_to_le64(inode->i_size);
+	entry->atime	= cpu_to_le32(inode->i_atime.tv_sec);
+	entry->ctime	= cpu_to_le32(inode->i_ctime.tv_sec);
+	entry->mtime	= cpu_to_le32(inode->i_mtime.tv_sec);
 	pmfs_flush_buffer(entry, sizeof(struct pmfs_setattr_logentry), 0);
+}
+
+void pmfs_apply_setattr_entry(struct pmfs_inode *pi,
+	struct pmfs_setattr_logentry *entry)
+{
+	if (entry->entry_type != SETATTR)
+		BUG();
+
+	pi->i_mode	= entry->mode;
+	pi->i_uid	= entry->uid;
+	pi->i_gid	= entry->gid;
+	pi->i_size	= entry->size;
+	pi->i_atime	= entry->atime;
+	pi->i_ctime	= entry->ctime;
+	pi->i_mtime	= entry->mtime;
+
+	/* Do not flush now */
 }
 
 /* Returns new tail after append */
