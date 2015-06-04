@@ -530,6 +530,7 @@ static int pmfs_rename(struct inode *old_dir,
 	struct pmfs_inode *pi, *new_pidir = NULL, *old_pidir = NULL;
 	u64 old_tail = 0, new_tail = 0, tail;
 	int err = -ENOENT;
+	bool need_trans = false;
 	int inc_link = 0, dec_link = 0;
 	timing_t rename_time;
 
@@ -563,22 +564,18 @@ static int pmfs_rename(struct inode *old_dir,
 	pi = pmfs_get_inode(sb, old_inode);
 	pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
 
-	if (!new_inode) {
-		/* link it into the new directory. */
-		err = pmfs_add_entry(new_dentry, NULL, old_inode->i_ino,
-					inc_link, 0, 0, &new_tail);
-		if (err)
-			goto out;
-	} else {
-		/* First remove the old entry, then add new entry */
+	if (new_inode) {
+		/* First remove the old entry in the new directory */
 		err = pmfs_remove_entry(new_dentry, 0,  0, &new_tail);
 		if (err)
 			goto out;
-		err = pmfs_add_entry(new_dentry, NULL, old_inode->i_ino,
-					inc_link, 0, new_tail, &new_tail);
-		if (err)
-			goto out;
 	}
+
+	/* link into the new directory. */
+	err = pmfs_add_entry(new_dentry, NULL, old_inode->i_ino,
+					inc_link, 0, new_tail, &new_tail);
+	if (err)
+		goto out;
 
 	/* and unlink the inode from the old directory ... */
 	if (new_pidir == old_pidir)
@@ -591,6 +588,7 @@ static int pmfs_rename(struct inode *old_dir,
 		goto out;
 
 	if (new_inode) {
+		need_trans = true;
 		pi = pmfs_get_inode(sb, new_inode);
 		pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
 		new_inode->i_ctime = CURRENT_TIME;
@@ -617,7 +615,7 @@ static int pmfs_rename(struct inode *old_dir,
 
 	pmfs_commit_transaction(sb, trans);
 
-	if (old_pidir == new_pidir) {
+	if (need_trans && old_pidir == new_pidir) {
 		pmfs_update_tail(new_pidir, old_tail);
 	} else {
 		/* FIXME: transaction here */
