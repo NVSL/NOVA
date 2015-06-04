@@ -29,13 +29,13 @@
 static int pmfs_rbtree_compare_find_by_name(struct super_block *sb,
 	struct pmfs_dir_node *curr, const char *name, int namelen)
 {
-	struct pmfs_log_direntry *entry;
+	struct pmfs_dir_logentry *entry;
 	int min_len;
 
 	if (!curr || curr->nvmm == 0)
 		BUG();
 
-	entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr->nvmm);
+	entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, curr->nvmm);
 	min_len = namelen < entry->name_len ? namelen : entry->name_len;
 
 	pmfs_dbg_verbose("%s: %s %s, entry @0x%lx\n", __func__,
@@ -186,7 +186,7 @@ void pmfs_print_dir_tree(struct super_block *sb,
 	struct pmfs_inode_info_header *sih, unsigned long ino)
 {
 	struct pmfs_dir_node *curr;
-	struct pmfs_log_direntry *entry;
+	struct pmfs_dir_logentry *entry;
 	struct rb_node *temp;
 
 	pmfs_dbg("%s: dir ino %lu\n", __func__, ino);
@@ -197,7 +197,7 @@ void pmfs_print_dir_tree(struct super_block *sb,
 		if (!curr || curr->nvmm == 0)
 			BUG();
 
-		entry = (struct pmfs_log_direntry *)
+		entry = (struct pmfs_dir_logentry *)
 				pmfs_get_block(sb, curr->nvmm);
 		pmfs_dbg("%.*s\n", entry->name_len, entry->name);
 		temp = rb_next(temp);
@@ -228,7 +228,7 @@ void pmfs_delete_dir_tree(struct super_block *sb,
 /* ========================= Entry operations ============================= */
 
 /*
- * Append a pmfs_log_direntry to the current pmfs_inode_log_page.
+ * Append a pmfs_dir_logentry to the current pmfs_inode_log_page.
  * Note unlike append_file_write_entry(), this method returns the tail pointer
  * after append.
  */
@@ -239,7 +239,7 @@ static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
 {
 	struct pmfs_inode_info *si = PMFS_I(dir);
 	struct pmfs_inode_info_header *sih = si->header;
-	struct pmfs_log_direntry *entry;
+	struct pmfs_dir_logentry *entry;
 	u64 curr_p, inode_start;
 	size_t size = de_len;
 	unsigned short links_count;
@@ -263,7 +263,7 @@ static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
 	if (is_last_entry(curr_p, size, 0))
 		curr_p = next_log_page(sb, curr_p);
 
-	entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr_p);
+	entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, curr_p);
 	entry->ino = cpu_to_le64(ino);
 	entry->name_len = dentry->d_name.len;
 	__copy_from_user_inatomic_nocache(entry->name, dentry->d_name.name,
@@ -317,7 +317,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	int allocated;
 	u64 new_block;
 	u64 curr_p;
-	struct pmfs_log_direntry *de_entry;
+	struct pmfs_dir_logentry *de_entry;
 
 	if (pi->log_head) {
 		pmfs_dbg("%s: log head exists @ 0x%llx!\n",
@@ -333,7 +333,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	pi->log_tail = pi->log_head = new_block;
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 
-	de_entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, new_block);
+	de_entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, new_block);
 	de_entry->ino = cpu_to_le64(self_ino);
 	de_entry->name_len = 1;
 	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(1));
@@ -345,7 +345,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 
 	curr_p = new_block + PMFS_DIR_LOG_REC_LEN(1);
 
-	de_entry = (struct pmfs_log_direntry *)((char *)de_entry +
+	de_entry = (struct pmfs_dir_logentry *)((char *)de_entry +
 					le16_to_cpu(de_entry->de_len));
 	de_entry->ino = cpu_to_le64(parent_ino);
 	de_entry->name_len = 2;
@@ -437,7 +437,7 @@ int pmfs_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
 }
 
 inline int pmfs_replay_add_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct pmfs_inode_info_header *sih, struct pmfs_log_direntry *entry,
+	struct pmfs_inode_info_header *sih, struct pmfs_dir_logentry *entry,
 	u64 curr_p)
 {
 	if (!entry->name_len)
@@ -450,7 +450,7 @@ inline int pmfs_replay_add_entry(struct super_block *sb, struct pmfs_inode *pi,
 
 inline int pmfs_replay_remove_entry(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
-	struct pmfs_log_direntry *entry)
+	struct pmfs_dir_logentry *entry)
 {
 	pmfs_dbg_verbose("%s: remove %s\n", __func__, entry->name);
 	pmfs_remove_dir_node_by_name(sb, pi, sih, entry->name,
@@ -459,7 +459,7 @@ inline int pmfs_replay_remove_entry(struct super_block *sb,
 }
 
 void pmfs_rebuild_dir_time_and_size(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_log_direntry *entry)
+	struct pmfs_inode *pi, struct pmfs_dir_logentry *entry)
 {
 	if (!entry || !pi)
 		return;
@@ -474,7 +474,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 	struct pmfs_inode_info_header *sih, u64 ino,
 	struct scan_bitmap *bm)
 {
-	struct pmfs_log_direntry *entry = NULL;
+	struct pmfs_dir_logentry *entry = NULL;
 	struct pmfs_inode_log_page *curr_page;
 	struct pmfs_inode *pi;
 	u64 curr_p;
@@ -517,7 +517,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 			BUG();
 		}
 
-		entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr_p);
+		entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, curr_p);
 		pmfs_dbg_verbose("curr_p: 0x%llx, ino %llu, name %*.s, namelen %u, "
 			"rec len %u\n", curr_p, entry->ino, entry->name_len,
 			entry->name, entry->name_len, entry->de_len);
@@ -592,7 +592,7 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_inode_info_header *child_sih;
 	struct pmfs_dir_node *curr;
-	struct pmfs_log_direntry *entry;
+	struct pmfs_dir_logentry *entry;
 	struct rb_node *temp;
 	ino_t ino;
 	timing_t readdir_time;
@@ -615,7 +615,7 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 	} else if (ctx->pos == READDIR_END) {
 		goto out;
 	} else if (ctx->pos) {
-		entry = (struct pmfs_log_direntry *)
+		entry = (struct pmfs_dir_logentry *)
 				pmfs_get_block(sb, ctx->pos);
 		pmfs_dbg_verbose("ctx: ino %llu, name %*.s, "
 				"name_len %u, de_len %u\n",
@@ -632,7 +632,7 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 		if (!curr || curr->nvmm == 0)
 			BUG();
 
-		entry = (struct pmfs_log_direntry *)
+		entry = (struct pmfs_dir_logentry *)
 				pmfs_get_block(sb, curr->nvmm);
 		if (entry->ino) {
 			ino = le64_to_cpu(entry->ino);

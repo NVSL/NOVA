@@ -35,18 +35,18 @@ static inline void pmfs_dec_count(struct inode *inode, struct pmfs_inode *pi)
 }
 
 static ino_t pmfs_inode_by_name(struct inode *dir, struct qstr *entry,
-				 struct pmfs_log_direntry **res_entry)
+				 struct pmfs_dir_logentry **res_entry)
 {
 	struct super_block *sb = dir->i_sb;
 	struct pmfs_dir_node *node;
-	struct pmfs_log_direntry *direntry;
+	struct pmfs_dir_logentry *direntry;
 
 	node = pmfs_find_dir_node_by_name(sb, NULL, dir,
 					entry->name, entry->len);
 	if (node == NULL)
 		return 0;
 
-	direntry = (struct pmfs_log_direntry *)pmfs_get_block(sb, node->nvmm);
+	direntry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, node->nvmm);
 	*res_entry = direntry;
 	return direntry->ino;
 }
@@ -55,7 +55,7 @@ static struct dentry *pmfs_lookup(struct inode *dir, struct dentry *dentry,
 				   unsigned int flags)
 {
 	struct inode *inode = NULL;
-	struct pmfs_log_direntry *de;
+	struct pmfs_dir_logentry *de;
 	ino_t ino;
 	timing_t lookup_time;
 
@@ -417,7 +417,7 @@ static int pmfs_empty_dir(struct inode *inode)
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_dir_node *curr;
-	struct pmfs_log_direntry *entry;
+	struct pmfs_dir_logentry *entry;
 	struct rb_node *temp;
 
 	sb = inode->i_sb;
@@ -428,7 +428,7 @@ static int pmfs_empty_dir(struct inode *inode)
 		if (!curr || curr->nvmm == 0)
 			BUG();
 
-		entry = (struct pmfs_log_direntry *)
+		entry = (struct pmfs_dir_logentry *)
 				pmfs_get_block(sb, curr->nvmm);
 		if (!is_dir_init_entry(sb, entry))
 			return 0;
@@ -441,7 +441,7 @@ static int pmfs_empty_dir(struct inode *inode)
 static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
-	struct pmfs_log_direntry *de;
+	struct pmfs_dir_logentry *de;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode), *pidir;
 	u64 tail = 0;
@@ -632,7 +632,7 @@ struct dentry *pmfs_get_parent(struct dentry *child)
 {
 	struct inode *inode;
 	struct qstr dotdot = QSTR_INIT("..", 2);
-	struct pmfs_log_direntry *de = NULL;
+	struct pmfs_dir_logentry *de = NULL;
 	ino_t ino;
 
 	pmfs_inode_by_name(child->d_inode, &dotdot, &de);

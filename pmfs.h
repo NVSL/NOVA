@@ -283,7 +283,7 @@ struct	pmfs_inode_log_page {
  * Structure of a directory log entry in PMFS.
  * Update DIR_LOG_REC_LEN if modify this struct!
  */
-struct pmfs_log_direntry {
+struct pmfs_dir_logentry {
 	u8	entry_type;
 	u8	name_len;               /* length of the directory entry name */
 	u8	file_type;              /* file type */
@@ -1124,19 +1124,19 @@ static inline bool is_last_entry(u64 curr_p, size_t size, int new_inode)
 
 static inline bool is_last_dir_entry(struct super_block *sb, u64 curr_p)
 {
-	struct pmfs_log_direntry *entry;
+	struct pmfs_dir_logentry *entry;
 
 	if (ENTRY_LOC(curr_p) + PMFS_DIR_LOG_REC_LEN(0) > LAST_ENTRY)
 		return true;
 
-	entry = (struct pmfs_log_direntry *)pmfs_get_block(sb, curr_p);
+	entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, curr_p);
 	if (entry->name_len == 0)
 		return true;
 	return false;
 }
 
 static inline int is_dir_init_entry(struct super_block *sb,
-	struct pmfs_log_direntry *entry)
+	struct pmfs_dir_logentry *entry)
 {
 	if (entry->name_len == 1 && strncmp(entry->name, ".", 1) == 0)
 		return 1;
