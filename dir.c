@@ -264,6 +264,7 @@ static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
 		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, curr_p);
+	entry->entry_type = DIR_LOG;
 	entry->ino = cpu_to_le64(ino);
 	entry->name_len = dentry->d_name.len;
 	__copy_from_user_inatomic_nocache(entry->name, dentry->d_name.name,
@@ -334,6 +335,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 
 	de_entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, new_block);
+	de_entry->entry_type = DIR_LOG;
 	de_entry->ino = cpu_to_le64(self_ino);
 	de_entry->name_len = 1;
 	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(1));
@@ -347,6 +349,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 
 	de_entry = (struct pmfs_dir_logentry *)((char *)de_entry +
 					le16_to_cpu(de_entry->de_len));
+	de_entry->entry_type = DIR_LOG;
 	de_entry->ino = cpu_to_le64(parent_ino);
 	de_entry->name_len = 2;
 	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(2));

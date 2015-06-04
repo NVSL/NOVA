@@ -2621,6 +2621,7 @@ static void pmfs_update_setattr_entry(struct inode *inode,
 	attr_mask = ATTR_MODE | ATTR_UID | ATTR_GID | ATTR_SIZE |
 			ATTR_ATIME | ATTR_MTIME | ATTR_CTIME;
 
+	entry->entry_type = SETATTR;
 	entry->attr = ia_valid & attr_mask;
 	entry->mode = cpu_to_le16(inode->i_mode);
 	entry->uid = cpu_to_le32(i_uid_read(inode));

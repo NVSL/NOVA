@@ -436,6 +436,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		copied = memcpy_to_nvmm((char *)kmem, offset, buf, bytes);
 		PMFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
+		entry_data.entry_type = FILE_WRITE;
 		entry_data.pgoff = cpu_to_le32(start_blk);
 		entry_data.num_pages = cpu_to_le32(allocated);
 		entry_data.block = cpu_to_le64(pmfs_get_block_off(sb, blocknr,
@@ -782,6 +783,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 					(char *)DRAM_ADDR(block), bytes);
 		PMFS_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
+		entry_data.entry_type = FILE_WRITE;
 		entry_data.pgoff = cpu_to_le32(pgoff);
 		entry_data.num_pages = cpu_to_le32(allocated);
 		entry_data.block = cpu_to_le64(pmfs_get_block_off(sb, blocknr,

@@ -248,6 +248,12 @@ extern unsigned long write_breaks;
 
 #define	ENTRY_LOC(p)	((p) & INVALID_MASK)
 
+enum pmfs_entry_type {
+	FILE_WRITE = 1,
+	DIR_LOG,
+	SETATTR,
+};
+
 /* Make sure this is 32 bytes */
 struct	pmfs_file_write_entry {
 	u8	entry_type;
