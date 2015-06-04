@@ -569,6 +569,7 @@ struct pmfs_sb_info {
 	uint32_t    jsize;
 	void       *journal_base_addr;
 	struct mutex journal_mutex;
+	struct mutex lite_journal_mutex;
 	struct task_struct *log_cleaner_thread;
 	wait_queue_head_t  log_cleaner_wait;
 	bool redo_log;

@@ -527,11 +527,14 @@ static int pmfs_rename(struct inode *old_dir,
 	struct inode *new_inode = new_dentry->d_inode;
 	pmfs_transaction_t *trans;
 	struct super_block *sb = old_inode->i_sb;
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi, *new_pidir = NULL, *old_pidir = NULL;
+	struct pmfs_lite_journal_entry entry;
 	u64 old_tail = 0, new_tail = 0, tail;
 	int err = -ENOENT;
 	bool need_trans = false;
 	int inc_link = 0, dec_link = 0;
+	u64 journal_tail;
 	timing_t rename_time;
 
 	PMFS_START_TIMING(rename_t, rename_time);
@@ -593,16 +596,12 @@ static int pmfs_rename(struct inode *old_dir,
 		pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
 		new_inode->i_ctime = CURRENT_TIME;
 
-		pmfs_memunlock_inode(sb, pi);
 		if (S_ISDIR(old_inode->i_mode)) {
 			if (new_inode->i_nlink)
 				drop_nlink(new_inode);
 		}
-		pi->i_ctime = cpu_to_le32(new_inode->i_ctime.tv_sec);
 		if (new_inode->i_nlink)
 			drop_nlink(new_inode);
-		pi->i_links_count = cpu_to_le16(new_inode->i_nlink);
-		pmfs_memlock_inode(sb, pi);
 
 //		if (!new_inode->i_nlink)
 //			pmfs_truncate_add(new_inode, new_inode->i_size);
@@ -618,9 +617,40 @@ static int pmfs_rename(struct inode *old_dir,
 	if (need_trans && old_pidir == new_pidir) {
 		pmfs_update_tail(new_pidir, old_tail);
 	} else {
-		/* FIXME: transaction here */
+		memset(&entry, 0, sizeof(struct pmfs_lite_journal_entry));
+		if (new_inode) {
+			entry.addrs[0] = (u64)pmfs_get_addr_off(sbi,
+							&pi->i_ctime);
+			entry.addrs[0] |= (u64)4 << 56;
+			entry.values[0] = pi->i_ctime;
+			entry.addrs[1] = (u64)pmfs_get_addr_off(sbi,
+							&pi->i_links_count);
+			entry.addrs[1] |= (u64)2 << 56;
+			entry.values[1] = pi->i_links_count;
+		}
+
+		entry.addrs[2] = (u64)pmfs_get_addr_off(sbi,
+						&old_pidir->log_tail);
+		entry.addrs[2] |= (u64)8 << 56;
+		entry.values[2] = old_pidir->log_tail;
+		entry.addrs[3] = (u64)pmfs_get_addr_off(sbi,
+						&new_pidir->log_tail);
+		entry.addrs[3] |= (u64)8 << 56;
+		entry.values[3] = new_pidir->log_tail;
+
+		mutex_lock(&sbi->lite_journal_mutex);
+		journal_tail = pmfs_create_lite_transaction(sb, &entry);
+
 		pmfs_update_tail(old_pidir, old_tail);
 		pmfs_update_tail(new_pidir, new_tail);
+		if (new_inode) {
+			pi->i_ctime = cpu_to_le32(new_inode->i_ctime.tv_sec);
+			pi->i_links_count = cpu_to_le16(new_inode->i_nlink);
+			/* In the same cacheline */
+			pmfs_flush_buffer(&pi->i_ctime, CACHELINE_SIZE, 1);
+		}
+		pmfs_commit_lite_transaction(sb, journal_tail);
+		mutex_unlock(&sbi->lite_journal_mutex);
 	}
 
 	PMFS_END_TIMING(rename_t, rename_time);

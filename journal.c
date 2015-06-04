@@ -960,8 +960,10 @@ static int pmfs_recover_lite_journal(struct super_block *sb,
 
 int pmfs_lite_journal_soft_init(struct super_block *sb)
 {
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi;
 
+	mutex_init(&sbi->lite_journal_mutex);
 	pi = pmfs_get_inode_by_ino(sb, PMFS_LITEJOURNAL_INO);
 
 	if (pi->log_head == pi->log_tail)
