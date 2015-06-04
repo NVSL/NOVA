@@ -3345,7 +3345,9 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 {
 	struct pmfs_inode *pi;
 	struct pmfs_file_write_entry *entry = NULL;
+	struct pmfs_setattr_logentry *attr_entry = NULL;
 	struct pmfs_inode_log_page *curr_page;
+	void *addr;
 	u64 curr_p;
 	u64 next;
 	u8 type;
@@ -3377,7 +3379,8 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 		set_bit(curr_p >> PAGE_SHIFT, bm->bitmap_4k);
 	}
 	while (curr_p != pi->log_tail) {
-		if (is_last_entry(curr_p, sizeof(struct pmfs_file_write_entry), 0)) {
+		if (is_last_entry(curr_p,
+				sizeof(struct pmfs_file_write_entry), 0)) {
 			sih->log_pages++;
 			curr_p = next_log_page(sb, curr_p);
 			if (bm) {
@@ -3391,13 +3394,24 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 			BUG();
 		}
 
-		type = *(u8 *)pmfs_get_block(sb, curr_p);
-		if (type != FILE_WRITE) {
-			pmfs_dbg("%s: unknown type %d\n", __func__, type);
-			BUG();
+		addr = (void *)pmfs_get_block(sb, curr_p);
+		type = *(u8 *)addr;
+		switch (type) {
+			case SETATTR:
+				attr_entry =
+					(struct pmfs_setattr_logentry *)addr;
+				pmfs_apply_setattr_entry(pi, attr_entry);
+				curr_p += sizeof(struct pmfs_setattr_logentry);
+				continue;
+			case FILE_WRITE:
+				break;
+			default:
+				pmfs_dbg("%s: unknown type %d\n",
+							__func__, type);
+				BUG();
 		}
 
-		entry = (struct pmfs_file_write_entry *)pmfs_get_block(sb, curr_p);
+		entry = (struct pmfs_file_write_entry *)addr;
 		//pmfs_print_inode_entry(entry);
 
 		if (entry->num_pages != GET_INVALID(entry->block)) {

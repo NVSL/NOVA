@@ -1176,6 +1176,8 @@ enum pmfs_new_inode_type {
 };
 
 extern const struct address_space_operations pmfs_aops_xip;
+void pmfs_apply_setattr_entry(struct pmfs_inode *pi,
+	struct pmfs_setattr_logentry *entry);
 u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih, u64 curr_p, int is_file);
 void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi);

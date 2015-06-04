@@ -478,9 +478,11 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 	struct scan_bitmap *bm)
 {
 	struct pmfs_dir_logentry *entry = NULL;
+	struct pmfs_setattr_logentry *attr_entry = NULL;
 	struct pmfs_inode_log_page *curr_page;
 	struct pmfs_inode *pi;
 	unsigned short de_len;
+	void *addr;
 	u64 curr_p;
 	u64 next;
 	u8 type;
@@ -522,10 +524,21 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 			BUG();
 		}
 
-		type = *(u8 *)pmfs_get_block(sb, curr_p);
-		if (type != DIR_LOG) {
-			pmfs_dbg("%s: unknown type %d\n", __func__, type);
-			BUG();
+		addr = (void *)pmfs_get_block(sb, curr_p);
+		type = *(u8 *)addr;
+		switch (type) {
+			case SETATTR:
+				attr_entry =
+					(struct pmfs_setattr_logentry *)addr;
+				pmfs_apply_setattr_entry(pi, attr_entry);
+				curr_p += sizeof(struct pmfs_setattr_logentry);
+				continue;
+			case DIR_LOG:
+				break;
+			default:
+				pmfs_dbg("%s: unknown type %d\n",
+							__func__, type);
+				BUG();
 		}
 
 		entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, curr_p);
