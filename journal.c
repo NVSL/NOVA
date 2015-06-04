@@ -908,6 +908,41 @@ static void pmfs_recover_lite_journal_entry(struct super_block *sb,
 	pmfs_flush_buffer((void *)pmfs_get_block(sb, addr), CACHELINE_SIZE, 0);
 }
 
+/* Caller needs to grab the lock until commit. */
+/* Do not fail, do not sleep. Make it fast! */
+u64 pmfs_new_lite_transaction(struct super_block *sb,
+	struct pmfs_lite_journal_entry *dram_entry)
+{
+	struct pmfs_inode *pi;
+	struct pmfs_lite_journal_entry *entry;
+	size_t size = sizeof(struct pmfs_lite_journal_entry);
+	u64 new_tail;
+
+	pi = pmfs_get_inode_by_ino(sb, PMFS_LITEJOURNAL_INO);
+	if (pi->log_head == 0 || pi->log_head != pi->log_tail)
+		BUG();
+
+	entry = (struct pmfs_lite_journal_entry *)pmfs_get_block(sb,
+							pi->log_head);
+
+	__copy_from_user_inatomic_nocache(entry, dram_entry, size);
+	new_tail = next_lite_journal(pi->log_head);
+	pmfs_update_tail(pi, new_tail);
+	return new_tail;
+}
+
+void pmfs_commit_lite_transaction(struct super_block *sb, u64 tail)
+{
+	struct pmfs_inode *pi;
+
+	pi = pmfs_get_inode_by_ino(sb, PMFS_LITEJOURNAL_INO);
+	if (pi->log_tail != tail)
+		BUG();
+
+	pi->log_head = tail;
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+}
+
 static int pmfs_recover_lite_journal(struct super_block *sb,
 	struct pmfs_inode *pi)
 {
