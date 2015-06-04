@@ -483,6 +483,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 	unsigned short de_len;
 	u64 curr_p;
 	u64 next;
+	u8 type;
 	int ret;
 
 	pmfs_dbg_verbose("Rebuild dir %llu tree\n", ino);
@@ -518,6 +519,12 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 
 		if (curr_p == 0) {
 			pmfs_err(sb, "Dir %llu log is NULL!\n", ino);
+			BUG();
+		}
+
+		type = *(u8 *)pmfs_get_block(sb, curr_p);
+		if (type != DIR_LOG) {
+			pmfs_dbg("%s: unknown type %d\n", __func__, type);
 			BUG();
 		}
 
