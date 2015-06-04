@@ -470,6 +470,11 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 		return ERR_PTR(-EINVAL);
 	}
 
+	if (pmfs_lite_journal_hard_init(sb) < 0) {
+		printk(KERN_ERR "Lite journal hard initialization failed\n");
+		return ERR_PTR(-EINVAL);
+	}
+
 	if (pmfs_init_inode_table(sb) < 0)
 		return ERR_PTR(-EINVAL);
 
@@ -742,6 +747,11 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	if (pmfs_journal_soft_init(sb)) {
 		retval = -EINVAL;
 		printk(KERN_ERR "Journal initialization failed\n");
+		goto out;
+	}
+	if (pmfs_lite_journal_soft_init(sb)) {
+		retval = -EINVAL;
+		printk(KERN_ERR "Lite journal initialization failed\n");
 		goto out;
 	}
 	if (pmfs_recover_journal(sb)) {

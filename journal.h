@@ -99,4 +99,6 @@ extern int pmfs_abort_transaction(struct super_block *sb,
 			pmfs_transaction_t *trans);
 extern int pmfs_recover_journal(struct super_block *sb);
 
+extern int pmfs_lite_journal_soft_init(struct super_block *sb);
+extern int pmfs_lite_journal_hard_init(struct super_block *sb);
 #endif    /* __PMFS_JOURNAL_H__ */
