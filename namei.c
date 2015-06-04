@@ -34,41 +34,6 @@ static inline void pmfs_dec_count(struct inode *inode, struct pmfs_inode *pi)
 	}
 }
 
-static inline struct pmfs_direntry *pmfs_next_entry(struct pmfs_direntry *p)
-{
-	return (struct pmfs_direntry *)((char *)p + le16_to_cpu(p->de_len));
-}
-
-/*
- * Methods themselves.
- */
-int pmfs_check_dir_entry(const char *function, struct inode *dir,
-			  struct pmfs_direntry *de, u8 *base,
-			  unsigned long offset)
-{
-	const char *error_msg = NULL;
-	const int rlen = le16_to_cpu(de->de_len);
-
-	if (unlikely(rlen < PMFS_DIR_REC_LEN(1)))
-		error_msg = "de_len is smaller than minimal";
-	else if (unlikely(rlen % 4 != 0))
-		error_msg = "de_len % 4 != 0";
-	else if (unlikely(rlen < PMFS_DIR_REC_LEN(de->name_len)))
-		error_msg = "de_len is too small for name_len";
-	else if (unlikely((((u8 *)de - base) + rlen > dir->i_sb->s_blocksize)))
-		error_msg = "directory entry across blocks";
-
-	if (unlikely(error_msg != NULL)) {
-		pmfs_dbg("bad entry in directory #%lu: %s - "
-			  "offset=%lu, inode=%lu, rec_len=%d, name_len=%d",
-			  dir->i_ino, error_msg, offset,
-			  (unsigned long)le64_to_cpu(de->ino), rlen,
-			  de->name_len);
-	}
-
-	return error_msg == NULL ? 1 : 0;
-}
-
 static ino_t pmfs_inode_by_name(struct inode *dir, struct qstr *entry,
 				 struct pmfs_log_direntry **res_entry)
 {

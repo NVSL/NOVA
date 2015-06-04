@@ -1190,18 +1190,6 @@ int pmfs_check_integrity(struct super_block *sb,
 void *pmfs_ioremap(struct super_block *sb, phys_addr_t phys_addr,
 	ssize_t size);
 
-int pmfs_check_dir_entry(const char *function, struct inode *dir,
-			  struct pmfs_direntry *de, u8 *base,
-			  unsigned long offset);
-
-static inline int pmfs_match(int len, const char *const name,
-			      struct pmfs_direntry *de)
-{
-	if (len == de->name_len && de->ino && !memcmp(de->name, name, len))
-		return 1;
-	return 0;
-}
-
 /* xip.c */
 ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
           size_t len, loff_t *ppos, bool need_mutex);

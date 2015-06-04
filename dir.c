@@ -228,8 +228,8 @@ void pmfs_delete_dir_tree(struct super_block *sb,
 /* ========================= Entry operations ============================= */
 
 /*
- * Append a pmfs_direntry to the current pmfs_inode_log_page.
- * Note unlike append_file_inode_entry(), this method returns the tail pointer
+ * Append a pmfs_log_direntry to the current pmfs_inode_log_page.
+ * Note unlike append_file_write_entry(), this method returns the tail pointer
  * after append.
  */
 static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
