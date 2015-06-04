@@ -424,6 +424,9 @@ int pmfs_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
 		return -EINVAL;
 
 	pidir = pmfs_get_inode(sb, dir);
+
+	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
+
 	loglen = PMFS_DIR_LOG_REC_LEN(entry->len);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, NULL, 0,
 				dentry, loglen, tail, dec_link, 0, &curr_tail);
