@@ -525,7 +525,6 @@ static int pmfs_rename(struct inode *old_dir,
 {
 	struct inode *old_inode = old_dentry->d_inode;
 	struct inode *new_inode = new_dentry->d_inode;
-	struct pmfs_log_direntry *new_de = NULL, *old_de = NULL;
 	pmfs_transaction_t *trans;
 	struct super_block *sb = old_inode->i_sb;
 	struct pmfs_inode *pi, *new_pidir = NULL, *old_pidir = NULL;
@@ -534,8 +533,6 @@ static int pmfs_rename(struct inode *old_dir,
 	timing_t rename_time;
 
 	PMFS_START_TIMING(rename_t, rename_time);
-	pmfs_inode_by_name(new_dir, &new_dentry->d_name, &new_de);
-	pmfs_inode_by_name(old_dir, &old_dentry->d_name, &old_de);
 
 	trans = pmfs_new_transaction(sb, MAX_INODE_LENTRIES * 4 +
 			MAX_DIRENTRY_LENTRIES * 2);
@@ -561,20 +558,21 @@ static int pmfs_rename(struct inode *old_dir,
 	pi = pmfs_get_inode(sb, old_inode);
 	pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
 
-	if (!new_de) {
+	if (!new_inode) {
 		/* link it into the new directory. */
 		err = pmfs_add_entry(new_dentry, NULL, old_inode->i_ino,
 					0, 0, 0, &new_tail);
 		if (err)
 			goto out;
 	} else {
-		pmfs_add_logentry(sb, trans, &new_de->ino, sizeof(new_de->ino),
-			LE_DATA);
-
-		pmfs_memunlock_range(sb, new_de, sb->s_blocksize);
-		new_de->ino = cpu_to_le64(old_inode->i_ino);
-		/*new_de->file_type = old_de->file_type; */
-		pmfs_memlock_range(sb, new_de, sb->s_blocksize);
+		/* First remove the old entry, then add new entry */
+		err = pmfs_remove_entry(new_dentry, 0,  0, &new_tail);
+		if (err)
+			goto out;
+		err = pmfs_add_entry(new_dentry, NULL, old_inode->i_ino,
+					0, 0, new_tail, &new_tail);
+		if (err)
+			goto out;
 
 		pmfs_add_logentry(sb, trans, new_pidir, MAX_DATA_PER_LENTRY,
 			LE_DATA);
