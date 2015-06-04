@@ -626,7 +626,8 @@ static void pmfs_recover_truncate_list(struct super_block *sb)
 			/* set allocation hint */
 			pmfs_set_blocksize_hint(sb, pi, 
 					le64_to_cpu(li->i_truncatesize));
-			pmfs_setsize(inode, le64_to_cpu(li->i_truncatesize));
+			pmfs_setsize(inode, inode->i_size,
+					le64_to_cpu(li->i_truncatesize));
 			pmfs_update_isize(inode, pi);
 		} else {
 			/* free the inode */

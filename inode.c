@@ -2534,10 +2534,8 @@ out_unlock:
 }
 #endif
 
-void pmfs_setsize(struct inode *inode, loff_t newsize)
+void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 {
-	loff_t oldsize = inode->i_size;
-
 	if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
 	      S_ISLNK(inode->i_mode))) {
 		pmfs_err(inode->i_sb, "%s:wrong file mode %x\n", inode->i_mode);
@@ -2579,6 +2577,7 @@ int pmfs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	return 0;
 }
 
+#if 0
 /* update a single inode field atomically without using a transaction */
 static int pmfs_update_single_field(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode *pi, unsigned int ia_valid)
@@ -2611,6 +2610,7 @@ static int pmfs_update_single_field(struct super_block *sb, struct inode *inode,
 	pmfs_flush_buffer(pi, sizeof(*pi), true);
 	return 0;
 }
+#endif
 
 static void pmfs_update_setattr_entry(struct inode *inode,
 	struct pmfs_setattr_logentry *entry, struct iattr *attr)
@@ -2692,9 +2692,10 @@ int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
-	pmfs_transaction_t *trans;
 	int ret;
 	unsigned int ia_valid = attr->ia_valid, attr_mask;
+	loff_t oldsize = inode->i_size;
+	u64 new_tail;
 	timing_t setattr_time;
 
 	PMFS_START_TIMING(setattr_t, setattr_time);
@@ -2705,51 +2706,34 @@ int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 	if (ret)
 		return ret;
 
-	if ((ia_valid & ATTR_SIZE) && (attr->ia_size != inode->i_size ||
-			pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL))) {
-
-//		pmfs_truncate_add(inode, attr->ia_size);
-		/* set allocation hint */
-		pmfs_set_blocksize_hint(sb, pi, attr->ia_size);
-
-		/* now we can freely truncate the inode */
-		pmfs_setsize(inode, attr->ia_size);
-		pmfs_update_isize(inode, pi);
-		pmfs_flush_buffer(pi, CACHELINE_SIZE, false);
-		/* we have also updated the i_ctime and i_mtime, so no
-		 * need to update them again */
-		ia_valid = ia_valid & ~(ATTR_CTIME | ATTR_MTIME);
-		/* now it is safe to remove the inode from the truncate list */
-//		pmfs_truncate_del(inode);
-	}
 	setattr_copy(inode, attr);
 
-	/* we have already handled ATTR_SIZE above so no need to check for it */
-	attr_mask = ATTR_MODE | ATTR_UID | ATTR_GID | ATTR_ATIME | ATTR_MTIME |
-		ATTR_CTIME;
+	attr_mask = ATTR_MODE | ATTR_UID | ATTR_GID | ATTR_SIZE | ATTR_ATIME
+			| ATTR_MTIME | ATTR_CTIME;
 
 	ia_valid = ia_valid & attr_mask;
 
 	if (ia_valid == 0)
 		return ret;
-	/* check if we need to update only a single field. we could avoid using
-	 * a transaction */
-	if ((ia_valid & (ia_valid - 1)) == 0) {
-		pmfs_update_single_field(sb, inode, pi, ia_valid);
-		return ret;
+
+	/* We are holding i_mutex so OK to append the log */
+	new_tail = pmfs_append_setattr_entry(sb, pi, inode, attr, 0);
+
+	pmfs_update_tail(pi, new_tail);
+
+	/* Only after log entry is committed, we can truncate size */
+	if ((ia_valid & ATTR_SIZE) && (attr->ia_size != oldsize ||
+			pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL))) {
+//		pmfs_truncate_add(inode, attr->ia_size);
+		/* set allocation hint */
+//		pmfs_set_blocksize_hint(sb, pi, attr->ia_size);
+
+		/* now we can freely truncate the inode */
+		/* FIXME: Check if this is correct */
+		pmfs_setsize(inode, oldsize, attr->ia_size);
+		/* now it is safe to remove the inode from the truncate list */
+//		pmfs_truncate_del(inode);
 	}
-
-	BUG_ON(pmfs_current_transaction());
-	/* multiple fields are modified. Use a transaction for atomicity */
-	trans = pmfs_new_transaction(sb, MAX_INODE_LENTRIES);
-	pmfs_dbg_verbose("%s: trans id %u\n", __func__, trans->transaction_id);
-	if (IS_ERR(trans))
-		return PTR_ERR(trans);
-	pmfs_add_logentry(sb, trans, pi, sizeof(*pi), LE_DATA);
-
-	pmfs_update_inode(inode, pi);
-
-	pmfs_commit_transaction(sb, trans);
 
 	PMFS_END_TIMING(setattr_t, setattr_time);
 	return ret;
