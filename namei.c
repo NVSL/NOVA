@@ -525,7 +525,6 @@ static int pmfs_rename(struct inode *old_dir,
 {
 	struct inode *old_inode = old_dentry->d_inode;
 	struct inode *new_inode = new_dentry->d_inode;
-	pmfs_transaction_t *trans;
 	struct super_block *sb = old_inode->i_sb;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi, *new_pidir = NULL, *old_pidir = NULL;
@@ -538,12 +537,6 @@ static int pmfs_rename(struct inode *old_dir,
 	timing_t rename_time;
 
 	PMFS_START_TIMING(rename_t, rename_time);
-
-	trans = pmfs_new_transaction(sb, MAX_INODE_LENTRIES * 4 +
-			MAX_DIRENTRY_LENTRIES * 2);
-	if (IS_ERR(trans)) {
-		return PTR_ERR(trans);
-	}
 
 	if (new_inode) {
 		err = -ENOTEMPTY;
@@ -565,7 +558,6 @@ static int pmfs_rename(struct inode *old_dir,
 	old_pidir = pmfs_get_inode(sb, old_dir);
 
 	pi = pmfs_get_inode(sb, old_inode);
-	pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
 
 	if (new_inode) {
 		/* First remove the old entry in the new directory */
@@ -593,7 +585,6 @@ static int pmfs_rename(struct inode *old_dir,
 	if (new_inode) {
 		need_trans = true;
 		pi = pmfs_get_inode(sb, new_inode);
-		pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
 		new_inode->i_ctime = CURRENT_TIME;
 
 		if (S_ISDIR(old_inode->i_mode)) {
@@ -611,8 +602,6 @@ static int pmfs_rename(struct inode *old_dir,
 		inc_nlink(new_dir);
 	if (dec_link < 0)
 		drop_nlink(old_dir);
-
-	pmfs_commit_transaction(sb, trans);
 
 	if (need_trans && old_pidir == new_pidir) {
 		pmfs_update_tail(new_pidir, old_tail);
@@ -656,7 +645,6 @@ static int pmfs_rename(struct inode *old_dir,
 	PMFS_END_TIMING(rename_t, rename_time);
 	return 0;
 out:
-	pmfs_abort_transaction(sb, trans);
 	pmfs_err(sb, "%s return %d\n", __func__, err);
 	PMFS_END_TIMING(rename_t, rename_time);
 	return err;
