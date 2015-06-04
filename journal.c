@@ -865,12 +865,6 @@ int pmfs_recover_journal(struct super_block *sb)
 
 /**************************** Lite journal ******************************/
 
-struct pmfs_lite_journal_entry {
-	/* The highest byte of addr is type */
-	u64 addrs[4];
-	u64 values[4];
-};
-
 static u64 next_lite_journal(u64 curr_p)
 {
 	size_t size = sizeof(struct pmfs_lite_journal_entry);

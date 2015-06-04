@@ -99,6 +99,16 @@ extern int pmfs_abort_transaction(struct super_block *sb,
 			pmfs_transaction_t *trans);
 extern int pmfs_recover_journal(struct super_block *sb);
 
-extern int pmfs_lite_journal_soft_init(struct super_block *sb);
-extern int pmfs_lite_journal_hard_init(struct super_block *sb);
+/* Lite journal */
+struct pmfs_lite_journal_entry {
+	/* The highest byte of addr is type */
+	u64 addrs[4];
+	u64 values[4];
+};
+
+int pmfs_lite_journal_soft_init(struct super_block *sb);
+int pmfs_lite_journal_hard_init(struct super_block *sb);
+u64 pmfs_create_lite_transaction(struct super_block *sb,
+	struct pmfs_lite_journal_entry *dram_entry);
+void pmfs_commit_lite_transaction(struct super_block *sb, u64 tail);
 #endif    /* __PMFS_JOURNAL_H__ */
