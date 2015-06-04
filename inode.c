@@ -3165,19 +3165,13 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, curr_p);
-	entry->pgoff = data->pgoff;
-	entry->num_pages = data->num_pages;
-	entry->block = data->block;
-	entry->ctime = data->ctime;
-	entry->mtime = data->mtime;
-	entry->size = data->size;
+	__copy_from_user_inatomic_nocache(entry, data,
+				sizeof(struct pmfs_inode_entry));
 	pmfs_dbg_verbose("file %lu entry @ 0x%llx: pgoff %u, num %u, "
 			"block %llu, size %llu\n", inode->i_ino,
 			curr_p, entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT, entry->size);
 	/* entry->invalid is set to 0 */
-
-	pmfs_flush_buffer(entry, sizeof(struct pmfs_inode_entry), 0);
 out:
 	PMFS_END_TIMING(append_entry_t, append_time);
 	return curr_p;
