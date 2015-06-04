@@ -249,7 +249,7 @@ extern unsigned long write_breaks;
 #define	ENTRY_LOC(p)	((p) & INVALID_MASK)
 
 /* Make sure this is 32 bytes */
-struct	pmfs_inode_entry {
+struct	pmfs_file_write_entry {
 	u8	entry_type;
 	u8	paddings[3];
 	u32	pgoff;
@@ -272,7 +272,7 @@ struct	pmfs_inode_page_tail {
 
 /* Fit in PAGE_SIZE */
 struct	pmfs_inode_log_page {
-	struct pmfs_inode_entry entries[ENTRIES_PER_PAGE];
+	struct pmfs_file_write_entry entries[ENTRIES_PER_PAGE];
 	struct pmfs_inode_page_tail page_tail;
 };
 
@@ -1138,8 +1138,8 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi);
 int pmfs_allocate_inode_log_pages(struct super_block *sb,
 	struct pmfs_inode *pi, unsigned long num_pages,
 	u64 *new_block);
-u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, struct pmfs_inode_entry *data, u64 tail);
+u64 pmfs_append_file_write_entry(struct super_block *sb, struct pmfs_inode *pi,
+	struct inode *inode, struct pmfs_file_write_entry *data, u64 tail);
 int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 	struct pmfs_inode_info_header *sih, u64 ino,
 	struct scan_bitmap *bm);
@@ -1153,7 +1153,7 @@ struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info *si,
 	unsigned long file_blocknr);
 extern int pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
-	struct pmfs_inode_info_header *sih, struct pmfs_inode_entry *data,
+	struct pmfs_inode_info_header *sih, struct pmfs_file_write_entry *data,
 	struct scan_bitmap *bm,	u64 address, bool nvmm, bool free,
 	bool alloc_dram);
 int pmfs_free_dram_resource(struct super_block *sb,

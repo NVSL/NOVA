@@ -195,7 +195,7 @@ void pmfs_clear_stats(void)
 void pmfs_print_inode_log(struct super_block *sb, struct inode *inode)
 {
 	struct pmfs_inode *pi;
-	size_t entry_size = sizeof(struct pmfs_inode_entry);
+	size_t entry_size = sizeof(struct pmfs_file_write_entry);
 	u64 curr;
 
 	pi = pmfs_get_inode(sb, inode);
@@ -214,7 +214,7 @@ void pmfs_print_inode_log(struct super_block *sb, struct inode *inode)
 					tail->next_page >> PAGE_SHIFT);
 			curr = tail->next_page;
 		} else {
-			struct pmfs_inode_entry *entry =
+			struct pmfs_file_write_entry *entry =
 					pmfs_get_block(sb, curr);
 			pmfs_dbg("entry @ %llu: offset %u, size %u, "
 				"blocknr %llu, invalid count %llu\n",
@@ -269,7 +269,7 @@ void pmfs_print_inode_log_blocknode(struct super_block *sb,
 {
 	struct pmfs_inode *pi;
 	struct pmfs_inode_page_tail *tail;
-	size_t entry_size = sizeof(struct pmfs_inode_entry);
+	size_t entry_size = sizeof(struct pmfs_file_write_entry);
 	u64 curr;
 	unsigned long count = 0;
 

@@ -46,7 +46,7 @@ static inline void pmfs_free_mempair(struct super_block *sb,
 	atomic64_inc(&mempair_free);
 }
 
-void pmfs_print_inode_entry(struct pmfs_inode_entry *entry)
+void pmfs_print_inode_entry(struct pmfs_file_write_entry *entry)
 {
 	pmfs_dbg("entry @%p: pgoff %u, num_pages %u, block 0x%llx, "
 		"size %llu\n", entry, entry->pgoff, entry->num_pages,
@@ -344,7 +344,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 	bool mpty, all_range_freed = true;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	unsigned long pgoff;
-	struct pmfs_inode_entry *entry;
+	struct pmfs_file_write_entry *entry;
 	struct mem_addr *pair;
 	unsigned long start_blocknr = 0, num_free = 0;
 
@@ -650,13 +650,13 @@ unsigned int pmfs_free_inode_subtree(struct super_block *sb,
 void pmfs_free_mem_addr(struct super_block *sb, __le64 addr, u32 btype)
 {
 	struct mem_addr *pair = (struct mem_addr *)addr;
-	struct pmfs_inode_entry *entry;
+	struct pmfs_file_write_entry *entry;
 
 	if (!pair)
 		return;
 
 	if (pair->nvmm_entry) {
-		entry = (struct pmfs_inode_entry *)
+		entry = (struct pmfs_file_write_entry *)
 				pmfs_get_block(sb, pair->nvmm_entry);
 		if (GET_INVALID(entry->block) < 4000)
 			entry->block++;
@@ -1193,7 +1193,7 @@ fail:
 	return errval;
 }
 
-static void assign_nvmm(struct pmfs_inode_entry *data,
+static void assign_nvmm(struct pmfs_file_write_entry *data,
 	struct mem_addr *leaf, struct scan_bitmap *bm, unsigned long pgoff)
 {
 	if (data->pgoff > pgoff || data->pgoff +
@@ -1209,7 +1209,7 @@ static void assign_nvmm(struct pmfs_inode_entry *data,
 }
 
 static int recursive_assign_blocks(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_inode_entry *data,
+	struct pmfs_inode *pi, struct pmfs_file_write_entry *data,
 	struct scan_bitmap *bm, __le64 block, u32 height,
 	unsigned long first_blocknr, unsigned long last_blocknr,
 	u64 address, unsigned long start_pgoff, bool nvmm,
@@ -1221,7 +1221,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 	unsigned long blocknr, first_blk, last_blk;
 	unsigned long pgoff;
 	unsigned int first_index, last_index;
-	struct pmfs_inode_entry *entry;
+	struct pmfs_file_write_entry *entry;
 	struct mem_addr *leaf;
 //	unsigned int flush_bytes;
 //	struct pmfs_blocknode *hint = NULL;
@@ -1411,7 +1411,7 @@ fail:
 }
 
 static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
-	struct pmfs_inode_info_header *sih, struct pmfs_inode_entry *data,
+	struct pmfs_inode_info_header *sih, struct pmfs_file_write_entry *data,
 	struct scan_bitmap *bm,	u64 address, bool nvmm, bool free,
 	bool alloc_dram)
 {
@@ -1501,9 +1501,9 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			struct mem_addr *root = (struct mem_addr *)sih->root;
 			if (root->nvmm_entry && nvmm) {
 				/* With cow we need to re-assign the root */
-				struct pmfs_inode_entry *entry;
+				struct pmfs_file_write_entry *entry;
 
-				entry = (struct pmfs_inode_entry *)
+				entry = (struct pmfs_file_write_entry *)
 					pmfs_get_block(sb, root->nvmm_entry);
 				if (GET_INVALID(entry->block) < 4000)
 					entry->block++;
@@ -1583,7 +1583,7 @@ inline int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
  * Assign inode to point to the blocks start from alloc_blocknr.
  */
 inline int pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
-	struct pmfs_inode_info_header *sih, struct pmfs_inode_entry *data,
+	struct pmfs_inode_info_header *sih, struct pmfs_file_write_entry *data,
 	struct scan_bitmap *bm,	u64 address, bool nvmm, bool free,
 	bool alloc_dram)
 {
@@ -2922,10 +2922,10 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 int pmfs_inode_log_gabbage_collection(struct super_block *sb,
 	struct pmfs_inode *pi, u64 new_block, unsigned long num_pages)
 {
-	struct pmfs_inode_entry *curr_entry, *new_entry;
+	struct pmfs_file_write_entry *curr_entry, *new_entry;
 	u64 old_head, new_head;
 	struct pmfs_inode_log_page *last_page;
-	size_t entry_size = sizeof(struct pmfs_inode_entry);
+	size_t entry_size = sizeof(struct pmfs_file_write_entry);
 
 	old_head = pi->log_head;
 	new_head = new_block;
@@ -2962,7 +2962,7 @@ update:
 static bool curr_page_invalid(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_log_page *curr_page)
 {
-	struct pmfs_inode_entry *entry;
+	struct pmfs_file_write_entry *entry;
 	int i;
 	timing_t check_time;
 
@@ -3131,20 +3131,20 @@ u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
 }
 
 /*
- * Append a pmfs_inode_entry to the current pmfs_inode_log_page.
+ * Append a pmfs_file_write_entry to the current pmfs_inode_log_page.
  * FIXME: Must hold inode->i_mutex. Convert it to lock-free.
  * blocknr and start_blk are pgoff.
  * We cannot update pi->log_tail here because a transaction may contain
  * multiple entries.
  */
-u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, struct pmfs_inode_entry *data, u64 tail)
+u64 pmfs_append_file_write_entry(struct super_block *sb, struct pmfs_inode *pi,
+	struct inode *inode, struct pmfs_file_write_entry *data, u64 tail)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
-	struct pmfs_inode_entry *entry;
+	struct pmfs_file_write_entry *entry;
 	u64 curr_p;
-	size_t size = sizeof(struct pmfs_inode_entry);
+	size_t size = sizeof(struct pmfs_file_write_entry);
 	timing_t append_time;
 
 	PMFS_START_TIMING(append_entry_t, append_time);
@@ -3164,9 +3164,9 @@ u64 pmfs_append_file_inode_entry(struct super_block *sb, struct pmfs_inode *pi,
 	if (is_last_entry(curr_p, size, 0))
 		curr_p = next_log_page(sb, curr_p);
 
-	entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, curr_p);
+	entry = (struct pmfs_file_write_entry *)pmfs_get_block(sb, curr_p);
 	__copy_from_user_inatomic_nocache(entry, data,
-				sizeof(struct pmfs_inode_entry));
+				sizeof(struct pmfs_file_write_entry));
 	pmfs_dbg_verbose("file %lu entry @ 0x%llx: pgoff %u, num %u, "
 			"block %llu, size %llu\n", inode->i_ino,
 			curr_p, entry->pgoff, entry->num_pages,
@@ -3254,7 +3254,7 @@ int pmfs_free_dram_resource(struct super_block *sb,
 }
 
 void pmfs_rebuild_file_time_and_size(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_inode_entry *entry)
+	struct pmfs_inode *pi, struct pmfs_file_write_entry *entry)
 {
 	if (!entry || !pi)
 		return;
@@ -3269,7 +3269,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 	struct scan_bitmap *bm)
 {
 	struct pmfs_inode *pi;
-	struct pmfs_inode_entry *entry = NULL;
+	struct pmfs_file_write_entry *entry = NULL;
 	struct pmfs_inode_log_page *curr_page;
 	u64 curr_p;
 	u64 next;
@@ -3301,7 +3301,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 		set_bit(curr_p >> PAGE_SHIFT, bm->bitmap_4k);
 	}
 	while (curr_p != pi->log_tail) {
-		if (is_last_entry(curr_p, sizeof(struct pmfs_inode_entry), 0)) {
+		if (is_last_entry(curr_p, sizeof(struct pmfs_file_write_entry), 0)) {
 			sih->log_pages++;
 			curr_p = next_log_page(sb, curr_p);
 			if (bm) {
@@ -3315,7 +3315,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 			BUG();
 		}
 
-		entry = (struct pmfs_inode_entry *)pmfs_get_block(sb, curr_p);
+		entry = (struct pmfs_file_write_entry *)pmfs_get_block(sb, curr_p);
 		//pmfs_print_inode_entry(entry);
 
 		if (entry->num_pages != GET_INVALID(entry->block)) {
@@ -3327,7 +3327,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 					false, false);
 		}
 
-		curr_p += sizeof(struct pmfs_inode_entry);
+		curr_p += sizeof(struct pmfs_file_write_entry);
 	}
 
 	pmfs_rebuild_file_time_and_size(sb, pi, entry);

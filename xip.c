@@ -31,7 +31,7 @@ do_xip_mapping_read(struct address_space *mapping,
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_entry *entry;
+	struct pmfs_file_write_entry *entry;
 	struct mem_addr *pair;
 	pgoff_t index, end_index;
 	unsigned long offset;
@@ -97,7 +97,7 @@ do_xip_mapping_read(struct address_space *mapping,
 		}
 
 		/* Find contiguous blocks */
-		entry = (struct pmfs_inode_entry *)
+		entry = (struct pmfs_file_write_entry *)
 				pmfs_get_block(sb, pair->nvmm_entry);
 		if (entry == NULL) {
 			pmfs_dbg("%s: entry is NULL\n", __func__);
@@ -344,7 +344,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	struct pmfs_inode_info_header *sih = si->header;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi;
-	struct pmfs_inode_entry entry_data;
+	struct pmfs_file_write_entry entry_data;
 	ssize_t     written = 0;
 	loff_t pos;
 	size_t count, offset, copied, ret;
@@ -446,7 +446,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		else
 			entry_data.size = inode->i_size;
 
-		curr_entry = pmfs_append_file_inode_entry(sb, pi, inode,
+		curr_entry = pmfs_append_file_write_entry(sb, pi, inode,
 							&entry_data, temp_tail);
 		if (curr_entry == 0) {
 			pmfs_err(sb, "ERROR: append inode entry failed\n");
@@ -472,7 +472,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		if (status < 0)
 			break;
 		//FIXME: Possible contention here
-		temp_tail = curr_entry + sizeof(struct pmfs_inode_entry);
+		temp_tail = curr_entry + sizeof(struct pmfs_file_write_entry);
 	}
 
 	*ppos = pos;
@@ -554,7 +554,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	struct pmfs_inode_info_header *sih = si->header;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi;
-	struct pmfs_inode_entry entry_data;
+	struct pmfs_file_write_entry entry_data;
 	ssize_t     written = 0;
 	loff_t pos;
 	size_t count, offset, copied, ret;
@@ -718,7 +718,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_inode *pi;
-	struct pmfs_inode_entry entry_data;
+	struct pmfs_file_write_entry entry_data;
 	unsigned long num_blocks;
 	unsigned long blocknr = 0;
 	unsigned long total_blocks;
@@ -793,7 +793,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		else
 			entry_data.size = inode->i_size;
 
-		curr_entry = pmfs_append_file_inode_entry(sb, pi, inode,
+		curr_entry = pmfs_append_file_write_entry(sb, pi, inode,
 						&entry_data, temp_tail);
 		if (curr_entry == 0) {
 			pmfs_err(sb, "ERROR: append inode entry failed\n");
@@ -824,7 +824,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 			goto out;
 		}
 		//FIXME: Possible contention here
-		temp_tail = curr_entry + sizeof(struct pmfs_inode_entry);
+		temp_tail = curr_entry + sizeof(struct pmfs_file_write_entry);
 	}
 
 	pmfs_memunlock_inode(sb, pi);
@@ -1039,7 +1039,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_inode *pi;
 	struct mem_addr *pair = NULL;
-	struct pmfs_inode_entry entry_data;
+	struct pmfs_file_write_entry entry_data;
 	unsigned long page_addr = 0;
 	int existed = 0;
 	int allocated;
