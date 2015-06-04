@@ -910,7 +910,7 @@ void pmfs_print_lite_transaction(struct pmfs_lite_journal_entry *entry)
 				i, entry->addrs[i], entry->values[i]);
 }
 
-/* Caller needs to grab the lock until commit. */
+/* Caller needs to grab lite_journal_mutex until commit. */
 /* Do not fail, do not sleep. Make it fast! */
 u64 pmfs_create_lite_transaction(struct super_block *sb,
 	struct pmfs_lite_journal_entry *dram_entry)
@@ -934,6 +934,7 @@ u64 pmfs_create_lite_transaction(struct super_block *sb,
 	return new_tail;
 }
 
+/* Caller needs to hold lite_journal_mutex until this returns. */
 void pmfs_commit_lite_transaction(struct super_block *sb, u64 tail)
 {
 	struct pmfs_inode *pi;

@@ -276,6 +276,40 @@ out_fail1:
 	goto out;
 }
 
+static void pmfs_lite_transaction_for_time_and_link(struct super_block *sb,
+	struct pmfs_inode *pi, struct pmfs_inode *pidir, struct inode *inode,
+	u64 tail)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct pmfs_lite_journal_entry entry;
+	u64 journal_tail;
+
+	/* Commit a lite transaction */
+	memset(&entry, 0, sizeof(struct pmfs_lite_journal_entry));
+	entry.addrs[0] = (u64)pmfs_get_addr_off(sbi, &pi->i_ctime);
+	entry.addrs[0] |= (u64)4 << 56;
+	entry.values[0] = pi->i_ctime;
+	entry.addrs[1] = (u64)pmfs_get_addr_off(sbi, &pi->i_links_count);
+	entry.addrs[1] |= (u64)2 << 56;
+	entry.values[1] = pi->i_links_count;
+
+	entry.addrs[2] = (u64)pmfs_get_addr_off(sbi, &pidir->log_tail);
+	entry.addrs[2] |= (u64)8 << 56;
+	entry.values[2] = pidir->log_tail;
+
+	mutex_lock(&sbi->lite_journal_mutex);
+	journal_tail = pmfs_create_lite_transaction(sb, &entry);
+
+	pi->i_links_count = cpu_to_le16(inode->i_nlink);
+	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	/* In the same cacheline */
+	pmfs_flush_buffer(&pi->i_ctime, CACHELINE_SIZE, 1);
+	pmfs_update_tail(pidir, tail);
+
+	pmfs_commit_lite_transaction(sb, journal_tail);
+	mutex_unlock(&sbi->lite_journal_mutex);
+}
+
 static int pmfs_link(struct dentry *dest_dentry, struct inode *dir,
 		      struct dentry *dentry)
 {
@@ -301,15 +335,12 @@ static int pmfs_link(struct dentry *dest_dentry, struct inode *dir,
 	if (!err) {
 		inode->i_ctime = CURRENT_TIME_SEC;
 		inc_nlink(inode);
-		pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-		pi->i_links_count = cpu_to_le16(inode->i_nlink);
-
 		d_instantiate(dentry, inode);
 	} else {
 		iput(inode);
 	}
 
-	pmfs_update_tail(pidir, tail);
+	pmfs_lite_transaction_for_time_and_link(sb, pi, pidir, inode, tail);
 
 	PMFS_END_TIMING(link_t, link_time);
 	return err;
@@ -343,11 +374,9 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 	if (inode->i_nlink) {
 		drop_nlink(inode);
 		/* FIXME: We still rely on this to find free inodes */
-		pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-		pi->i_links_count = cpu_to_le16(inode->i_nlink);
 	}
 
-	pmfs_update_tail(pidir, tail);
+	pmfs_lite_transaction_for_time_and_link(sb, pi, pidir, inode, tail);
 
 	PMFS_END_TIMING(unlink_t, unlink_time);
 	return 0;
@@ -448,7 +477,6 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
 	struct pmfs_log_direntry *de;
-	pmfs_transaction_t *trans;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode), *pidir;
 	u64 tail = 0;
@@ -474,14 +502,6 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 	if (inode->i_nlink != 2)
 		pmfs_dbg("empty directory has nlink!=2 (%d)", inode->i_nlink);
 
-	trans = pmfs_new_transaction(sb, MAX_INODE_LENTRIES * 2 +
-			MAX_DIRENTRY_LENTRIES);
-	if (IS_ERR(trans)) {
-		err = PTR_ERR(trans);
-		return err;
-	}
-	pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
-
 	err = pmfs_remove_entry(dentry, -1, 0, &tail);
 	if (err)
 		goto end_rmdir;
@@ -489,11 +509,6 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 	/*inode->i_version++; */
 	clear_nlink(inode);
 	inode->i_ctime = dir->i_ctime;
-
-	pmfs_memunlock_inode(sb, pi);
-	pi->i_links_count = cpu_to_le16(inode->i_nlink);
-	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-	pmfs_memlock_inode(sb, pi);
 
 	/* add the inode to truncate list in case a crash happens before the
 	 * subsequent evict_inode is called. It will be deleted from the
@@ -504,16 +519,14 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 	if (dir->i_nlink)
 		drop_nlink(dir);
 
-	pmfs_commit_transaction(sb, trans);
-
 	pmfs_delete_dir_tree(sb, sih);
 
-	pmfs_update_tail(pidir, tail);
+	pmfs_lite_transaction_for_time_and_link(sb, pi, pidir, inode, tail);
 
 	PMFS_END_TIMING(rmdir_t, rmdir_time);
 	return err;
+
 end_rmdir:
-	pmfs_abort_transaction(sb, trans);
 	pmfs_err(sb, "%s return %d\n", __func__, err);
 	PMFS_END_TIMING(rmdir_t, rmdir_time);
 	return err;
