@@ -270,7 +270,6 @@ static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
 					dentry->d_name.len);
 	entry->file_type = 0;
 	entry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
-	entry->ctime = cpu_to_le32(dir->i_ctime.tv_sec);
 	entry->size = cpu_to_le64(dir->i_size);
 	entry->new_inode = new_inode;
 
@@ -338,7 +337,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	de_entry->ino = cpu_to_le64(self_ino);
 	de_entry->name_len = 1;
 	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(1));
-	de_entry->ctime = de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
+	de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 1;
 	strcpy(de_entry->name, ".");
@@ -351,7 +350,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	de_entry->ino = cpu_to_le64(parent_ino);
 	de_entry->name_len = 2;
 	de_entry->de_len = cpu_to_le16(PMFS_DIR_LOG_REC_LEN(2));
-	de_entry->ctime = de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
+	de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 2;
 	strcpy(de_entry->name, "..");
@@ -465,7 +464,7 @@ void pmfs_rebuild_dir_time_and_size(struct super_block *sb,
 	if (!entry || !pi)
 		return;
 
-	pi->i_ctime = cpu_to_le32(entry->ctime);
+	pi->i_ctime = cpu_to_le32(entry->mtime);
 	pi->i_mtime = cpu_to_le32(entry->mtime);
 	pi->i_size = cpu_to_le64(entry->size);
 	pi->i_links_count = entry->links_count;

@@ -61,8 +61,7 @@
 struct pmfs_log_direntry {
 	__le64	ino;                    /* inode no pointed to by this entry */
 	__le64	size;
-	__le32	ctime;
-	__le32	mtime;
+	__le32	mtime;			/* For both mtime and ctime */
 	__le16	de_len;                 /* length of this directory entry */
 	__le16	links_count;
 	u8	name_len;               /* length of the directory entry name */
@@ -73,7 +72,7 @@ struct pmfs_log_direntry {
 
 #define PMFS_DIR_PAD            4
 #define PMFS_DIR_ROUND          (PMFS_DIR_PAD - 1)
-#define PMFS_DIR_LOG_REC_LEN(name_len)  (((name_len) + 31 + PMFS_DIR_ROUND) & \
+#define PMFS_DIR_LOG_REC_LEN(name_len)  (((name_len) + 27 + PMFS_DIR_ROUND) & \
 				      ~PMFS_DIR_ROUND)
 
 /* PMFS supported data blocks */
