@@ -862,3 +862,110 @@ int pmfs_recover_journal(struct super_block *sb)
 	return 0;
 }
 
+
+/**************************** Lite journal ******************************/
+
+struct pmfs_lite_journal_entry {
+	u64 addrs[4];
+	u64 values[4];
+	u64 types[4];
+	u64 paddings[4];
+};
+
+static u64 next_lite_journal(u64 curr_p)
+{
+	size_t size = sizeof(struct pmfs_lite_journal_entry);
+
+	/* One page holds 64 entries with cacheline size */
+	if ((curr_p & (PAGE_SIZE - 1)) + size >= PAGE_SIZE)
+		return (curr_p & PAGE_MASK);
+
+	return curr_p + size;
+}
+
+static void pmfs_recover_lite_journal_entry(struct super_block *sb,
+	u64 addr, u64 value, u64 type)
+{
+	switch (type) {
+		case 1:
+			*(u8 *)pmfs_get_block(sb, addr) = (u8)value;
+			break;
+		case 2:
+			*(u16 *)pmfs_get_block(sb, addr) = (u16)value;
+			break;
+		case 4:
+			*(u32 *)pmfs_get_block(sb, addr) = (u32)value;
+			break;
+		case 8:
+			*(u64 *)pmfs_get_block(sb, addr) = (u64)value;
+			break;
+		default:
+			pmfs_dbg("%s: unknown data type %llu\n",
+					__func__, type);
+			break;
+	}
+
+	pmfs_flush_buffer((void *)pmfs_get_block(sb, addr), CACHELINE_SIZE, 0);
+}
+
+static int pmfs_recover_lite_journal(struct super_block *sb,
+	struct pmfs_inode *pi)
+{
+	struct pmfs_lite_journal_entry *entry;
+	int i;
+
+	entry = (struct pmfs_lite_journal_entry *)pmfs_get_block(sb,
+							pi->log_head);
+
+	for (i = 0; i < 4; i++) {
+		if (entry->addrs[i] && entry->types[i])
+			pmfs_recover_lite_journal_entry(sb, entry->addrs[i],
+					entry->values[i], entry->types[i]);
+	}
+
+	PERSISTENT_BARRIER();
+	pmfs_update_tail(pi, pi->log_head);
+	return 0;
+}
+
+int pmfs_lite_journal_soft_init(struct super_block *sb)
+{
+	struct pmfs_inode *pi;
+
+	pi = pmfs_get_inode_by_ino(sb, PMFS_LITEJOURNAL_INO);
+
+	if (pi->log_head == pi->log_tail)
+		return 0;
+
+	/* We only allow one uncommited entry */
+	if (pi->log_tail == next_lite_journal(pi->log_head)) {
+		pmfs_recover_lite_journal(sb, pi);
+		return 0;
+	}
+
+	/* We are in trouble */
+	pmfs_dbg("%s: lite journal head 0x%llx, tail 0x%llx\n",
+			__func__, pi->log_head, pi->log_tail);
+	return -EINVAL;
+}
+
+int pmfs_lite_journal_hard_init(struct super_block *sb)
+{
+	struct pmfs_inode *pi;
+	unsigned long blocknr = 0;
+	int allocated;
+	u64 block;
+
+	pi = pmfs_get_inode_by_ino(sb, PMFS_LITEJOURNAL_INO);
+	allocated = pmfs_new_log_blocks(sb, &blocknr, 1,
+						PMFS_BLOCK_TYPE_4K, 1);
+	if (allocated != 1 || blocknr == 0)
+		return -ENOSPC;
+
+	block = pmfs_get_block_off(sb, blocknr,	PMFS_BLOCK_TYPE_4K);
+	pi->log_head = pi->log_tail = block;
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+
+	return pmfs_lite_journal_soft_init(sb);
+}
+
