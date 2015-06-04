@@ -901,6 +901,15 @@ static void pmfs_recover_lite_journal_entry(struct super_block *sb,
 	pmfs_flush_buffer((void *)pmfs_get_block(sb, addr), CACHELINE_SIZE, 0);
 }
 
+void pmfs_print_lite_transaction(struct pmfs_lite_journal_entry *entry)
+{
+	int i;
+
+	for (i = 0; i < 4; i++)
+		pmfs_dbg_verbose("Entry %d: addr 0x%llx, value 0x%llx\n",
+				i, entry->addrs[i], entry->values[i]);
+}
+
 /* Caller needs to grab the lock until commit. */
 /* Do not fail, do not sleep. Make it fast! */
 u64 pmfs_create_lite_transaction(struct super_block *sb,
@@ -918,6 +927,7 @@ u64 pmfs_create_lite_transaction(struct super_block *sb,
 	entry = (struct pmfs_lite_journal_entry *)pmfs_get_block(sb,
 							pi->log_head);
 
+	pmfs_print_lite_transaction(dram_entry);
 	__copy_from_user_inatomic_nocache(entry, dram_entry, size);
 	new_tail = next_lite_journal(pi->log_head);
 	pmfs_update_tail(pi, new_tail);
@@ -948,9 +958,11 @@ static int pmfs_recover_lite_journal(struct super_block *sb,
 
 	for (i = 0; i < 4; i++) {
 		type = entry->addrs[i] >> 56;
-		if (entry->addrs[i] && type)
+		if (entry->addrs[i] && type) {
+			pmfs_dbg("%s: recover entry %d\n", __func__, i);
 			pmfs_recover_lite_journal_entry(sb, entry->addrs[i],
 					entry->values[i], type);
+		}
 	}
 
 	PERSISTENT_BARRIER();
