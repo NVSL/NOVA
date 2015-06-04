@@ -2612,6 +2612,62 @@ static int pmfs_update_single_field(struct super_block *sb, struct inode *inode,
 	return 0;
 }
 
+static void pmfs_update_setattr_entry(struct inode *inode,
+	struct pmfs_setattr_logentry *entry, struct iattr *attr)
+{
+	unsigned int ia_valid = attr->ia_valid, attr_mask;
+
+	/* These files are in the lowest byte */
+	attr_mask = ATTR_MODE | ATTR_UID | ATTR_GID | ATTR_SIZE |
+			ATTR_ATIME | ATTR_MTIME | ATTR_CTIME;
+
+	entry->attr = ia_valid & attr_mask;
+	entry->mode = cpu_to_le16(inode->i_mode);
+	entry->uid = cpu_to_le32(i_uid_read(inode));
+	entry->gid = cpu_to_le32(i_gid_read(inode));
+	entry->size = cpu_to_le64(inode->i_size);
+	entry->atime = cpu_to_le32(inode->i_atime.tv_sec);
+	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	entry->mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+}
+
+/* Returns new tail after append */
+u64 pmfs_append_setattr_entry(struct super_block *sb, struct pmfs_inode *pi,
+	struct inode *inode, struct iattr *attr, u64 tail)
+{
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = si->header;
+	struct pmfs_setattr_logentry *entry;
+	u64 curr_p, new_tail = 0;
+	size_t size = sizeof(struct pmfs_setattr_logentry);
+	timing_t append_time;
+
+	PMFS_START_TIMING(append_entry_t, append_time);
+
+	if (tail)
+		curr_p = tail;
+	else
+		curr_p = pi->log_tail;
+
+	if (curr_p == 0 || (is_last_entry(curr_p, size, 0) &&
+				next_log_page(sb, curr_p) == 0)) {
+		curr_p = pmfs_extend_inode_log(sb, pi, sih, curr_p, 1);
+		if (curr_p == 0)
+			goto out;
+	}
+
+	if (is_last_entry(curr_p, size, 0))
+		curr_p = next_log_page(sb, curr_p);
+
+	entry = (struct pmfs_setattr_logentry *)pmfs_get_block(sb, curr_p);
+	/* inode is already updated with attr */
+	pmfs_update_setattr_entry(inode, entry, attr);
+	new_tail = curr_p + size;
+out:
+	PMFS_END_TIMING(append_entry_t, append_time);
+	return new_tail;
+}
+
 int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 {
 	struct inode *inode = dentry->d_inode;
