@@ -440,7 +440,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		entry_data.num_pages = allocated;
 		entry_data.block = pmfs_get_block_off(sb, blocknr,
 							pi->i_blk_type);
-		entry_data.ctime = entry_data.mtime = time;
+		entry_data.mtime = time;
 		if (pos + copied > inode->i_size)
 			entry_data.size = pos + copied;
 		else
@@ -787,7 +787,7 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 		entry_data.block = pmfs_get_block_off(sb, blocknr,
 							pi->i_blk_type);
 		/* FIXME: should we use the page cache write time? */
-		entry_data.ctime = entry_data.mtime = time;
+		entry_data.mtime = time;
 		if (pos + copied > inode->i_size)
 			entry_data.size = pos + copied;
 		else

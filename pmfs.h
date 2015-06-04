@@ -248,13 +248,16 @@ extern unsigned long write_breaks;
 
 #define	ENTRY_LOC(p)	((p) & INVALID_MASK)
 
+/* Make sure this is 32 bytes */
 struct	pmfs_inode_entry {
+	u8	entry_type;
+	u8	paddings[3];
 	u32	pgoff;
 	u32	num_pages;
+	/* For both ctime and mtime */
+	u32	mtime;
 	/* ret of find_data_block, last 12 bits are invalid count */
 	u64	block;
-	u32	ctime;
-	u32	mtime;
 	u64	size;
 };
 

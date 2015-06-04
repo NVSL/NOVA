@@ -3259,7 +3259,7 @@ void pmfs_rebuild_file_time_and_size(struct super_block *sb,
 	if (!entry || !pi)
 		return;
 
-	pi->i_ctime = cpu_to_le32(entry->ctime);
+	pi->i_ctime = cpu_to_le32(entry->mtime);
 	pi->i_mtime = cpu_to_le32(entry->mtime);
 	pi->i_size = cpu_to_le64(entry->size);
 }
