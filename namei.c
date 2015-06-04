@@ -281,6 +281,7 @@ static int pmfs_link(struct dentry *dest_dentry, struct inode *dir,
 {
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode = dest_dentry->d_inode;
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
 	struct pmfs_inode *pidir;
 	u64 tail = 0;
 	int err = -ENOMEM;
@@ -294,10 +295,14 @@ static int pmfs_link(struct dentry *dest_dentry, struct inode *dir,
 	if (!pidir)
 		return -EINVAL;
 
+	ihold(inode);
+
 	err = pmfs_add_entry(dentry, NULL, inode->i_ino, 0, 0, 0, &tail);
 	if (!err) {
 		inode->i_ctime = CURRENT_TIME_SEC;
 		inc_nlink(inode);
+		pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+		pi->i_links_count = cpu_to_le16(inode->i_nlink);
 
 		d_instantiate(dentry, inode);
 	} else {
@@ -338,6 +343,7 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 	if (inode->i_nlink) {
 		drop_nlink(inode);
 		/* FIXME: We still rely on this to find free inodes */
+		pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
 		pi->i_links_count = cpu_to_le16(inode->i_nlink);
 	}
 
