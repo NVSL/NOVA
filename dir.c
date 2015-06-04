@@ -281,7 +281,7 @@ static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
 	entry->links_count = cpu_to_le16(links_count);
 
 	/* Update actual de_len */
-	entry->de_len = de_len;
+	entry->de_len = cpu_to_le16(de_len);
 	pmfs_dbg_verbose("dir entry @ 0x%llx: ino %llu, entry len %u, "
 			"name len %u, file type %u\n",
 			curr_p, entry->ino, entry->de_len,
@@ -464,9 +464,9 @@ void pmfs_rebuild_dir_time_and_size(struct super_block *sb,
 	if (!entry || !pi)
 		return;
 
-	pi->i_ctime = cpu_to_le32(entry->mtime);
-	pi->i_mtime = cpu_to_le32(entry->mtime);
-	pi->i_size = cpu_to_le64(entry->size);
+	pi->i_ctime = entry->mtime;
+	pi->i_mtime = entry->mtime;
+	pi->i_size = entry->size;
 	pi->i_links_count = entry->links_count;
 }
 
@@ -477,6 +477,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 	struct pmfs_dir_logentry *entry = NULL;
 	struct pmfs_inode_log_page *curr_page;
 	struct pmfs_inode *pi;
+	unsigned short de_len;
 	u64 curr_p;
 	u64 next;
 	int ret;
@@ -519,8 +520,9 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 
 		entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, curr_p);
 		pmfs_dbg_verbose("curr_p: 0x%llx, ino %llu, name %*.s, namelen %u, "
-			"rec len %u\n", curr_p, entry->ino, entry->name_len,
-			entry->name, entry->name_len, entry->de_len);
+			"rec len %u\n", curr_p, le64_to_cpu(entry->ino),
+			entry->name_len, entry->name, entry->name_len,
+			le16_to_cpu(entry->de_len));
 
 		if (entry->ino > 0) {
 			/* A valid entry to add */
@@ -536,15 +538,15 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 			break;
 		}
 
-		curr_p += entry->de_len;
+		de_len = le16_to_cpu(entry->de_len);
+		curr_p += de_len;
 
 		/*
 		 * If following by a new inode, find the inode
 		 * and its end first
 		 */
 		if (entry->new_inode) {
-			if (is_last_entry(curr_p - entry->de_len,
-					entry->de_len, 1)) {
+			if (is_last_entry(curr_p - de_len, de_len, 1)) {
 				sih->log_pages++;
 				curr_p = next_log_page(sb, curr_p);
 				if (bm) {
@@ -563,7 +565,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 	}
 
 	pmfs_rebuild_dir_time_and_size(sb, pi, entry);
-	sih->i_size = entry->size;
+	sih->i_size = le64_to_cpu(entry->size);
 
 	/* Keep traversing until log ends */
 	curr_p &= PAGE_MASK;
