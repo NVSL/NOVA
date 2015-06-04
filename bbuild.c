@@ -31,7 +31,7 @@ static void pmfs_free_header(struct super_block *sb,
 
 static void pmfs_clear_datablock_inode(struct super_block *sb)
 {
-	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_IN0);
+	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
 	pmfs_transaction_t *trans;
 
 	/* 2 log entry for inode */
@@ -51,7 +51,7 @@ static void pmfs_clear_datablock_inode(struct super_block *sb)
 static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_IN0);
+	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
 	struct pmfs_blocknode_lowhigh *entry;
 	struct pmfs_blocknode *blknode;
 	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
@@ -97,7 +97,7 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 static void pmfs_init_inode_list_from_inode(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, PMFS_INODELIST_IN0);
+	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, PMFS_INODELIST_INO);
 	struct pmfs_blocknode_lowhigh *entry;
 	struct pmfs_blocknode *blknode;
 	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
@@ -142,7 +142,7 @@ static void pmfs_init_inode_list_from_inode(struct super_block *sb)
 
 static bool pmfs_can_skip_full_scan(struct super_block *sb)
 {
-	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_IN0);
+	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
 	struct pmfs_super_block *super = pmfs_get_super(sb);
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 
@@ -193,7 +193,7 @@ static int pmfs_allocate_datablock_block_inode(pmfs_transaction_t *trans,
 void pmfs_save_blocknode_mappings(struct super_block *sb)
 {
 	unsigned long num_blocks, blocknr;
-	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_IN0);
+	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
 	struct pmfs_blocknode_lowhigh *p;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct list_head *head = &(sbi->block_inuse_head);
@@ -363,7 +363,7 @@ out:
 void pmfs_save_inode_list_to_log(struct super_block *sb)
 {
 	unsigned long num_blocks;
-	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_INODELIST_IN0);
+	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_INODELIST_INO);
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct list_head *head = &(sbi->inode_inuse_head);
 	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
@@ -405,7 +405,7 @@ void pmfs_save_inode_list_to_log(struct super_block *sb)
 void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 {
 	unsigned long num_blocks;
-	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_IN0);
+	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct list_head *head = &(sbi->block_inuse_head);
 	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
