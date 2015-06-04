@@ -436,15 +436,15 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		copied = memcpy_to_nvmm((char *)kmem, offset, buf, bytes);
 		PMFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
-		entry_data.pgoff = start_blk;
-		entry_data.num_pages = allocated;
-		entry_data.block = pmfs_get_block_off(sb, blocknr,
-							pi->i_blk_type);
-		entry_data.mtime = time;
+		entry_data.pgoff = cpu_to_le32(start_blk);
+		entry_data.num_pages = cpu_to_le32(allocated);
+		entry_data.block = cpu_to_le64(pmfs_get_block_off(sb, blocknr,
+							pi->i_blk_type));
+		entry_data.mtime = cpu_to_le32(time);
 		if (pos + copied > inode->i_size)
-			entry_data.size = pos + copied;
+			entry_data.size = cpu_to_le64(pos + copied);
 		else
-			entry_data.size = inode->i_size;
+			entry_data.size = cpu_to_le64(inode->i_size);
 
 		curr_entry = pmfs_append_file_write_entry(sb, pi, inode,
 							&entry_data, temp_tail);
@@ -782,16 +782,16 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 					(char *)DRAM_ADDR(block), bytes);
 		PMFS_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
-		entry_data.pgoff = pgoff;
-		entry_data.num_pages = allocated;
-		entry_data.block = pmfs_get_block_off(sb, blocknr,
-							pi->i_blk_type);
+		entry_data.pgoff = cpu_to_le32(pgoff);
+		entry_data.num_pages = cpu_to_le32(allocated);
+		entry_data.block = cpu_to_le64(pmfs_get_block_off(sb, blocknr,
+							pi->i_blk_type));
 		/* FIXME: should we use the page cache write time? */
-		entry_data.mtime = time;
+		entry_data.mtime = cpu_to_le32(time);
 		if (pos + copied > inode->i_size)
-			entry_data.size = pos + copied;
+			entry_data.size = cpu_to_le64(pos + copied);
 		else
-			entry_data.size = inode->i_size;
+			entry_data.size = cpu_to_le64(inode->i_size);
 
 		curr_entry = pmfs_append_file_write_entry(sb, pi, inode,
 						&entry_data, temp_tail);
