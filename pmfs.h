@@ -296,6 +296,22 @@ struct pmfs_dir_logentry {
 	char	name[PMFS_NAME_LEN];   /* File name */
 };
 
+/*
+ * Struct of inode attributes change log (setattr)
+ * Make sure it is 32 bytes.
+ */
+struct pmfs_setattr_logentry {
+	u8	entry_type;
+	u8	attr;
+	__le16	mode;
+	__le32	uid;
+	__le32	gid;
+	__le32	atime;
+	__le32	mtime;
+	__le32	ctime;
+	__le64	size;
+};
+
 #define PMFS_DIR_PAD            4
 #define PMFS_DIR_ROUND          (PMFS_DIR_PAD - 1)
 #define PMFS_DIR_LOG_REC_LEN(name_len)  (((name_len) + 28 + PMFS_DIR_ROUND) & \

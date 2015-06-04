@@ -829,10 +829,11 @@ setup_sb:
 
 	clear_opt(sbi->s_mount_opt, MOUNTING);
 	retval = 0;
-	pmfs_dbg("Size: %lu %lu %lu\n",
+	pmfs_dbg("Size: %lu %lu %lu %lu\n",
 		sizeof(struct pmfs_file_write_entry),
 		sizeof(struct pmfs_inode_log_page),
-		sizeof(struct pmfs_dir_logentry));
+		sizeof(struct pmfs_dir_logentry),
+		sizeof(struct pmfs_setattr_logentry));
 	PMFS_END_TIMING(mount_t, mount_time);
 	return retval;
 out:
