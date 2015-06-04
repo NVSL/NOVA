@@ -530,6 +530,7 @@ static int pmfs_rename(struct inode *old_dir,
 	struct pmfs_inode *pi, *new_pidir = NULL, *old_pidir = NULL;
 	u64 old_tail = 0, new_tail = 0, tail;
 	int err = -ENOENT;
+	int inc_link = 0, dec_link = 0;
 	timing_t rename_time;
 
 	PMFS_START_TIMING(rename_t, rename_time);
@@ -550,6 +551,10 @@ static int pmfs_rename(struct inode *old_dir,
 			if (new_dir->i_nlink >= PMFS_LINK_MAX)
 				goto out;
 		}
+		if (S_ISDIR(old_inode->i_mode)) {
+			inc_link = 1;
+			dec_link = -1;
+		}
 	}
 
 	new_pidir = pmfs_get_inode(sb, new_dir);
@@ -561,7 +566,7 @@ static int pmfs_rename(struct inode *old_dir,
 	if (!new_inode) {
 		/* link it into the new directory. */
 		err = pmfs_add_entry(new_dentry, NULL, old_inode->i_ino,
-					0, 0, 0, &new_tail);
+					inc_link, 0, 0, &new_tail);
 		if (err)
 			goto out;
 	} else {
@@ -570,15 +575,9 @@ static int pmfs_rename(struct inode *old_dir,
 		if (err)
 			goto out;
 		err = pmfs_add_entry(new_dentry, NULL, old_inode->i_ino,
-					0, 0, new_tail, &new_tail);
+					inc_link, 0, new_tail, &new_tail);
 		if (err)
 			goto out;
-
-		pmfs_add_logentry(sb, trans, new_pidir, MAX_DATA_PER_LENTRY,
-			LE_DATA);
-		/*new_dir->i_version++; */
-		new_dir->i_ctime = new_dir->i_mtime = CURRENT_TIME_SEC;
-		pmfs_update_time(new_dir, new_pidir);
 	}
 
 	/* and unlink the inode from the old directory ... */
@@ -587,7 +586,7 @@ static int pmfs_rename(struct inode *old_dir,
 	else
 		tail = 0;
 
-	err = pmfs_remove_entry(old_dentry, 0, tail, &old_tail);
+	err = pmfs_remove_entry(old_dentry, dec_link, tail, &old_tail);
 	if (err)
 		goto out;
 
@@ -609,12 +608,12 @@ static int pmfs_rename(struct inode *old_dir,
 
 //		if (!new_inode->i_nlink)
 //			pmfs_truncate_add(new_inode, new_inode->i_size);
-	} else {
-		if (S_ISDIR(old_inode->i_mode)) {
-			pmfs_inc_count(new_dir, new_pidir);
-			pmfs_dec_count(old_dir, old_pidir);
-		}
 	}
+
+	if (inc_link)
+		inc_nlink(new_dir);
+	if (dec_link < 0)
+		drop_nlink(old_dir);
 
 	pmfs_commit_transaction(sb, trans);
 
