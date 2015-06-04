@@ -2629,6 +2629,7 @@ static void pmfs_update_setattr_entry(struct inode *inode,
 	entry->atime = cpu_to_le32(inode->i_atime.tv_sec);
 	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
 	entry->mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+	pmfs_flush_buffer(entry, sizeof(struct pmfs_setattr_logentry), 1);
 }
 
 /* Returns new tail after append */
