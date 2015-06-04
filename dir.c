@@ -461,7 +461,7 @@ inline int pmfs_replay_remove_entry(struct super_block *sb,
 	return 0;
 }
 
-void pmfs_rebuild_dir_time_and_size(struct super_block *sb,
+static inline void pmfs_rebuild_dir_time_and_size(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_dir_logentry *entry)
 {
 	if (!entry || !pi)
@@ -542,6 +542,8 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 			break;
 		}
 
+		pmfs_rebuild_dir_time_and_size(sb, pi, entry);
+
 		de_len = le16_to_cpu(entry->de_len);
 		curr_p += de_len;
 
@@ -568,8 +570,9 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 		}
 	}
 
-	pmfs_rebuild_dir_time_and_size(sb, pi, entry);
-	sih->i_size = le64_to_cpu(entry->size);
+	sih->i_size = le64_to_cpu(pi->i_size);
+	sih->i_mode = le64_to_cpu(pi->i_mode);
+	pmfs_flush_buffer(pi, sizeof(struct pmfs_inode), 1);
 
 	/* Keep traversing until log ends */
 	curr_p &= PAGE_MASK;

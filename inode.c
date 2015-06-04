@@ -3328,7 +3328,7 @@ int pmfs_free_dram_resource(struct super_block *sb,
 	return freed;
 }
 
-void pmfs_rebuild_file_time_and_size(struct super_block *sb,
+static inline void pmfs_rebuild_file_time_and_size(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_file_write_entry *entry)
 {
 	if (!entry || !pi)
@@ -3402,11 +3402,13 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 					false, false);
 		}
 
+		pmfs_rebuild_file_time_and_size(sb, pi, entry);
 		curr_p += sizeof(struct pmfs_file_write_entry);
 	}
 
-	pmfs_rebuild_file_time_and_size(sb, pi, entry);
-	sih->i_size = entry->size;
+	sih->i_size = le64_to_cpu(pi->i_size);
+	sih->i_mode = le16_to_cpu(pi->i_mode);
+	pmfs_flush_buffer(pi, sizeof(struct pmfs_inode), 1);
 
 	/* Keep traversing until log ends */
 	curr_p &= PAGE_MASK;
