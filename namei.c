@@ -586,7 +586,7 @@ static int pmfs_rename(struct inode *old_dir,
 		drop_nlink(old_dir);
 
 	if (!need_trans && old_pidir == new_pidir) {
-		pmfs_update_tail(new_pidir, old_tail);
+		pmfs_update_tail(old_pidir, old_tail);
 	} else {
 		memset(&entry, 0, sizeof(struct pmfs_lite_journal_entry));
 		if (new_inode) {
@@ -604,16 +604,21 @@ static int pmfs_rename(struct inode *old_dir,
 						&old_pidir->log_tail);
 		entry.addrs[2] |= (u64)8 << 56;
 		entry.values[2] = old_pidir->log_tail;
-		entry.addrs[3] = (u64)pmfs_get_addr_off(sbi,
+
+		if (old_pidir != new_pidir) {
+			entry.addrs[3] = (u64)pmfs_get_addr_off(sbi,
 						&new_pidir->log_tail);
-		entry.addrs[3] |= (u64)8 << 56;
-		entry.values[3] = new_pidir->log_tail;
+			entry.addrs[3] |= (u64)8 << 56;
+			entry.values[3] = new_pidir->log_tail;
+		}
 
 		mutex_lock(&sbi->lite_journal_mutex);
 		journal_tail = pmfs_create_lite_transaction(sb, &entry);
 
 		pmfs_update_tail(old_pidir, old_tail);
-		pmfs_update_tail(new_pidir, new_tail);
+		if (old_pidir != new_pidir)
+			pmfs_update_tail(new_pidir, new_tail);
+
 		if (new_inode) {
 			pi->i_ctime = cpu_to_le32(new_inode->i_ctime.tv_sec);
 			pi->i_links_count = cpu_to_le16(new_inode->i_nlink);
