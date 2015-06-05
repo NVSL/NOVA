@@ -527,7 +527,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 		addr = (void *)pmfs_get_block(sb, curr_p);
 		type = *(u8 *)addr;
 		switch (type) {
-			case SETATTR:
+			case SET_ATTR:
 				attr_entry =
 					(struct pmfs_setattr_logentry *)addr;
 				pmfs_apply_setattr_entry(pi, attr_entry);

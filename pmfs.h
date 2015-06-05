@@ -251,11 +251,12 @@ extern unsigned long write_breaks;
 enum pmfs_entry_type {
 	FILE_WRITE = 1,
 	DIR_LOG,
-	SETATTR,
+	SET_ATTR,
+	LINK_CHANGE,
 };
 
 /* Make sure this is 32 bytes */
-struct	pmfs_file_write_entry {
+struct pmfs_file_write_entry {
 	u8	entry_type;
 	u8	paddings[3];
 	__le32	pgoff;
@@ -321,6 +322,15 @@ struct pmfs_setattr_logentry {
 	__le32	mtime;
 	__le32	ctime;
 	__le64	size;
+} __attribute((__packed__));
+
+/* Do we need this to be 32 bytes? */
+struct pmfs_link_change_entry {
+	u8	entry_type;
+	u8	padding;
+	__le16	links;
+	__le32	ctime;
+	__le64	paddings[3];
 } __attribute((__packed__));
 
 struct pmfs_dir_node {

@@ -2622,7 +2622,7 @@ static void pmfs_update_setattr_entry(struct inode *inode,
 	attr_mask = ATTR_MODE | ATTR_UID | ATTR_GID | ATTR_SIZE |
 			ATTR_ATIME | ATTR_MTIME | ATTR_CTIME;
 
-	entry->entry_type	= SETATTR;
+	entry->entry_type	= SET_ATTR;
 	entry->attr	= ia_valid & attr_mask;
 	entry->mode	= cpu_to_le16(inode->i_mode);
 	entry->uid	= cpu_to_le32(i_uid_read(inode));
@@ -2637,7 +2637,7 @@ static void pmfs_update_setattr_entry(struct inode *inode,
 void pmfs_apply_setattr_entry(struct pmfs_inode *pi,
 	struct pmfs_setattr_logentry *entry)
 {
-	if (entry->entry_type != SETATTR)
+	if (entry->entry_type != SET_ATTR)
 		BUG();
 
 	pi->i_mode	= entry->mode;
@@ -3384,7 +3384,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 		addr = (void *)pmfs_get_block(sb, curr_p);
 		type = *(u8 *)addr;
 		switch (type) {
-			case SETATTR:
+			case SET_ATTR:
 				attr_entry =
 					(struct pmfs_setattr_logentry *)addr;
 				pmfs_apply_setattr_entry(pi, attr_entry);
