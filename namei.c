@@ -276,6 +276,48 @@ static void pmfs_lite_transaction_for_time_and_link(struct super_block *sb,
 	mutex_unlock(&sbi->lite_journal_mutex);
 }
 
+/* Returns new tail after append */
+static u64 pmfs_append_link_change_entry(struct super_block *sb,
+	struct pmfs_inode *pi, struct inode *inode, u64 tail)
+{
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = si->header;
+	struct pmfs_link_change_entry *entry;
+	u64 curr_p, new_tail = 0;
+	size_t size = sizeof(struct pmfs_link_change_entry);
+	timing_t append_time;
+
+	PMFS_START_TIMING(append_entry_t, append_time);
+	pmfs_dbg_verbose("%s: inode %lu attr change\n",
+				__func__, inode->i_ino);
+
+	curr_p = pmfs_get_append_head(sb, pi, sih, tail, size, 0, 1);
+	if (curr_p == 0)
+		BUG();
+
+	entry = (struct pmfs_link_change_entry *)pmfs_get_block(sb, curr_p);
+	entry->entry_type = LINK_CHANGE;
+	entry->links = cpu_to_le16(inode->i_nlink);
+	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	pmfs_flush_buffer(entry, size, 1);
+	new_tail = curr_p + size;
+
+	PMFS_END_TIMING(append_entry_t, append_time);
+	return new_tail;
+}
+
+void pmfs_apply_link_change_entry(struct pmfs_inode *pi,
+	struct pmfs_link_change_entry *entry)
+{
+	if (entry->entry_type != LINK_CHANGE)
+		BUG();
+
+	pi->i_links_count	= entry->links;
+	pi->i_ctime		= entry->ctime;
+
+	/* Do not flush now */
+}
+
 static int pmfs_link(struct dentry *dest_dentry, struct inode *dir,
 		      struct dentry *dentry)
 {
