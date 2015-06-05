@@ -247,21 +247,10 @@ static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
 
 	PMFS_START_TIMING(append_entry_t, append_time);
 
-	if (tail)
-		curr_p = tail;
-	else
-		curr_p = pidir->log_tail;
-
-	if (curr_p == 0 || (is_last_entry(curr_p, size, new_inode) &&
-				next_log_page(sb, curr_p) == 0)) {
-		curr_p = pmfs_extend_inode_log(sb, pidir, sih, curr_p, 0);
-		if (curr_p == 0)
-			goto out;
-	}
-
-	/* Append the entry, then inode if needed */
-	if (is_last_entry(curr_p, size, 0))
-		curr_p = next_log_page(sb, curr_p);
+	curr_p = pmfs_get_append_head(sb, pidir, sih, tail,
+						size, new_inode, 0);
+	if (curr_p == 0)
+		BUG();
 
 	entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, curr_p);
 	entry->entry_type = DIR_LOG;
@@ -306,7 +295,7 @@ static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
 
 		*curr_tail = inode_start + PMFS_INODE_SIZE;
 	}
-out:
+
 	PMFS_END_TIMING(append_entry_t, append_time);
 	return curr_p;
 }

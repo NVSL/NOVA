@@ -1194,6 +1194,9 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi);
 int pmfs_allocate_inode_log_pages(struct super_block *sb,
 	struct pmfs_inode *pi, unsigned long num_pages,
 	u64 *new_block);
+u64 pmfs_get_append_head(struct super_block *sb, struct pmfs_inode *pi,
+	struct pmfs_inode_info_header *sih, u64 tail, size_t size,
+	int new_inode, int is_file);
 u64 pmfs_append_file_write_entry(struct super_block *sb, struct pmfs_inode *pi,
 	struct inode *inode, struct pmfs_file_write_entry *data, u64 tail);
 int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,

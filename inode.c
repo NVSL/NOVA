@@ -2666,26 +2666,15 @@ u64 pmfs_append_setattr_entry(struct super_block *sb, struct pmfs_inode *pi,
 	pmfs_dbg_verbose("%s: inode %lu attr change\n",
 				__func__, inode->i_ino);
 
-	if (tail)
-		curr_p = tail;
-	else
-		curr_p = pi->log_tail;
-
-	if (curr_p == 0 || (is_last_entry(curr_p, size, 0) &&
-				next_log_page(sb, curr_p) == 0)) {
-		curr_p = pmfs_extend_inode_log(sb, pi, sih, curr_p, 1);
-		if (curr_p == 0)
-			goto out;
-	}
-
-	if (is_last_entry(curr_p, size, 0))
-		curr_p = next_log_page(sb, curr_p);
+	curr_p = pmfs_get_append_head(sb, pi, sih, tail, size, 0, 1);
+	if (curr_p == 0)
+		BUG();
 
 	entry = (struct pmfs_setattr_logentry *)pmfs_get_block(sb, curr_p);
 	/* inode is already updated with attr */
 	pmfs_update_setattr_entry(inode, entry, attr);
 	new_tail = curr_p + size;
-out:
+
 	PMFS_END_TIMING(append_entry_t, append_time);
 	return new_tail;
 }
@@ -3197,6 +3186,30 @@ u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
 	return new_block;
 }
 
+u64 pmfs_get_append_head(struct super_block *sb, struct pmfs_inode *pi,
+	struct pmfs_inode_info_header *sih, u64 tail, size_t size,
+	int new_inode, int is_file)
+{
+	u64 curr_p;
+
+	if (tail)
+		curr_p = tail;
+	else
+		curr_p = pi->log_tail;
+
+	if (curr_p == 0 || (is_last_entry(curr_p, size, new_inode) &&
+				next_log_page(sb, curr_p) == 0)) {
+		curr_p = pmfs_extend_inode_log(sb, pi, sih, curr_p, is_file);
+		if (curr_p == 0)
+			return 0;
+	}
+
+	if (is_last_entry(curr_p, size, 0))
+		curr_p = next_log_page(sb, curr_p);
+
+	return  curr_p;
+}
+
 /*
  * Append a pmfs_file_write_entry to the current pmfs_inode_log_page.
  * FIXME: Must hold inode->i_mutex. Convert it to lock-free.
@@ -3216,20 +3229,9 @@ u64 pmfs_append_file_write_entry(struct super_block *sb, struct pmfs_inode *pi,
 
 	PMFS_START_TIMING(append_entry_t, append_time);
 
-	if (tail)
-		curr_p = tail;
-	else
-		curr_p = pi->log_tail;
-
-	if (curr_p == 0 || (is_last_entry(curr_p, size, 0) &&
-				next_log_page(sb, curr_p) == 0)) {
-		curr_p = pmfs_extend_inode_log(sb, pi, sih, curr_p, 1);
-		if (curr_p == 0)
-			goto out;
-	}
-
-	if (is_last_entry(curr_p, size, 0))
-		curr_p = next_log_page(sb, curr_p);
+	curr_p = pmfs_get_append_head(sb, pi, sih, tail, size, 0, 1);
+	if (curr_p == 0)
+		BUG();
 
 	entry = (struct pmfs_file_write_entry *)pmfs_get_block(sb, curr_p);
 	__copy_from_user_inatomic_nocache(entry, data,
@@ -3239,7 +3241,7 @@ u64 pmfs_append_file_write_entry(struct super_block *sb, struct pmfs_inode *pi,
 			curr_p, entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT, entry->size);
 	/* entry->invalid is set to 0 */
-out:
+
 	PMFS_END_TIMING(append_entry_t, append_time);
 	return curr_p;
 }
