@@ -349,7 +349,7 @@ static u64 pmfs_append_alive_inode_entry(struct super_block *sb,
 	entry = (struct pmfs_alive_inode_entry *)pmfs_get_block(sb, curr_p);
 	entry->ino = sih->ino;
 	entry->pi_addr = sih->pi_addr;
-	pmfs_dbg_verbose("append entry inode %llu, pmfs inode 0x%llx\n",
+	pmfs_dbg_verbose("append entry alive inode %llu, pmfs inode 0x%llx\n",
 			sih->ino, sih->pi_addr);
 
 	pmfs_flush_buffer(entry, sizeof(struct pmfs_alive_inode_entry), 0);

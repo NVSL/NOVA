@@ -1960,7 +1960,7 @@ static int pmfs_free_inode(struct inode *inode,
 	PMFS_START_TIMING(free_inode_t, free_time);
 	mutex_lock(&PMFS_SB(sb)->inode_table_mutex);
 
-	pmfs_dbg_verbose("free_inode: %lx free_nodes %x tot nodes %x hint %x\n",
+	pmfs_dbg_verbose("free_inode: %lu free_nodes %x tot nodes %x hint %x\n",
 		   inode->i_ino, sbi->s_free_inodes_count, sbi->s_inodes_count,
 		   sbi->s_free_inode_hint);
 	inode_nr = inode->i_ino >> PMFS_INODE_BITS;
@@ -1977,8 +1977,9 @@ static int pmfs_free_inode(struct inode *inode,
 
 	pmfs_memunlock_inode(sb, pi);
 	pi->root = 0;
-	/* pi->i_links_count = 0;
-	pi->i_xattr = 0; */
+	/* FIXME: use valid bit */
+	pi->i_links_count = 0;
+	/* pi->i_xattr = 0; */
 	pi->i_size = 0;
 	pi->i_dtime = cpu_to_le32(get_seconds());
 	pmfs_free_inode_log(sb, pi);
@@ -2229,7 +2230,7 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	i = ino >> PMFS_INODE_BITS;
 
 	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
-	pmfs_dbg_verbose("allocating inode %llu @ %p\n", ino, pi);
+	pmfs_dbg_verbose("allocating inode %llu @ 0x%llx\n", ino, pi_addr);
 
 	/* chosen inode is in ino */
 	inode->i_ino = ino;
@@ -2662,6 +2663,8 @@ u64 pmfs_append_setattr_entry(struct super_block *sb, struct pmfs_inode *pi,
 	timing_t append_time;
 
 	PMFS_START_TIMING(append_entry_t, append_time);
+	pmfs_dbg_verbose("%s: inode %lu attr change\n",
+				__func__, inode->i_ino);
 
 	if (tail)
 		curr_p = tail;

@@ -115,7 +115,8 @@ static int pmfs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (err)
 		goto out_err;
 
-	pmfs_dbg_verbose("%s: %s\n", __func__, dentry->d_name.name);
+	pmfs_dbg_verbose("%s: %s, ino %llu\n", __func__,
+					dentry->d_name.name, ino);
 	inode = pmfs_new_vfs_inode(TYPE_CREATE, dir, pi_addr, sih, ino, mode,
 					0, 0, &dentry->d_name);
 	if (IS_ERR(inode))
@@ -327,7 +328,8 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 	if (!pidir)
 		goto out;
 
-	pmfs_dbg_verbose("%s: %s\n", __func__, dentry->d_name.name);
+	pmfs_dbg_verbose("%s: %s, ino %lu\n", __func__,
+				dentry->d_name.name, inode->i_ino);
 	retval = pmfs_remove_entry(dentry, 0, 0, &tail);
 	if (retval)
 		goto out;
@@ -514,6 +516,8 @@ static int pmfs_rename(struct inode *old_dir,
 	u64 journal_tail;
 	timing_t rename_time;
 
+	pmfs_dbg_verbose("%s: rename %s to %s\n", __func__,
+			old_dentry->d_name.name, new_dentry->d_name.name);
 	PMFS_START_TIMING(rename_t, rename_time);
 
 	if (new_inode) {
@@ -581,7 +585,7 @@ static int pmfs_rename(struct inode *old_dir,
 	if (dec_link < 0)
 		drop_nlink(old_dir);
 
-	if (need_trans && old_pidir == new_pidir) {
+	if (!need_trans && old_pidir == new_pidir) {
 		pmfs_update_tail(new_pidir, old_tail);
 	} else {
 		memset(&entry, 0, sizeof(struct pmfs_lite_journal_entry));
