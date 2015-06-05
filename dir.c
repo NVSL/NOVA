@@ -468,6 +468,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 {
 	struct pmfs_dir_logentry *entry = NULL;
 	struct pmfs_setattr_logentry *attr_entry = NULL;
+	struct pmfs_link_change_entry *link_change_entry = NULL;
 	struct pmfs_inode_log_page *curr_page;
 	struct pmfs_inode *pi;
 	unsigned short de_len;
@@ -521,6 +522,13 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 					(struct pmfs_setattr_logentry *)addr;
 				pmfs_apply_setattr_entry(pi, attr_entry);
 				curr_p += sizeof(struct pmfs_setattr_logentry);
+				continue;
+			case LINK_CHANGE:
+				link_change_entry =
+					(struct pmfs_link_change_entry *)addr;
+				pmfs_apply_link_change_entry(pi,
+							link_change_entry);
+				curr_p += sizeof(struct pmfs_link_change_entry);
 				continue;
 			case DIR_LOG:
 				break;
