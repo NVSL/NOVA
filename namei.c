@@ -552,11 +552,11 @@ static int pmfs_rename(struct inode *old_dir,
 	struct inode *new_inode = new_dentry->d_inode;
 	struct super_block *sb = old_inode->i_sb;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_inode *pi, *new_pidir = NULL, *old_pidir = NULL;
+	struct pmfs_inode *old_pi = NULL, *new_pi = NULL;
+	struct pmfs_inode *new_pidir = NULL, *old_pidir = NULL;
 	struct pmfs_lite_journal_entry entry;
-	u64 old_tail = 0, new_tail = 0, tail, pi_tail = 0;
+	u64 old_tail = 0, new_tail = 0, tail, new_pi_tail = 0, old_pi_tail = 0;
 	int err = -ENOENT;
-	bool need_trans = false;
 	int inc_link = 0, dec_link = 0;
 	u64 journal_tail;
 	timing_t rename_time;
@@ -584,7 +584,10 @@ static int pmfs_rename(struct inode *old_dir,
 	new_pidir = pmfs_get_inode(sb, new_dir);
 	old_pidir = pmfs_get_inode(sb, old_dir);
 
-	pi = pmfs_get_inode(sb, old_inode);
+	old_pi = pmfs_get_inode(sb, old_inode);
+	old_inode->i_ctime = CURRENT_TIME;
+	old_pi_tail = pmfs_append_link_change_entry(sb, old_pi,
+							old_inode, 0);
 
 	if (new_inode) {
 		/* First remove the old entry in the new directory */
@@ -610,8 +613,7 @@ static int pmfs_rename(struct inode *old_dir,
 		goto out;
 
 	if (new_inode) {
-		need_trans = true;
-		pi = pmfs_get_inode(sb, new_inode);
+		new_pi = pmfs_get_inode(sb, new_inode);
 		new_inode->i_ctime = CURRENT_TIME;
 
 		if (S_ISDIR(old_inode->i_mode)) {
@@ -623,7 +625,8 @@ static int pmfs_rename(struct inode *old_dir,
 
 //		if (!new_inode->i_nlink)
 //			pmfs_truncate_add(new_inode, new_inode->i_size);
-		pi_tail = pmfs_append_link_change_entry(sb, pi, new_inode, 0);
+		new_pi_tail = pmfs_append_link_change_entry(sb, new_pi,
+							new_inode, 0);
 	}
 
 	if (inc_link)
@@ -631,41 +634,42 @@ static int pmfs_rename(struct inode *old_dir,
 	if (dec_link < 0)
 		drop_nlink(old_dir);
 
-	if (!need_trans && old_pidir == new_pidir) {
-		pmfs_update_tail(old_pidir, old_tail);
-	} else {
-		memset(&entry, 0, sizeof(struct pmfs_lite_journal_entry));
-		if (new_inode) {
-			entry.addrs[0] = (u64)pmfs_get_addr_off(sbi,
-							&pi->log_tail);
-			entry.addrs[0] |= (u64)8 << 56;
-			entry.values[0] = pi->log_tail;
-		}
+	memset(&entry, 0, sizeof(struct pmfs_lite_journal_entry));
 
-		entry.addrs[1] = (u64)pmfs_get_addr_off(sbi,
-						&old_pidir->log_tail);
-		entry.addrs[1] |= (u64)8 << 56;
-		entry.values[1] = old_pidir->log_tail;
+	entry.addrs[0] = (u64)pmfs_get_addr_off(sbi, &old_pi->log_tail);
+	entry.addrs[0] |= (u64)8 << 56;
+	entry.values[0] = old_pi->log_tail;
 
-		if (old_pidir != new_pidir) {
-			entry.addrs[2] = (u64)pmfs_get_addr_off(sbi,
-						&new_pidir->log_tail);
-			entry.addrs[2] |= (u64)8 << 56;
-			entry.values[2] = new_pidir->log_tail;
-		}
+	entry.addrs[1] = (u64)pmfs_get_addr_off(sbi, &old_pidir->log_tail);
+	entry.addrs[1] |= (u64)8 << 56;
+	entry.values[1] = old_pidir->log_tail;
 
-		mutex_lock(&sbi->lite_journal_mutex);
-		journal_tail = pmfs_create_lite_transaction(sb, &entry);
-
-		pmfs_update_tail(old_pidir, old_tail);
-		if (old_pidir != new_pidir)
-			pmfs_update_tail(new_pidir, new_tail);
-		if (new_inode)
-			pmfs_update_tail(pi, pi_tail);
-
-		pmfs_commit_lite_transaction(sb, journal_tail);
-		mutex_unlock(&sbi->lite_journal_mutex);
+	if (new_inode) {
+		entry.addrs[2] = (u64)pmfs_get_addr_off(sbi,
+						&new_pi->log_tail);
+		entry.addrs[2] |= (u64)8 << 56;
+		entry.values[2] = new_pi->log_tail;
 	}
+
+	if (old_pidir != new_pidir) {
+		entry.addrs[3] = (u64)pmfs_get_addr_off(sbi,
+						&new_pidir->log_tail);
+		entry.addrs[3] |= (u64)8 << 56;
+		entry.values[3] = new_pidir->log_tail;
+	}
+
+	mutex_lock(&sbi->lite_journal_mutex);
+	journal_tail = pmfs_create_lite_transaction(sb, &entry);
+
+	pmfs_update_tail(old_pi, old_pi_tail);
+	pmfs_update_tail(old_pidir, old_tail);
+	if (old_pidir != new_pidir)
+		pmfs_update_tail(new_pidir, new_tail);
+	if (new_inode)
+		pmfs_update_tail(new_pi, new_pi_tail);
+
+	pmfs_commit_lite_transaction(sb, journal_tail);
+	mutex_unlock(&sbi->lite_journal_mutex);
 
 	PMFS_END_TIMING(rename_t, rename_time);
 	return 0;
