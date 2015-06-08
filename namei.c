@@ -271,13 +271,13 @@ static void pmfs_lite_transaction_for_time_and_link(struct super_block *sb,
 }
 
 /* Returns new tail after append */
-static u64 pmfs_append_link_change_entry(struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode, u64 tail)
+static int pmfs_append_link_change_entry(struct super_block *sb,
+	struct pmfs_inode *pi, struct inode *inode, u64 tail, u64 *new_tail)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_link_change_entry *entry;
-	u64 curr_p, new_tail = 0;
+	u64 curr_p;
 	size_t size = sizeof(struct pmfs_link_change_entry);
 	timing_t append_time;
 
@@ -287,17 +287,17 @@ static u64 pmfs_append_link_change_entry(struct super_block *sb,
 
 	curr_p = pmfs_get_append_head(sb, pi, sih, tail, size, 0, 1);
 	if (curr_p == 0)
-		BUG();
+		return -ENOMEM;
 
 	entry = (struct pmfs_link_change_entry *)pmfs_get_block(sb, curr_p);
 	entry->entry_type = LINK_CHANGE;
 	entry->links = cpu_to_le16(inode->i_nlink);
 	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
 	pmfs_flush_buffer(entry, size, 1);
-	new_tail = curr_p + size;
+	*new_tail = curr_p + size;
 
 	PMFS_END_TIMING(append_entry_t, append_time);
-	return new_tail;
+	return 0;
 }
 
 void pmfs_apply_link_change_entry(struct pmfs_inode *pi,
@@ -324,29 +324,38 @@ static int pmfs_link(struct dentry *dest_dentry, struct inode *dir,
 	timing_t link_time;
 
 	PMFS_START_TIMING(link_t, link_time);
-	if (inode->i_nlink >= PMFS_LINK_MAX)
-		return -EMLINK;
+	if (inode->i_nlink >= PMFS_LINK_MAX) {
+		err = -EMLINK;
+		goto out;
+	}
 
 	pidir = pmfs_get_inode(sb, dir);
-	if (!pidir)
-		return -EINVAL;
+	if (!pidir) {
+		err = -EINVAL;
+		goto out;
+	}
 
 	ihold(inode);
 
 	err = pmfs_add_entry(dentry, NULL, inode->i_ino, 0, 0, 0, &pidir_tail);
-	if (!err) {
-		inode->i_ctime = CURRENT_TIME_SEC;
-		inc_nlink(inode);
-		d_instantiate(dentry, inode);
-	} else {
+	if (err) {
 		iput(inode);
+		goto out;
 	}
 
-	pi_tail = pmfs_append_link_change_entry(sb, pi, inode, 0);
+	inode->i_ctime = CURRENT_TIME_SEC;
+	inc_nlink(inode);
 
+	err = pmfs_append_link_change_entry(sb, pi, inode, 0, &pi_tail);
+	if (err) {
+		iput(inode);
+		goto out;
+	}
+
+	d_instantiate(dentry, inode);
 	pmfs_lite_transaction_for_time_and_link(sb, pi, pidir,
 						pi_tail, pidir_tail);
-
+out:
 	PMFS_END_TIMING(link_t, link_time);
 	return err;
 }
@@ -382,7 +391,9 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 		/* FIXME: We still rely on this to find free inodes */
 	}
 
-	pi_tail = pmfs_append_link_change_entry(sb, pi, inode, 0);
+	retval = pmfs_append_link_change_entry(sb, pi, inode, 0, &pi_tail);
+	if (retval)
+		goto out;
 
 	pmfs_lite_transaction_for_time_and_link(sb, pi, pidir,
 						pi_tail, pidir_tail);
@@ -530,7 +541,9 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 
 	pmfs_delete_dir_tree(sb, sih);
 
-	pi_tail = pmfs_append_link_change_entry(sb, pi, inode, 0);
+	err = pmfs_append_link_change_entry(sb, pi, inode, 0, &pi_tail);
+	if (err)
+		goto end_rmdir;
 
 	pmfs_lite_transaction_for_time_and_link(sb, pi, pidir,
 						pi_tail, pidir_tail);
@@ -586,8 +599,10 @@ static int pmfs_rename(struct inode *old_dir,
 
 	old_pi = pmfs_get_inode(sb, old_inode);
 	old_inode->i_ctime = CURRENT_TIME;
-	old_pi_tail = pmfs_append_link_change_entry(sb, old_pi,
-							old_inode, 0);
+	err = pmfs_append_link_change_entry(sb, old_pi,
+						old_inode, 0, &old_pi_tail);
+	if (err)
+		goto out;
 
 	if (new_inode) {
 		/* First remove the old entry in the new directory */
@@ -625,8 +640,10 @@ static int pmfs_rename(struct inode *old_dir,
 
 //		if (!new_inode->i_nlink)
 //			pmfs_truncate_add(new_inode, new_inode->i_size);
-		new_pi_tail = pmfs_append_link_change_entry(sb, new_pi,
-							new_inode, 0);
+		err = pmfs_append_link_change_entry(sb, new_pi,
+						new_inode, 0, &new_pi_tail);
+		if (err)
+			goto out;
 	}
 
 	if (inc_link)
