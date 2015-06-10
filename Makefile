@@ -13,7 +13,7 @@ running:
 	make -C /media/root/New_Volume1/linux-kernel M=`pwd`
 	
 pmep:
-	make -C /root/Andiry/prd M=`pwd`
+	make -C /root/Andiry/linux-test M=`pwd`
 	
 clean:
 	rm -rf *.o *.mod.c modules.* Module.* *.ko
