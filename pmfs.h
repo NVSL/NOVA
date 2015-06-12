@@ -376,7 +376,6 @@ extern int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
 extern unsigned long pmfs_new_cache_block(struct super_block *sb, int zero,
 	int nosleep);
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
-void pmfs_free_cache_block(unsigned long page_addr);
 
 /* dir.c */
 int pmfs_append_dir_init_entries(struct super_block *sb,
@@ -842,6 +841,7 @@ struct mem_addr {
 	unsigned long nvmm_entry;	// NVMM inode entry
 	unsigned long nvmm;		// NVMM blocknr
 	unsigned long dram;		// DRAM virtual address
+	struct page *page;
 };
 
 static inline u64 __pmfs_find_data_block(struct super_block *sb,
@@ -1228,6 +1228,7 @@ inline int pmfs_insert_blocknode_inodetree(struct pmfs_sb_info *sbi,
 inline struct pmfs_blocknode *
 pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
 	unsigned long new_block_low, unsigned long *step);
+void pmfs_free_cache_block(struct mem_addr *pair);
 
 /* bbuild.c */
 void pmfs_save_blocknode_mappings_to_log(struct super_block *sb);

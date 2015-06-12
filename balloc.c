@@ -381,13 +381,14 @@ void pmfs_free_meta_block(struct super_block *sb, unsigned long page_addr)
 	atomic64_inc(&meta_free);
 }
 
-void pmfs_free_cache_block(unsigned long page_addr)
+void pmfs_free_cache_block(struct mem_addr *pair)
 {
 	timing_t free_time;
 
 	PMFS_START_TIMING(free_cache_t, free_time);
-	pmfs_dbg_verbose("Free cache block 0x%lx\n", page_addr);
-	pmfs_free_dram_page(page_addr);
+	pmfs_dbg_verbose("Free cache block 0x%lx\n", pair->dram);
+	pmfs_free_dram_page(pair->dram);
+	pair->dram = 0;
 	PMFS_END_TIMING(free_cache_t, free_time);
 	atomic64_inc(&cache_free);
 }

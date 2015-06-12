@@ -366,8 +366,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 			pgoff = start_pgoff + i;
 
 			if (pair->dram) {
-				pmfs_free_cache_block(pair->dram);
-				pair->dram = 0;
+				pmfs_free_cache_block(pair);
 			}
 			if (pair->nvmm_entry) {
 				entry = pmfs_get_block(sb, pair->nvmm_entry);
@@ -566,8 +565,7 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 			/* Freeing the page cache block */
 			pair = (struct mem_addr *)node[i];
 			if (pair->dram) {
-				pmfs_free_cache_block(pair->dram);
-				pair->dram = 0;
+				pmfs_free_cache_block(pair);
 				freed++;
 			}
 			pmfs_free_mempair(sb, pair);
@@ -666,8 +664,7 @@ void pmfs_free_mem_addr(struct super_block *sb, __le64 addr, u32 btype)
 	}
 
 	if (pair->dram) {
-		pmfs_free_cache_block(pair->dram);
-		pair->dram = 0;
+		pmfs_free_cache_block(pair);
 	}
 
 	pmfs_free_mempair(sb, pair);
@@ -718,8 +715,7 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 	if (height == 0) {
 		struct mem_addr *pair = (struct mem_addr *)root;
 		if (pair->dram) {
-			pmfs_free_cache_block(pair->dram);
-			pair->dram = 0;
+			pmfs_free_cache_block(pair);
 			freed = 1;
 		}
 		pmfs_free_mempair(sb, pair);
