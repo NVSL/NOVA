@@ -344,6 +344,15 @@ enum alloc_type {
 	GETPAGE,
 };
 
+/* MALLOC TEST */
+#define	TEST_ZERO	1
+#define	TEST_NORMAL	2
+#define	TEST_VMALLOC	3
+#define	TEST_KMALLOC	4
+#define	TEST_KZALLOC	5
+#define	TEST_PAGEALLOC	6
+#define	TEST_PAGEZALLOC	7
+
 /* Function Prototypes */
 extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
 

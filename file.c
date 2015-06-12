@@ -121,7 +121,7 @@ int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
 		return 0;
 	}
 
-	if (category == 6 || category == 7) {
+	if (category == TEST_PAGEALLOC || category == TEST_PAGEZALLOC) {
 		return PageDirty((struct page *)address);
 	}
 

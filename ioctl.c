@@ -31,14 +31,6 @@ struct write_request
 	size_t	len;
 };
 
-#define	ZERO	1
-#define	NORMAL	2
-#define	VMALLOC	3
-#define	KMALLOC	4
-#define	KZALLOC	5
-#define	PAGEALLOC 6
-#define	PAGEZALLOC 7
-
 struct malloc_request
 {
 	int	category;
@@ -60,43 +52,43 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 	PMFS_START_TIMING(malloc_test_t, malloc_time);
 	for (i = 0; i < size; i++) {
 		switch(category) {
-		case ZERO:
+		case TEST_ZERO:
 			addr[i] = get_zeroed_page(flags);
 			page = virt_to_page((void *)addr[i]);
 			pfn = page_to_pfn(page);
 //			pmfs_dbg("get_zero_page: page %p pfn %d\n", page, pfn);
 			break;
-		case NORMAL:
+		case TEST_NORMAL:
 			addr[i] = __get_free_page(flags);
 			page = virt_to_page((void *)addr[i]);
 			pfn = page_to_pfn(page);
 //			pmfs_dbg("get_free_page: page %p pfn %d\n", page, pfn);
 			break;
-		case VMALLOC:
+		case TEST_VMALLOC:
 			addr[i] = (unsigned long)vmalloc(PAGE_SIZE);
 			page = vmalloc_to_page((void *)addr[i]);
 			pfn = page_to_pfn(page);
 //			pmfs_dbg("vmalloc: page %p pfn %d\n", page, pfn);
 			break;
-		case KMALLOC:
+		case TEST_KMALLOC:
 			addr[i] = (unsigned long)kmalloc(PAGE_SIZE, flags);
 			page = virt_to_page((void *)addr[i]);
 			pfn = page_to_pfn(page);
 //			pmfs_dbg("kmalloc: page %p pfn %d\n", page, pfn);
 			break;
-		case KZALLOC:
+		case TEST_KZALLOC:
 			addr[i] = (unsigned long)kzalloc(PAGE_SIZE, flags);
 			page = virt_to_page((void *)addr[i]);
 			pfn = page_to_pfn(page);
 //			pmfs_dbg("kzalloc: page %p pfn %d\n", page, pfn);
 			break;
-		case PAGEALLOC:
+		case TEST_PAGEALLOC:
 			addr[i] = (unsigned long)alloc_page(flags);
 			page_addr = kmap_atomic((struct page *)addr[i]);
 			kunmap_atomic(page_addr);
 			check = 0;
 			break;
-		case PAGEZALLOC:
+		case TEST_PAGEZALLOC:
 			flags |= __GFP_ZERO;
 			addr[i] = (unsigned long)alloc_page(flags);
 			page_addr = kmap_atomic((struct page *)addr[i]);
@@ -117,19 +109,19 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 					&ptep, category);
 
 		switch(category) {
-		case ZERO:
-		case NORMAL:
+		case TEST_ZERO:
+		case TEST_NORMAL:
 			free_page(addr[i]);
 			break;
-		case VMALLOC:
+		case TEST_VMALLOC:
 			vfree((void *)addr[i]);
 			break;
-		case KMALLOC:
-		case KZALLOC:
+		case TEST_KMALLOC:
+		case TEST_KZALLOC:
 			kfree((void *)addr[i]);
 			break;
-		case PAGEALLOC:
-		case PAGEZALLOC:
+		case TEST_PAGEALLOC:
+		case TEST_PAGEZALLOC:
 			__free_page((struct page *)addr[i]);
 			break;
 		default:
