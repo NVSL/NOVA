@@ -197,8 +197,8 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
 	/* Check the dirty range */
 	pi = pmfs_get_inode(sb, inode);
-	if (si->low_dirty > si->high_dirty)
-		goto persist;
+//	if (si->low_dirty > si->high_dirty)
+//		goto persist;
 
 	end += 1; /* end is inclusive. We like our indices normal please ! */
 
@@ -219,15 +219,15 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 //	end = CACHELINE_ALIGN(end);
 
 	start_blk = start >> PAGE_SHIFT;
-	if (start_blk < si->low_dirty) {
-		start = si->low_dirty << PAGE_SHIFT;
-		start_blk = si->low_dirty;
-	}
+//	if (start_blk < si->low_dirty) {
+//		start = si->low_dirty << PAGE_SHIFT;
+//		start_blk = si->low_dirty;
+//	}
 	end_blk = end >> PAGE_SHIFT;
-	if (end_blk > si->high_dirty) {
-		end = (si->high_dirty + 1) << PAGE_SHIFT;
-		end_blk = si->high_dirty;
-	}
+//	if (end_blk > si->high_dirty) {
+//		end = (si->high_dirty + 1) << PAGE_SHIFT;
+//		end_blk = si->high_dirty;
+//	}
 	pmfs_dbg_verbose("%s: start_blk %lu, end_blk %lu\n",
 				__func__, start_blk, end_blk);
 

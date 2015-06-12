@@ -966,7 +966,7 @@ static inline int pmfs_find_dram_page_and_clean(struct super_block *sb,
 	pair = (struct mem_addr *)bp;
 	if (pair->dram && IS_DIRTY(pair->dram)) {
 		*dram_addr = pair->dram;
-		pair->dram &= ~DIRTY_BIT;
+//		pair->dram &= ~DIRTY_BIT;
 		return 1;
 	}
 
