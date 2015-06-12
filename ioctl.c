@@ -36,6 +36,8 @@ struct write_request
 #define	VMALLOC	3
 #define	KMALLOC	4
 #define	KZALLOC	5
+#define	PAGEALLOC 6
+#define	PAGEZALLOC 7
 
 struct malloc_request
 {
@@ -49,20 +51,23 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 	int i;
 	struct page *page;
 	int pfn;
+	int check = 1;
 	unsigned long *addr = kmalloc(size * sizeof(unsigned long),
-					GFP_KERNEL); 
+					GFP_KERNEL);
+	unsigned long flags = GFP_KERNEL;
+	void *page_addr;
 
 	PMFS_START_TIMING(malloc_test_t, malloc_time);
 	for (i = 0; i < size; i++) {
 		switch(category) {
 		case ZERO:
-			addr[i] = get_zeroed_page(GFP_KERNEL);
+			addr[i] = get_zeroed_page(flags);
 			page = virt_to_page((void *)addr[i]);
 			pfn = page_to_pfn(page);
 //			pmfs_dbg("get_zero_page: page %p pfn %d\n", page, pfn);
 			break;
 		case NORMAL:
-			addr[i] = __get_free_page(GFP_KERNEL);
+			addr[i] = __get_free_page(flags);
 			page = virt_to_page((void *)addr[i]);
 			pfn = page_to_pfn(page);
 //			pmfs_dbg("get_free_page: page %p pfn %d\n", page, pfn);
@@ -74,21 +79,34 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 //			pmfs_dbg("vmalloc: page %p pfn %d\n", page, pfn);
 			break;
 		case KMALLOC:
-			addr[i] = (unsigned long)kmalloc(PAGE_SIZE, GFP_KERNEL);
+			addr[i] = (unsigned long)kmalloc(PAGE_SIZE, flags);
 			page = virt_to_page((void *)addr[i]);
 			pfn = page_to_pfn(page);
 //			pmfs_dbg("kmalloc: page %p pfn %d\n", page, pfn);
 			break;
 		case KZALLOC:
-			addr[i] = (unsigned long)kzalloc(PAGE_SIZE, GFP_KERNEL);
+			addr[i] = (unsigned long)kzalloc(PAGE_SIZE, flags);
 			page = virt_to_page((void *)addr[i]);
 			pfn = page_to_pfn(page);
 //			pmfs_dbg("kzalloc: page %p pfn %d\n", page, pfn);
 			break;
+		case PAGEALLOC:
+			addr[i] = (unsigned long)alloc_page(flags);
+			page_addr = kmap_atomic((struct page *)addr[i]);
+			kunmap_atomic(page_addr);
+			check = 0;
+			break;
+		case PAGEZALLOC:
+			flags |= __GFP_ZERO;
+			addr[i] = (unsigned long)alloc_page(flags);
+			page_addr = kmap_atomic((struct page *)addr[i]);
+			kunmap_atomic(page_addr);
+			check = 0;
+			break;
 		default:
 			break;
 		}
-		if (addr[i] == 0 || addr[i] != DRAM_ADDR(addr[i]))
+		if (addr[i] == 0 || (check && addr[i] != DRAM_ADDR(addr[i])))
 			pmfs_dbg("Error: page %d addr 0x%lx\n", i, addr[i]);
 	}
 	PMFS_END_TIMING(malloc_test_t, malloc_time);
@@ -96,7 +114,7 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 	for (i = 0; i < size; i++) {
 		pte_t *ptep;
 		pmfs_is_page_dirty(current->active_mm, (unsigned long)addr[i],
-					&ptep);
+					&ptep, category);
 
 		switch(category) {
 		case ZERO:
@@ -109,6 +127,10 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 		case KMALLOC:
 		case KZALLOC:
 			kfree((void *)addr[i]);
+			break;
+		case PAGEALLOC:
+		case PAGEZALLOC:
+			__free_page((struct page *)addr[i]);
 			break;
 		default:
 			break;
