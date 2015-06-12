@@ -456,7 +456,8 @@ unsigned long pmfs_new_cache_block(struct super_block *sb,
 	timing_t alloc_time;
 
 	PMFS_START_TIMING(new_cache_page_t, alloc_time);
-	page_addr = pmfs_alloc_dram_page(sb, KMALLOC, zero, nosleep);
+	/* Using vmalloc because we need the page to do mmap */
+	page_addr = pmfs_alloc_dram_page(sb, VMALLOC, zero, nosleep);
 	if (page_addr == 0) {
 		PMFS_END_TIMING(new_cache_page_t, alloc_time);
 		pmfs_dbg("%s: allocation failed\n", __func__);

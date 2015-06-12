@@ -1047,7 +1047,6 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	int allocated;
 	u64 bp;
 	void *nvmm;
-	struct page *page;
 
 	pi = pmfs_get_inode(sb, inode);
 
@@ -1076,8 +1075,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	}
 
 	*kmem = (void *)DRAM_ADDR(page_addr);
-	page = virt_to_page(*kmem);
-	*pfn = page_to_pfn(page);
+	*pfn = vmalloc_to_pfn(*kmem);
 
 	return 0;
 }
