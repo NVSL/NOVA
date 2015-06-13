@@ -85,6 +85,8 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 		case TEST_PAGEALLOC:
 			addr[i] = (unsigned long)alloc_page(flags);
 			page_addr = kmap_atomic((struct page *)addr[i]);
+//			*(unsigned long *)page_addr = 1;
+//			pmfs_dbg("alloc page: 0x%lx\n", (unsigned long)page_addr);
 			kunmap_atomic(page_addr);
 			check = 0;
 			break;
@@ -92,6 +94,8 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 			flags |= __GFP_ZERO;
 			addr[i] = (unsigned long)alloc_page(flags);
 			page_addr = kmap_atomic((struct page *)addr[i]);
+//			*(unsigned long *)page_addr = 1;
+//			pmfs_dbg("alloc page: 0x%lx\n", (unsigned long)page_addr);
 			kunmap_atomic(page_addr);
 			check = 0;
 			break;
@@ -105,8 +109,13 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 
 	for (i = 0; i < size; i++) {
 		pte_t *ptep;
-		pmfs_is_page_dirty(current->active_mm, (unsigned long)addr[i],
-					&ptep, category);
+		int dirty;
+
+		dirty = pmfs_is_page_dirty(current->active_mm,
+				(unsigned long)addr[i],	&ptep, category);
+		if (dirty)
+			pmfs_dbg("page 0x%lx is dirty\n",
+					(unsigned long)addr[i]);
 
 		switch(category) {
 		case TEST_ZERO:

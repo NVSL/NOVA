@@ -15,7 +15,6 @@
 
 #include <linux/fs.h>
 #include <linux/aio.h>
-#include <linux/sched.h>
 #include <linux/highuid.h>
 #include <linux/module.h>
 #include <linux/mpage.h>

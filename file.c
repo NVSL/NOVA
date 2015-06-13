@@ -13,11 +13,8 @@
  * warranty of any kind, whether express or implied.
  */
 
-#include <linux/fs.h>
-#include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/uio.h>
-#include <linux/mm.h>
 #include <linux/uaccess.h>
 #include <linux/falloc.h>
 #include <asm/mman.h>
@@ -240,6 +237,8 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 //		void *xip_mem;
 		pgoff_t pgoff;
 		loff_t offset;
+		pte_t *ptep;
+		int dirty;
 		unsigned long nr_flush_bytes;
 
 		pgoff = start >> PAGE_CACHE_SHIFT;
@@ -253,12 +252,17 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
 		page = pmfs_find_data_block(inode, (sector_t)pgoff, false);
 		pmfs_dbg_verbose("pgoff %lu: page 0x%llx\n", pgoff, page);
+		dirty = pmfs_is_page_dirty(current->active_mm,
+				DRAM_ADDR(page), &ptep, 0);
+		if (dirty)
+			pmfs_dbg_verbose("page 0x%llx is dirty\n", page);
 		if (page && IS_DIRTY(page)) {
 			pmfs_dbg_verbose("fsync: pgoff %lu, "
 					"page 0x%llx dirty\n", pgoff, page);
 			pmfs_copy_to_nvmm(inode, pgoff, offset,
 						nr_flush_bytes);
 		}
+		pmfs_set_page_clean(current->active_mm, DRAM_ADDR(page), ptep);
 		start += nr_flush_bytes;
 	} while (start < end);
 

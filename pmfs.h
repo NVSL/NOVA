@@ -15,6 +15,10 @@
 #ifndef __PMFS_H
 #define __PMFS_H
 
+#include <linux/fs.h>
+#include <linux/init.h>
+#include <linux/mm.h>
+#include <linux/sched.h>
 #include <linux/crc16.h>
 #include <linux/mutex.h>
 #include <linux/pagemap.h>

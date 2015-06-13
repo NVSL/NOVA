@@ -10,9 +10,6 @@
  * warranty of any kind, whether express or implied.
  */
 
-#include <linux/mm.h>
-#include <linux/sched.h>
-#include <linux/fs.h>
 #include <linux/buffer_head.h>
 #include <asm/cpufeature.h>
 #include <asm/pgtable.h>
