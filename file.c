@@ -233,7 +233,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 				__func__, start_blk, end_blk);
 
 	do {
-		u64 page = 0;
+		u64 page_addr = 0;
 //		void *xip_mem;
 		pgoff_t pgoff;
 		loff_t offset;
@@ -250,19 +250,20 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		if (nr_flush_bytes == 0)
 			nr_flush_bytes = PAGE_SIZE;
 
-		page = pmfs_find_data_block(inode, (sector_t)pgoff, false);
-		pmfs_dbg_verbose("pgoff %lu: page 0x%llx\n", pgoff, page);
+		page_addr = pmfs_find_data_block(inode, (sector_t)pgoff, false);
+		pmfs_dbg_verbose("pgoff %lu: page 0x%llx\n", pgoff, page_addr);
 		dirty = pmfs_is_page_dirty(current->active_mm,
-				DRAM_ADDR(page), &ptep, 0);
+				DRAM_ADDR(page_addr), &ptep, 0);
 		if (dirty)
-			pmfs_dbg_verbose("page 0x%llx is dirty\n", page);
-		if (page && IS_DIRTY(page)) {
+			pmfs_dbg_verbose("page 0x%llx is dirty\n", page_addr);
+		if (page_addr && IS_DIRTY(page_addr)) {
 			pmfs_dbg_verbose("fsync: pgoff %lu, "
-					"page 0x%llx dirty\n", pgoff, page);
+				"page 0x%llx dirty\n", pgoff, page_addr);
 			pmfs_copy_to_nvmm(inode, pgoff, offset,
 						nr_flush_bytes);
 		}
-		pmfs_set_page_clean(current->active_mm, DRAM_ADDR(page), ptep);
+		pmfs_set_page_clean(current->active_mm,
+						DRAM_ADDR(page_addr), ptep);
 		start += nr_flush_bytes;
 	} while (start < end);
 
