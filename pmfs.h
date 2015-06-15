@@ -1271,8 +1271,9 @@ void *pmfs_ioremap(struct super_block *sb, phys_addr_t phys_addr,
 /* xip.c */
 ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
           size_t len, loff_t *ppos, bool need_mutex);
-int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
-				unsigned long count);
+int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
+	struct pmfs_inode *pi, pgoff_t pgoff, loff_t offset,
+	unsigned long count);
 
 /* pmfs_stats.c */
 void pmfs_print_timing_stats(struct super_block *sb);

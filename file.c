@@ -264,7 +264,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 			if (page_addr && IS_DIRTY(page_addr)) {
 				pmfs_dbg_verbose("fsync: pgoff %lu, page "
 					"0x%llx dirty\n", pgoff, page_addr);
-				pmfs_copy_to_nvmm(inode, pgoff, offset,
+				pmfs_copy_to_nvmm(sb, inode, pi, pgoff, offset,
 							nr_flush_bytes);
 			}
 //			pmfs_set_page_clean(current->active_mm,

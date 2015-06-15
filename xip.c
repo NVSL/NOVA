@@ -697,13 +697,12 @@ out:
 	return ret;
 }
 
-int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
-				unsigned long count)
+int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
+	struct pmfs_inode *pi, pgoff_t pgoff, loff_t offset,
+	unsigned long count)
 {
-	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
-	struct pmfs_inode *pi;
 	struct pmfs_file_write_entry entry_data;
 	unsigned long num_blocks;
 	unsigned long blocknr = 0;
@@ -726,7 +725,6 @@ int pmfs_copy_to_nvmm(struct inode *inode, pgoff_t pgoff, loff_t offset,
 	sb_start_write(inode->i_sb);
 	mutex_lock(&inode->i_mutex);
 
-	pi = pmfs_get_inode(sb, inode);
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
 	total_blocks = num_blocks;
 	pos = offset + (pgoff << sb->s_blocksize_bits);
