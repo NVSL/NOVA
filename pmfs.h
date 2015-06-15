@@ -921,6 +921,7 @@ pmfs_find_info_header(struct super_block *sb, unsigned long ino)
 	return (struct pmfs_inode_info_header *)bp;
 }
 
+#if 0
 /* Deprecated */
 static inline u64 __pmfs_find_dir_block(struct super_block *sb,
 		struct pmfs_inode_info *si, unsigned long blocknr)
@@ -949,6 +950,7 @@ static inline u64 __pmfs_find_dir_block(struct super_block *sb,
 
 	return bp;
 }
+#endif
 
 /* Return 1 if the page is found and dirty */
 static inline int pmfs_find_dram_page_and_clean(struct super_block *sb,
@@ -987,7 +989,7 @@ static inline int pmfs_find_dram_page_and_clean(struct super_block *sb,
 	return 0;
 }
 
-static inline struct mem_addr *__pmfs_get_entry(struct super_block *sb,
+static inline struct mem_addr *__pmfs_get_mem_pair(struct super_block *sb,
 		struct pmfs_inode_info *si, unsigned long blocknr)
 {
 	struct pmfs_inode_info_header *sih = si->header;

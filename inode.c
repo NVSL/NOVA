@@ -134,7 +134,7 @@ struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 
 	pmfs_dbg_verbose("%s: si %p, root 0x%llx, height %u\n",
 		__func__, si, sih->root, sih->height);
-	return __pmfs_get_entry(sb, si, blocknr);
+	return __pmfs_get_mem_pair(sb, si, blocknr);
 }
 
 /*
