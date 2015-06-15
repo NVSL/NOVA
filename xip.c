@@ -502,6 +502,7 @@ out:
 	return ret;
 }
 
+#if 0
 /*
  * If the pair does not exist, *existed = 0;
  * If nvmm exists, *existed = 1;
@@ -542,6 +543,7 @@ alloc:
 		pair->dram = dram_addr | DIRTY_BIT;
 	return 1;
 }
+#endif
 
 ssize_t pmfs_page_cache_file_write(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos)
@@ -559,7 +561,6 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	unsigned long start_blk, num_blocks;
 	unsigned long total_blocks;
 	unsigned long page_addr = 0;
-	int allocated, existed = 0;
 	void* kmem;
 	size_t bytes;
 	long status = 0;
@@ -613,34 +614,29 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
 		page_addr = 0;
-		existed = 0;
 
 		/* don't zero-out the allocated blocks */
 		PMFS_START_TIMING(find_cache_t, find_cache_time);
-		allocated = pmfs_find_alloc_dram_pages(sb, inode, pi,
-				start_blk, &page_addr, &existed, &pair, 1, 0);
+		pair = pmfs_get_mem_pair(sb, pi, si, start_blk);
 		PMFS_END_TIMING(find_cache_t, find_cache_time);
-		pmfs_dbg_verbose("%s: alloc %d dram pages @ 0x%lx\n", __func__,
-					allocated, page_addr);
 
-		if (allocated <= 0) {
-			pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__,
-								allocated);
-			ret = allocated;
+		if (pair == NULL || pair->dram == 0) {
+			pmfs_err(sb, "%s dram page not found!\n", __func__);
+			ret = -EINVAL;
 			goto out;
 		}
 
 		step++;
-		bytes = sb->s_blocksize * allocated - offset;
+		bytes = sb->s_blocksize - offset;
 		if (bytes > count)
 			bytes = count;
 
+		page_addr = pair->dram;
 		kmem = (void *)DRAM_ADDR(page_addr);
-		pmfs_dbg_verbose("Write: 0x%lx, existed %d\n",
-					page_addr, existed);
+		pmfs_dbg_verbose("Write: 0x%lx\n", page_addr);
 
 		/* If only NVMM page presents, copy the partial block */
-		if ((existed == 1 || OUTDATE(page_addr)) && (offset ||
+		if ((OUTDATE(page_addr)) && (offset ||
 				((offset + bytes) & (PAGE_SIZE - 1)) != 0)) {
 			u64 bp;
 			void *nvmm;
@@ -658,15 +654,6 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		copied = bytes - __copy_from_user(kmem + offset, buf, bytes);
 		PMFS_END_TIMING(memcpy_w_dram_t, memcpy_time);
 
-		/* If the mem pair does not exist, assign the dram page */
-		if (existed == 0) {
-			page_addr |= DIRTY_BIT;
-			entry_data.pgoff = start_blk;
-			entry_data.num_pages = allocated;
-			pmfs_assign_blocks(sb, pi, sih, &entry_data, NULL,
-					page_addr, false, false, false);
-		}
-
 		if (start_blk < si->low_dirty)
 			si->low_dirty = start_blk;
 		if (start_blk > si->high_dirty)
@@ -679,7 +666,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 			pos += copied;
 			buf += copied;
 			count -= copied;
-			num_blocks -= allocated;
+			num_blocks -= 1;
 		}
 		if (unlikely(copied != bytes))
 			if (status >= 0)
@@ -1035,43 +1022,36 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	struct inode *inode = mapping->host;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_inode *pi;
 	struct mem_addr *pair = NULL;
-	struct pmfs_file_write_entry entry_data;
-	unsigned long page_addr = 0;
-	int existed = 0;
-	int allocated;
 	u64 bp;
 	void *nvmm;
 
 	pi = pmfs_get_inode(sb, inode);
 
-	allocated = pmfs_find_alloc_dram_pages(sb, inode, pi,
-				pgoff, &page_addr, &existed, &pair, 1, 0);
-	if (allocated != 1) {
-		pmfs_dbg("%s: failed to allocate dram page\n", __func__);
+	pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
+	if (pair == NULL) {
+		/* This should not happen. NVMM must exist! */
+		pmfs_dbg("%s: pair does not exist\n", __func__);
 		return -EINVAL;
 	}
 
-	/* If the mem pair does not exist, assign the dram page */
-	if (existed == 0) {
-		page_addr |= DIRTY_BIT;
-		entry_data.pgoff = pgoff;
-		entry_data.num_pages = allocated;
-		pmfs_assign_blocks(sb, pi, sih, &entry_data, NULL,
-					page_addr, false, false, false);
-	}
-
-	if (existed == 1) {
+	if (pair->dram == 0 || (pair->dram & OUTDATE_BIT)) {
+		if (pair->dram == 0) {
+			pair->dram = pmfs_new_cache_block(sb, 0, 0);
+			if (pair->dram == 0)
+				return -EINVAL;
+		}
 		/* Copy from NVMM to dram */
 		bp = __pmfs_find_data_block(sb, si, pgoff, true);
 		nvmm = pmfs_get_block(sb, bp);
-		__copy_from_user((void *)DRAM_ADDR(page_addr),
+		__copy_from_user((void *)DRAM_ADDR(pair->dram),
 					nvmm, PAGE_SIZE);
+		pair->dram &= ~OUTDATE_BIT;
 	}
 
-	*kmem = (void *)DRAM_ADDR(page_addr);
+	pair->dram |= DIRTY_BIT;
+	*kmem = (void *)DRAM_ADDR(pair->dram);
 	*pfn = vmalloc_to_pfn(*kmem);
 
 	return 0;
