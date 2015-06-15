@@ -234,7 +234,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 				__func__, start_blk, end_blk);
 
 	do {
-		u64 page_addr = 0;
+		u64 addr = 0;
 //		void *xip_mem;
 		pgoff_t pgoff;
 		loff_t offset;
@@ -253,20 +253,22 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
 		pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
 		if (pair) {
-			page_addr = pair->dram;
+			addr = pmfs_get_dram_addr(pair);
 			pmfs_dbg_verbose("pgoff %lu: page 0x%llx\n",
-							pgoff, page_addr);
+							pgoff, addr);
 //			dirty = pmfs_is_page_dirty(current->active_mm,
 //					DRAM_ADDR(page_addr), &ptep, 0);
 //			if (dirty)
 //				pmfs_dbg_verbose("page 0x%llx is dirty\n",
 //					page_addr);
-			if (page_addr && IS_DIRTY(page_addr)) {
+			if (addr && IS_DIRTY(pair->dram)) {
 				pmfs_dbg_verbose("fsync: pgoff %lu, page "
-					"0x%llx dirty\n", pgoff, page_addr);
+					"0x%llx dirty\n", pgoff, addr);
 				pmfs_copy_to_nvmm(sb, inode, pi, pgoff, offset,
 							nr_flush_bytes);
 			}
+			if (pair->page)
+				kunmap_atomic((void *)addr);
 //			pmfs_set_page_clean(current->active_mm,
 //						DRAM_ADDR(page_addr), ptep);
 		}

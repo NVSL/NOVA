@@ -947,6 +947,18 @@ static inline struct mem_addr *__pmfs_get_mem_pair(struct super_block *sb,
 	return (struct mem_addr *)bp;
 }
 
+static inline unsigned long pmfs_get_dram_addr(struct mem_addr *pair)
+{
+	unsigned long addr;
+
+	if (pair->page)
+		addr = (unsigned long)kmap_atomic(pair->page);
+	else
+		addr = pair->dram;
+
+	return addr;
+}
+
 static inline u64 __pmfs_find_nvmm_block(struct super_block *sb,
 	struct pmfs_inode_info *si, struct mem_addr *mem_pair,
 	unsigned long blocknr)

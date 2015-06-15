@@ -34,6 +34,8 @@ static inline struct mem_addr *pmfs_alloc_mempair(struct super_block *sb)
 	struct mem_addr *p;
 	p = (struct mem_addr *)
 		kmem_cache_alloc(pmfs_mempair_cachep, GFP_NOFS);
+	p->page = NULL;
+	p->nvmm_entry = p->nvmm = p->dram = 0;
 	atomic64_inc(&mempair_alloc);
 	return p;
 }
