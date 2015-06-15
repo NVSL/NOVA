@@ -133,6 +133,13 @@ static int pmfs_alloc_dram_page(struct super_block *sb,
 				addr = 0;
 			}
 			break;
+		case ALLOCPAGE:
+			if (zero)
+				flags |= __GFP_ZERO;
+			*page = alloc_page(flags);
+			if (*page == NULL)
+				return -ENOMEM;
+			return 0;
 		default:
 			break;
 	}
@@ -391,8 +398,11 @@ void pmfs_free_cache_block(struct mem_addr *pair)
 	timing_t free_time;
 
 	PMFS_START_TIMING(free_cache_t, free_time);
-	pmfs_dbg_verbose("Free cache block 0x%lx\n", pair->dram);
-	pmfs_free_dram_page(pair->dram);
+	if (pair->page)
+		__free_page(pair->page);
+	else
+		pmfs_free_dram_page(pair->dram);
+	pair->page = NULL;
 	pair->dram = 0;
 	PMFS_END_TIMING(free_cache_t, free_time);
 	atomic64_inc(&cache_free);

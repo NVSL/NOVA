@@ -346,6 +346,7 @@ enum alloc_type {
 	KMALLOC = 1,
 	VMALLOC,
 	GETPAGE,
+	ALLOCPAGE,
 };
 
 /* MALLOC TEST */
