@@ -859,7 +859,8 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 extern struct kmem_cache *pmfs_mempair_cachep;
 
 static inline u64 __pmfs_find_nvmm_block(struct super_block *sb,
-		struct pmfs_inode_info *si, unsigned long blocknr)
+	struct pmfs_inode_info *si, struct mem_addr *mem_pair,
+	unsigned long blocknr)
 {
 	struct pmfs_inode_info_header *sih = si->header;
 	__le64 *level_ptr;
@@ -867,6 +868,9 @@ static inline u64 __pmfs_find_nvmm_block(struct super_block *sb,
 	u32 height, bit_shift;
 	unsigned int idx;
 	struct mem_addr *pair;
+
+	if (mem_pair)
+		return mem_pair->nvmm << PAGE_SHIFT;
 
 	height = sih->height;
 	bp = sih->root;

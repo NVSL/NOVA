@@ -100,7 +100,7 @@ u64 pmfs_find_nvmm_block(struct inode *inode, unsigned long file_blocknr)
 
 	pmfs_dbg_verbose("%s: inode %lu, si %p, root 0x%llx, height %u\n",
 		__func__, inode->i_ino, si, sih->root, sih->height);
-	bp = __pmfs_find_nvmm_block(sb, si, blocknr);
+	bp = __pmfs_find_nvmm_block(sb, si, NULL, blocknr);
 	pmfs_dbg1("find_nvmm_block %lx, %x %llx blk_p %p blk_shift %x"
 		" blk_offset %lx\n", file_blocknr, sih->height, bp,
 		pmfs_get_block(sb, bp), blk_shift, blk_offset);

@@ -641,7 +641,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 			u64 bp;
 			void *nvmm;
 
-			bp = __pmfs_find_nvmm_block(sb, si, start_blk);
+			bp = __pmfs_find_nvmm_block(sb, si, pair, start_blk);
 			nvmm = pmfs_get_block(sb, bp);
 			memcpy((void *)DRAM_ADDR(page_addr), nvmm, PAGE_SIZE);
 		}
@@ -1045,7 +1045,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 				return err;
 		}
 		/* Copy from NVMM to dram */
-		bp = __pmfs_find_nvmm_block(sb, si, pgoff);
+		bp = __pmfs_find_nvmm_block(sb, si, pair, pgoff);
 		nvmm = pmfs_get_block(sb, bp);
 		__copy_from_user((void *)DRAM_ADDR(pair->dram),
 					nvmm, PAGE_SIZE);
