@@ -858,40 +858,6 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 
 extern struct kmem_cache *pmfs_mempair_cachep;
 
-static inline u64 __pmfs_find_nvmm_block(struct super_block *sb,
-	struct pmfs_inode_info *si, struct mem_addr *mem_pair,
-	unsigned long blocknr)
-{
-	struct pmfs_inode_info_header *sih = si->header;
-	__le64 *level_ptr;
-	u64 bp = 0;
-	u32 height, bit_shift;
-	unsigned int idx;
-	struct mem_addr *pair;
-
-	if (mem_pair)
-		return mem_pair->nvmm << PAGE_SHIFT;
-
-	height = sih->height;
-	bp = sih->root;
-	if (bp == 0)
-		return 0;
-
-	while (height > 0) {
-		level_ptr = (__le64 *)DRAM_ADDR(bp);
-		bit_shift = (height - 1) * META_BLK_SHIFT;
-		idx = blocknr >> bit_shift;
-		bp = le64_to_cpu(level_ptr[idx]);
-		if (bp == 0)
-			return 0;
-		blocknr = blocknr & ((1 << bit_shift) - 1);
-		height--;
-	}
-
-	pair = (struct mem_addr *)bp;
-	return pair->nvmm << PAGE_SHIFT;
-}
-
 /* ino is divided by PMFS_INODE_SIZE */
 static inline struct pmfs_inode_info_header *
 pmfs_find_info_header(struct super_block *sb, unsigned long ino)
@@ -979,6 +945,22 @@ static inline struct mem_addr *__pmfs_get_mem_pair(struct super_block *sb,
 	}
 
 	return (struct mem_addr *)bp;
+}
+
+static inline u64 __pmfs_find_nvmm_block(struct super_block *sb,
+	struct pmfs_inode_info *si, struct mem_addr *mem_pair,
+	unsigned long blocknr)
+{
+	struct mem_addr *pair = NULL;
+
+	if (mem_pair)
+		return mem_pair->nvmm << PAGE_SHIFT;
+
+	pair = __pmfs_get_mem_pair(sb, si, blocknr);
+	if (!pair)
+		return 0;
+
+	return pair->nvmm << PAGE_SHIFT;
 }
 
 static inline unsigned int pmfs_inode_blk_shift (struct pmfs_inode *pi)
