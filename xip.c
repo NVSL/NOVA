@@ -709,11 +709,11 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	unsigned long total_blocks;
 	unsigned int data_bits;
 	int allocated;
-	u64 curr_entry, block;
-	ssize_t     written = 0;
+	u64 curr_entry, page_addr;
+	ssize_t written = 0;
 	int ret;
-	int dirty;
-	void* kmem;
+	void *kmem;
+	struct mem_addr *pair = NULL;
 	size_t bytes, copied;
 	loff_t pos;
 	int status = 0;
@@ -733,8 +733,8 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	temp_tail = pi->log_tail;
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
-		dirty = pmfs_find_dram_page_and_clean(sb, si, pgoff, &block);
-		if (dirty == 0) {
+		pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
+		if (!pair || IS_DIRTY(pair->dram) == 0) {
 			pmfs_dbg("%s: Dirty DRAM page not found! pgoff %lu, "
 					"blocks %lu\n",	__func__, pgoff,
 					num_blocks);
@@ -746,6 +746,8 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 			continue;
 		}
 
+//		pair->dram &= ~DIRTY_BIT;
+		page_addr = pair->dram;
 		allocated = pmfs_new_data_blocks(sb, &blocknr, 1,
 						pi->i_blk_type, 0);
 		if (allocated <= 0) {
@@ -763,7 +765,7 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 			pmfs_get_block_off(sb, blocknr,	pi->i_blk_type));
 		PMFS_START_TIMING(memcpy_w_wb_t, memcpy_time);
 		copied = memcpy_to_nvmm((char *)kmem, offset,
-					(char *)DRAM_ADDR(block), bytes);
+					(char *)DRAM_ADDR(page_addr), bytes);
 		PMFS_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
 		entry_data.entry_type = FILE_WRITE;

@@ -952,43 +952,6 @@ static inline u64 __pmfs_find_dir_block(struct super_block *sb,
 }
 #endif
 
-/* Return 1 if the page is found and dirty */
-static inline int pmfs_find_dram_page_and_clean(struct super_block *sb,
-	struct pmfs_inode_info *si, unsigned long blocknr, u64 *dram_addr)
-{
-	struct pmfs_inode_info_header *sih = si->header;
-	__le64 *level_ptr;
-	u64 bp = 0;
-	u32 height, bit_shift;
-	unsigned int idx;
-	struct mem_addr *pair;
-
-	height = sih->height;
-	bp = sih->root;
-	if (bp == 0)
-		return 0;
-
-	while (height > 0) {
-		level_ptr = (__le64 *)DRAM_ADDR(bp);
-		bit_shift = (height - 1) * META_BLK_SHIFT;
-		idx = blocknr >> bit_shift;
-		bp = le64_to_cpu(level_ptr[idx]);
-		if (bp == 0)
-			return 0;
-		blocknr = blocknr & ((1 << bit_shift) - 1);
-		height--;
-	}
-
-	pair = (struct mem_addr *)bp;
-	if (pair->dram && IS_DIRTY(pair->dram)) {
-		*dram_addr = pair->dram;
-//		pair->dram &= ~DIRTY_BIT;
-		return 1;
-	}
-
-	return 0;
-}
-
 static inline struct mem_addr *__pmfs_get_mem_pair(struct super_block *sb,
 		struct pmfs_inode_info *si, unsigned long blocknr)
 {
