@@ -70,8 +70,9 @@ static inline void pmfs_free_dram_page(unsigned long page_addr)
 		free_page(DRAM_ADDR(page_addr));
 }
 
-static unsigned long pmfs_alloc_dram_page(struct super_block *sb,
-	enum alloc_type type, int zero, int nosleep)
+static int pmfs_alloc_dram_page(struct super_block *sb,
+	enum alloc_type type, unsigned long *page_addr, struct page **page,
+	int zero, int nosleep)
 {
 	unsigned long addr = 0;
 	int flags;
@@ -91,7 +92,8 @@ static unsigned long pmfs_alloc_dram_page(struct super_block *sb,
 							flags);
 			if (addr && addr == DRAM_ADDR(addr)) {
 				addr |= DRAM_BIT | KMALLOC_BIT;
-				pmfs_dbg_verbose("Kmalloc DRAM page 0x%lx\n", addr);
+				pmfs_dbg_verbose("Kmalloc DRAM page 0x%lx\n",
+							addr);
 				break;
 			}
 			if (addr) {
@@ -106,7 +108,8 @@ static unsigned long pmfs_alloc_dram_page(struct super_block *sb,
 				addr = (unsigned long)vmalloc(flags);
 			if (addr && addr == DRAM_ADDR(addr)) {
 				addr |= DRAM_BIT | VMALLOC_BIT;
-				pmfs_dbg_verbose("vmalloc DRAM page 0x%lx\n", addr);
+				pmfs_dbg_verbose("vmalloc DRAM page 0x%lx\n",
+							addr);
 				break;
 			}
 			if (addr) {
@@ -121,22 +124,24 @@ static unsigned long pmfs_alloc_dram_page(struct super_block *sb,
 				addr = __get_free_page(flags);
 			if (addr && addr == DRAM_ADDR(addr)) {
 				addr |= DRAM_BIT | GETPAGE_BIT;
-				pmfs_dbg_verbose("Get DRAM page 0x%lx\n", addr);
+				pmfs_dbg_verbose("Get DRAM page 0x%lx\n",
+							addr);
 				break;
 			}
 			if (addr) {
 				free_page(addr);
 				addr = 0;
 			}
-			/* Fall through */
+			break;
 		default:
 			break;
 	}
 
 	if (addr == 0)
-		BUG();
+		return -ENOMEM;
 
-	return addr;
+	*page_addr = addr;
+	return 0;
 }
 
 static int pmfs_rbtree_compare_blocknode(struct pmfs_blocknode *curr,
@@ -432,18 +437,17 @@ void pmfs_free_log_blocks(struct super_block *sb, unsigned long blocknr,
 int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
 	int zero, int nosleep)
 {
-	unsigned long page_addr;
+	int ret;
 	timing_t alloc_time;
 
 	PMFS_START_TIMING(new_meta_block_t, alloc_time);
-	page_addr = pmfs_alloc_dram_page(sb, KMALLOC, zero, nosleep);
-	if (page_addr == 0) {
+	ret = pmfs_alloc_dram_page(sb, KMALLOC, blocknr, NULL, zero, nosleep);
+	if (ret) {
 		PMFS_END_TIMING(new_meta_block_t, alloc_time);
-		return -EINVAL;
+		return ret;
 	}
 
-	*blocknr = page_addr;
-	pmfs_dbg_verbose("%s: 0x%lx\n", __func__, page_addr);
+	pmfs_dbg_verbose("%s: 0x%lx\n", __func__, *blocknr);
 	PMFS_END_TIMING(new_meta_block_t, alloc_time);
 	atomic64_inc(&meta_alloc);
 	return 0;
@@ -458,11 +462,11 @@ int pmfs_new_cache_block(struct super_block *sb,
 
 	PMFS_START_TIMING(new_cache_page_t, alloc_time);
 	/* Using vmalloc because we need the page to do mmap */
-	page_addr = pmfs_alloc_dram_page(sb, VMALLOC, zero, nosleep);
-	if (page_addr == 0) {
+	err = pmfs_alloc_dram_page(sb, VMALLOC, &page_addr, NULL,
+							zero, nosleep);
+	if (err) {
 		PMFS_END_TIMING(new_cache_page_t, alloc_time);
 		pmfs_dbg("%s: allocation failed\n", __func__);
-		err = -ENOMEM;
 		goto out;
 	}
 
