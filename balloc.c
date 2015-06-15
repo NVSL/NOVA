@@ -466,13 +466,14 @@ int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
 int pmfs_new_cache_block(struct super_block *sb,
 	struct mem_addr *pair, int zero, int nosleep)
 {
-	unsigned long page_addr;
+	unsigned long page_addr = 0;
+	struct page *page = NULL;
 	int err = 0;
 	timing_t alloc_time;
 
 	PMFS_START_TIMING(new_cache_page_t, alloc_time);
 	/* Using vmalloc because we need the page to do mmap */
-	err = pmfs_alloc_dram_page(sb, VMALLOC, &page_addr, NULL,
+	err = pmfs_alloc_dram_page(sb, VMALLOC, &page_addr, &page,
 							zero, nosleep);
 	if (err) {
 		PMFS_END_TIMING(new_cache_page_t, alloc_time);
@@ -480,6 +481,7 @@ int pmfs_new_cache_block(struct super_block *sb,
 		goto out;
 	}
 
+	pair->page = page;
 	pair->dram = page_addr;
 	atomic64_inc(&cache_alloc);
 out:
