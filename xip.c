@@ -654,6 +654,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		copied = bytes - __copy_from_user(kmem + offset, buf, bytes);
 		PMFS_END_TIMING(memcpy_w_dram_t, memcpy_time);
 
+		pair->dram |= DIRTY_BIT;
 		if (start_blk < si->low_dirty)
 			si->low_dirty = start_blk;
 		if (start_blk > si->high_dirty)
