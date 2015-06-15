@@ -78,8 +78,7 @@ static int pmfs_new_data_block(struct super_block *sb, struct pmfs_inode *pi,
  * find the offset to the block represented by the given inode's file
  * relative block number.
  */
-u64 pmfs_find_data_block(struct inode *inode, unsigned long file_blocknr,
-		bool nvmm)
+u64 pmfs_find_nvmm_block(struct inode *inode, unsigned long file_blocknr)
 {
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
@@ -101,8 +100,8 @@ u64 pmfs_find_data_block(struct inode *inode, unsigned long file_blocknr,
 
 	pmfs_dbg_verbose("%s: inode %lu, si %p, root 0x%llx, height %u\n",
 		__func__, inode->i_ino, si, sih->root, sih->height);
-	bp = __pmfs_find_data_block(sb, si, blocknr, nvmm);
-	pmfs_dbg1("find_data_block %lx, %x %llx blk_p %p blk_shift %x"
+	bp = __pmfs_find_nvmm_block(sb, si, blocknr);
+	pmfs_dbg1("find_nvmm_block %lx, %x %llx blk_p %p blk_shift %x"
 		" blk_offset %lx\n", file_blocknr, sih->height, bp,
 		pmfs_get_block(sb, bp), blk_shift, blk_offset);
 
@@ -2415,7 +2414,7 @@ static void pmfs_block_truncate_page(struct inode *inode, loff_t newsize)
 	length = sb->s_blocksize - offset;
 	blocknr = newsize >> sb->s_blocksize_bits;
 
-	blockoff = pmfs_find_data_block(inode, blocknr, true);
+	blockoff = pmfs_find_nvmm_block(inode, blocknr);
 
 	/* Hole ? */
 	if (!blockoff)

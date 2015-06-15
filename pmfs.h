@@ -267,7 +267,7 @@ struct pmfs_file_write_entry {
 	__le32	num_pages;
 	/* For both ctime and mtime */
 	__le32	mtime;
-	/* ret of find_data_block, last 12 bits are invalid count */
+	/* ret of find_nvmm_block, last 12 bits are invalid count */
 	__le64	block;
 	__le64	size;
 } __attribute((__packed__));
@@ -423,8 +423,8 @@ extern int pmfs_init_inode_table(struct super_block *sb);
 int pmfs_init_inode_inuse_list(struct super_block *sb);
 extern int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
 		unsigned long file_blocknr, unsigned int num, bool zero);
-extern u64 pmfs_find_data_block(struct inode *inode,
-		unsigned long file_blocknr, bool nvmm);
+extern u64 pmfs_find_nvmm_block(struct inode *inode, 
+		unsigned long file_blocknr);
 extern u64 pmfs_find_inode(struct inode *inode,
 		unsigned long file_blocknr);
 int pmfs_set_blocksize_hint(struct super_block *sb, struct pmfs_inode *pi,
@@ -858,8 +858,8 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 
 extern struct kmem_cache *pmfs_mempair_cachep;
 
-static inline u64 __pmfs_find_data_block(struct super_block *sb,
-		struct pmfs_inode_info *si, unsigned long blocknr, bool nvmm)
+static inline u64 __pmfs_find_nvmm_block(struct super_block *sb,
+		struct pmfs_inode_info *si, unsigned long blocknr)
 {
 	struct pmfs_inode_info_header *sih = si->header;
 	__le64 *level_ptr;
@@ -885,11 +885,7 @@ static inline u64 __pmfs_find_data_block(struct super_block *sb,
 	}
 
 	pair = (struct mem_addr *)bp;
-
-	if (nvmm)
-		return pair->nvmm << PAGE_SHIFT;
-	else
-		return pair->dram;
+	return pair->nvmm << PAGE_SHIFT;
 }
 
 /* ino is divided by PMFS_INODE_SIZE */

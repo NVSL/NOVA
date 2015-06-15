@@ -641,7 +641,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 			u64 bp;
 			void *nvmm;
 
-			bp = __pmfs_find_data_block(sb, si, start_blk, true);
+			bp = __pmfs_find_nvmm_block(sb, si, start_blk);
 			nvmm = pmfs_get_block(sb, bp);
 			memcpy((void *)DRAM_ADDR(page_addr), nvmm, PAGE_SIZE);
 		}
@@ -920,7 +920,7 @@ static int pmfs_find_and_alloc_blocks(struct inode *inode, sector_t iblock,
 	pmfs_transaction_t *trans;
 	struct pmfs_inode *pi;
 
-	block = pmfs_find_data_block(inode, iblock, true);
+	block = pmfs_find_nvmm_block(inode, iblock);
 
 	if (!block) {
 		struct super_block *sb = inode->i_sb;
@@ -963,7 +963,7 @@ static int pmfs_find_and_alloc_blocks(struct inode *inode, sector_t iblock,
 				goto err;
 			}
 		}
-		block = pmfs_find_data_block(inode, iblock, true);
+		block = pmfs_find_nvmm_block(inode, iblock);
 		if (!block) {
 			pmfs_dbg("[%s:%d] But alloc didn't fail!\n",
 				  __func__, __LINE__);
@@ -1045,7 +1045,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 				return err;
 		}
 		/* Copy from NVMM to dram */
-		bp = __pmfs_find_data_block(sb, si, pgoff, true);
+		bp = __pmfs_find_nvmm_block(sb, si, pgoff);
 		nvmm = pmfs_get_block(sb, bp);
 		__copy_from_user((void *)DRAM_ADDR(pair->dram),
 					nvmm, PAGE_SIZE);
