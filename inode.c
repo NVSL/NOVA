@@ -1261,13 +1261,14 @@ static int recursive_assign_blocks(struct super_block *sb,
 				pi->i_blocks--;
 			}
 			if (alloc_dram) {
-				unsigned long dram;
 				if (!leaf->dram) {
-					dram = pmfs_new_cache_block(sb, 0, 0);
+					errval = pmfs_new_cache_block(sb, leaf,
+									0, 0);
+					if (errval)
+						goto fail;
 					if (leaf->nvmm_entry)
 						/* Outdate with NVMM */
-						dram |= OUTDATE_BIT;
-					leaf->dram = dram;
+						leaf->dram |= OUTDATE_BIT;
 				}
 			} else {
 				if (nvmm) {
@@ -1463,7 +1464,9 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 
 			root->dram = root->nvmm = root->nvmm_entry = 0;
 			if (alloc_dram) {
-				root->dram = pmfs_new_cache_block(sb, 0, 0);
+				errval = pmfs_new_cache_block(sb, root, 0, 0);
+				if (errval)
+					goto fail;
 			} else {
 				if (nvmm) {
 					root->nvmm_entry = address;
@@ -1513,13 +1516,14 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			}
 
 			if (alloc_dram) {
-				unsigned long dram;
 				if (!root->dram) {
-					dram = pmfs_new_cache_block(sb, 0, 0);
+					errval = pmfs_new_cache_block(sb, root,
+									0, 0);
+					if (errval)
+						goto fail;
 					if (root->nvmm_entry)
 						/* Outdate with NVMM */
-						dram |= OUTDATE_BIT;
-					root->dram = dram;
+						root->dram |= OUTDATE_BIT;
 				}
 			} else {
 				if (nvmm) {

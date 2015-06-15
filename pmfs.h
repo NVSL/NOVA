@@ -357,6 +357,13 @@ enum alloc_type {
 #define	TEST_PAGEALLOC	6
 #define	TEST_PAGEZALLOC	7
 
+struct mem_addr {
+	unsigned long nvmm_entry;	// NVMM inode entry
+	unsigned long nvmm;		// NVMM blocknr
+	unsigned long dram;		// DRAM virtual address
+	struct page *page;
+};
+
 /* Function Prototypes */
 extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
 
@@ -386,8 +393,8 @@ extern int pmfs_new_log_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned int num, unsigned short btype, int zero);
 extern int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
 	int zero, int nosleep);
-extern unsigned long pmfs_new_cache_block(struct super_block *sb, int zero,
-	int nosleep);
+extern int pmfs_new_cache_block(struct super_block *sb, struct mem_addr *pair,
+	int zero, int nosleep);
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
 
 /* dir.c */
@@ -849,13 +856,6 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 #define	MAX_BLOCK	((1UL << 32) - 1)
 
 extern struct kmem_cache *pmfs_mempair_cachep;
-
-struct mem_addr {
-	unsigned long nvmm_entry;	// NVMM inode entry
-	unsigned long nvmm;		// NVMM blocknr
-	unsigned long dram;		// DRAM virtual address
-	struct page *page;
-};
 
 static inline u64 __pmfs_find_data_block(struct super_block *sb,
 		struct pmfs_inode_info *si, unsigned long blocknr, bool nvmm)

@@ -449,10 +449,11 @@ int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
 	return 0;
 }
 
-unsigned long pmfs_new_cache_block(struct super_block *sb,
-	int zero, int nosleep)
+int pmfs_new_cache_block(struct super_block *sb,
+	struct mem_addr *pair, int zero, int nosleep)
 {
 	unsigned long page_addr;
+	int err = 0;
 	timing_t alloc_time;
 
 	PMFS_START_TIMING(new_cache_page_t, alloc_time);
@@ -461,13 +462,15 @@ unsigned long pmfs_new_cache_block(struct super_block *sb,
 	if (page_addr == 0) {
 		PMFS_END_TIMING(new_cache_page_t, alloc_time);
 		pmfs_dbg("%s: allocation failed\n", __func__);
-		BUG();
-		return 0;
+		err = -ENOMEM;
+		goto out;
 	}
 
-	PMFS_END_TIMING(new_cache_page_t, alloc_time);
+	pair->dram = page_addr;
 	atomic64_inc(&cache_alloc);
-	return page_addr;
+out:
+	PMFS_END_TIMING(new_cache_page_t, alloc_time);
+	return err;
 }
 
 /* Return how many blocks allocated */

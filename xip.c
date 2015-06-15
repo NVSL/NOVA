@@ -1027,6 +1027,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	struct mem_addr *pair = NULL;
 	u64 bp;
 	void *nvmm;
+	int err;
 
 	pi = pmfs_get_inode(sb, inode);
 
@@ -1039,9 +1040,9 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 
 	if (pair->dram == 0 || (pair->dram & OUTDATE_BIT)) {
 		if (pair->dram == 0) {
-			pair->dram = pmfs_new_cache_block(sb, 0, 0);
-			if (pair->dram == 0)
-				return -EINVAL;
+			err = pmfs_new_cache_block(sb, pair, 0, 0);
+			if (err)
+				return err;
 		}
 		/* Copy from NVMM to dram */
 		bp = __pmfs_find_data_block(sb, si, pgoff, true);
