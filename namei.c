@@ -630,7 +630,6 @@ static int pmfs_rename(struct inode *old_dir,
 		tail = 0;
 		__copy_from_user_inatomic_nocache(pmfs_get_block(sb, pi_newaddr),
 						old_pi, PMFS_INODE_SIZE);
-		sih->pi_addr = pi_newaddr;
 	} else {
 		tail = new_tail;
 	}
@@ -699,6 +698,9 @@ static int pmfs_rename(struct inode *old_dir,
 
 	pmfs_commit_lite_transaction(sb, journal_tail);
 	mutex_unlock(&sbi->lite_journal_mutex);
+
+	if (need_new_pi && pi_newaddr)
+		sih->pi_addr = pi_newaddr;
 
 	PMFS_END_TIMING(rename_t, rename_time);
 	return 0;
