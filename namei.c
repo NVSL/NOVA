@@ -568,7 +568,11 @@ static int pmfs_rename(struct inode *old_dir,
 	struct pmfs_inode *old_pi = NULL, *new_pi = NULL;
 	struct pmfs_inode *new_pidir = NULL, *old_pidir = NULL;
 	struct pmfs_lite_journal_entry entry;
+	struct pmfs_inode_info *si = PMFS_I(old_inode);
+	struct pmfs_inode_info_header *sih = si->header;
 	u64 old_tail = 0, new_tail = 0, tail, new_pi_tail = 0, old_pi_tail = 0;
+	u64 pi_newaddr = 0;
+	int need_new_pi = 0;
 	int err = -ENOENT;
 	int inc_link = 0, dec_link = 0;
 	u64 journal_tail;
@@ -611,17 +615,25 @@ static int pmfs_rename(struct inode *old_dir,
 			goto out;
 	}
 
+	/* If old dir is different from new dir, copy the inode to new dir */
+	if (new_pidir != old_pidir)
+		need_new_pi = 1;
+
 	/* link into the new directory. */
-	err = pmfs_add_entry(new_dentry, NULL, old_inode->i_ino,
-					inc_link, 0, new_tail, &new_tail);
+	err = pmfs_add_entry(new_dentry, &pi_newaddr, old_inode->i_ino,
+				inc_link, need_new_pi, new_tail, &new_tail);
 	if (err)
 		goto out;
 
 	/* and unlink the inode from the old directory ... */
-	if (new_pidir == old_pidir)
-		tail = new_tail;
-	else
+	if (need_new_pi) {
 		tail = 0;
+		__copy_from_user_inatomic_nocache(pmfs_get_block(sb, pi_newaddr),
+						old_pi, PMFS_INODE_SIZE);
+		sih->pi_addr = pi_newaddr;
+	} else {
+		tail = new_tail;
+	}
 
 	err = pmfs_remove_entry(old_dentry, dec_link, tail, &old_tail);
 	if (err)
