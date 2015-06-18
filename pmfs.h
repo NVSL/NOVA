@@ -75,7 +75,7 @@ extern unsigned int pmfs_dbgmask;
 
 #define pmfs_dbg_verbose(s, args ...)		 \
 	((pmfs_dbgmask & PMFS_DBGMASK_VERBOSE) ? pmfs_dbg(s, ##args) : 0)
-//#define pmfs_dbg_verbose(s, args ...)	pmfs_dbg(s, ##args)
+#define pmfs_dbgv(s, args ...)	pmfs_dbg_verbose(s, ##args)
 #define pmfs_dbg_trans(s, args ...)		 \
 	((pmfs_dbgmask & PMFS_DBGMASK_TRANSACTION) ? pmfs_dbg(s, ##args) : 0)
 
