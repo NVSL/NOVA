@@ -254,7 +254,7 @@ static void pmfs_lite_transaction_for_time_and_link(struct super_block *sb,
 	}
 
 	mutex_lock(&sbi->lite_journal_mutex);
-	journal_tail = pmfs_create_lite_transaction(sb, &entry);
+	journal_tail = pmfs_create_lite_transaction(sb, &entry, NULL, 1);
 
 	pmfs_update_tail(pi, pi_tail);
 	pmfs_update_tail(pidir, pidir_tail);
@@ -574,7 +574,7 @@ static int pmfs_rename(struct inode *old_dir,
 	struct pmfs_inode *old_pi = NULL, *new_pi = NULL;
 	struct pmfs_inode *new_old_pi = NULL;
 	struct pmfs_inode *new_pidir = NULL, *old_pidir = NULL;
-	struct pmfs_lite_journal_entry entry;
+	struct pmfs_lite_journal_entry entry, entry1;
 	struct pmfs_inode_info *si = PMFS_I(old_inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	u64 old_tail = 0, new_tail = 0, tail, new_pi_tail = 0, old_pi_tail = 0;
@@ -640,9 +640,6 @@ static int pmfs_rename(struct inode *old_dir,
 						pi_newaddr);
 		__copy_from_user_inatomic_nocache(new_old_pi,
 						old_pi, PMFS_INODE_SIZE);
-		/* FIXME: Move this to transaction */
-		old_pi->valid = 0;
-		old_pi = new_old_pi;
 	} else {
 		tail = new_tail;
 	}
@@ -664,9 +661,6 @@ static int pmfs_rename(struct inode *old_dir,
 
 //		if (!new_inode->i_nlink)
 //			pmfs_truncate_add(new_inode, new_inode->i_size);
-		/* FIXME: Move this to transaction */
-		if (!new_inode->i_nlink)
-			new_pi->valid = 0;
 		err = pmfs_append_link_change_entry(sb, new_pi,
 						new_inode, 0, &new_pi_tail);
 		if (err)
@@ -688,29 +682,53 @@ static int pmfs_rename(struct inode *old_dir,
 	entry.addrs[1] |= (u64)8 << 56;
 	entry.values[1] = old_pidir->log_tail;
 
-	if (new_inode) {
-		entry.addrs[2] = (u64)pmfs_get_addr_off(sbi,
-						&new_pi->log_tail);
-		entry.addrs[2] |= (u64)8 << 56;
-		entry.values[2] = new_pi->log_tail;
-	}
-
 	if (old_pidir != new_pidir) {
+		entry.addrs[2] = (u64)pmfs_get_addr_off(sbi,
+						&old_pi->valid);
+		entry.addrs[2] |= (u64)1 << 56;
+		entry.values[2] = old_pi->valid;
+
 		entry.addrs[3] = (u64)pmfs_get_addr_off(sbi,
 						&new_pidir->log_tail);
 		entry.addrs[3] |= (u64)8 << 56;
 		entry.values[3] = new_pidir->log_tail;
 	}
 
+	memset(&entry1, 0, sizeof(struct pmfs_lite_journal_entry));
+
+	entry1.addrs[0] = (u64)pmfs_get_addr_off(sbi, &new_old_pi->log_tail);
+	entry1.addrs[0] |= (u64)8 << 56;
+	entry1.values[0] = new_old_pi->log_tail;
+
+	if (new_inode) {
+		entry1.addrs[1] = (u64)pmfs_get_addr_off(sbi,
+						&new_pi->log_tail);
+		entry1.addrs[1] |= (u64)8 << 56;
+		entry1.values[1] = new_pi->log_tail;
+
+		if (!new_inode->i_nlink) {
+			entry1.addrs[2] = (u64)pmfs_get_addr_off(sbi,
+							&new_pi->valid);
+			entry1.addrs[2] |= (u64)1 << 56;
+			entry1.values[2] = new_pi->valid;
+		}
+	}
+
 	mutex_lock(&sbi->lite_journal_mutex);
-	journal_tail = pmfs_create_lite_transaction(sb, &entry);
+	journal_tail = pmfs_create_lite_transaction(sb, &entry, &entry1, 2);
 
 	pmfs_update_tail(old_pi, old_pi_tail);
+	pmfs_update_tail(new_old_pi, old_pi_tail);
 	pmfs_update_tail(old_pidir, old_tail);
-	if (old_pidir != new_pidir)
+	if (old_pidir != new_pidir) {
 		pmfs_update_tail(new_pidir, new_tail);
-	if (new_inode)
+		old_pi->valid = 0;
+	}
+	if (new_inode) {
 		pmfs_update_tail(new_pi, new_pi_tail);
+		if (!new_inode->i_nlink)
+			new_pi->valid = 0;
+	}
 
 	pmfs_commit_lite_transaction(sb, journal_tail);
 	mutex_unlock(&sbi->lite_journal_mutex);

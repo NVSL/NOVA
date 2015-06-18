@@ -913,23 +913,35 @@ void pmfs_print_lite_transaction(struct pmfs_lite_journal_entry *entry)
 /* Caller needs to grab lite_journal_mutex until commit. */
 /* Do not fail, do not sleep. Make it fast! */
 u64 pmfs_create_lite_transaction(struct super_block *sb,
-	struct pmfs_lite_journal_entry *dram_entry)
+	struct pmfs_lite_journal_entry *dram_entry1,
+	struct pmfs_lite_journal_entry *dram_entry2,
+	int entries)
 {
 	struct pmfs_inode *pi;
 	struct pmfs_lite_journal_entry *entry;
 	size_t size = sizeof(struct pmfs_lite_journal_entry);
-	u64 new_tail;
+	u64 new_tail, temp;;
 
 	pi = pmfs_get_inode_by_ino(sb, PMFS_LITEJOURNAL_INO);
 	if (pi->log_head == 0 || pi->log_head != pi->log_tail)
 		BUG();
 
+	temp = pi->log_head;
 	entry = (struct pmfs_lite_journal_entry *)pmfs_get_block(sb,
-							pi->log_head);
+							temp);
 
-	pmfs_print_lite_transaction(dram_entry);
-	__copy_from_user_inatomic_nocache(entry, dram_entry, size);
-	new_tail = next_lite_journal(pi->log_head);
+	pmfs_print_lite_transaction(dram_entry1);
+	__copy_from_user_inatomic_nocache(entry, dram_entry1, size);
+
+	if (entries == 2) {
+		temp = next_lite_journal(temp);
+		entry = (struct pmfs_lite_journal_entry *)pmfs_get_block(sb,
+							temp);
+		pmfs_print_lite_transaction(dram_entry2);
+		__copy_from_user_inatomic_nocache(entry, dram_entry2, size);
+	}
+
+	new_tail = next_lite_journal(temp);
 	pmfs_update_tail(pi, new_tail);
 	return new_tail;
 }

@@ -109,6 +109,8 @@ struct pmfs_lite_journal_entry {
 int pmfs_lite_journal_soft_init(struct super_block *sb);
 int pmfs_lite_journal_hard_init(struct super_block *sb);
 u64 pmfs_create_lite_transaction(struct super_block *sb,
-	struct pmfs_lite_journal_entry *dram_entry);
+	struct pmfs_lite_journal_entry *dram_entry1,
+	struct pmfs_lite_journal_entry *dram_entry2,
+	int entries);
 void pmfs_commit_lite_transaction(struct super_block *sb, u64 tail);
 #endif    /* __PMFS_JOURNAL_H__ */
