@@ -17,23 +17,6 @@
 #include "pmfs.h"
 #include "xip.h"
 
-/*
- * Couple of helper functions - make the code slightly cleaner.
- */
-static inline void pmfs_inc_count(struct inode *inode, struct pmfs_inode *pi)
-{
-	inc_nlink(inode);
-	pmfs_update_nlink(inode, pi);
-}
-
-static inline void pmfs_dec_count(struct inode *inode, struct pmfs_inode *pi)
-{
-	if (inode->i_nlink) {
-		drop_nlink(inode);
-		pmfs_update_nlink(inode, pi);
-	}
-}
-
 static ino_t pmfs_inode_by_name(struct inode *dir, struct qstr *entry,
 				 struct pmfs_dir_logentry **res_entry)
 {
@@ -248,7 +231,7 @@ out_fail1:
 
 static void pmfs_lite_transaction_for_time_and_link(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode *pidir, u64 pi_tail,
-	u64 pidir_tail)
+	u64 pidir_tail, int invalidate)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_lite_journal_entry entry;
@@ -264,11 +247,19 @@ static void pmfs_lite_transaction_for_time_and_link(struct super_block *sb,
 	entry.addrs[1] |= (u64)8 << 56;
 	entry.values[1] = pidir->log_tail;
 
+	if (invalidate) {
+		entry.addrs[2] = (u64)pmfs_get_addr_off(sbi, &pi->valid);
+		entry.addrs[2] |= (u64)1 << 56;
+		entry.values[2] = pi->valid;
+	}
+
 	mutex_lock(&sbi->lite_journal_mutex);
 	journal_tail = pmfs_create_lite_transaction(sb, &entry);
 
 	pmfs_update_tail(pi, pi_tail);
 	pmfs_update_tail(pidir, pidir_tail);
+	if (invalidate)
+		pi->valid = 0;
 
 	pmfs_commit_lite_transaction(sb, journal_tail);
 	mutex_unlock(&sbi->lite_journal_mutex);
@@ -361,7 +352,7 @@ static int pmfs_link(struct dentry *dest_dentry, struct inode *dir,
 
 	d_instantiate(dentry, inode);
 	pmfs_lite_transaction_for_time_and_link(sb, pi, pidir,
-						pi_tail, pidir_tail);
+						pi_tail, pidir_tail, 0);
 out:
 	PMFS_END_TIMING(link_t, link_time);
 	return err;
@@ -375,6 +366,7 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
 	struct pmfs_inode *pidir;
 	u64 pidir_tail = 0, pi_tail = 0;
+	int invalidate = 0;
 	timing_t unlink_time;
 
 	PMFS_START_TIMING(unlink_t, unlink_time);
@@ -393,9 +385,11 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 //		pmfs_truncate_add(inode, inode->i_size);
 	inode->i_ctime = dir->i_ctime;
 
+	if (inode->i_nlink == 1)
+		invalidate = 1;
+
 	if (inode->i_nlink) {
 		drop_nlink(inode);
-		/* FIXME: We still rely on this to find free inodes */
 	}
 
 	retval = pmfs_append_link_change_entry(sb, pi, inode, 0, &pi_tail);
@@ -403,7 +397,7 @@ static int pmfs_unlink(struct inode *dir, struct dentry *dentry)
 		goto out;
 
 	pmfs_lite_transaction_for_time_and_link(sb, pi, pidir,
-						pi_tail, pidir_tail);
+					pi_tail, pidir_tail, invalidate);
 
 	PMFS_END_TIMING(unlink_t, unlink_time);
 	return 0;
@@ -558,7 +552,7 @@ static int pmfs_rmdir(struct inode *dir, struct dentry *dentry)
 		goto end_rmdir;
 
 	pmfs_lite_transaction_for_time_and_link(sb, pi, pidir,
-						pi_tail, pidir_tail);
+						pi_tail, pidir_tail, 1);
 
 	PMFS_END_TIMING(rmdir_t, rmdir_time);
 	return err;
@@ -578,6 +572,7 @@ static int pmfs_rename(struct inode *old_dir,
 	struct super_block *sb = old_inode->i_sb;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *old_pi = NULL, *new_pi = NULL;
+	struct pmfs_inode *new_old_pi = NULL;
 	struct pmfs_inode *new_pidir = NULL, *old_pidir = NULL;
 	struct pmfs_lite_journal_entry entry;
 	struct pmfs_inode_info *si = PMFS_I(old_inode);
@@ -641,8 +636,13 @@ static int pmfs_rename(struct inode *old_dir,
 	/* and unlink the inode from the old directory ... */
 	if (need_new_pi) {
 		tail = 0;
-		__copy_from_user_inatomic_nocache(pmfs_get_block(sb, pi_newaddr),
+		new_old_pi = (struct pmfs_inode *)pmfs_get_block(sb,
+						pi_newaddr);
+		__copy_from_user_inatomic_nocache(new_old_pi,
 						old_pi, PMFS_INODE_SIZE);
+		/* FIXME: Move this to transaction */
+		old_pi->valid = 0;
+		old_pi = new_old_pi;
 	} else {
 		tail = new_tail;
 	}
@@ -664,6 +664,9 @@ static int pmfs_rename(struct inode *old_dir,
 
 //		if (!new_inode->i_nlink)
 //			pmfs_truncate_add(new_inode, new_inode->i_size);
+		/* FIXME: Move this to transaction */
+		if (!new_inode->i_nlink)
+			new_pi->valid = 0;
 		err = pmfs_append_link_change_entry(sb, new_pi,
 						new_inode, 0, &new_pi_tail);
 		if (err)

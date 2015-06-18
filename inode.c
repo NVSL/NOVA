@@ -2271,6 +2271,7 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	pi->i_dtime = 0;
 	pi->log_head = 0;
 	pi->log_tail = 0;
+	pi->valid = 1;
 	pmfs_memlock_inode(sb, pi);
 
 	si = PMFS_I(inode);
