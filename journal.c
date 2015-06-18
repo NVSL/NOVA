@@ -947,15 +947,11 @@ void pmfs_commit_lite_transaction(struct super_block *sb, u64 tail)
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 }
 
-static int pmfs_recover_lite_journal(struct super_block *sb,
-	struct pmfs_inode *pi)
+static void pmfs_undo_lite_journal_entry(struct super_block *sb,
+	struct pmfs_lite_journal_entry *entry)
 {
-	struct pmfs_lite_journal_entry *entry;
 	int i;
 	u8 type;
-
-	entry = (struct pmfs_lite_journal_entry *)pmfs_get_block(sb,
-							pi->log_head);
 
 	for (i = 0; i < 4; i++) {
 		type = entry->addrs[i] >> 56;
@@ -964,6 +960,24 @@ static int pmfs_recover_lite_journal(struct super_block *sb,
 			pmfs_recover_lite_journal_entry(sb, entry->addrs[i],
 					entry->values[i], type);
 		}
+	}
+}
+
+static int pmfs_recover_lite_journal(struct super_block *sb,
+	struct pmfs_inode *pi, int recover)
+{
+	struct pmfs_lite_journal_entry *entry;
+	u64 temp;
+
+	entry = (struct pmfs_lite_journal_entry *)pmfs_get_block(sb,
+							pi->log_head);
+	pmfs_undo_lite_journal_entry(sb, entry);
+
+	if (recover == 2) {
+		temp = next_lite_journal(pi->log_head);
+		entry = (struct pmfs_lite_journal_entry *)pmfs_get_block(sb,
+							temp);
+		pmfs_undo_lite_journal_entry(sb, entry);
 	}
 
 	PERSISTENT_BARRIER();
@@ -975,6 +989,7 @@ int pmfs_lite_journal_soft_init(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi;
+	u64 temp;
 
 	mutex_init(&sbi->lite_journal_mutex);
 	pi = pmfs_get_inode_by_ino(sb, PMFS_LITEJOURNAL_INO);
@@ -982,9 +997,16 @@ int pmfs_lite_journal_soft_init(struct super_block *sb)
 	if (pi->log_head == pi->log_tail)
 		return 0;
 
-	/* We only allow one uncommited entry */
-	if (pi->log_tail == next_lite_journal(pi->log_head)) {
-		pmfs_recover_lite_journal(sb, pi);
+	/* We only allow up to two uncommited entries */
+	temp = next_lite_journal(pi->log_head);
+	if (pi->log_tail == temp) {
+		pmfs_recover_lite_journal(sb, pi, 1);
+		return 0;
+	}
+
+	temp = next_lite_journal(temp);
+	if (pi->log_tail == temp) {
+		pmfs_recover_lite_journal(sb, pi, 2);
 		return 0;
 	}
 
