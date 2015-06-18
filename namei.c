@@ -582,6 +582,7 @@ static int pmfs_rename(struct inode *old_dir,
 	int need_new_pi = 0;
 	int err = -ENOENT;
 	int inc_link = 0, dec_link = 0;
+	int entries = 0;
 	u64 journal_tail;
 	timing_t rename_time;
 
@@ -640,6 +641,8 @@ static int pmfs_rename(struct inode *old_dir,
 						pi_newaddr);
 		__copy_from_user_inatomic_nocache(new_old_pi,
 						old_pi, PMFS_INODE_SIZE);
+		/* new_old_pi is part of the log so in-place update is fine */
+		pmfs_update_tail(new_old_pi, old_pi_tail);
 	} else {
 		tail = new_tail;
 	}
@@ -672,6 +675,7 @@ static int pmfs_rename(struct inode *old_dir,
 	if (dec_link < 0)
 		drop_nlink(old_dir);
 
+	entries = 1;
 	memset(&entry, 0, sizeof(struct pmfs_lite_journal_entry));
 
 	entry.addrs[0] = (u64)pmfs_get_addr_off(sbi, &old_pi->log_tail);
@@ -694,31 +698,28 @@ static int pmfs_rename(struct inode *old_dir,
 		entry.values[3] = new_pidir->log_tail;
 	}
 
-	memset(&entry1, 0, sizeof(struct pmfs_lite_journal_entry));
-
-	entry1.addrs[0] = (u64)pmfs_get_addr_off(sbi, &new_old_pi->log_tail);
-	entry1.addrs[0] |= (u64)8 << 56;
-	entry1.values[0] = new_old_pi->log_tail;
-
 	if (new_inode) {
-		entry1.addrs[1] = (u64)pmfs_get_addr_off(sbi,
+		entries++;
+		memset(&entry1, 0, sizeof(struct pmfs_lite_journal_entry));
+
+		entry1.addrs[0] = (u64)pmfs_get_addr_off(sbi,
 						&new_pi->log_tail);
-		entry1.addrs[1] |= (u64)8 << 56;
-		entry1.values[1] = new_pi->log_tail;
+		entry1.addrs[0] |= (u64)8 << 56;
+		entry1.values[0] = new_pi->log_tail;
 
 		if (!new_inode->i_nlink) {
-			entry1.addrs[2] = (u64)pmfs_get_addr_off(sbi,
+			entry1.addrs[1] = (u64)pmfs_get_addr_off(sbi,
 							&new_pi->valid);
-			entry1.addrs[2] |= (u64)1 << 56;
-			entry1.values[2] = new_pi->valid;
+			entry1.addrs[1] |= (u64)1 << 56;
+			entry1.values[1] = new_pi->valid;
 		}
 	}
 
 	mutex_lock(&sbi->lite_journal_mutex);
-	journal_tail = pmfs_create_lite_transaction(sb, &entry, &entry1, 2);
+	journal_tail = pmfs_create_lite_transaction(sb, &entry,
+							&entry1, entries);
 
 	pmfs_update_tail(old_pi, old_pi_tail);
-	pmfs_update_tail(new_old_pi, old_pi_tail);
 	pmfs_update_tail(old_pidir, old_tail);
 	if (old_pidir != new_pidir) {
 		pmfs_update_tail(new_pidir, new_tail);
