@@ -77,10 +77,14 @@ static int pmfs_alloc_dram_page(struct super_block *sb,
 	unsigned long addr = 0;
 	int flags;
 
+	/*
+	 * Must use NOIO because we don't want to recurse back into the
+	 * block or filesystem layers from page reclaim.
+	 */
 	if (nosleep)
-		flags = GFP_ATOMIC;
+		flags = GFP_ATOMIC | GFP_NOIO;
 	else
-		flags = GFP_KERNEL;
+		flags = GFP_NOIO;
 
 	switch (type) {
 		case KMALLOC:
