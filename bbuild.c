@@ -1124,7 +1124,6 @@ static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 		break;
 	}
 
-//	udelay(10);
 	return 0;
 }
 
@@ -1459,7 +1458,6 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	pmfs_journal_t *journal = pmfs_get_journal(sb);
 	struct scan_bitmap *bm = NULL;
 	bool value = false;
-	bool set_bm = true;
 	int ret;
 	timing_t recovery_time;
 
@@ -1470,11 +1468,9 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	/* FIXME: The whole part needs re-written if returns false */
 	value = pmfs_can_skip_full_scan(sb);
 	if (value) {
-		pmfs_dbg_verbose("PMFS: Skipping build blocknode map\n");
-		set_bm = false;
-	}
-
-	if (set_bm) {
+		pmfs_dbg("PMFS: Skipping build blocknode map\n");
+	} else {
+		pmfs_dbg("PMFS: build blocknode map\n");
 		bm = alloc_bm(initsize);
 		if (!bm)
 			return -ENOMEM;
@@ -1491,7 +1487,7 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	else
 		ret = pmfs_singlethread_recovery(sb, bm);
 
-	if (set_bm) {
+	if (bm) {
 		/* Reserving tow inodes - Inode 0 and Inode for datablock */
 		sbi->s_free_inodes_count = sbi->s_inodes_count -
 				(sbi->s_inodes_used_count + 2);
