@@ -1742,8 +1742,8 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 			sih = pmfs_alloc_header(sb, inode->i_mode);
 			pmfs_assign_info_header(sb, ino, sih, 1);
 			pmfs_dbg_verbose("%s: rebuild root dir\n", __func__);
-			pmfs_rebuild_dir_inode_tree(sb, pi_addr,
-					sih, inode->i_ino, NULL);
+			pmfs_rebuild_dir_inode_tree(sb, pi, pi_addr,
+					sih, NULL);
 			si->header = sih;
 		}
 		break;
@@ -3323,15 +3323,15 @@ static inline void pmfs_rebuild_file_time_and_size(struct super_block *sb,
 	pi->i_size = cpu_to_le64(entry->size);
 }
 
-int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
-	struct pmfs_inode_info_header *sih, u64 ino,
-	struct scan_bitmap *bm)
+int pmfs_rebuild_file_inode_tree(struct super_block *sb,
+	struct pmfs_inode *pi, u64 pi_addr,
+	struct pmfs_inode_info_header *sih, struct scan_bitmap *bm)
 {
-	struct pmfs_inode *pi;
 	struct pmfs_file_write_entry *entry = NULL;
 	struct pmfs_setattr_logentry *attr_entry = NULL;
 	struct pmfs_link_change_entry *link_change_entry = NULL;
 	struct pmfs_inode_log_page *curr_page;
+	u64 ino = pi->pmfs_ino << PMFS_INODE_BITS;
 	void *addr;
 	u64 curr_p;
 	u64 next;
@@ -3345,12 +3345,6 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb, u64 pi_addr,
 	sih->root = 0;
 	sih->height = 0;
 	sih->pi_addr = pi_addr;
-
-	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
-	if (!pi) {
-		pmfs_dbg("%s: pi is NULL\n", __func__);
-		return -EINVAL;
-	}
 
 	curr_p = pi->log_head;
 	pmfs_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",

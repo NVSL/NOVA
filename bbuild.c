@@ -1106,7 +1106,6 @@ static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 {
 	struct pmfs_inode_info_header *sih;
 	unsigned long pmfs_ino = pi->pmfs_ino;
-	u64 ino = pmfs_ino << PMFS_INODE_BITS;
 
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:
@@ -1115,7 +1114,7 @@ static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 				cpuid, pi, pmfs_ino, pi->log_head,
 				pi->log_tail);
 		sih = pmfs_alloc_header(sb, __le16_to_cpu(pi->i_mode));
-		pmfs_rebuild_file_inode_tree(sb, pi_addr, sih, ino, bm);
+		pmfs_rebuild_file_inode_tree(sb, pi, pi_addr, sih, bm);
 		pmfs_assign_info_header(sb, pmfs_ino, sih, multithread);
 		break;
 	case S_IFDIR:
@@ -1124,7 +1123,7 @@ static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
 				cpuid, pi, pmfs_ino, pi->log_head,
 				pi->log_tail);
 		sih = pmfs_alloc_header(sb, __le16_to_cpu(pi->i_mode));
-		pmfs_rebuild_dir_inode_tree(sb, pi_addr, sih, ino, bm);
+		pmfs_rebuild_dir_inode_tree(sb, pi, pi_addr, sih, bm);
 		pmfs_assign_info_header(sb, pmfs_ino, sih, multithread);
 		break;
 	case S_IFLNK:

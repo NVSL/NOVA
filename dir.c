@@ -462,15 +462,15 @@ static inline void pmfs_rebuild_dir_time_and_size(struct super_block *sb,
 	pi->i_links_count = entry->links_count;
 }
 
-int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
-	struct pmfs_inode_info_header *sih, u64 ino,
-	struct scan_bitmap *bm)
+int pmfs_rebuild_dir_inode_tree(struct super_block *sb,
+	struct pmfs_inode *pi, u64 pi_addr,
+	struct pmfs_inode_info_header *sih, struct scan_bitmap *bm)
 {
 	struct pmfs_dir_logentry *entry = NULL;
 	struct pmfs_setattr_logentry *attr_entry = NULL;
 	struct pmfs_link_change_entry *link_change_entry = NULL;
 	struct pmfs_inode_log_page *curr_page;
-	struct pmfs_inode *pi;
+	u64 ino = pi->pmfs_ino << PMFS_INODE_BITS;
 	unsigned short de_len;
 	void *addr;
 	u64 curr_p;
@@ -479,11 +479,6 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb, u64 pi_addr,
 	int ret;
 
 	pmfs_dbg_verbose("Rebuild dir %llu tree\n", ino);
-	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
-	if (!pi) {
-		pmfs_dbg("%s: pi is NULL\n", __func__);
-		return -EINVAL;
-	}
 
 	sih->dir_tree = RB_ROOT;
 	sih->pi_addr = pi_addr;

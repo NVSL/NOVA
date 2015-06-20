@@ -447,7 +447,7 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	pmfs_append_dir_init_entries(sb, pi, inode->i_ino, dir->i_ino);
 
 	/* Build the dir tree */
-	pmfs_rebuild_dir_inode_tree(sb, pi_addr, sih, inode->i_ino, NULL);
+	pmfs_rebuild_dir_inode_tree(sb, pi, pi_addr, sih, NULL);
 
 	pidir = pmfs_get_inode(sb, dir);
 	inc_nlink(dir);
