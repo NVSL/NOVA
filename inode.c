@@ -3291,6 +3291,7 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 
 	/* FIXME: make this atomic */
 	pi->log_head = pi->log_tail = 0;
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 }
 
 int pmfs_free_dram_resource(struct super_block *sb,
