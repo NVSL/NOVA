@@ -1100,12 +1100,18 @@ out:
 	return errval;
 }
 
-static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
-	u64 pi_addr, struct scan_bitmap *bm, int cpuid,
-	int multithread)
+static int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
+	struct scan_bitmap *bm, int cpuid, int multithread)
 {
 	struct pmfs_inode_info_header *sih;
-	unsigned long pmfs_ino = pi->pmfs_ino;
+	struct pmfs_inode *pi;
+	unsigned long pmfs_ino;
+
+	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
+	if (!pi)
+		BUG();
+
+	pmfs_ino = pi->pmfs_ino;
 
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:
@@ -1153,7 +1159,6 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_alive_inode_entry *entry = NULL;
 	size_t size = sizeof(struct pmfs_alive_inode_entry);
-	struct pmfs_inode *pi;
 	u64 curr_p = inode_table->log_head;
 
 	pmfs_dbg_verbose("%s: rebuild alive inodes\n", __func__);
@@ -1180,8 +1185,7 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 		entry = (struct pmfs_alive_inode_entry *)pmfs_get_block(sb,
 								curr_p);
 
-		pi = (struct pmfs_inode *)pmfs_get_block(sb, entry->pi_addr);
-		pmfs_recover_inode(sb, pi, entry->pi_addr,
+		pmfs_recover_inode(sb, entry->pi_addr,
 						bm, smp_processor_id(), 0);
 		processed[smp_processor_id()]++;
 		curr_p += size;
@@ -1256,22 +1260,21 @@ static inline void task_ring_enqueue(struct task_ring *ring, u64 pi_addr)
 	ring->enqueue = (ring->enqueue + 1) % 512;
 }
 
-static inline struct pmfs_inode *task_ring_dequeue(struct super_block *sb,
-	struct task_ring *ring,	u64 *pi_addr)
+static inline u64 task_ring_dequeue(struct super_block *sb,
+	struct task_ring *ring)
 {
-	struct pmfs_inode *pi;
+	u64 pi_addr = 0;
 
-	*pi_addr = ring->tasks[ring->dequeue];
-	pi = (struct pmfs_inode *)pmfs_get_block(sb, *pi_addr);
+	pi_addr = ring->tasks[ring->dequeue];
 
-	if (!pi)
+	if (pi_addr == 0)
 		BUG();
 
 	ring->tasks[ring->dequeue] = 0;
 	ring->dequeue = (ring->dequeue + 1) % 512;
 	ring->processed++;
 
-	return pi;
+	return pi_addr;
 }
 
 struct scan_bitmap *recovery_bm = NULL;
@@ -1282,15 +1285,14 @@ wait_queue_head_t finish_wq;
 static int thread_func(void *data)
 {
 	struct super_block *sb = data;
-	struct pmfs_inode *pi;
 	int cpuid = smp_processor_id();
 	struct task_ring *ring = &task_rings[cpuid];
 	u64 pi_addr = 0;
 
 	while (!kthread_should_stop()) {
 		while(!task_ring_is_empty(ring)) {
-			pi = task_ring_dequeue(sb, ring, &pi_addr);
-			pmfs_recover_inode(sb, pi, pi_addr, recovery_bm,
+			pi_addr = task_ring_dequeue(sb, ring);
+			pmfs_recover_inode(sb, pi_addr, recovery_bm,
 							cpuid, 1);
 			wake_up_interruptible(&finish_wq);
 		}
