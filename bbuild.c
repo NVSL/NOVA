@@ -320,7 +320,8 @@ out:
 }
 
 static u64 pmfs_append_alive_inode_entry(struct super_block *sb,
-	struct pmfs_inode *inode_table, struct pmfs_inode_info_header *sih,
+	struct pmfs_inode *inode_table, struct pmfs_inode *pi,
+	struct pmfs_inode_info_header *sih,
 	struct pmfs_inode_info_header *inode_table_sih)
 {
 	size_t size = sizeof(struct pmfs_alive_inode_entry);
@@ -854,14 +855,16 @@ static int pmfs_increase_header_tree_height(struct super_block *sb,
 }
 
 static int pmfs_inode_alive(struct super_block *sb,
-	struct pmfs_inode_info_header *sih)
+	struct pmfs_inode_info_header *sih, struct pmfs_inode **return_pi)
 {
 	struct pmfs_inode *pi;
 
 	if (sih->ino && sih->pi_addr) {
 		pi = (struct pmfs_inode *)pmfs_get_block(sb, sih->pi_addr);
-		if (pi->valid)
+		if (pi->valid) {
+			*return_pi = pi;
 			return 1;
+		}
 	}
 
 	return 0;
@@ -873,6 +876,7 @@ static int recursive_truncate_header_tree(struct super_block *sb,
 	__le64 block, u32 height, unsigned long first_blocknr)
 {
 	struct pmfs_inode_info_header *sih;
+	struct pmfs_inode *pi = NULL;
 	unsigned long first_blk, page_addr;
 	unsigned int node_bits, first_index, last_index, i;
 	__le64 *node;
@@ -890,9 +894,9 @@ static int recursive_truncate_header_tree(struct super_block *sb,
 			if (unlikely(!node[i]))
 				continue;
 			sih = (struct pmfs_inode_info_header *)node[i];
-			if (pmfs_inode_alive(sb, sih))
+			if (pmfs_inode_alive(sb, sih, &pi))
 				pmfs_append_alive_inode_entry(sb, inode_table,
-						sih, inode_table_sih);
+						pi, sih, inode_table_sih);
 			pmfs_free_dram_resource(sb, sih);
 			pmfs_free_header(sb, sih);
 			node[i] = 0;
@@ -922,6 +926,7 @@ unsigned int pmfs_free_header_tree(struct super_block *sb)
 	struct pmfs_inode *inode_table = pmfs_get_inode_table(sb);
 	struct pmfs_inode_info_header *sih, *inode_table_sih;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct pmfs_inode *pi = NULL;
 	unsigned long root = sbi->root;
 	unsigned long first_blocknr;
 	unsigned int freed;
@@ -933,9 +938,9 @@ unsigned int pmfs_free_header_tree(struct super_block *sb)
 
 	if (sbi->height == 0) {
 		sih = (struct pmfs_inode_info_header *)root;
-		if (pmfs_inode_alive(sb, sih))
-			pmfs_append_alive_inode_entry(sb, inode_table, sih,
-					inode_table_sih);
+		if (pmfs_inode_alive(sb, sih, &pi))
+			pmfs_append_alive_inode_entry(sb, inode_table, pi,
+					sih, inode_table_sih);
 		pmfs_free_dram_resource(sb, sih);
 		pmfs_free_header(sb, (void *)root);
 		freed = 1;
