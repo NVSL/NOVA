@@ -345,7 +345,9 @@ static u64 pmfs_append_alive_inode_entry(struct super_block *sb,
 		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct pmfs_alive_inode_entry *)pmfs_get_block(sb, curr_p);
-	entry->ino = sih->ino;
+	if (sih->ino != pi->pmfs_ino << PMFS_INODE_BITS)
+		pmfs_dbg("%s: inode number not match! sih %llu, pi %llu\n",
+			__func__, sih->ino, pi->pmfs_ino << PMFS_INODE_BITS);
 	entry->pi_addr = sih->pi_addr;
 	pmfs_dbg_verbose("append entry alive inode %llu, pmfs inode 0x%llx\n",
 			sih->ino, sih->pi_addr);
@@ -1099,30 +1101,37 @@ out:
 }
 
 static int pmfs_recover_inode(struct super_block *sb, struct pmfs_inode *pi,
-	u64 pi_addr, u64 ino, struct scan_bitmap *bm, int cpuid,
+	u64 pi_addr, struct scan_bitmap *bm, int cpuid,
 	int multithread)
 {
 	struct pmfs_inode_info_header *sih;
-	unsigned long pmfs_ino = ino >> PMFS_INODE_BITS;
+	unsigned long pmfs_ino = pi->pmfs_ino;
+	u64 ino = pmfs_ino << PMFS_INODE_BITS;
 
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:
 		pmfs_dbg_verbose("This is thread %d, processing file %p, "
-				"ino %llu, head 0x%llx, tail 0x%llx\n",
-				cpuid, pi, ino, pi->log_head, pi->log_tail);
+				"pmfs ino %lu, head 0x%llx, tail 0x%llx\n",
+				cpuid, pi, pmfs_ino, pi->log_head,
+				pi->log_tail);
 		sih = pmfs_alloc_header(sb, __le16_to_cpu(pi->i_mode));
 		pmfs_rebuild_file_inode_tree(sb, pi_addr, sih, ino, bm);
 		pmfs_assign_info_header(sb, pmfs_ino, sih, multithread);
 		break;
 	case S_IFDIR:
 		pmfs_dbg_verbose("This is thread %d, processing dir %p, "
-				"ino %llu, head 0x%llx, tail 0x%llx\n",
-				cpuid, pi, ino, pi->log_head, pi->log_tail);
+				"pmfs ino %lu, head 0x%llx, tail 0x%llx\n",
+				cpuid, pi, pmfs_ino, pi->log_head,
+				pi->log_tail);
 		sih = pmfs_alloc_header(sb, __le16_to_cpu(pi->i_mode));
 		pmfs_rebuild_dir_inode_tree(sb, pi_addr, sih, ino, bm);
 		pmfs_assign_info_header(sb, pmfs_ino, sih, multithread);
 		break;
 	case S_IFLNK:
+		pmfs_dbg_verbose("This is thread %d, processing symlink %p, "
+				"pmfs ino %lu, head 0x%llx, tail 0x%llx\n",
+				cpuid, pi, pmfs_ino, pi->log_head,
+				pi->log_tail);
 		/* No need to rebuild tree for symlink files */
 		sih = pmfs_alloc_header(sb, __le16_to_cpu(pi->i_mode));
 		sih->pi_addr = pi_addr;
@@ -1173,7 +1182,7 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 								curr_p);
 
 		pi = (struct pmfs_inode *)pmfs_get_block(sb, entry->pi_addr);
-		pmfs_recover_inode(sb, pi, entry->pi_addr, entry->ino,
+		pmfs_recover_inode(sb, pi, entry->pi_addr,
 						bm, smp_processor_id(), 0);
 		processed[smp_processor_id()]++;
 		curr_p += size;
@@ -1213,7 +1222,6 @@ int pmfs_singlethread_recovery(struct super_block *sb, struct scan_bitmap *bm)
 
 struct task_ring {
 	u64 tasks[512];
-	u64 ino[512];
 	int id;
 	int enqueue;
 	int dequeue;
@@ -1239,32 +1247,28 @@ static inline bool task_ring_is_full(struct task_ring *ring)
 	return (ring->enqueue + 1) % 512 == ring->dequeue;
 }
 
-static inline void task_ring_enqueue(struct task_ring *ring,
-	u64 pi_addr, u64 ino)
+static inline void task_ring_enqueue(struct task_ring *ring, u64 pi_addr)
 {
 	pmfs_dbg_verbose("Enqueue at %d\n", ring->enqueue);
-	if (ring->tasks[ring->enqueue] || ring->ino[ring->enqueue])
+	if (ring->tasks[ring->enqueue])
 		pmfs_dbg("%s: ERROR existing entry %llu\n", __func__,
-				ring->ino[ring->enqueue]);
+				ring->tasks[ring->enqueue]);
 	ring->tasks[ring->enqueue] = pi_addr;
-	ring->ino[ring->enqueue] = ino;
 	ring->enqueue = (ring->enqueue + 1) % 512;
 }
 
 static inline struct pmfs_inode *task_ring_dequeue(struct super_block *sb,
-	struct task_ring *ring,	u64 *ino, u64 *pi_addr)
+	struct task_ring *ring,	u64 *pi_addr)
 {
 	struct pmfs_inode *pi;
 
 	*pi_addr = ring->tasks[ring->dequeue];
 	pi = (struct pmfs_inode *)pmfs_get_block(sb, *pi_addr);
 
-	*ino = ring->ino[ring->dequeue];
 	if (!pi)
 		BUG();
 
 	ring->tasks[ring->dequeue] = 0;
-	ring->ino[ring->dequeue] = 0;
 	ring->dequeue = (ring->dequeue + 1) % 512;
 	ring->processed++;
 
@@ -1282,13 +1286,12 @@ static int thread_func(void *data)
 	struct pmfs_inode *pi;
 	int cpuid = smp_processor_id();
 	struct task_ring *ring = &task_rings[cpuid];
-	u64 ino = 0;
 	u64 pi_addr = 0;
 
 	while (!kthread_should_stop()) {
 		while(!task_ring_is_empty(ring)) {
-			pi = task_ring_dequeue(sb, ring, &ino, &pi_addr);
-			pmfs_recover_inode(sb, pi, pi_addr, ino, recovery_bm,
+			pi = task_ring_dequeue(sb, ring, &pi_addr);
+			pmfs_recover_inode(sb, pi, pi_addr, recovery_bm,
 							cpuid, 1);
 			wake_up_interruptible(&finish_wq);
 		}
@@ -1359,7 +1362,7 @@ static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
 							msecs_to_jiffies(1));
 		}
 
-		task_ring_enqueue(ring, entry->pi_addr,	entry->ino);
+		task_ring_enqueue(ring, entry->pi_addr);
 		wake_up_interruptible(&ring->assign_wq);
 
 		curr_p += size;

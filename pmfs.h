@@ -552,7 +552,6 @@ struct pmfs_blocknode_lowhigh {
 };
 
 struct pmfs_alive_inode_entry {
-       __le64 ino;
        __le64 pi_addr;
 };
 
