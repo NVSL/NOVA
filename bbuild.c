@@ -320,7 +320,7 @@ out:
 }
 
 static u64 pmfs_append_alive_inode_entry(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
+	struct pmfs_inode *inode_table, struct pmfs_inode_info_header *sih,
 	struct pmfs_inode_info_header *inode_table_sih)
 {
 	size_t size = sizeof(struct pmfs_alive_inode_entry);
@@ -330,12 +330,12 @@ static u64 pmfs_append_alive_inode_entry(struct super_block *sb,
 
 	PMFS_START_TIMING(append_entry_t, append_time);
 
-	curr_p = pi->log_tail;
+	curr_p = inode_table->log_tail;
 
 	if (curr_p == 0 || (is_last_entry(curr_p, size, 0) &&
 				next_log_page(sb, curr_p) == 0)) {
-		curr_p = pmfs_extend_inode_log(sb, pi, inode_table_sih,
-							curr_p, 0);
+		curr_p = pmfs_extend_inode_log(sb, inode_table,
+						inode_table_sih, curr_p, 0);
 		if (curr_p == 0)
 			goto out;
 	}
@@ -351,7 +351,7 @@ static u64 pmfs_append_alive_inode_entry(struct super_block *sb,
 
 	pmfs_flush_buffer(entry, sizeof(struct pmfs_alive_inode_entry), 0);
 	/* flush at the end */
-	pi->log_tail = curr_p + size;
+	inode_table->log_tail = curr_p + size;
 out:
 	PMFS_END_TIMING(append_entry_t, append_time);
 	return curr_p;
@@ -868,7 +868,8 @@ static int pmfs_inode_alive(struct super_block *sb,
 }
 
 static int recursive_truncate_header_tree(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_inode_info_header *inode_table_sih,
+	struct pmfs_inode *inode_table,
+	struct pmfs_inode_info_header *inode_table_sih,
 	__le64 block, u32 height, unsigned long first_blocknr)
 {
 	struct pmfs_inode_info_header *sih;
@@ -890,8 +891,8 @@ static int recursive_truncate_header_tree(struct super_block *sb,
 				continue;
 			sih = (struct pmfs_inode_info_header *)node[i];
 			if (pmfs_inode_alive(sb, sih))
-				pmfs_append_alive_inode_entry(sb, pi, sih,
-						inode_table_sih);
+				pmfs_append_alive_inode_entry(sb, inode_table,
+						sih, inode_table_sih);
 			pmfs_free_dram_resource(sb, sih);
 			pmfs_free_header(sb, sih);
 			node[i] = 0;
@@ -904,9 +905,10 @@ static int recursive_truncate_header_tree(struct super_block *sb,
 			first_blk = (i == first_index) ? (first_blocknr &
 				((1 << node_bits) - 1)) : 0;
 
-			freed += recursive_truncate_header_tree(sb, pi,
-					inode_table_sih, DRAM_ADDR(node[i]),
-					height - 1, first_blk);
+			freed += recursive_truncate_header_tree(sb,
+					inode_table, inode_table_sih,
+					DRAM_ADDR(node[i]), height - 1,
+					first_blk);
 			/* Freeing the meta-data block */
 			page_addr = node[i];
 			pmfs_free_meta_block(sb, page_addr);
@@ -917,7 +919,7 @@ static int recursive_truncate_header_tree(struct super_block *sb,
 
 unsigned int pmfs_free_header_tree(struct super_block *sb)
 {
-	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
+	struct pmfs_inode *inode_table = pmfs_get_inode_table(sb);
 	struct pmfs_inode_info_header *sih, *inode_table_sih;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	unsigned long root = sbi->root;
@@ -932,7 +934,7 @@ unsigned int pmfs_free_header_tree(struct super_block *sb)
 	if (sbi->height == 0) {
 		sih = (struct pmfs_inode_info_header *)root;
 		if (pmfs_inode_alive(sb, sih))
-			pmfs_append_alive_inode_entry(sb, pi, sih,
+			pmfs_append_alive_inode_entry(sb, inode_table, sih,
 					inode_table_sih);
 		pmfs_free_dram_resource(sb, sih);
 		pmfs_free_header(sb, (void *)root);
@@ -940,14 +942,15 @@ unsigned int pmfs_free_header_tree(struct super_block *sb)
 	} else {
 		first_blocknr = 0;
 
-		freed = recursive_truncate_header_tree(sb, pi, inode_table_sih,
-				DRAM_ADDR(root), sbi->height, first_blocknr);
+		freed = recursive_truncate_header_tree(sb, inode_table,
+				inode_table_sih, DRAM_ADDR(root), sbi->height,
+				first_blocknr);
 		first_blocknr = root;
 		pmfs_free_meta_block(sb, first_blocknr);
 	}
 
 	pmfs_free_header(sb, inode_table_sih);
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+	pmfs_flush_buffer(&inode_table->log_head, CACHELINE_SIZE, 1);
 	sbi->root = sbi->height = 0;
 	pmfs_dbg("%s: freed %u\n", __func__, freed);
 	return freed;
