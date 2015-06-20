@@ -27,7 +27,7 @@
 #include "pmfs.h"
 
 static void pmfs_free_header(struct super_block *sb,
-	struct pmfs_inode_info_header *p);
+	struct pmfs_inode_info_header *sih);
 
 static void pmfs_clear_datablock_inode(struct super_block *sb)
 {
@@ -757,7 +757,7 @@ int pmfs_setup_blocknode_map(struct super_block *sb)
 	mutex_init(&sbi->inode_table_mutex);
 	sbi->block_start = (unsigned long)0;
 	sbi->block_end = ((unsigned long)(initsize) >> PAGE_SHIFT);
-	
+
 	value = pmfs_can_skip_full_scan(sb);
 	if (value) {
 		pmfs_dbg_verbose("PMFS: Skipping full scan of inodes...\n");
@@ -818,9 +818,9 @@ struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
 }
 
 static void pmfs_free_header(struct super_block *sb,
-	struct pmfs_inode_info_header *p)
+	struct pmfs_inode_info_header *sih)
 {
-	kmem_cache_free(pmfs_header_cachep, p);
+	kmem_cache_free(pmfs_header_cachep, sih);
 	atomic64_inc(&header_free);
 }
 
