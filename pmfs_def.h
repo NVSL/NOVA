@@ -111,6 +111,7 @@ struct pmfs_inode {
 	__le32 padding;     /* pad to ensure truncate_item starts 8-byte aligned */
 
 	u8	valid;		/* Is this inode valid? */
+	u64	pmfs_ino;
 };
 
 /* This is a per-inode structure and follows immediately after the 

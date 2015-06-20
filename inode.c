@@ -1952,45 +1952,32 @@ static int pmfs_free_inode(struct inode *inode,
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi;
-	unsigned long inode_nr;
-	pmfs_transaction_t *trans;
+	unsigned long pmfs_ino;
 	int err = 0;
 	timing_t free_time;
 
 	PMFS_START_TIMING(free_inode_t, free_time);
-	mutex_lock(&PMFS_SB(sb)->inode_table_mutex);
+	mutex_lock(&sbi->inode_table_mutex);
 
 	pmfs_dbg_verbose("free_inode: %lu free_nodes %x tot nodes %x hint %x\n",
 		   inode->i_ino, sbi->s_free_inodes_count, sbi->s_inodes_count,
 		   sbi->s_free_inode_hint);
-	inode_nr = inode->i_ino >> PMFS_INODE_BITS;
+	pmfs_ino = inode->i_ino >> PMFS_INODE_BITS;
 
 	pi = pmfs_get_inode(sb, inode);
 
-	trans = pmfs_new_transaction(sb, MAX_INODE_LENTRIES);
-	if (IS_ERR(trans)) {
-		err = PTR_ERR(trans);
-		goto out;
+	if (pi->valid) {
+		pmfs_dbg("%s: inode %lu still valid\n",
+				__func__, inode->i_ino);
+		pi->valid = 0;
 	}
 
-	pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY, LE_DATA);
-
-	pmfs_memunlock_inode(sb, pi);
-	pi->root = 0;
-	/* FIXME: use valid bit */
-	pi->i_links_count = 0;
-	/* pi->i_xattr = 0; */
-	pi->i_size = 0;
-	pi->i_dtime = cpu_to_le32(get_seconds());
 	pmfs_free_inode_log(sb, pi);
-	pmfs_memlock_inode(sb, pi);
-
-	pmfs_commit_transaction(sb, trans);
 	sih->pi_addr = 0;
 
 	/* increment s_free_inodes_count */
-	if (inode_nr < (sbi->s_free_inode_hint))
-		sbi->s_free_inode_hint = (inode_nr);
+	if (pmfs_ino < (sbi->s_free_inode_hint))
+		sbi->s_free_inode_hint = (pmfs_ino);
 
 	sbi->s_free_inodes_count += 1;
 
@@ -2004,9 +1991,9 @@ static int pmfs_free_inode(struct inode *inode,
 	pmfs_dbg_verbose("free_inode: free_nodes %x total_nodes %x hint %x\n",
 		   sbi->s_free_inodes_count, sbi->s_inodes_count,
 		   sbi->s_free_inode_hint);
-out:
-	pmfs_free_inuse_inode(sb, inode_nr);
-	mutex_unlock(&PMFS_SB(sb)->inode_table_mutex);
+
+	pmfs_free_inuse_inode(sb, pmfs_ino);
+	mutex_unlock(&sbi->inode_table_mutex);
 	PMFS_END_TIMING(free_inode_t, free_time);
 	return err;
 }
@@ -2202,7 +2189,7 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	struct pmfs_inode *diri = NULL;
 	struct pmfs_inode_info *si;
 	struct pmfs_inode *pi;
-	int i, errval;
+	int pmfs_ino, errval;
 	timing_t new_inode_time;
 
 	PMFS_START_TIMING(new_inode_t, new_inode_time);
@@ -2227,7 +2214,7 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	if (!diri)
 		return ERR_PTR(-EACCES);
 
-	i = ino >> PMFS_INODE_BITS;
+	pmfs_ino = ino >> PMFS_INODE_BITS;
 
 	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
 	pmfs_dbg_verbose("allocating inode %llu @ 0x%llx\n", ino, pi_addr);
@@ -2261,7 +2248,7 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	}
 
 	/*
-	 * pi is part of the dir log. No transaction is needed,
+	 * Pi is part of the dir log so no transaction is needed,
 	 * but we need to flush to NVMM.
 	 */
 	pmfs_memunlock_inode(sb, pi);
@@ -2271,6 +2258,7 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	pi->i_dtime = 0;
 	pi->log_head = 0;
 	pi->log_tail = 0;
+	pi->pmfs_ino = pmfs_ino;
 	pi->valid = 1;
 	pmfs_memlock_inode(sb, pi);
 
