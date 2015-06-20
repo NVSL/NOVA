@@ -433,18 +433,6 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 		return;
 	}
 
-	pi->log_head = new_block;
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
-
-	temp_tail = new_block;
-	list_for_each_entry(i, head, link) {
-		step++;
-		curr_entry = pmfs_append_blocknode_entry(sb, i, temp_tail);
-		temp_tail = curr_entry + size;
-	}
-
-	pmfs_update_tail(pi, temp_tail);
-
 	pmfs_dbg("%s: %lu blocknodes, step %d, pi head 0x%llx, tail 0x%llx\n",
 		__func__, sbi->num_blocknode_block, step, pi->log_head,
 		pi->log_tail);
@@ -474,6 +462,20 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	pmfs_memlock_range(sb, &super->s_wtime, PMFS_FAST_MOUNT_FIELD_SIZE);
 	/* commit the transaction */
 	pmfs_commit_transaction(sb, trans);
+	pmfs_flush_buffer(super, PMFS_SB_SIZE, 1);
+
+	/* Finally update log head and tail */
+	pi->log_head = new_block;
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+
+	temp_tail = new_block;
+	list_for_each_entry(i, head, link) {
+		step++;
+		curr_entry = pmfs_append_blocknode_entry(sb, i, temp_tail);
+		temp_tail = curr_entry + size;
+	}
+
+	pmfs_update_tail(pi, temp_tail);
 }
 
 static void pmfs_inode_crawl_recursive(struct super_block *sb,
