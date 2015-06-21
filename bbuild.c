@@ -442,8 +442,9 @@ static u64 pmfs_append_alive_inode_entry(struct super_block *sb,
 		pmfs_dbg("%s: inode number not match! sih %llu, pi %llu\n",
 			__func__, sih->ino, pi->pmfs_ino << PMFS_INODE_BITS);
 	entry->pi_addr = sih->pi_addr;
-	pmfs_dbg_verbose("append entry alive inode %llu, pmfs inode 0x%llx\n",
-			sih->ino, sih->pi_addr);
+	pmfs_dbg_verbose("append entry alive inode %llu, pmfs inode 0x%llx "
+			"@ 0x%llx\n",
+			sih->ino, sih->pi_addr, curr_p);
 
 	pmfs_flush_buffer(entry, sizeof(struct pmfs_alive_inode_entry), 0);
 	/* flush at the end */
@@ -529,10 +530,6 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 		return;
 	}
 
-	pmfs_dbg("%s: %lu blocknodes, step %d, pi head 0x%llx, tail 0x%llx\n",
-		__func__, sbi->num_blocknode_block, step, pi->log_head,
-		pi->log_tail);
-
 	/*
 	 * save the total allocated blocknode mappings
 	 * in super block
@@ -572,6 +569,10 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	}
 
 	pmfs_update_tail(pi, temp_tail);
+
+	pmfs_dbg("%s: %lu blocknodes, step %d, pi head 0x%llx, tail 0x%llx\n",
+		__func__, sbi->num_blocknode_block, step, pi->log_head,
+		pi->log_tail);
 }
 
 static void pmfs_inode_crawl_recursive(struct super_block *sb,
@@ -1193,7 +1194,7 @@ out:
 	return errval;
 }
 
-static int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
+int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 	struct scan_bitmap *bm, int cpuid, int multithread)
 {
 	struct pmfs_inode_info_header *sih;
@@ -1204,7 +1205,17 @@ static int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 	if (!pi)
 		PMFS_ASSERT(0);
 
+	if (pi->valid == 0)
+		return 0;
+
 	pmfs_ino = pi->pmfs_ino;
+	if (bm && pmfs_ino != 1)
+		pmfs_insert_inodetree(sb, pmfs_ino);
+
+	pmfs_dbg_verbose("%s: inode %lu, addr 0x%llx, valid %d, "
+			"head 0x%llx, tail 0x%llx\n",
+			__func__, pmfs_ino, pi_addr, pi->valid,
+			pi->log_head, pi->log_tail);
 
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:
@@ -1233,6 +1244,10 @@ static int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 		/* No need to rebuild tree for symlink files */
 		sih = pmfs_alloc_header(sb, __le16_to_cpu(pi->i_mode));
 		sih->pi_addr = pi_addr;
+		if (bm && pi->log_head) {
+			BUG_ON(pi->log_head & (PAGE_SIZE - 1));
+			set_bit(pi->log_head >> PAGE_SHIFT, bm->bitmap_4k);
+		}
 		pmfs_assign_info_header(sb, pmfs_ino, sih, multithread);
 		break;
 	default:
@@ -1240,6 +1255,38 @@ static int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 	}
 
 	return 0;
+}
+
+/*********************** DFS recovery *************************/
+
+int pmfs_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
+{
+	struct pmfs_inode *pi;
+	u64 root_addr = PMFS_ROOT_INO_START;
+
+	/* Initialize inuse inode list */
+	if (pmfs_init_inode_inuse_list(sb) < 0)
+		return -EINVAL;
+
+	/* Handle special inodes */
+	pi = pmfs_get_inode_by_ino(sb, PMFS_INODELIST_INO);
+	pi->log_head = pi->log_tail = 0;
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+
+	pi = pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
+	pi->log_head = pi->log_tail = 0;
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+
+	pi = pmfs_get_inode_table(sb);
+	pi->log_head = pi->log_tail = 0;
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+
+	pi = pmfs_get_inode_by_ino(sb, PMFS_LITEJOURNAL_INO);
+	if (pi->log_head)
+		set_bit(pi->log_head >> PAGE_SHIFT, bm->bitmap_4k);
+
+	/* Start from the root iode */
+	return pmfs_recover_inode(sb, root_addr, bm, smp_processor_id(), 0);
 }
 
 /*********************** Singlethread recovery *************************/
@@ -1570,7 +1617,6 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	sbi->block_start = (unsigned long)0;
 	sbi->block_end = ((unsigned long)(initsize) >> PAGE_SHIFT);
 
-	/* FIXME: The whole part needs re-written if returns false */
 	value = pmfs_can_skip_full_scan(sb);
 	if (value) {
 		pmfs_dbg("PMFS: Skipping build blocknode map\n");
@@ -1587,10 +1633,14 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	sbi->btype = PMFS_BLOCK_TYPE_4K;
 
 	pmfs_assign_bogus_header_info(sb);
-	if (multithread)
-		ret = pmfs_multithread_recovery(sb, bm);
-	else
-		ret = pmfs_singlethread_recovery(sb, bm);
+	if (bm) {
+		ret = pmfs_dfs_recovery(sb, bm);
+	} else {
+		if (multithread)
+			ret = pmfs_multithread_recovery(sb, bm);
+		else
+			ret = pmfs_singlethread_recovery(sb, bm);
+	}
 
 	if (bm) {
 		/* Reserving tow inodes - Inode 0 and Inode for datablock */

@@ -489,6 +489,8 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb,
 		BUG();
 	}
 
+	pmfs_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
+				curr_p, pi->log_tail);
 	if (bm) {
 		BUG_ON(curr_p & (PAGE_SIZE - 1));
 		set_bit(curr_p >> PAGE_SHIFT, bm->bitmap_4k);
@@ -528,9 +530,9 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb,
 			case DIR_LOG:
 				break;
 			default:
-				pmfs_dbg("%s: unknown type %d\n",
-							__func__, type);
-				BUG();
+				pmfs_dbg("%s: unknown type %d, 0x%llx\n",
+							__func__, type, curr_p);
+				PMFS_ASSERT(0);
 		}
 
 		entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, curr_p);
@@ -577,7 +579,11 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb,
 					curr_p : CACHE_ALIGN(curr_p) +
 							CACHELINE_SIZE;
 			}
-			/* handle the inode */
+			/* If power failure, recover the inode in DFS way */
+			if (bm)
+				pmfs_recover_inode(sb, curr_p,
+						bm, smp_processor_id(), 0);
+
 			curr_p += PMFS_INODE_SIZE;
 		}
 	}

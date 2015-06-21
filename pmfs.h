@@ -1205,6 +1205,8 @@ pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
 void pmfs_free_cache_block(struct mem_addr *pair);
 
 /* bbuild.c */
+int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
+	struct scan_bitmap *bm, int cpuid, int multithread);
 void pmfs_save_blocknode_mappings_to_log(struct super_block *sb);
 void pmfs_save_inode_list_to_log(struct super_block *sb);
 unsigned int pmfs_free_header_tree(struct super_block *sb);

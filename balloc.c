@@ -40,7 +40,7 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 	sbi->num_free_blocks -= num_used_block;
 	pmfs_insert_blocknode_blocktree(sbi, blknode);
 	list_add(&blknode->link, &sbi->block_inuse_head);
-	pmfs_dbg_verbose("Add: %lu %lu\n", blknode->block_low,
+	pmfs_dbg_verbose("%s: Add: %lx %lx\n", __func__, blknode->block_low,
 					blknode->block_high);
 }
 
@@ -611,7 +611,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	}
 	*blocknr = new_block_low;
 
-	pmfs_dbg_verbose("Alloc %u data blocks %lu\n", num, *blocknr);
+	pmfs_dbg_verbose("Alloc %u NVMM blocks 0x%lx\n", num, *blocknr);
 	alloc_steps += step;
 	return num_blocks / pmfs_get_numblocks(btype);
 }
@@ -624,6 +624,8 @@ inline int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	PMFS_START_TIMING(new_data_blocks_t, alloc_time);
 	allocated = pmfs_new_blocks(sb, blocknr, num, btype, zero, 0);
 	PMFS_END_TIMING(new_data_blocks_t, alloc_time);
+	pmfs_dbg_verbose("%s: %d blocks @ 0x%lx\n", __func__,
+						allocated, *blocknr);
 	return allocated;
 }
 
@@ -635,6 +637,8 @@ inline int pmfs_new_log_blocks(struct super_block *sb, unsigned long *blocknr,
 	PMFS_START_TIMING(new_log_blocks_t, alloc_time);
 	allocated = pmfs_new_blocks(sb, blocknr, num, btype, zero, 1);
 	PMFS_END_TIMING(new_log_blocks_t, alloc_time);
+	pmfs_dbg_verbose("%s: %d blocks @ 0x%lx\n", __func__,
+						allocated, *blocknr);
 	return allocated;
 }
 

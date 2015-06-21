@@ -1675,6 +1675,7 @@ int pmfs_init_inode_inuse_list(struct super_block *sb)
 	blknode->block_high = PMFS_FREE_INODE_HINT_START - 1;
 	pmfs_insert_blocknode_inodetree(sbi, blknode);
 	list_add(&blknode->link, &sbi->inode_inuse_head);
+	sbi->num_blocknode_inode = 1;
 
 	return 0;
 }
@@ -2217,7 +2218,8 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	pmfs_ino = ino >> PMFS_INODE_BITS;
 
 	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
-	pmfs_dbg_verbose("allocating inode %llu @ 0x%llx\n", ino, pi_addr);
+	pmfs_dbg_verbose("%s: allocating inode %llu @ 0x%llx\n",
+					__func__, ino, pi_addr);
 
 	/* chosen inode is in ino */
 	inode->i_ino = ino;
@@ -2923,8 +2925,8 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 	}
 	ret_pages += allocated;
 	num_pages -= allocated;
-	pmfs_dbg_verbose("Alloc %d log blocks @ 0x%lx\n", allocated,
-						new_inode_blocknr);
+	pmfs_dbg_verbose("Pi %llu: Alloc %d log blocks @ 0x%lx\n",
+			pi->pmfs_ino, allocated, new_inode_blocknr);
 
 	/* Coalesce the pages */
 	pmfs_coalesce_log_pages(sb, 0, new_inode_blocknr, allocated);
@@ -2936,6 +2938,8 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 		allocated = pmfs_new_log_blocks(sb, &new_inode_blocknr,
 					num_pages, PMFS_BLOCK_TYPE_4K, 1);
 
+		pmfs_dbg_verbose("Alloc %d log blocks @ 0x%lx\n",
+					allocated, new_inode_blocknr);
 		if (allocated <= 0) {
 			pmfs_err(sb, "ERROR: no inode log page available: "
 				"%d %d\n", num_pages, allocated);
@@ -3392,13 +3396,13 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 			case FILE_WRITE:
 				break;
 			default:
-				pmfs_dbg("%s: unknown type %d\n",
-							__func__, type);
-				BUG();
+				pmfs_dbg("%s: unknown type %d, 0x%llx\n",
+							__func__, type, curr_p);
+				PMFS_ASSERT(0);
 		}
 
 		entry = (struct pmfs_file_write_entry *)addr;
-		//pmfs_print_inode_entry(entry);
+//		pmfs_print_inode_entry(entry);
 
 		if (entry->num_pages != GET_INVALID(entry->block)) {
 			/*
