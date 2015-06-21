@@ -1193,6 +1193,8 @@ int pmfs_free_dram_resource(struct super_block *sb,
 	struct pmfs_inode_info_header *sih);
 
 /* balloc.c */
+inline int pmfs_rbtree_compare_blocknode(struct pmfs_blocknode *curr,
+	unsigned long new_block_low);
 inline int pmfs_insert_blocknode_blocktree(struct pmfs_sb_info *sbi,
 	struct pmfs_blocknode *new_node);
 inline int pmfs_insert_blocknode_inodetree(struct pmfs_sb_info *sbi,

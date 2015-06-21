@@ -48,6 +48,99 @@ static void pmfs_clear_datablock_inode(struct super_block *sb)
 	pmfs_commit_transaction(sb, trans);
 }
 
+static int pmfs_insert_inodetree(struct super_block *sb,
+	unsigned long pmfs_ino)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct pmfs_blocknode *curr = NULL, *prev = NULL, *next = NULL;
+	struct pmfs_blocknode *new_node;
+	struct rb_node **temp, *parent;
+	int compVal;
+
+	temp = &(sbi->inode_inuse_tree.rb_node);
+	parent = NULL;
+
+	while (*temp) {
+		curr = container_of(*temp, struct pmfs_blocknode, node);
+		compVal = pmfs_rbtree_compare_blocknode(curr, pmfs_ino);
+		parent = *temp;
+
+		if (compVal == -1) {
+			temp = &((*temp)->rb_left);
+		} else if (compVal == 1) {
+			temp = &((*temp)->rb_right);
+		} else {
+			pmfs_dbg("%s: ino %lu exists in entry %lu - %lu\n",
+				__func__, pmfs_ino, curr->block_low,
+				curr->block_high);
+			return 0;
+		}
+	}
+
+	if (pmfs_ino < curr->block_low) {
+		next = curr;
+		prev = list_entry(curr->link.prev, struct pmfs_blocknode, link);
+	} else {
+		prev = curr;
+		next = list_entry(curr->link.next, struct pmfs_blocknode, link);
+	}
+
+	if (pmfs_ino == curr->block_low - 1) {
+		curr->block_low = pmfs_ino;
+		if (prev && prev->block_high + 1 == pmfs_ino) {
+			prev->block_high = curr->block_high;
+			list_del(&curr->link);
+			rb_erase(&curr->node,
+					&sbi->inode_inuse_tree);
+			sbi->num_blocknode_inode--;
+		}
+		return 0;
+	}
+
+	if (pmfs_ino == curr->block_high + 1) {
+		curr->block_high = pmfs_ino;
+		if (next && next->block_low - 1 == pmfs_ino) {
+			curr->block_high = next->block_high;
+			list_del(&next->link);
+			rb_erase(&next->node,
+					&sbi->inode_inuse_tree);
+			sbi->num_blocknode_inode--;
+		}
+		return 0;
+	}
+
+	if (pmfs_ino < curr->block_low) {
+		if (prev && prev->block_high + 1 == pmfs_ino) {
+			prev->block_high = pmfs_ino;
+			return 0;
+		}
+		goto insert;
+	}
+
+	if (pmfs_ino > curr->block_high) {
+		if (next && next->block_low - 1 == pmfs_ino) {
+			next->block_low = pmfs_ino;
+			return 0;
+		}
+		goto insert;
+	}
+
+	pmfs_dbg("%s ERROR: ino %lu, entry %lu - %lu\n",
+			__func__, pmfs_ino, curr->block_low,
+			curr->block_high);
+	return -EINVAL;
+
+insert:
+	new_node = pmfs_alloc_inode_node(sb);
+	PMFS_ASSERT(new_node);
+	new_node->block_low = new_node->block_high = pmfs_ino;
+	list_add(&new_node->link, &prev->link);
+	rb_link_node(&new_node->node, parent, temp);
+	rb_insert_color(&new_node->node, &sbi->inode_inuse_tree);
+	sbi->num_blocknode_inode++;
+	return 0;
+}
+
 static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
@@ -72,7 +165,7 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 
 		if (curr_p == 0) {
 			pmfs_dbg("%s: curr_p is NULL!\n", __func__);
-			BUG();
+			PMFS_ASSERT(0);
 		}
 
 		entry = (struct pmfs_blocknode_lowhigh *)pmfs_get_block(sb,
@@ -118,7 +211,7 @@ static void pmfs_init_inode_list_from_inode(struct super_block *sb)
 
 		if (curr_p == 0) {
 			pmfs_dbg("%s: curr_p is NULL!\n", __func__);
-			BUG();
+			PMFS_ASSERT(0);
 		}
 
 		entry = (struct pmfs_blocknode_lowhigh *)pmfs_get_block(sb,
@@ -807,7 +900,7 @@ struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
 		kmem_cache_alloc(pmfs_header_cachep, GFP_NOFS);
 
 	if (!p)
-		BUG();
+		PMFS_ASSERT(0);
 
 	p->root = 0;
 	p->height = 0;
@@ -1109,7 +1202,7 @@ static int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 
 	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
 	if (!pi)
-		BUG();
+		PMFS_ASSERT(0);
 
 	pmfs_ino = pi->pmfs_ino;
 
@@ -1174,7 +1267,7 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 
 		if (curr_p == 0) {
 			pmfs_err(sb, "Alive inode log reaches NULL!\n");
-			BUG();
+			PMFS_ASSERT(0);
 		}
 
 		if (bm) {
@@ -1268,7 +1361,7 @@ static inline u64 task_ring_dequeue(struct super_block *sb,
 	pi_addr = ring->tasks[ring->dequeue];
 
 	if (pi_addr == 0)
-		BUG();
+		PMFS_ASSERT(0);
 
 	ring->tasks[ring->dequeue] = 0;
 	ring->dequeue = (ring->dequeue + 1) % 512;
@@ -1347,7 +1440,7 @@ static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
 
 		if (curr_p == 0) {
 			pmfs_err(sb, "Alive inode log reaches NULL!\n");
-			BUG();
+			PMFS_ASSERT(0);
 		}
 
 		if (bm) {

@@ -155,7 +155,7 @@ static int pmfs_alloc_dram_page(struct super_block *sb,
 	return 0;
 }
 
-static int pmfs_rbtree_compare_blocknode(struct pmfs_blocknode *curr,
+inline int pmfs_rbtree_compare_blocknode(struct pmfs_blocknode *curr,
 	unsigned long new_block_low)
 {
 	if (new_block_low < curr->block_low)
