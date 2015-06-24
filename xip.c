@@ -342,6 +342,42 @@ static inline size_t memcpy_to_nvmm(char *kmem, loff_t offset,
 	return copied;
 }
 
+static int pmfs_reassign_file_btree(struct super_block *sb,
+	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
+	u64 begin_tail)
+{
+	struct pmfs_file_write_entry *entry_data;
+	u64 curr_p = begin_tail;
+	size_t entry_size = sizeof(struct pmfs_file_write_entry);
+
+	while (curr_p != pi->log_tail) {
+		if (is_last_entry(curr_p, entry_size, 0))
+			curr_p = next_log_page(sb, curr_p);
+
+		if (curr_p == 0) {
+			pmfs_err(sb, "%s: File inode %llu log is NULL!\n",
+				__func__, pi->pmfs_ino << PMFS_INODE_BITS);
+			return -EINVAL;
+		}
+
+		entry_data = (struct pmfs_file_write_entry *)
+					pmfs_get_block(sb, curr_p);
+
+		if (entry_data->entry_type != FILE_WRITE) {
+			pmfs_dbg("%s: entry type is not write? %d\n",
+					__func__, entry_data->entry_type);
+			curr_p += entry_size;
+			continue;
+		}
+
+		pmfs_assign_blocks(sb, pi, sih, entry_data, NULL,
+					curr_p, true, true, false);
+		curr_p += entry_size;
+	}
+
+	return 0;
+}
+
 ssize_t pmfs_cow_file_write(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos, bool need_mutex)
 {
@@ -366,7 +402,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	long status = 0;
 	timing_t cow_write_time, memcpy_time;
 	unsigned long step = 0;
-	u64 temp_tail;
+	u64 temp_tail, begin_tail;
 	u32 time;
 
 	PMFS_START_TIMING(cow_write_t, cow_write_time);
@@ -407,7 +443,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 			__func__, inode->i_ino,	pos >> sb->s_blocksize_bits,
 			offset, count);
 
-	temp_tail = pi->log_tail;
+	begin_tail = temp_tail = pi->log_tail;
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
@@ -462,9 +498,6 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 			goto out;
 		}
 
-		pmfs_assign_blocks(sb, pi, sih, &entry_data, NULL,
-					curr_entry, true, true, false);
-
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {
 			status = copied;
@@ -479,7 +512,10 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 				status = -EFAULT;
 		if (status < 0)
 			break;
-		//FIXME: Possible contention here
+
+		/* Log is newly allocated? */
+		if (begin_tail == 0)
+			begin_tail = curr_entry;
 		temp_tail = curr_entry + sizeof(struct pmfs_file_write_entry);
 	}
 
@@ -498,6 +534,11 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	}
 
 	pmfs_update_tail(pi, temp_tail);
+
+	/* Free the overlap blocks after the write is committed */
+	ret = pmfs_reassign_file_btree(sb, pi, sih, begin_tail);
+	if (ret)
+		goto out;
 
 	ret = written;
 	write_breaks += step;
