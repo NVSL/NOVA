@@ -728,7 +728,7 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	size_t bytes, copied;
 	loff_t pos;
 	int status = 0;
-	u64 temp_tail;
+	u64 temp_tail, begin_tail;
 	u32 time;
 	timing_t memcpy_time, copy_to_nvmm_time;
 
@@ -741,7 +741,7 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	pos = offset + (pgoff << sb->s_blocksize_bits);
 	time = CURRENT_TIME_SEC.tv_sec;
 
-	temp_tail = pi->log_tail;
+	begin_tail = temp_tail = pi->log_tail;
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
@@ -802,13 +802,6 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 			goto out;
 		}
 
-		/*
-		 * Yeah, we have to assign the blocks to NVMM otherwise
-		 * they cannot be freed
-		 */
-		pmfs_assign_blocks(sb, pi, sih, &entry_data, NULL,
-					curr_entry, true, true, false);
-
 		if (copied > 0) {
 			status = copied;
 			written += copied;
@@ -824,7 +817,10 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 			ret = status;
 			goto out;
 		}
-		//FIXME: Possible contention here
+
+		/* Log is newly allocated? */
+		if (begin_tail == 0)
+			begin_tail = curr_entry;
 		temp_tail = curr_entry + sizeof(struct pmfs_file_write_entry);
 	}
 
@@ -837,6 +833,11 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 
 	pmfs_update_tail(pi, temp_tail);
+
+	/* Free the overlap blocks after the write is committed */
+	ret = pmfs_reassign_file_btree(sb, pi, sih, begin_tail);
+	if (ret)
+		goto out;
 
 	ret = 0;
 out:
