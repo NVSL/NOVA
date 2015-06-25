@@ -217,11 +217,11 @@ void pmfs_print_inode_log(struct super_block *sb, struct inode *inode)
 			struct pmfs_file_write_entry *entry =
 					pmfs_get_block(sb, curr);
 			pmfs_dbg("entry @ %llu: offset %u, size %u, "
-				"blocknr %llu, invalid count %llu\n",
+				"blocknr %llu, invalid count %u\n",
 				(curr & (PAGE_SIZE - 1)) / entry_size,
 				entry->pgoff, entry->num_pages,
 				entry->block >> PAGE_SHIFT,
-				GET_INVALID(entry->block));
+				entry->invalid_pages);
 			curr += entry_size;
 		}
 	}

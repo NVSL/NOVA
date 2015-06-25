@@ -370,8 +370,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 			}
 			if (pair->nvmm_entry) {
 				entry = pmfs_get_block(sb, pair->nvmm_entry);
-				if (GET_INVALID(entry->block) < 4000)
-					entry->block++;
+				entry->invalid_pages++;
 
 				if (start_blocknr == 0) {
 					start_blocknr = pair->nvmm;
@@ -656,8 +655,7 @@ void pmfs_free_mem_addr(struct super_block *sb, __le64 addr, u32 btype)
 	if (pair->nvmm_entry) {
 		entry = (struct pmfs_file_write_entry *)
 				pmfs_get_block(sb, pair->nvmm_entry);
-		if (GET_INVALID(entry->block) < 4000)
-			entry->block++;
+		entry->invalid_pages++;
 		pmfs_free_data_blocks(sb, pair->nvmm, 1, btype, NULL, 1);
 		pair->nvmm_entry = 0;
 		pair->nvmm = 0;
@@ -1249,8 +1247,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 			pgoff = start_pgoff + i;
 			if (leaf->nvmm_entry && nvmm) {
 				entry = pmfs_get_block(sb, leaf->nvmm_entry);
-				if (GET_INVALID(entry->block) < 4000)
-					entry->block++;
+				entry->invalid_pages++;
 				if (bm)
 					clear_bit(leaf->nvmm, bm->bitmap_4k);
 				if (free)
@@ -1504,8 +1501,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 
 				entry = (struct pmfs_file_write_entry *)
 					pmfs_get_block(sb, root->nvmm_entry);
-				if (GET_INVALID(entry->block) < 4000)
-					entry->block++;
+				entry->invalid_pages++;
 				if (bm)
 					clear_bit(root->nvmm, bm->bitmap_4k);
 				if (free)
@@ -2986,7 +2982,7 @@ int pmfs_inode_log_gabbage_collection(struct super_block *sb,
 			break;
 
 		curr_entry = pmfs_get_block(sb, old_head);
-		if (curr_entry->num_pages == GET_INVALID(curr_entry->block)) {
+		if (curr_entry->num_pages == curr_entry->invalid_pages) {
 			goto update;
 		}
 		new_entry = pmfs_get_block(sb, new_head);
@@ -3014,11 +3010,11 @@ static bool curr_page_invalid(struct super_block *sb, struct pmfs_inode *pi,
 	for (i = 0; i < ENTRIES_PER_PAGE; i++) {
 		entry = &curr_page->entries[i];
 		/* Do not recycle inode change entry */
-		if (entry->entry_type != FILE_WRITE) {
+		if (pmfs_get_entry_type(entry) != FILE_WRITE) {
 			PMFS_END_TIMING(check_invalid_t, check_time);
 			return false;
 		}
-		if (entry->num_pages != GET_INVALID(entry->block)) {
+		if (entry->num_pages != entry->invalid_pages) {
 			PMFS_END_TIMING(check_invalid_t, check_time);
 			return false;
 		}
@@ -3378,7 +3374,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 		}
 
 		addr = (void *)pmfs_get_block(sb, curr_p);
-		type = *(u8 *)addr;
+		type = pmfs_get_entry_type(addr);
 		switch (type) {
 			case SET_ATTR:
 				attr_entry =
@@ -3404,7 +3400,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 		entry = (struct pmfs_file_write_entry *)addr;
 //		pmfs_print_inode_entry(entry);
 
-		if (entry->num_pages != GET_INVALID(entry->block)) {
+		if (entry->num_pages != entry->invalid_pages) {
 			/*
 			 * The overlaped blocks are already freed.
 			 * Don't double free them, just re-assign the pointers.

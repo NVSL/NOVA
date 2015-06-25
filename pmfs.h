@@ -248,7 +248,6 @@ extern unsigned long write_breaks;
 
 #define	INVALID_MASK	4095
 #define	BLOCK_OFF(p)	((p) & ~INVALID_MASK)
-#define	GET_INVALID(p)	((p) & INVALID_MASK)
 
 #define	ENTRY_LOC(p)	((p) & INVALID_MASK)
 
@@ -259,16 +258,25 @@ enum pmfs_entry_type {
 	LINK_CHANGE,
 };
 
+static inline u8 pmfs_get_entry_type(void *p)
+{
+	return *(u8 *)p;
+}
+
+static inline void pmfs_set_entry_type(void *p, enum pmfs_entry_type type)
+{
+	*(u8 *)p |= type;
+}
+
 /* Make sure this is 32 bytes */
 struct pmfs_file_write_entry {
-	u8	entry_type;
-	u8	paddings[3];
+	/* ret of find_nvmm_block, the lowest byte is entry type */
+	__le64	block;
 	__le32	pgoff;
 	__le32	num_pages;
+	__le32	invalid_pages;
 	/* For both ctime and mtime */
 	__le32	mtime;
-	/* ret of find_nvmm_block, last 12 bits are invalid count */
-	__le64	block;
 	__le64	size;
 } __attribute((__packed__));
 

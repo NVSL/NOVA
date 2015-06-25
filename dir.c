@@ -512,7 +512,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb,
 		}
 
 		addr = (void *)pmfs_get_block(sb, curr_p);
-		type = *(u8 *)addr;
+		type = pmfs_get_entry_type(addr);
 		switch (type) {
 			case SET_ATTR:
 				attr_entry =

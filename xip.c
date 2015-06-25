@@ -109,7 +109,7 @@ do_xip_mapping_read(struct address_space *mapping,
 				entry->num_pages, entry->block >> PAGE_SHIFT);
 			return -EINVAL;
 		}
-		if (GET_INVALID(entry->block) == 0) {
+		if (entry->invalid_pages == 0) {
 			nr = (entry->num_pages - (index - entry->pgoff))
 				* PAGE_SIZE;
 		} else {
@@ -363,9 +363,9 @@ static int pmfs_reassign_file_btree(struct super_block *sb,
 		entry_data = (struct pmfs_file_write_entry *)
 					pmfs_get_block(sb, curr_p);
 
-		if (entry_data->entry_type != FILE_WRITE) {
+		if (pmfs_get_entry_type(entry_data) != FILE_WRITE) {
 			pmfs_dbg("%s: entry type is not write? %d\n",
-					__func__, entry_data->entry_type);
+				__func__, pmfs_get_entry_type(entry_data));
 			curr_p += entry_size;
 			continue;
 		}
@@ -479,12 +479,15 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		copied = memcpy_to_nvmm((char *)kmem, offset, buf, bytes);
 		PMFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
-		entry_data.entry_type = FILE_WRITE;
 		entry_data.pgoff = cpu_to_le32(start_blk);
 		entry_data.num_pages = cpu_to_le32(allocated);
+		entry_data.invalid_pages = 0;
 		entry_data.block = cpu_to_le64(pmfs_get_block_off(sb, blocknr,
 							pi->i_blk_type));
 		entry_data.mtime = cpu_to_le32(time);
+		/* Set entry type after set block */
+		pmfs_set_entry_type((void *)&entry_data, FILE_WRITE);
+
 		if (pos + copied > inode->i_size)
 			entry_data.size = cpu_to_le64(pos + copied);
 		else
@@ -781,13 +784,16 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 		if (pair->page)
 			kunmap_atomic((void *)page_addr);
 
-		entry_data.entry_type = FILE_WRITE;
 		entry_data.pgoff = cpu_to_le32(pgoff);
 		entry_data.num_pages = cpu_to_le32(allocated);
+		entry_data.invalid_pages = 0;
 		entry_data.block = cpu_to_le64(pmfs_get_block_off(sb, blocknr,
 							pi->i_blk_type));
 		/* FIXME: should we use the page cache write time? */
 		entry_data.mtime = cpu_to_le32(time);
+		/* Set entry type after set block */
+		pmfs_set_entry_type((void *)&entry_data, FILE_WRITE);
+
 		if (pos + copied > inode->i_size)
 			entry_data.size = cpu_to_le64(pos + copied);
 		else
