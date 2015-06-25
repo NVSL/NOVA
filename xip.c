@@ -528,7 +528,6 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 			(total_blocks << (data_bits - sb->s_blocksize_bits)));
 	pmfs_memlock_inode(sb, pi);
 
-	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	if (pos > inode->i_size) {
 		i_size_write(inode, pos);
 		sih->i_size = pos;
@@ -541,6 +540,8 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	ret = pmfs_reassign_file_btree(sb, pi, sih, begin_tail);
 	if (ret)
 		goto out;
+
+	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 
 	ret = written;
 	write_breaks += step;
@@ -834,14 +835,14 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 			(total_blocks << (data_bits - sb->s_blocksize_bits)));
 	pmfs_memlock_inode(sb, pi);
 
-	inode->i_blocks = le64_to_cpu(pi->i_blocks);
-
 	pmfs_update_tail(pi, temp_tail);
 
 	/* Free the overlap blocks after the write is committed */
 	ret = pmfs_reassign_file_btree(sb, pi, sih, begin_tail);
 	if (ret)
 		goto out;
+
+	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 
 	ret = 0;
 out:
