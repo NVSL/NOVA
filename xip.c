@@ -402,7 +402,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	long status = 0;
 	timing_t cow_write_time, memcpy_time;
 	unsigned long step = 0;
-	u64 temp_tail, begin_tail;
+	u64 temp_tail, begin_tail = 0;
 	u32 time;
 
 	PMFS_START_TIMING(cow_write_t, cow_write_time);
@@ -443,7 +443,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 			__func__, inode->i_ino,	pos >> sb->s_blocksize_bits,
 			offset, count);
 
-	begin_tail = temp_tail = pi->log_tail;
+	temp_tail = pi->log_tail;
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
@@ -513,7 +513,6 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		if (status < 0)
 			break;
 
-		/* Log is newly allocated? */
 		if (begin_tail == 0)
 			begin_tail = curr_entry;
 		temp_tail = curr_entry + sizeof(struct pmfs_file_write_entry);
@@ -728,7 +727,7 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	size_t bytes, copied;
 	loff_t pos;
 	int status = 0;
-	u64 temp_tail, begin_tail;
+	u64 temp_tail, begin_tail = 0;
 	u32 time;
 	timing_t memcpy_time, copy_to_nvmm_time;
 
@@ -741,7 +740,7 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	pos = offset + (pgoff << sb->s_blocksize_bits);
 	time = CURRENT_TIME_SEC.tv_sec;
 
-	begin_tail = temp_tail = pi->log_tail;
+	temp_tail = pi->log_tail;
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
@@ -818,7 +817,6 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 			goto out;
 		}
 
-		/* Log is newly allocated? */
 		if (begin_tail == 0)
 			begin_tail = curr_entry;
 		temp_tail = curr_entry + sizeof(struct pmfs_file_write_entry);
