@@ -501,7 +501,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 			goto out;
 		}
 
-		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
+		pmfs_dbgv("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {
 			status = copied;
 			written += copied;
@@ -711,25 +711,79 @@ out:
 	return ret;
 }
 
-int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
-	struct pmfs_inode *pi, pgoff_t pgoff, loff_t offset,
-	unsigned long count)
+static ssize_t pmfs_flush_dram_to_nvmm(struct super_block *sb,
+	struct inode *inode, struct pmfs_inode *pi, loff_t pos,
+	size_t count, void *kmem)
+{
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct mem_addr *pair;
+	unsigned long start_blk;
+	unsigned long addr;
+	loff_t offset;
+	size_t bytes, copied;
+	ssize_t written = 0;
+	int status = 0;
+	ssize_t ret;
+
+	while (count) {
+		start_blk = pos >> sb->s_blocksize_bits;
+		offset = pos & (sb->s_blocksize - 1);
+		bytes = sb->s_blocksize - offset;
+		if (bytes > count)
+			bytes = count;
+
+		pair = pmfs_get_mem_pair(sb, pi, si, start_blk);
+		if (pair == NULL) {
+			pmfs_err(sb, "%s dram page not found!\n", __func__);
+			ret = -EINVAL;
+			goto out;
+		}
+
+		addr = pmfs_get_dram_addr(pair);
+		copied = bytes - __copy_from_user_inatomic_nocache(kmem +
+				offset, (void *)DRAM_ADDR(addr) + offset,
+				bytes);
+
+		if (pair->page)
+			kunmap_atomic((void *)addr);
+
+		if (copied > 0) {
+			status = copied;
+			written += copied;
+			pos += copied;
+			count -= copied;
+			kmem += offset + copied;
+		}
+		if (unlikely(copied != bytes))
+			if (status >= 0)
+				status = -EFAULT;
+		if (status < 0) {
+			ret = status;
+			goto out;
+		}
+	}
+	ret = written;
+out:
+	return ret;
+}
+
+ssize_t pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
+	struct pmfs_inode *pi, loff_t pos, size_t count)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_file_write_entry entry_data;
-	unsigned long num_blocks;
+	unsigned long start_blk, num_blocks;
 	unsigned long blocknr = 0;
 	unsigned long total_blocks;
 	unsigned int data_bits;
 	int allocated;
-	u64 curr_entry, page_addr;
+	u64 curr_entry;
 	ssize_t written = 0;
 	int ret;
 	void *kmem;
-	struct mem_addr *pair = NULL;
 	size_t bytes, copied;
-	loff_t pos;
+	loff_t offset;
 	int status = 0;
 	u64 temp_tail, begin_tail = 0;
 	u32 time;
@@ -739,30 +793,20 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	sb_start_write(inode->i_sb);
 	mutex_lock(&inode->i_mutex);
 
+	offset = pos & (sb->s_blocksize - 1);
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
 	total_blocks = num_blocks;
-	pos = offset + (pgoff << sb->s_blocksize_bits);
 	time = CURRENT_TIME_SEC.tv_sec;
+
+	pmfs_dbgv("%s: ino %lu, block %llu, offset %lu, count %lu\n",
+		__func__, inode->i_ino, pos >> sb->s_blocksize_bits,
+		(unsigned long)offset, count);
 
 	temp_tail = pi->log_tail;
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
-		pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
-		if (!pair || IS_DIRTY(pair->dram) == 0) {
-			pmfs_dbg("%s: Dirty DRAM page not found! pgoff %lu, "
-					"blocks %lu\n",	__func__, pgoff,
-					num_blocks);
-			bytes = sb->s_blocksize - offset;
-			pos += bytes;
-			count -= bytes;
-			pgoff++;
-			num_blocks--;
-			continue;
-		}
-
-//		pair->dram &= ~DIRTY_BIT;
-		page_addr = pmfs_get_dram_addr(pair);
-		allocated = pmfs_new_data_blocks(sb, &blocknr, 1,
+		start_blk = pos >> sb->s_blocksize_bits;
+		allocated = pmfs_new_data_blocks(sb, &blocknr, num_blocks,
 						pi->i_blk_type, 0);
 		if (allocated <= 0) {
 			pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__,
@@ -777,15 +821,17 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 
 		kmem = pmfs_get_block(inode->i_sb,
 			pmfs_get_block_off(sb, blocknr,	pi->i_blk_type));
+
+		if (offset || ((offset + bytes) & (PAGE_SIZE - 1)))
+			pmfs_handle_head_tail_blocks(sb, pi, inode, pos,
+							bytes, kmem);
+
 		PMFS_START_TIMING(memcpy_w_wb_t, memcpy_time);
-		copied = memcpy_to_nvmm((char *)kmem, offset,
-					(char *)DRAM_ADDR(page_addr), bytes);
+		copied = pmfs_flush_dram_to_nvmm(sb, inode, pi, pos, bytes,
+							kmem);
 		PMFS_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
-		if (pair->page)
-			kunmap_atomic((void *)page_addr);
-
-		entry_data.pgoff = cpu_to_le32(pgoff);
+		entry_data.pgoff = cpu_to_le32(start_blk);
 		entry_data.num_pages = cpu_to_le32(allocated);
 		entry_data.invalid_pages = 0;
 		entry_data.block = cpu_to_le64(pmfs_get_block_off(sb, blocknr,
@@ -795,10 +841,7 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 		/* Set entry type after set block */
 		pmfs_set_entry_type((void *)&entry_data, FILE_WRITE);
 
-		if (pos + copied > inode->i_size)
-			entry_data.size = cpu_to_le64(pos + copied);
-		else
-			entry_data.size = cpu_to_le64(inode->i_size);
+		entry_data.size = cpu_to_le64(inode->i_size);
 
 		curr_entry = pmfs_append_file_write_entry(sb, pi, inode,
 						&entry_data, temp_tail);
@@ -808,12 +851,12 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 			goto out;
 		}
 
+		pmfs_dbgv("Write: %p, %ld\n", kmem, copied);
 		if (copied > 0) {
 			status = copied;
 			written += copied;
 			pos += copied;
 			count -= copied;
-			pgoff += allocated;
 			num_blocks -= allocated;
 		}
 		if (unlikely(copied != bytes))
@@ -844,7 +887,7 @@ int pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 
-	ret = 0;
+	ret = written;
 out:
 	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);

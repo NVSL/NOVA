@@ -202,8 +202,6 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 //	if (si->low_dirty > si->high_dirty)
 //		goto persist;
 
-	end += 1; /* end is inclusive. We like our indices normal please ! */
-
 	isize = i_size_read(inode);
 
 	if ((unsigned long)end > (unsigned long)isize)
@@ -215,10 +213,6 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		PMFS_END_TIMING(fsync_t, fsync_time);
 		return 0;
 	}
-
-	/* Align start to cacheline boundaries */
-	start = start & CACHELINE_MASK;
-//	end = CACHELINE_ALIGN(end);
 
 	start_blk = start >> PAGE_SHIFT;
 //	if (start_blk < si->low_dirty) {
@@ -264,7 +258,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 			if (addr && IS_DIRTY(pair->dram)) {
 				pmfs_dbg_verbose("fsync: pgoff %lu, page "
 					"0x%llx dirty\n", pgoff, addr);
-				pmfs_copy_to_nvmm(sb, inode, pi, pgoff, offset,
+				pmfs_copy_to_nvmm(sb, inode, pi, start,
 							nr_flush_bytes);
 			}
 			if (pair->page)
