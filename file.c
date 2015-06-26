@@ -175,6 +175,49 @@ static inline int pmfs_set_page_clean(struct mm_struct *mm,
 	return 0;
 }
 
+static unsigned long pmfs_get_dirty_range(struct super_block *sb,
+	struct pmfs_inode *pi, struct pmfs_inode_info *si, loff_t *start,
+	loff_t end)
+{
+	struct mem_addr *pair = NULL;
+	unsigned long flush_bytes = 0, bytes;
+	pgoff_t pgoff;
+	loff_t offset;
+	loff_t dirty_start;
+	loff_t temp = *start;
+	unsigned long addr;
+
+	dirty_start = temp;
+	while (temp < end) {
+		pgoff = temp >> PAGE_CACHE_SHIFT;
+		offset = temp & ~PAGE_CACHE_MASK;
+		bytes = sb->s_blocksize - offset;
+		if (bytes > (end - temp))
+			bytes = end - temp;
+
+		pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
+		if (pair) {
+			addr = pmfs_get_dram_addr(pair);
+			if (addr && IS_DIRTY(pair->dram)) {
+				if (flush_bytes == 0)
+					dirty_start = temp;
+				flush_bytes += bytes;
+			} else {
+				if (flush_bytes)
+					break;
+			}
+		}
+		temp += bytes;
+	}
+
+	if (flush_bytes == 0)
+		*start = end;
+	else
+		*start = dirty_start;
+
+	return flush_bytes;
+}
+
 /* This function is called by both msync() and fsync().
  * TODO: Check if we can avoid calling pmfs_flush_buffer() for fsync. We use
  * movnti to write data to files, so we may want to avoid doing unnecessary
@@ -187,7 +230,6 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi;
-	struct mem_addr *pair = NULL;
 	unsigned long start_blk, end_blk;
 	loff_t isize;
 	timing_t fsync_time;
@@ -196,6 +238,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	/* if the file is not mmap'ed, there is no need to do clflushes */
 //	if (mapping_mapped(mapping) == 0)
 //		goto persist;
+	mutex_lock(&inode->i_mutex);
 
 	/* Check the dirty range */
 	pi = pmfs_get_inode(sb, inode);
@@ -211,6 +254,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		pmfs_dbg_verbose("[%s:%d] : (ERR) isize(%llx), start(%llx),"
 			" end(%llx)\n", __func__, __LINE__, isize, start, end);
 		PMFS_END_TIMING(fsync_t, fsync_time);
+		mutex_unlock(&inode->i_mutex);
 		return 0;
 	}
 
@@ -228,44 +272,22 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 				__func__, start_blk, end_blk);
 
 	do {
-		u64 addr = 0;
-//		void *xip_mem;
-		pgoff_t pgoff;
-		loff_t offset;
 //		pte_t *ptep;
 //		int dirty;
-		unsigned long nr_flush_bytes;
+		unsigned long nr_flush_bytes = 0;
 
-		pgoff = start >> PAGE_CACHE_SHIFT;
-		offset = start & ~PAGE_CACHE_MASK;
+		nr_flush_bytes = pmfs_get_dirty_range(sb, pi, si, &start, end);
 
-		nr_flush_bytes = PAGE_CACHE_SIZE - offset;
-		if (nr_flush_bytes > (end - start))
-			nr_flush_bytes = end - start;
-		if (nr_flush_bytes == 0)
-			nr_flush_bytes = PAGE_SIZE;
-
-		pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
-		if (pair) {
-			addr = pmfs_get_dram_addr(pair);
-			pmfs_dbg_verbose("pgoff %lu: page 0x%llx\n",
-							pgoff, addr);
-//			dirty = pmfs_is_page_dirty(current->active_mm,
-//					DRAM_ADDR(page_addr), &ptep, 0);
-//			if (dirty)
-//				pmfs_dbg_verbose("page 0x%llx is dirty\n",
-//					page_addr);
-			if (addr && IS_DIRTY(pair->dram)) {
-				pmfs_dbg_verbose("fsync: pgoff %lu, page "
-					"0x%llx dirty\n", pgoff, addr);
-				pmfs_copy_to_nvmm(sb, inode, pi, start,
-							nr_flush_bytes);
-			}
-			if (pair->page)
-				kunmap_atomic((void *)addr);
-//			pmfs_set_page_clean(current->active_mm,
-//						DRAM_ADDR(page_addr), ptep);
-		}
+//		dirty = pmfs_is_page_dirty(current->active_mm,
+//					DRAM_ADDR(addr), &ptep, 0);
+//		if (dirty)
+//			pmfs_dbg_verbose("page 0x%llx is dirty\n",
+//					addr);
+		if (nr_flush_bytes)
+			pmfs_copy_to_nvmm(sb, inode, pi, start,
+						nr_flush_bytes);
+//		pmfs_set_page_clean(current->active_mm,
+//						DRAM_ADDR(addr), ptep);
 		start += nr_flush_bytes;
 	} while (start < end);
 
@@ -283,6 +305,7 @@ persist:
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
 	PMFS_END_TIMING(fsync_t, fsync_time);
+	mutex_unlock(&inode->i_mutex);
 	return 0;
 }
 

@@ -791,7 +791,6 @@ ssize_t pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 
 	PMFS_START_TIMING(copy_to_nvmm_t, copy_to_nvmm_time);
 	sb_start_write(inode->i_sb);
-	mutex_lock(&inode->i_mutex);
 
 	offset = pos & (sb->s_blocksize - 1);
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
@@ -889,7 +888,6 @@ ssize_t pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 
 	ret = written;
 out:
-	mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
 	PMFS_END_TIMING(copy_to_nvmm_t, copy_to_nvmm_time);
 	fsync_bytes += written;
