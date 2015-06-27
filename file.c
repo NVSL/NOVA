@@ -275,6 +275,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	pmfs_dbg_verbose("%s: start_blk %lu, end_blk %lu\n",
 				__func__, start_blk, end_blk);
 
+	end_temp = pi->log_tail;
 	do {
 //		pte_t *ptep;
 //		int dirty;
