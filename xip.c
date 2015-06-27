@@ -342,7 +342,7 @@ static inline size_t memcpy_to_nvmm(char *kmem, loff_t offset,
 	return copied;
 }
 
-static int pmfs_reassign_file_btree(struct super_block *sb,
+int pmfs_reassign_file_btree(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
 	u64 begin_tail)
 {
@@ -768,10 +768,9 @@ out:
 }
 
 ssize_t pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
-	struct pmfs_inode *pi, loff_t pos, size_t count)
+	struct pmfs_inode *pi, loff_t pos, size_t count, u64 *begin,
+	u64 *end)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_file_write_entry entry_data;
 	unsigned long start_blk, num_blocks;
 	unsigned long blocknr = 0;
@@ -801,7 +800,7 @@ ssize_t pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 		__func__, inode->i_ino, pos >> sb->s_blocksize_bits,
 		(unsigned long)offset, count);
 
-	temp_tail = pi->log_tail;
+	temp_tail = *end;
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
@@ -877,14 +876,8 @@ ssize_t pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 			(total_blocks << (data_bits - sb->s_blocksize_bits)));
 	pmfs_memlock_inode(sb, pi);
 
-	pmfs_update_tail(pi, temp_tail);
-
-	/* Free the overlap blocks after the write is committed */
-	ret = pmfs_reassign_file_btree(sb, pi, sih, begin_tail);
-	if (ret)
-		goto out;
-
-	inode->i_blocks = le64_to_cpu(pi->i_blocks);
+	*begin = begin_tail;
+	*end = temp_tail;
 
 	ret = written;
 out:

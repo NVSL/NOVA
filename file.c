@@ -228,9 +228,13 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	struct address_space *mapping = file->f_mapping;
 	struct inode *inode = mapping->host;
 	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = si->header;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi;
 	unsigned long start_blk, end_blk;
+	u64 end_tail = 0, begin_tail = 0;
+	u64 begin_temp = 0, end_temp = 0;
+	int ret = 0;
 	loff_t isize;
 	timing_t fsync_time;
 
@@ -285,7 +289,10 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 //					addr);
 		if (nr_flush_bytes)
 			pmfs_copy_to_nvmm(sb, inode, pi, start,
-						nr_flush_bytes);
+				nr_flush_bytes, &begin_temp, &end_temp);
+
+		if (begin_tail == 0)
+			begin_tail = begin_temp;
 //		pmfs_set_page_clean(current->active_mm,
 //						DRAM_ADDR(addr), ptep);
 		start += nr_flush_bytes;
@@ -301,12 +308,22 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		si->high_dirty = (end_blk == 0 ? 0 : end_blk - 1);
 	}
 
+	end_tail = end_temp;
+	if (begin_tail && end_tail && end_tail != pi->log_tail) {
+		pmfs_update_tail(pi, end_tail);
+
+		/* Free the overlap blocks after the write is committed */
+		ret = pmfs_reassign_file_btree(sb, pi, sih, begin_tail);
+
+		inode->i_blocks = le64_to_cpu(pi->i_blocks);
+	}
+
 persist:
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
 	PMFS_END_TIMING(fsync_t, fsync_time);
 	mutex_unlock(&inode->i_mutex);
-	return 0;
+	return ret;
 }
 
 /* This callback is called when a file is closed */

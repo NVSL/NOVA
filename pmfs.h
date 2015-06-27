@@ -1237,10 +1237,14 @@ void *pmfs_ioremap(struct super_block *sb, phys_addr_t phys_addr,
 	ssize_t size);
 
 /* xip.c */
+int pmfs_reassign_file_btree(struct super_block *sb,
+	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
+	u64 begin_tail);
 ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
           size_t len, loff_t *ppos, bool need_mutex);
 ssize_t pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
-	struct pmfs_inode *pi, loff_t pos, size_t count);
+	struct pmfs_inode *pi, loff_t pos, size_t count, u64 *begin,
+	u64 *end);
 
 /* pmfs_stats.c */
 void pmfs_print_timing_stats(struct super_block *sb);
