@@ -855,11 +855,11 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 #define	VMALLOC_BIT	0x4UL	// Alloc with vmalloc
 #define	GETPAGE_BIT	0x8UL	// Alloc with get_free_page
 #define	DIRTY_BIT	0x10UL	// Dirty
-#define	MMAPED_BIT	0x20UL	// mmaped
+#define	MMAP_WRITE_BIT	0x20UL	// mmaped for write
 #define	OUTDATE_BIT	0x40UL	// Outdate with NVMM page
 #define	IS_DRAM_ADDR(p)	((p) & (DRAM_BIT))
 #define	IS_DIRTY(p)	((p) & (DIRTY_BIT))
-#define	IS_MAPPED(p)	((p) & (MMAPED_BIT))
+#define	IS_MAPPED(p)	((p) & (MMAP_WRITE_BIT))
 #define	OUTDATE(p)	((p) & (OUTDATE_BIT))
 #define	DRAM_ADDR(p)	((p) & (PAGE_MASK))
 

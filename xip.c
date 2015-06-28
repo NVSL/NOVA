@@ -898,14 +898,14 @@ ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
 		return pmfs_page_cache_file_write(filp, buf, len, ppos);
 }
 
-int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
-		      void **kmem, unsigned long *pfn)
+static int pmfs_get_dram_mem(struct inode *inode, struct vm_area_struct *vma,
+	pgoff_t pgoff, int create, void **kmem, unsigned long *pfn)
 {
-	struct inode *inode = mapping->host;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode *pi;
 	struct mem_addr *pair = NULL;
+	vm_flags_t vm_flags = vma->vm_flags;
 	unsigned long addr = 0;
 	u64 bp;
 	void *nvmm;
@@ -936,7 +936,9 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 		pair->dram &= ~OUTDATE_BIT;
 	}
 
-	pair->dram |= MMAPED_BIT;
+	if (vm_flags & VM_WRITE)
+		pair->dram |= MMAP_WRITE_BIT;
+
 	*kmem = (void *)DRAM_ADDR(addr);
 	if (pair->page) {
 		kunmap_atomic((void *)addr);
@@ -971,7 +973,8 @@ static int __pmfs_xip_file_fault(struct vm_area_struct *vma,
 	}
 
 //	err = pmfs_get_xip_mem(mapping, vmf->pgoff, 1, &xip_mem, &xip_pfn);
-	err = pmfs_get_dram_mem(mapping, vmf->pgoff, 1, &xip_mem, &xip_pfn);
+	err = pmfs_get_dram_mem(inode, vma, vmf->pgoff, 1,
+						&xip_mem, &xip_pfn);
 	if (unlikely(err)) {
 		pmfs_dbg("[%s:%d] get_xip_mem failed(OOM). vm_start(0x%lx),"
 			" vm_end(0x%lx), pgoff(0x%lx), VA(%lx)\n",
@@ -981,7 +984,7 @@ static int __pmfs_xip_file_fault(struct vm_area_struct *vma,
 		return VM_FAULT_SIGBUS;
 	}
 
-	pmfs_dbg_verbose("%s flags: vma 0x%lx, vmf 0x%x\n",
+	pmfs_dbgv("%s flags: vma 0x%lx, vmf 0x%x\n",
 			__func__, vma->vm_flags, vmf->flags);
 
 	pmfs_dbg_mmapv("[%s:%d] vm_start(0x%lx), vm_end(0x%lx), pgoff(0x%lx), "
