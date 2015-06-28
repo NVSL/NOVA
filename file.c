@@ -175,6 +175,12 @@ static inline int pmfs_set_page_clean(struct mm_struct *mm,
 	return 0;
 }
 
+/* FIXME: Assuming mmaped pages are dirty */
+static inline int pmfs_check_page_dirty(struct mem_addr *pair)
+{
+	return IS_DIRTY(pair->dram) || IS_MAPPED(pair->dram);
+}
+
 static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info *si, loff_t *start,
 	loff_t end)
@@ -198,7 +204,7 @@ static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 		pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
 		if (pair) {
 			addr = pmfs_get_dram_addr(pair);
-			if (addr && IS_DIRTY(pair->dram)) {
+			if (addr && pmfs_check_page_dirty(pair)) {
 				if (flush_bytes == 0)
 					dirty_start = temp;
 				flush_bytes += bytes;
@@ -218,6 +224,28 @@ static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 	return flush_bytes;
 }
 
+static void pmfs_update_dirty_range(struct pmfs_inode_info *si,
+	loff_t start, loff_t end)
+{
+	u64 low;
+	u64 high;
+
+	if (si->low_dirty > si->high_dirty)
+		return;
+
+	low = si->low_dirty << PAGE_SHIFT;
+	high = (si->high_dirty + 1) << PAGE_SHIFT;
+
+	if (start <= low && end >= high) {
+		si->low_dirty = MAX_BLOCK;
+		si->high_dirty = 0;
+	} else if (start <= low && end > low) {
+		si->low_dirty = end >> PAGE_SHIFT;
+	} else if (end >= high && start < high) {
+		si->high_dirty = start >> PAGE_SHIFT ;
+	}
+}
+
 /* This function is called by both msync() and fsync().
  * TODO: Check if we can avoid calling pmfs_flush_buffer() for fsync. We use
  * movnti to write data to files, so we may want to avoid doing unnecessary
@@ -235,19 +263,21 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	u64 end_tail = 0, begin_tail = 0;
 	u64 begin_temp = 0, end_temp = 0;
 	int ret = 0;
+	int mmaped = 0;
+	loff_t sync_start, sync_end;
 	loff_t isize;
 	timing_t fsync_time;
 
 	PMFS_START_TIMING(fsync_t, fsync_time);
-	/* if the file is not mmap'ed, there is no need to do clflushes */
-//	if (mapping_mapped(mapping) == 0)
-//		goto persist;
+	if (mapping_mapped(mapping))
+		mmaped = 1;
+
 	mutex_lock(&inode->i_mutex);
 
 	/* Check the dirty range */
 	pi = pmfs_get_inode(sb, inode);
-//	if (si->low_dirty > si->high_dirty)
-//		goto persist;
+	if (mmaped == 0 && si->low_dirty > si->high_dirty)
+		goto persist;
 
 	isize = i_size_read(inode);
 
@@ -263,51 +293,37 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	}
 
 	start_blk = start >> PAGE_SHIFT;
-//	if (start_blk < si->low_dirty) {
-//		start = si->low_dirty << PAGE_SHIFT;
-//		start_blk = si->low_dirty;
-//	}
+	if (mmaped == 0 && start_blk < si->low_dirty) {
+		start = si->low_dirty << PAGE_SHIFT;
+		start_blk = si->low_dirty;
+	}
 	end_blk = end >> PAGE_SHIFT;
-//	if (end_blk > si->high_dirty) {
-//		end = (si->high_dirty + 1) << PAGE_SHIFT;
-//		end_blk = si->high_dirty;
-//	}
+	if (mmaped == 0 && end_blk > si->high_dirty) {
+		end = (si->high_dirty + 1) << PAGE_SHIFT;
+		end_blk = si->high_dirty;
+	}
 	pmfs_dbg_verbose("%s: start_blk %lu, end_blk %lu\n",
 				__func__, start_blk, end_blk);
 
+	sync_start = start;
+	sync_end = end;
 	end_temp = pi->log_tail;
 	do {
-//		pte_t *ptep;
-//		int dirty;
 		unsigned long nr_flush_bytes = 0;
 
 		nr_flush_bytes = pmfs_get_dirty_range(sb, pi, si, &start, end);
 
-//		dirty = pmfs_is_page_dirty(current->active_mm,
-//					DRAM_ADDR(addr), &ptep, 0);
-//		if (dirty)
-//			pmfs_dbg_verbose("page 0x%llx is dirty\n",
-//					addr);
 		if (nr_flush_bytes)
 			pmfs_copy_to_nvmm(sb, inode, pi, start,
 				nr_flush_bytes, &begin_temp, &end_temp);
 
 		if (begin_tail == 0)
 			begin_tail = begin_temp;
-//		pmfs_set_page_clean(current->active_mm,
-//						DRAM_ADDR(addr), ptep);
+
 		start += nr_flush_bytes;
 	} while (start < end);
 
-	if (start_blk == si->low_dirty && end_blk == si->high_dirty) {
-		si->low_dirty = MAX_BLOCK;
-		si->high_dirty = 0;
-	} else if (start_blk == si->low_dirty) {
-		si->low_dirty = (start_blk == MAX_BLOCK ?
-					MAX_BLOCK : start_blk + 1);
-	} else if (end_blk == si->high_dirty) {
-		si->high_dirty = (end_blk == 0 ? 0 : end_blk - 1);
-	}
+	pmfs_update_dirty_range(si, sync_start, sync_end);
 
 	end_tail = end_temp;
 	if (begin_tail && end_tail && end_tail != pi->log_tail) {

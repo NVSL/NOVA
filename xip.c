@@ -747,6 +747,8 @@ static ssize_t pmfs_flush_dram_to_nvmm(struct super_block *sb,
 		if (pair->page)
 			kunmap_atomic((void *)addr);
 
+		pair->dram &= ~DIRTY_BIT;
+
 		if (copied > 0) {
 			status = copied;
 			written += copied;
@@ -934,7 +936,7 @@ int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 		pair->dram &= ~OUTDATE_BIT;
 	}
 
-	pair->dram |= DIRTY_BIT;
+	pair->dram |= MMAPED_BIT;
 	*kmem = (void *)DRAM_ADDR(addr);
 	if (pair->page) {
 		kunmap_atomic((void *)addr);
