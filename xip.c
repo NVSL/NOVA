@@ -897,7 +897,55 @@ ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
 }
 
 int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
-		      void **kmem, unsigned long *pfn);
+		      void **kmem, unsigned long *pfn)
+{
+	struct inode *inode = mapping->host;
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode *pi;
+	struct mem_addr *pair = NULL;
+	unsigned long addr = 0;
+	u64 bp;
+	void *nvmm;
+	int err;
+
+	pi = pmfs_get_inode(sb, inode);
+
+	pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
+	if (pair == NULL) {
+		/* This should not happen. NVMM must exist! */
+		pmfs_dbg("%s: pair does not exist\n", __func__);
+		return -EINVAL;
+	}
+
+	addr = pmfs_get_dram_addr(pair);
+	if (addr == 0 || (pair->dram & OUTDATE_BIT)) {
+		if (addr == 0) {
+			err = pmfs_new_cache_block(sb, pair, 0, 0);
+			if (err)
+				return err;
+			addr = pmfs_get_dram_addr(pair);
+		}
+		/* Copy from NVMM to dram */
+		bp = __pmfs_find_nvmm_block(sb, si, pair, pgoff);
+		nvmm = pmfs_get_block(sb, bp);
+		__copy_from_user((void *)DRAM_ADDR(addr),
+					nvmm, PAGE_SIZE);
+		pair->dram &= ~OUTDATE_BIT;
+	}
+
+	pair->dram |= DIRTY_BIT;
+	*kmem = (void *)DRAM_ADDR(addr);
+	if (pair->page) {
+		kunmap_atomic((void *)addr);
+		*pfn = page_to_pfn(pair->page);
+	} else {
+		*pfn = vmalloc_to_pfn(*kmem);
+	}
+
+	return 0;
+}
+
 /* OOM err return with xip file fault handlers doesn't mean anything.
  * It would just cause the OS to go an unnecessary killing spree !
  */
@@ -1068,56 +1116,6 @@ int pmfs_get_xip_mem(struct address_space *mapping, pgoff_t pgoff, int create,
 	pmfs_dbg_mmapvv("[%s:%d] sb->physaddr(0x%llx), block(0x%lx),"
 		" pgoff(0x%lx), flag(0x%x), PFN(0x%lx)\n", __func__, __LINE__,
 		PMFS_SB(inode->i_sb)->phys_addr, block, pgoff, create, *pfn);
-	return 0;
-}
-
-int pmfs_get_dram_mem(struct address_space *mapping, pgoff_t pgoff, int create,
-		      void **kmem, unsigned long *pfn)
-{
-	struct inode *inode = mapping->host;
-	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode *pi;
-	struct mem_addr *pair = NULL;
-	unsigned long addr = 0;
-	u64 bp;
-	void *nvmm;
-	int err;
-
-	pi = pmfs_get_inode(sb, inode);
-
-	pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
-	if (pair == NULL) {
-		/* This should not happen. NVMM must exist! */
-		pmfs_dbg("%s: pair does not exist\n", __func__);
-		return -EINVAL;
-	}
-
-	addr = pmfs_get_dram_addr(pair);
-	if (addr == 0 || (pair->dram & OUTDATE_BIT)) {
-		if (addr == 0) {
-			err = pmfs_new_cache_block(sb, pair, 0, 0);
-			if (err)
-				return err;
-			addr = pmfs_get_dram_addr(pair);
-		}
-		/* Copy from NVMM to dram */
-		bp = __pmfs_find_nvmm_block(sb, si, pair, pgoff);
-		nvmm = pmfs_get_block(sb, bp);
-		__copy_from_user((void *)DRAM_ADDR(addr),
-					nvmm, PAGE_SIZE);
-		pair->dram &= ~OUTDATE_BIT;
-	}
-
-	pair->dram |= DIRTY_BIT;
-	*kmem = (void *)DRAM_ADDR(addr);
-	if (pair->page) {
-		kunmap_atomic((void *)addr);
-		*pfn = page_to_pfn(pair->page);
-	} else {
-		*pfn = vmalloc_to_pfn(*kmem);
-	}
-
 	return 0;
 }
 
