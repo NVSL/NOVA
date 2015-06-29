@@ -365,7 +365,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 			pair = (struct mem_addr *)node[i];
 			pgoff = start_pgoff + i;
 
-			if (pair->dram) {
+			if (pair->page || pair->dram) {
 				pmfs_free_cache_block(pair);
 			}
 			if (pair->nvmm_entry) {
@@ -563,7 +563,7 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 				continue;
 			/* Freeing the page cache block */
 			pair = (struct mem_addr *)node[i];
-			if (pair->dram) {
+			if (pair->page || pair->dram) {
 				pmfs_free_cache_block(pair);
 				freed++;
 			}
@@ -661,7 +661,7 @@ void pmfs_free_mem_addr(struct super_block *sb, __le64 addr, u32 btype)
 		pair->nvmm = 0;
 	}
 
-	if (pair->dram) {
+	if (pair->page || pair->dram) {
 		pmfs_free_cache_block(pair);
 	}
 
@@ -712,7 +712,7 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 
 	if (height == 0) {
 		struct mem_addr *pair = (struct mem_addr *)root;
-		if (pair->dram) {
+		if (pair->page || pair->dram) {
 			pmfs_free_cache_block(pair);
 			freed = 1;
 		}
@@ -1259,7 +1259,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 				pi->i_blocks--;
 			}
 			if (alloc_dram) {
-				if (!leaf->dram) {
+				if (!leaf->page && leaf->dram == 0) {
 					errval = pmfs_new_cache_block(sb, leaf,
 									0, 0);
 					if (errval)
@@ -1462,6 +1462,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			}
 
 			root->dram = root->nvmm = root->nvmm_entry = 0;
+			root->page = NULL;
 			if (alloc_dram) {
 				errval = pmfs_new_cache_block(sb, root, 0, 0);
 				if (errval)
@@ -1515,7 +1516,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			}
 
 			if (alloc_dram) {
-				if (!root->dram) {
+				if (!root->page && root->dram == 0) {
 					errval = pmfs_new_cache_block(sb, root,
 									0, 0);
 					if (errval)

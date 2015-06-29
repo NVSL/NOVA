@@ -141,6 +141,7 @@ static int pmfs_alloc_dram_page(struct super_block *sb,
 			if (zero)
 				flags |= __GFP_ZERO;
 			*page = alloc_page(flags);
+			*page_addr |= DRAM_BIT;
 			if (*page == NULL)
 				return -ENOMEM;
 			return 0;
