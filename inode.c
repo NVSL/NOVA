@@ -1264,6 +1264,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 									0, 0);
 					if (errval)
 						goto fail;
+					leaf->dram |= UNINIT_BIT;
 					if (leaf->nvmm_entry)
 						/* Outdate with NVMM */
 						leaf->dram |= OUTDATE_BIT;
@@ -1465,6 +1466,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 				errval = pmfs_new_cache_block(sb, root, 0, 0);
 				if (errval)
 					goto fail;
+				root->dram |= UNINIT_BIT;
 			} else {
 				if (nvmm) {
 					root->nvmm_entry = address;
@@ -1518,6 +1520,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 									0, 0);
 					if (errval)
 						goto fail;
+					root->dram |= UNINIT_BIT;
 					if (root->nvmm_entry)
 						/* Outdate with NVMM */
 						root->dram |= OUTDATE_BIT;

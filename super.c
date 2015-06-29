@@ -697,6 +697,9 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	INIT_LIST_HEAD(&sbi->inode_inuse_head);
 	sbi->inode_inuse_tree = RB_ROOT;
 
+	if (pmfs_new_meta_block(sb, &sbi->zeroed_page, 1, 0))
+		goto out;
+
 	if (pmfs_parse_options(data, sbi, 0))
 		goto out;
 
@@ -840,6 +843,11 @@ out:
 	if (sbi->virt_addr) {
 		pmfs_iounmap(sbi->virt_addr, initsize, pmfs_is_wprotected(sb));
 		release_mem_region(sbi->phys_addr, initsize);
+	}
+
+	if (sbi->zeroed_page) {
+		pmfs_free_meta_block(sb, sbi->zeroed_page);
+		sbi->zeroed_page = 0;
 	}
 
 	kfree(sbi);
@@ -993,6 +1001,7 @@ static void pmfs_put_super(struct super_block *sb)
 		pmfs_free_inode_node(sb, i);
 	}
 
+	pmfs_free_meta_block(sb, sbi->zeroed_page);
 	pmfs_detect_memory_leak(sb);
 	sb->s_fs_info = NULL;
 	pmfs_dbgmask = 0;

@@ -87,8 +87,13 @@ do_xip_mapping_read(struct address_space *mapping,
 			pmfs_dbg_verbose("%s: memory @ 0x%lx\n", __func__,
 					(unsigned long)xip_mem);
 			if (unlikely(OUTDATE(pair->dram))) {
-				pmfs_dbg("%s: DRAM page is out-of-date\n",
-					__func__);
+				pmfs_dbg("%s: inode %lu DRAM page %lu is "
+					"out-of-date\n", __func__,
+					inode->i_ino, index);
+			} else if (unlikely(UNINIT(pair->dram))) {
+				pmfs_dbg("%s: inode %lu DRAM page %lu is "
+					"unitialized\n", __func__,
+					inode->i_ino, index);
 			} else {
 				dram_copy = 1;
 				goto memcpy;
@@ -564,11 +569,12 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	struct super_block *sb = inode->i_sb;
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi;
 	struct pmfs_file_write_entry entry_data;
 	ssize_t     written = 0;
 	loff_t pos;
-	size_t count, offset, copied, ret;
+	size_t count, offset, copied, ret, tail;
 	unsigned long start_blk, num_blocks;
 	unsigned long total_blocks;
 	unsigned long page_addr = 0;
@@ -646,19 +652,29 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		kmem = (void *)DRAM_ADDR(page_addr);
 		pmfs_dbg_verbose("Write: 0x%lx\n", page_addr);
 
+		tail = (offset + bytes) & (PAGE_SIZE - 1);
 		/* If only NVMM page presents, copy the partial block */
-		if ((OUTDATE(pair->dram)) && (offset ||
-				((offset + bytes) & (PAGE_SIZE - 1)) != 0)) {
+		if ((OUTDATE(pair->dram)) && (offset || tail)) {
 			u64 bp;
 			void *nvmm;
 
 			bp = __pmfs_find_nvmm_block(sb, si, pair, start_blk);
 			nvmm = pmfs_get_block(sb, bp);
 			memcpy(kmem, nvmm, PAGE_SIZE);
+			pair->dram &= ~UNINIT_BIT;
 		}
 
-		if (pair && (pair->dram & OUTDATE_BIT))
-			pair->dram &= ~OUTDATE_BIT;
+		/* If DRAM is uninitialized, memset the partial block to 0 */
+		if ((UNINIT(pair->dram)) && (offset || tail)) {
+			if (offset)
+				memcpy(kmem,
+					(void *)DRAM_ADDR(sbi->zeroed_page),
+					offset);
+			if (tail)
+				memcpy(kmem + tail,
+					(void *)DRAM_ADDR(sbi->zeroed_page),
+					PAGE_SIZE - tail);
+		}
 
 		/* Now copy from user buf */
 		PMFS_START_TIMING(memcpy_w_dram_t, memcpy_time);
@@ -667,6 +683,11 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 
 		if (pair->page)
 			kunmap_atomic(kmem);
+
+		if (OUTDATE(pair->dram))
+			pair->dram &= ~OUTDATE_BIT;
+		if (UNINIT(pair->dram))
+			pair->dram &= ~UNINIT_BIT;
 
 		pair->dram |= DIRTY_BIT;
 		if (start_blk < si->low_dirty)
@@ -934,6 +955,7 @@ static int pmfs_get_dram_mem(struct inode *inode, struct vm_area_struct *vma,
 		__copy_from_user((void *)DRAM_ADDR(addr),
 					nvmm, PAGE_SIZE);
 		pair->dram &= ~OUTDATE_BIT;
+		pair->dram &= ~UNINIT_BIT;
 	}
 
 	if (vm_flags & VM_WRITE)

@@ -673,6 +673,9 @@ struct pmfs_sb_info {
 	/* Track inuse inodes */
 	struct list_head inode_inuse_head;
 	struct rb_root	inode_inuse_tree;
+
+	/* ZEROED page for cache page initialized */
+	unsigned long zeroed_page;
 };
 
 static inline struct pmfs_sb_info *PMFS_SB(struct super_block *sb)
@@ -857,10 +860,13 @@ static inline u64 __pmfs_find_inode(struct super_block *sb,
 #define	DIRTY_BIT	0x10UL	// Dirty
 #define	MMAP_WRITE_BIT	0x20UL	// mmaped for write
 #define	OUTDATE_BIT	0x40UL	// Outdate with NVMM page
+#define	UNINIT_BIT	0x80UL	// Unitialized page
+
 #define	IS_DRAM_ADDR(p)	((p) & (DRAM_BIT))
 #define	IS_DIRTY(p)	((p) & (DIRTY_BIT))
 #define	IS_MAPPED(p)	((p) & (MMAP_WRITE_BIT))
 #define	OUTDATE(p)	((p) & (OUTDATE_BIT))
+#define	UNINIT(p)	((p) & (UNINIT_BIT))
 #define	DRAM_ADDR(p)	((p) & (PAGE_MASK))
 
 #define	MAX_BLOCK	((1UL << 32) - 1)
