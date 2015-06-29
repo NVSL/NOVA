@@ -477,8 +477,8 @@ int pmfs_new_cache_block(struct super_block *sb,
 	timing_t alloc_time;
 
 	PMFS_START_TIMING(new_cache_page_t, alloc_time);
-	/* Using vmalloc because we need the page to do mmap */
-	err = pmfs_alloc_dram_page(sb, VMALLOC, &page_addr, &page,
+	/* Using vmalloc/allocpage because we need the page to do mmap */
+	err = pmfs_alloc_dram_page(sb, ALLOCPAGE, &page_addr, &page,
 							zero, nosleep);
 	if (err) {
 		PMFS_END_TIMING(new_cache_page_t, alloc_time);
