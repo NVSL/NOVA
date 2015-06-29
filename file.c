@@ -191,7 +191,6 @@ static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 	loff_t offset;
 	loff_t dirty_start;
 	loff_t temp = *start;
-	unsigned long addr;
 
 	dirty_start = temp;
 	while (temp < end) {
@@ -203,8 +202,7 @@ static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 
 		pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
 		if (pair) {
-			addr = pmfs_get_dram_addr(pair);
-			if (addr && pmfs_check_page_dirty(pair)) {
+			if (pmfs_check_page_dirty(pair)) {
 				if (flush_bytes == 0)
 					dirty_start = temp;
 				flush_bytes += bytes;
@@ -302,17 +300,22 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		end = (si->high_dirty + 1) << PAGE_SHIFT;
 		end_blk = si->high_dirty;
 	}
-	pmfs_dbg_verbose("%s: start_blk %lu, end_blk %lu\n",
-				__func__, start_blk, end_blk);
+	pmfs_dbgv("%s: mmaped %d, start %llu, end %llu, size %llu, "
+			" start_blk %lu, end_blk %lu\n",
+			__func__, mmaped, start, end, isize, start_blk,
+			end_blk);
 
 	sync_start = start;
 	sync_end = end;
 	end_temp = pi->log_tail;
+
 	do {
 		unsigned long nr_flush_bytes = 0;
 
 		nr_flush_bytes = pmfs_get_dirty_range(sb, pi, si, &start, end);
 
+		pmfs_dbgv("start %llu, flush bytes %lu\n",
+				start, nr_flush_bytes);
 		if (nr_flush_bytes)
 			pmfs_copy_to_nvmm(sb, inode, pi, start,
 				nr_flush_bytes, &begin_temp, &end_temp);
@@ -340,6 +343,7 @@ persist:
 	PERSISTENT_BARRIER();
 	PMFS_END_TIMING(fsync_t, fsync_time);
 	mutex_unlock(&inode->i_mutex);
+
 	return ret;
 }
 
