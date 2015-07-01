@@ -208,6 +208,7 @@ extern unsigned long alloc_data_pages;
 extern unsigned long free_data_pages;
 extern unsigned long alloc_log_pages;
 extern unsigned long free_log_pages;
+extern atomic64_t fsync_pages;
 extern atomic64_t meta_alloc;
 extern atomic64_t meta_free;
 extern atomic64_t cache_alloc;
