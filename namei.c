@@ -266,7 +266,7 @@ static void pmfs_lite_transaction_for_time_and_link(struct super_block *sb,
 }
 
 /* Returns new tail after append */
-static int pmfs_append_link_change_entry(struct super_block *sb,
+int pmfs_append_link_change_entry(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, u64 tail, u64 *new_tail)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);

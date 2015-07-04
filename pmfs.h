@@ -416,6 +416,8 @@ extern int pmfs_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
 
 /* namei.c */
 extern struct dentry *pmfs_get_parent(struct dentry *child);
+int pmfs_append_link_change_entry(struct super_block *sb,
+	struct pmfs_inode *pi, struct inode *inode, u64 tail, u64 *new_tail);
 void pmfs_apply_link_change_entry(struct pmfs_inode *pi,
 	struct pmfs_link_change_entry *entry);
 
