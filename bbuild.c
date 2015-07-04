@@ -926,6 +926,7 @@ out:
 int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 	struct scan_bitmap *bm, int cpuid, int multithread)
 {
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode_info_header *sih;
 	struct pmfs_inode *pi;
 	unsigned long pmfs_ino;
@@ -940,6 +941,9 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 	pmfs_ino = pi->pmfs_ino;
 	if (bm && pmfs_ino != 1)
 		pmfs_insert_inodetree(sb, pmfs_ino);
+
+	if (bm)
+		sbi->s_inodes_used_count++;
 
 	pmfs_dbg_verbose("%s: inode %lu, addr 0x%llx, valid %d, "
 			"head 0x%llx, tail 0x%llx\n",
@@ -1023,9 +1027,8 @@ int pmfs_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 int *processed;
 
 static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
-	struct pmfs_inode *inode_table, struct scan_bitmap *bm)
+	struct pmfs_inode *inode_table)
 {
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_alive_inode_entry *entry = NULL;
 	size_t size = sizeof(struct pmfs_alive_inode_entry);
 	u64 curr_p = inode_table->log_head;
@@ -1046,16 +1049,11 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 			PMFS_ASSERT(0);
 		}
 
-		if (bm) {
-			sbi->s_inodes_used_count++;
-			sbi->s_inodes_used_count++;
-		}
-
 		entry = (struct pmfs_alive_inode_entry *)pmfs_get_block(sb,
 								curr_p);
 
-		pmfs_recover_inode(sb, entry->pi_addr,
-						bm, smp_processor_id(), 0);
+		pmfs_recover_inode(sb, entry->pi_addr, NULL,
+						smp_processor_id(), 0);
 		processed[smp_processor_id()]++;
 		curr_p += size;
 	}
@@ -1067,7 +1065,7 @@ static void pmfs_inode_table_singlethread_crawl(struct super_block *sb,
 	return;
 }
 
-int pmfs_singlethread_recovery(struct super_block *sb, struct scan_bitmap *bm)
+int pmfs_singlethread_recovery(struct super_block *sb)
 {
 	struct pmfs_inode *inode_table = pmfs_get_inode_table(sb);
 	int cpus = num_online_cpus();
@@ -1078,7 +1076,7 @@ int pmfs_singlethread_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	if (!processed)
 		return -ENOMEM;
 
-	pmfs_inode_table_singlethread_crawl(sb, inode_table, bm);
+	pmfs_inode_table_singlethread_crawl(sb, inode_table);
 
 	for (i = 0; i < cpus; i++) {
 		total += processed[i];
@@ -1146,7 +1144,6 @@ static inline u64 task_ring_dequeue(struct super_block *sb,
 	return pi_addr;
 }
 
-struct scan_bitmap *recovery_bm = NULL;
 static struct task_struct **threads;
 static struct task_ring *task_rings;
 wait_queue_head_t finish_wq;
@@ -1161,7 +1158,7 @@ static int thread_func(void *data)
 	while (!kthread_should_stop()) {
 		while(!task_ring_is_empty(ring)) {
 			pi_addr = task_ring_dequeue(sb, ring);
-			pmfs_recover_inode(sb, pi_addr, recovery_bm,
+			pmfs_recover_inode(sb, pi_addr, NULL,
 							cpuid, 1);
 			wake_up_interruptible(&finish_wq);
 		}
@@ -1195,9 +1192,8 @@ static inline struct task_ring *get_free_ring(int cpus, struct task_ring *ring)
 }
 
 static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
-	struct pmfs_inode *inode_table, struct scan_bitmap *bm, int cpus)
+	struct pmfs_inode *inode_table, int cpus)
 {
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_alive_inode_entry *entry = NULL;
 	size_t size = sizeof(struct pmfs_alive_inode_entry);
 	struct task_ring *ring = NULL;
@@ -1217,11 +1213,6 @@ static void pmfs_inode_table_multithread_crawl(struct super_block *sb,
 		if (curr_p == 0) {
 			pmfs_err(sb, "Alive inode log reaches NULL!\n");
 			PMFS_ASSERT(0);
-		}
-
-		if (bm) {
-			sbi->s_inodes_used_count++;
-			sbi->s_inodes_used_count++;
 		}
 
 		entry = (struct pmfs_alive_inode_entry *)pmfs_get_block(sb,
@@ -1304,7 +1295,7 @@ static void wait_to_finish(int cpus)
 	pmfs_dbg("Multithread total recovered %d\n", total);
 }
 
-int pmfs_multithread_recovery(struct super_block *sb, struct scan_bitmap *bm)
+int pmfs_multithread_recovery(struct super_block *sb)
 {
 	struct pmfs_inode *inode_table = pmfs_get_inode_table(sb);
 	int cpus;
@@ -1317,7 +1308,7 @@ int pmfs_multithread_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	if (ret)
 		return ret;
 
-	pmfs_inode_table_multithread_crawl(sb, inode_table, bm, cpus);
+	pmfs_inode_table_multithread_crawl(sb, inode_table, cpus);
 
 	wait_to_finish(cpus);
 	free_resources();
@@ -1379,8 +1370,6 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 		bm = alloc_bm(initsize);
 		if (!bm)
 			return -ENOMEM;
-
-		recovery_bm = bm;
 	}
 
 	pmfs_dbg("%s\n", __func__);
@@ -1391,9 +1380,9 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 		ret = pmfs_dfs_recovery(sb, bm);
 	} else {
 		if (multithread)
-			ret = pmfs_multithread_recovery(sb, bm);
+			ret = pmfs_multithread_recovery(sb);
 		else
-			ret = pmfs_singlethread_recovery(sb, bm);
+			ret = pmfs_singlethread_recovery(sb);
 	}
 
 	if (bm) {
