@@ -376,99 +376,7 @@ struct mem_addr {
 	struct page *page;
 };
 
-/* Function Prototypes */
-extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
 
-/* file.c */
-extern int pmfs_mmap(struct file *file, struct vm_area_struct *vma);
-
-/* balloc.c */
-extern struct pmfs_blocknode *pmfs_alloc_block_node(struct super_block *sb);
-extern struct pmfs_blocknode *pmfs_alloc_inode_node(struct super_block *sb);
-extern void pmfs_free_block_node(struct super_block *sb,
-	struct pmfs_blocknode *bnode);
-extern void pmfs_free_inode_node(struct super_block *sb,
-	struct pmfs_blocknode *bnode);
-extern void pmfs_init_blockmap(struct super_block *sb,
-		unsigned long init_used_size);
-extern void pmfs_free_meta_block(struct super_block *sb, unsigned long blocknr);
-extern void pmfs_free_data_blocks(struct super_block *sb,
-	unsigned long blocknr, int num, unsigned short btype,
-	struct pmfs_blocknode **start_hint, int needlock);
-extern void pmfs_free_log_blocks(struct super_block *sb,
-	unsigned long blocknr, int num, unsigned short btype,
-	struct pmfs_blocknode **start_hint, int needlock);
-extern int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
-	unsigned int num, unsigned short btype, int zero);
-extern int pmfs_new_log_blocks(struct super_block *sb, unsigned long *blocknr,
-	unsigned int num, unsigned short btype, int zero);
-extern int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
-	int zero, int nosleep);
-extern int pmfs_new_cache_block(struct super_block *sb, struct mem_addr *pair,
-	int zero, int nosleep);
-extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
-
-/* dir.c */
-int pmfs_append_dir_init_entries(struct super_block *sb,
-	struct pmfs_inode *pi, u64 self_ino, u64 parent_ino);
-extern int pmfs_add_entry(struct dentry *dentry, u64 *pi_addr, u64 ino,
-	int inc_link, int new_inode, u64 tail, u64 *new_tail);
-extern int pmfs_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
-	u64 *new_tail);
-
-/* namei.c */
-extern struct dentry *pmfs_get_parent(struct dentry *child);
-int pmfs_append_link_change_entry(struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode, u64 tail, u64 *new_tail);
-void pmfs_apply_link_change_entry(struct pmfs_inode *pi,
-	struct pmfs_link_change_entry *entry);
-
-/* inode.c */
-extern unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
-		__le64 root, u32 height, u32 btype, unsigned long last_blocknr);
-extern int pmfs_init_inode_table(struct super_block *sb);
-int pmfs_init_inode_inuse_list(struct super_block *sb);
-extern u64 pmfs_find_nvmm_block(struct inode *inode, 
-		unsigned long file_blocknr);
-int pmfs_set_blocksize_hint(struct super_block *sb, struct inode *inode,
-	struct pmfs_inode *pi, loff_t new_size);
-void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize);
-
-extern struct inode *pmfs_iget(struct super_block *sb, unsigned long ino);
-extern void pmfs_put_inode(struct inode *inode);
-extern void pmfs_evict_inode(struct inode *inode);
-extern void pmfs_update_isize(struct inode *inode, struct pmfs_inode *pi);
-extern void pmfs_update_nlink(struct inode *inode, struct pmfs_inode *pi);
-extern void pmfs_update_time(struct inode *inode, struct pmfs_inode *pi);
-extern int pmfs_write_inode(struct inode *inode, struct writeback_control *wbc);
-extern void pmfs_dirty_inode(struct inode *inode, int flags);
-extern int pmfs_notify_change(struct dentry *dentry, struct iattr *attr);
-int pmfs_getattr(struct vfsmount *mnt, struct dentry *dentry, 
-		struct kstat *stat);
-extern void pmfs_set_inode_flags(struct inode *inode, struct pmfs_inode *pi,
-	unsigned int flags);
-extern void pmfs_get_inode_flags(struct inode *inode, struct pmfs_inode *pi);
-extern unsigned long pmfs_find_region(struct inode *inode, loff_t *offset,
-		int hole);
-
-/* ioctl.c */
-extern long pmfs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
-#ifdef CONFIG_COMPAT
-extern long pmfs_compat_ioctl(struct file *file, unsigned int cmd,
-	unsigned long arg);
-#endif
-
-/* super.c */
-#ifdef CONFIG_PMFS_TEST
-extern struct pmfs_super_block *get_pmfs_super(void);
-#endif
-extern void __pmfs_free_blocknode(struct pmfs_blocknode *bnode);
-extern struct super_block *pmfs_read_super(struct super_block *sb, void *data,
-	int silent);
-extern int pmfs_statfs(struct dentry *d, struct kstatfs *buf);
-extern int pmfs_remount(struct super_block *sb, int *flags, char *data);
-struct pmfs_dir_node *pmfs_alloc_dirnode(struct super_block *sb);
-void pmfs_free_dirnode(struct super_block *sb, struct pmfs_dir_node *node);
 
 #define _mm_clflush(addr)\
 	asm volatile("clflush %0" : "+m" (*(volatile char *)(addr)))
@@ -709,19 +617,6 @@ static inline struct pmfs_super_block *pmfs_get_redund_super(struct super_block 
 	return (struct pmfs_super_block *)(sbi->virt_addr + PMFS_SB_SIZE);
 }
 
-/*
- * ROOT_INO: Start from PMFS_SB_SIZE * 2
- * BLOCKNODE_INO: PMFS_SB_SIZE * 2 + PMFS_INODE_SIZE
- */
-static inline struct pmfs_inode *pmfs_get_basic_inode(struct super_block *sb,
-	u64 inode_number)
-{
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-
-	return (struct pmfs_inode *)(sbi->virt_addr + PMFS_SB_SIZE * 2 +
-				 inode_number - PMFS_INODE_SIZE);
-}
-
 /* If this is part of a read-modify-write of the block,
  * pmfs_memunlock_block() before calling! */
 static inline void *pmfs_get_block(struct super_block *sb, u64 block)
@@ -763,22 +658,6 @@ static inline void pmfs_memcpy_atomic (void *dst, const void *src, u8 size)
 			pmfs_dbg("error: memcpy_atomic called with %d bytes\n", size);
 			//BUG();
 	}
-}
-
-static inline void pmfs_update_time_and_size(struct inode *inode,
-	struct pmfs_inode *pi)
-{
-	__le32 words[2];
-	__le64 new_pi_size = cpu_to_le64(i_size_read(inode));
-
-	/* pi->i_size, pi->i_ctime, and pi->i_mtime need to be atomically updated.
- 	* So use cmpxchg16b here. */
-	words[0] = cpu_to_le32(inode->i_ctime.tv_sec);
-	words[1] = cpu_to_le32(inode->i_mtime.tv_sec);
-	/* TODO: the following function assumes cmpxchg16b instruction writes
- 	* 16 bytes atomically. Confirm if it is really true. */
-	cmpxchg_double_local(&pi->i_size, (u64 *)&pi->i_ctime, pi->i_size,
-		*(u64 *)&pi->i_ctime, new_pi_size, *(u64 *)words);
 }
 
 /* assumes the length to be 4-byte aligned */
@@ -934,6 +813,19 @@ static inline uint32_t pmfs_inode_blk_size (struct pmfs_inode *pi)
 	return blk_type_to_size[pi->i_blk_type];
 }
 
+/*
+ * ROOT_INO: Start from PMFS_SB_SIZE * 2
+ * BLOCKNODE_INO: PMFS_SB_SIZE * 2 + PMFS_INODE_SIZE
+ */
+static inline struct pmfs_inode *pmfs_get_basic_inode(struct super_block *sb,
+	u64 inode_number)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+
+	return (struct pmfs_inode *)(sbi->virt_addr + PMFS_SB_SIZE * 2 +
+				 inode_number - PMFS_INODE_SIZE);
+}
+
 /* If this is part of a read-modify-write of the inode metadata,
  * pmfs_memunlock_inode() before calling! */
 static inline struct pmfs_inode *pmfs_get_inode_by_ino(struct super_block *sb,
@@ -1011,33 +903,13 @@ static inline void check_eof_blocks(struct super_block *sb,
 		pi->i_flags &= cpu_to_le32(~PMFS_EOFBLOCKS_FL);
 }
 
-#include "wprotect.h"
+enum pmfs_new_inode_type {
+	TYPE_CREATE = 0,
+	TYPE_MKNOD,
+	TYPE_SYMLINK,
+	TYPE_MKDIR
+};
 
-/*
- * Inodes and files operations
- */
-
-/* dir.c */
-extern const struct file_operations pmfs_dir_operations;
-void pmfs_print_dir_tree(struct super_block *sb,
-	struct pmfs_inode_info_header *sih, unsigned long ino);
-void pmfs_delete_dir_tree(struct super_block *sb,
-	struct pmfs_inode_info_header *sih);
-struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode, const char *name,
-	unsigned long name_len);
-int pmfs_rebuild_dir_inode_tree(struct super_block *sb,
-	struct pmfs_inode *pi, u64 pi_addr,
-	struct pmfs_inode_info_header *sih, struct scan_bitmap *bm);
-
-/* file.c */
-extern const struct inode_operations pmfs_file_inode_operations;
-extern const struct file_operations pmfs_xip_file_operations;
-int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync);
-int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
-	pte_t **ptep, int category);
-
-/* inode.c */
 static inline u64 next_log_page(struct super_block *sb, u64 curr_p)
 {
 	void *curr_addr = pmfs_get_block(sb, curr_p);
@@ -1088,14 +960,116 @@ static inline int is_dir_init_entry(struct super_block *sb,
 	return 0;
 }
 
-enum pmfs_new_inode_type {
-	TYPE_CREATE = 0,
-	TYPE_MKNOD,
-	TYPE_SYMLINK,
-	TYPE_MKDIR
-};
+#include "wprotect.h"
 
+/* Function Prototypes */
+extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
+
+/* balloc.c */
+extern struct pmfs_blocknode *pmfs_alloc_block_node(struct super_block *sb);
+extern struct pmfs_blocknode *pmfs_alloc_inode_node(struct super_block *sb);
+extern void pmfs_free_block_node(struct super_block *sb,
+	struct pmfs_blocknode *bnode);
+extern void pmfs_free_inode_node(struct super_block *sb,
+	struct pmfs_blocknode *bnode);
+extern void pmfs_init_blockmap(struct super_block *sb,
+		unsigned long init_used_size);
+extern void pmfs_free_meta_block(struct super_block *sb, unsigned long blocknr);
+extern void pmfs_free_data_blocks(struct super_block *sb,
+	unsigned long blocknr, int num, unsigned short btype,
+	struct pmfs_blocknode **start_hint, int needlock);
+extern void pmfs_free_log_blocks(struct super_block *sb,
+	unsigned long blocknr, int num, unsigned short btype,
+	struct pmfs_blocknode **start_hint, int needlock);
+extern int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
+	unsigned int num, unsigned short btype, int zero);
+extern int pmfs_new_log_blocks(struct super_block *sb, unsigned long *blocknr,
+	unsigned int num, unsigned short btype, int zero);
+extern int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
+	int zero, int nosleep);
+extern int pmfs_new_cache_block(struct super_block *sb, struct mem_addr *pair,
+	int zero, int nosleep);
+extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
+inline int pmfs_rbtree_compare_blocknode(struct pmfs_blocknode *curr,
+	unsigned long new_block_low);
+inline int pmfs_insert_blocknode_blocktree(struct pmfs_sb_info *sbi,
+	struct pmfs_blocknode *new_node);
+inline int pmfs_insert_blocknode_inodetree(struct pmfs_sb_info *sbi,
+	struct pmfs_blocknode *new_node);
+inline struct pmfs_blocknode *
+pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
+	unsigned long new_block_low, unsigned long *step);
+void pmfs_free_cache_block(struct mem_addr *pair);
+
+/* bbuild.c */
+int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
+	struct scan_bitmap *bm, int cpuid, int multithread);
+void pmfs_save_blocknode_mappings_to_log(struct super_block *sb);
+void pmfs_save_inode_list_to_log(struct super_block *sb);
+unsigned int pmfs_free_header_tree(struct super_block *sb);
+struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
+	u16 i_mode);
+int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
+	struct pmfs_inode_info_header *sih, int multithread);
+int pmfs_inode_log_recovery(struct super_block *sb, int multithread);
+
+/*
+ * Inodes and files operations
+ */
+
+/* dir.c */
+extern const struct file_operations pmfs_dir_operations;
+int pmfs_append_dir_init_entries(struct super_block *sb,
+	struct pmfs_inode *pi, u64 self_ino, u64 parent_ino);
+extern int pmfs_add_entry(struct dentry *dentry, u64 *pi_addr, u64 ino,
+	int inc_link, int new_inode, u64 tail, u64 *new_tail);
+extern int pmfs_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
+	u64 *new_tail);
+void pmfs_print_dir_tree(struct super_block *sb,
+	struct pmfs_inode_info_header *sih, unsigned long ino);
+void pmfs_delete_dir_tree(struct super_block *sb,
+	struct pmfs_inode_info_header *sih);
+struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
+	struct pmfs_inode *pi, struct inode *inode, const char *name,
+	unsigned long name_len);
+int pmfs_rebuild_dir_inode_tree(struct super_block *sb,
+	struct pmfs_inode *pi, u64 pi_addr,
+	struct pmfs_inode_info_header *sih, struct scan_bitmap *bm);
+
+/* file.c */
+extern const struct inode_operations pmfs_file_inode_operations;
+extern const struct file_operations pmfs_xip_file_operations;
+int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync);
+int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
+	pte_t **ptep, int category);
+
+/* inode.c */
 extern const struct address_space_operations pmfs_aops_xip;
+extern unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
+		__le64 root, u32 height, u32 btype, unsigned long last_blocknr);
+extern int pmfs_init_inode_table(struct super_block *sb);
+int pmfs_init_inode_inuse_list(struct super_block *sb);
+extern u64 pmfs_find_nvmm_block(struct inode *inode, 
+		unsigned long file_blocknr);
+int pmfs_set_blocksize_hint(struct super_block *sb, struct inode *inode,
+	struct pmfs_inode *pi, loff_t new_size);
+void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize);
+extern struct inode *pmfs_iget(struct super_block *sb, unsigned long ino);
+extern void pmfs_put_inode(struct inode *inode);
+extern void pmfs_evict_inode(struct inode *inode);
+extern void pmfs_update_isize(struct inode *inode, struct pmfs_inode *pi);
+extern void pmfs_update_nlink(struct inode *inode, struct pmfs_inode *pi);
+extern void pmfs_update_time(struct inode *inode, struct pmfs_inode *pi);
+extern int pmfs_write_inode(struct inode *inode, struct writeback_control *wbc);
+extern void pmfs_dirty_inode(struct inode *inode, int flags);
+extern int pmfs_notify_change(struct dentry *dentry, struct iattr *attr);
+int pmfs_getattr(struct vfsmount *mnt, struct dentry *dentry, 
+		struct kstat *stat);
+extern void pmfs_set_inode_flags(struct inode *inode, struct pmfs_inode *pi,
+	unsigned int flags);
+extern void pmfs_get_inode_flags(struct inode *inode, struct pmfs_inode *pi);
+extern unsigned long pmfs_find_region(struct inode *inode, loff_t *offset,
+		int hole);
 void pmfs_apply_setattr_entry(struct pmfs_inode *pi,
 	struct pmfs_setattr_logentry *entry);
 u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
@@ -1128,33 +1102,33 @@ extern int pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 int pmfs_free_dram_resource(struct super_block *sb,
 	struct pmfs_inode_info_header *sih);
 
-/* balloc.c */
-inline int pmfs_rbtree_compare_blocknode(struct pmfs_blocknode *curr,
-	unsigned long new_block_low);
-inline int pmfs_insert_blocknode_blocktree(struct pmfs_sb_info *sbi,
-	struct pmfs_blocknode *new_node);
-inline int pmfs_insert_blocknode_inodetree(struct pmfs_sb_info *sbi,
-	struct pmfs_blocknode *new_node);
-inline struct pmfs_blocknode *
-pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
-	unsigned long new_block_low, unsigned long *step);
-void pmfs_free_cache_block(struct mem_addr *pair);
-
-/* bbuild.c */
-int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
-	struct scan_bitmap *bm, int cpuid, int multithread);
-void pmfs_save_blocknode_mappings_to_log(struct super_block *sb);
-void pmfs_save_inode_list_to_log(struct super_block *sb);
-unsigned int pmfs_free_header_tree(struct super_block *sb);
-struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
-	u16 i_mode);
-int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
-	struct pmfs_inode_info_header *sih, int multithread);
-int pmfs_inode_log_recovery(struct super_block *sb, int multithread);
+/* ioctl.c */
+extern long pmfs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
+#ifdef CONFIG_COMPAT
+extern long pmfs_compat_ioctl(struct file *file, unsigned int cmd,
+	unsigned long arg);
+#endif
 
 /* namei.c */
 extern const struct inode_operations pmfs_dir_inode_operations;
 extern const struct inode_operations pmfs_special_inode_operations;
+extern struct dentry *pmfs_get_parent(struct dentry *child);
+int pmfs_append_link_change_entry(struct super_block *sb,
+	struct pmfs_inode *pi, struct inode *inode, u64 tail, u64 *new_tail);
+void pmfs_apply_link_change_entry(struct pmfs_inode *pi,
+	struct pmfs_link_change_entry *entry);
+
+/* super.c */
+#ifdef CONFIG_PMFS_TEST
+extern struct pmfs_super_block *get_pmfs_super(void);
+#endif
+extern void __pmfs_free_blocknode(struct pmfs_blocknode *bnode);
+extern struct super_block *pmfs_read_super(struct super_block *sb, void *data,
+	int silent);
+extern int pmfs_statfs(struct dentry *d, struct kstatfs *buf);
+extern int pmfs_remount(struct super_block *sb, int *flags, char *data);
+struct pmfs_dir_node *pmfs_alloc_dirnode(struct super_block *sb);
+void pmfs_free_dirnode(struct super_block *sb, struct pmfs_dir_node *node);
 
 /* symlink.c */
 extern const struct inode_operations pmfs_symlink_inode_operations;
