@@ -1076,6 +1076,14 @@ int pmfs_init_inode_table(struct super_block *sb)
 	 */
 	pi->i_blk_type = PMFS_BLOCK_TYPE_4K;
 
+	sbi->s_inodes_count = sbi->num_free_blocks <<
+			(pmfs_inode_blk_shift(pi) - PMFS_INODE_BITS);
+
+	/* inode 0 is considered invalid and hence never used */
+	sbi->s_free_inodes_count =
+		(sbi->s_inodes_count - PMFS_FREE_INODE_HINT_START);
+	sbi->s_free_inode_hint = (PMFS_FREE_INODE_HINT_START);
+
 	return 0;
 }
 
