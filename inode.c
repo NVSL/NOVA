@@ -630,16 +630,6 @@ unsigned long pmfs_inode_file_count_iblocks (struct super_block *sb,
 	return (iblocks << (pmfs_inode_blk_shift(pi) - sb->s_blocksize_bits));
 }
 
-static inline unsigned long pmfs_inode_count_iblocks (struct super_block *sb,
-	struct pmfs_inode *pi, __le64 root)
-{
-	unsigned long iblocks;
-	if (root == 0)
-		return 0;
-	iblocks = pmfs_inode_count_iblocks_recursive(sb, root, pi->height);
-	return (iblocks << (pmfs_inode_blk_shift(pi) - sb->s_blocksize_bits));
-}
-
 /* Support for sparse files: even though pi->i_size may indicate a certain
  * last_blocknr, it may not be true for sparse files. Specifically, last_blocknr
  * can not be more than the maximum allowed by the inode's tree height.
@@ -1079,7 +1069,6 @@ int pmfs_init_inode_table(struct super_block *sb)
 	pi->i_gid = 0;
 	pi->i_links_count = cpu_to_le16(1);
 	pi->i_flags = 0;
-	pi->height = 0;
 	pi->i_dtime = 0;
 
 	/*
@@ -1667,7 +1656,6 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	pmfs_memunlock_inode(sb, pi);
 	pi->i_blk_type = PMFS_DEFAULT_BLOCK_TYPE;
 	pi->i_flags = pmfs_mask_flags(mode, diri->i_flags);
-	pi->height = 0;
 	pi->i_dtime = 0;
 	pi->log_head = 0;
 	pi->log_tail = 0;

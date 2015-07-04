@@ -82,36 +82,34 @@
  */
 struct pmfs_inode {
 	/* first 48 bytes */
-	__le16	i_rsvd;         /* reserved. used to be checksum */
-	u8	    height;         /* height of data b-tree; max 3 for now */
-	u8	    i_blk_type;     /* data block size this inode uses */
-	__le32	i_flags;            /* Inode flags */
-	__le64	root;               /* btree root. must be below qw w/ height */
-	__le64	i_size;             /* Size of data in bytes */
-	__le32	i_ctime;            /* Inode modification time */
-	__le32	i_mtime;            /* Inode b-tree Modification time */
-	__le32	i_dtime;            /* Deletion Time */
-	__le16	i_mode;             /* File mode */
-	__le16	i_links_count;      /* Links count */
-	__le64	i_blocks;           /* Blocks count */
+	u8	i_rsvd[3];	/* reserved. used to be checksum */
+	u8	i_blk_type;	/* data block size this inode uses */
+	__le32	i_flags;	/* Inode flags */
+	__le64	i_size;		/* Size of data in bytes */
+	__le32	i_ctime;	/* Inode modification time */
+	__le32	i_mtime;	/* Inode b-tree Modification time */
+	__le32	i_dtime;	/* Deletion Time */
+	__le16	i_mode;		/* File mode */
+	__le16	i_links_count;	/* Links count */
+	__le64	i_blocks;	/* Blocks count */
+	__le64	i_xattr;	/* Extended attribute block */
 
 	/* second 48 bytes */
-	__le64	i_xattr;            /* Extended attribute block */
-	__le32	i_uid;              /* Owner Uid */
-	__le32	i_gid;              /* Group Id */
-	__le32	i_generation;       /* File version (for NFS) */
-	__le32	i_atime;            /* Access time */
+	__le32	i_uid;		/* Owner Uid */
+	__le32	i_gid;		/* Group Id */
+	__le32	i_generation;	/* File version (for NFS) */
+	__le32	i_atime;	/* Access time */
+	__le64	pmfs_ino;	/* pmfs inode number */
 
-	__le64	log_head;	    /* Log head pointer */
-	__le64	log_tail;	    /* Log tail pointer */
+	__le64	log_head;	/* Log head pointer */
+	__le64	log_tail;	/* Log tail pointer */
 
 	struct {
-		__le32 rdev;    /* major/minor # */
-	} dev;              /* device inode */
+		__le32 rdev;	/* major/minor # */
+	} dev;			/* device inode */
 	__le32 padding;
 
 	u8	valid;		/* Is this inode valid? */
-	u64	pmfs_ino;
 };
 
 /*
