@@ -356,13 +356,21 @@ static int pmfs_flush(struct file *file, fl_owner_t id)
 {
 	struct address_space *mapping = file->f_mapping;
 	struct inode *inode = mapping->host;
-	loff_t isize;
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	loff_t isize, start, end;
 	int ret = 0;
-	/* if the file was opened for writing, make it persistent.
-	 * TODO: Should we be more smart to check if the file was modified? */
 
+	/* if the file was opened for writing, make it persistent.
+	 * Only sync the dirty range. Mmap needs to call msync() explicitly.
+	 */
 	isize = i_size_read(inode);
-	pmfs_fsync(file, 0, isize, 1);
+	if (si->low_dirty <= si->high_dirty) {
+		start = si->low_dirty << PAGE_SHIFT;
+		end = (si->high_dirty + 1) << PAGE_SHIFT;
+		if (end > isize)
+			end = isize;
+		pmfs_fsync(file, start, end, 1);
+	}
 
 	if (file->f_mode & FMODE_WRITE) {
 		PERSISTENT_MARK();
