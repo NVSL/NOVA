@@ -288,6 +288,8 @@ int pmfs_append_link_change_entry(struct super_block *sb,
 	entry->entry_type = LINK_CHANGE;
 	entry->links = cpu_to_le16(inode->i_nlink);
 	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	entry->flags = cpu_to_le32(inode->i_flags);
+	entry->generation = cpu_to_le32(inode->i_generation);
 	pmfs_flush_buffer(entry, size, 1);
 	*new_tail = curr_p + size;
 
@@ -303,6 +305,8 @@ void pmfs_apply_link_change_entry(struct pmfs_inode *pi,
 
 	pi->i_links_count	= entry->links;
 	pi->i_ctime		= entry->ctime;
+	pi->i_flags		= entry->flags;
+	pi->i_generation	= entry->generation;
 
 	/* Do not flush now */
 }

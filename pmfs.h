@@ -343,7 +343,9 @@ struct pmfs_link_change_entry {
 	u8	padding;
 	__le16	links;
 	__le32	ctime;
-	__le64	paddings[3];
+	__le32	flags;
+	__le32	generation;
+	__le64	paddings[2];
 } __attribute((__packed__));
 
 struct pmfs_dir_node {
