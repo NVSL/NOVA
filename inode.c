@@ -1707,28 +1707,6 @@ fail1:
 	return ERR_PTR(errval);
 }
 
-inline void pmfs_update_nlink(struct inode *inode, struct pmfs_inode *pi)
-{
-	pmfs_memunlock_inode(inode->i_sb, pi);
-	pi->i_links_count = cpu_to_le16(inode->i_nlink);
-	pmfs_memlock_inode(inode->i_sb, pi);
-}
-
-inline void pmfs_update_isize(struct inode *inode, struct pmfs_inode *pi)
-{
-	pmfs_memunlock_inode(inode->i_sb, pi);
-	pi->i_size = cpu_to_le64(inode->i_size);
-	pmfs_memlock_inode(inode->i_sb, pi);
-}
-
-inline void pmfs_update_time(struct inode *inode, struct pmfs_inode *pi)
-{
-	pmfs_memunlock_inode(inode->i_sb, pi);
-	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-	pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
-	pmfs_memlock_inode(inode->i_sb, pi);
-}
-
 /* This function checks if VFS's inode and PMFS's inode are not in sync */
 static bool pmfs_is_inode_dirty(struct inode *inode, struct pmfs_inode *pi)
 {

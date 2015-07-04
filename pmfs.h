@@ -1053,9 +1053,6 @@ int pmfs_set_blocksize_hint(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode *pi, loff_t new_size);
 extern struct inode *pmfs_iget(struct super_block *sb, unsigned long ino);
 extern void pmfs_evict_inode(struct inode *inode);
-extern void pmfs_update_isize(struct inode *inode, struct pmfs_inode *pi);
-extern void pmfs_update_nlink(struct inode *inode, struct pmfs_inode *pi);
-extern void pmfs_update_time(struct inode *inode, struct pmfs_inode *pi);
 extern int pmfs_write_inode(struct inode *inode, struct writeback_control *wbc);
 extern void pmfs_dirty_inode(struct inode *inode, int flags);
 extern int pmfs_notify_change(struct dentry *dentry, struct iattr *attr);

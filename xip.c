@@ -424,7 +424,6 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		goto out;
 	}
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
-//	pmfs_update_time(inode, pi);
 	time = CURRENT_TIME_SEC.tv_sec;
 
 	pmfs_dbg_verbose("%s: inode %lu, block %llu, offset %lu, count %lu\n",
@@ -519,7 +518,6 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	if (pos > inode->i_size) {
 		i_size_write(inode, pos);
 		sih->i_size = pos;
-//		pmfs_update_isize(inode, pi);
 	}
 
 	pmfs_update_tail(pi, temp_tail);
@@ -596,7 +594,6 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		goto out;
 	}
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
-//	pmfs_update_time(inode, pi);
 
 	pmfs_dbg_verbose("%s: ino %lu, block %llu, offset %lu, count %lu\n",
 		__func__, inode->i_ino, pos >> sb->s_blocksize_bits, offset,
@@ -698,8 +695,6 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	if (pos > inode->i_size) {
 		i_size_write(inode, pos);
 		sih->i_size = pos;
-		/* Don't update the actual size for pi */
-//		pmfs_update_isize(inode, pi);
 	}
 
 	*ppos = pos;
