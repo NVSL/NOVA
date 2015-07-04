@@ -1694,7 +1694,7 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 	i_gid_write(inode, le32_to_cpu(pi->i_gid));
 //	set_nlink(inode, le16_to_cpu(pi->i_links_count));
 	inode->i_generation = le32_to_cpu(pi->i_generation);
-	pmfs_set_inode_flags(inode, pi);
+	pmfs_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
 	ino = inode->i_ino >> PMFS_INODE_BITS;
 
 	/* check if the inode is active. */
@@ -2262,7 +2262,7 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 
 	pmfs_update_inode(inode, pi);
 
-	pmfs_set_inode_flags(inode, pi);
+	pmfs_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
 
 	if (insert_inode_locked(inode) < 0) {
 		pmfs_err(sb, "pmfs_new_inode failed ino %lx\n", inode->i_ino);
@@ -2715,10 +2715,9 @@ int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 	return ret;
 }
 
-void pmfs_set_inode_flags(struct inode *inode, struct pmfs_inode *pi)
+void pmfs_set_inode_flags(struct inode *inode, struct pmfs_inode *pi,
+	unsigned int flags)
 {
-	unsigned int flags = le32_to_cpu(pi->i_flags);
-
 	inode->i_flags &=
 		~(S_SYNC | S_APPEND | S_IMMUTABLE | S_NOATIME | S_DIRSYNC);
 	if (flags & FS_SYNC_FL)
