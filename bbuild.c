@@ -358,7 +358,6 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	int step = 0;
 	int allocated;
 	u64 new_block = 0;
-	pmfs_transaction_t *trans;
 	u64 curr_entry = 0;
 	u64 temp_tail;
 
@@ -367,26 +366,20 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	if (sbi->num_blocknode_block % BLOCKNODE_PER_PAGE)
 		num_blocks++;
 
-	/* 2 entries for super-block */
-	trans = pmfs_new_transaction(sb, MAX_SB_LENTRIES);
-	if (IS_ERR(trans))
-		return;
-
 	allocated = pmfs_allocate_inode_log_pages(sb, pi, num_blocks,
 						&new_block);
 	if (allocated != num_blocks) {
 		pmfs_dbg("Error saving blocknode mappings: %d\n", allocated);
-		pmfs_abort_transaction(sb, trans);
 		return;
 	}
 
 	/*
 	 * save the total allocated blocknode mappings
 	 * in super block
+	 * No transaction is needed as we will recover the fields
+	 * via DFS recovery
 	 */
 	super = pmfs_get_super(sb);
-	pmfs_add_logentry(sb, trans, &super->s_wtime,
-			PMFS_FAST_MOUNT_FIELD_SIZE, LE_DATA);
 
 	pmfs_memunlock_range(sb, &super->s_wtime, PMFS_FAST_MOUNT_FIELD_SIZE);
 
@@ -398,8 +391,6 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	super->s_free_inode_hint = cpu_to_le64(sbi->s_free_inode_hint);
 
 	pmfs_memlock_range(sb, &super->s_wtime, PMFS_FAST_MOUNT_FIELD_SIZE);
-	/* commit the transaction */
-	pmfs_commit_transaction(sb, trans);
 	pmfs_flush_buffer(super, PMFS_SB_SIZE, 1);
 
 	/* Finally update log head and tail */
