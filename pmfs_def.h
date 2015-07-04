@@ -82,7 +82,8 @@
  */
 struct pmfs_inode {
 	/* first 48 bytes */
-	u8	i_rsvd[3];	/* reserved. used to be checksum */
+	__le16	i_rsvd;		/* reserved. used to be checksum */
+	u8	valid;		/* Is this inode valid? */
 	u8	i_blk_type;	/* data block size this inode uses */
 	__le32	i_flags;	/* Inode flags */
 	__le64	i_size;		/* Size of data in bytes */
@@ -108,8 +109,6 @@ struct pmfs_inode {
 		__le32 rdev;	/* major/minor # */
 	} dev;			/* device inode */
 	__le32 padding;
-
-	u8	valid;		/* Is this inode valid? */
 };
 
 /*
