@@ -198,8 +198,8 @@ static int pmfs_symlink(struct inode *dir, struct dentry *dentry,
 		goto out_fail1;
 
 	/* Pre-allocate symlink log page before allocating inode */
-	allocated = pmfs_new_log_blocks(sb, &blocknr, 1,
-						PMFS_BLOCK_TYPE_4K, 1);
+	allocated = pmfs_new_log_blocks(sb, ino >> PMFS_INODE_BITS,
+				&blocknr, 1, PMFS_BLOCK_TYPE_4K, 1);
 	if (allocated != 1 || blocknr == 0)
 		goto out_fail1;
 

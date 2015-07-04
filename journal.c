@@ -1020,11 +1020,13 @@ int pmfs_lite_journal_hard_init(struct super_block *sb)
 {
 	struct pmfs_inode *pi;
 	unsigned long blocknr = 0;
+	unsigned long pmfs_ino;
 	int allocated;
 	u64 block;
 
 	pi = pmfs_get_inode_by_ino(sb, PMFS_LITEJOURNAL_INO);
-	allocated = pmfs_new_log_blocks(sb, &blocknr, 1,
+	pmfs_ino = PMFS_LITEJOURNAL_INO >> PMFS_INODE_BITS;
+	allocated = pmfs_new_log_blocks(sb, pmfs_ino, &blocknr, 1,
 						PMFS_BLOCK_TYPE_4K, 1);
 	pmfs_dbg_verbose("%s: allocate log @ 0x%lx\n", __func__, blocknr);
 	if (allocated != 1 || blocknr == 0)

@@ -982,8 +982,9 @@ extern void pmfs_free_log_blocks(struct super_block *sb,
 	struct pmfs_blocknode **start_hint, int needlock);
 extern int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned int num, unsigned short btype, int zero);
-extern int pmfs_new_log_blocks(struct super_block *sb, unsigned long *blocknr,
-	unsigned int num, unsigned short btype, int zero);
+extern int pmfs_new_log_blocks(struct super_block *sb, unsigned long pmfs_ino,
+	unsigned long *blocknr, unsigned int num, unsigned short btype,
+	int zero);
 extern int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
 	int zero, int nosleep);
 extern int pmfs_new_cache_block(struct super_block *sb, struct mem_addr *pair,

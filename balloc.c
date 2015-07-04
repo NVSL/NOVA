@@ -630,8 +630,9 @@ inline int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
 	return allocated;
 }
 
-inline int pmfs_new_log_blocks(struct super_block *sb, unsigned long *blocknr,
-		unsigned int num, unsigned short btype, int zero)
+inline int pmfs_new_log_blocks(struct super_block *sb, unsigned long pmfs_ino,
+	unsigned long *blocknr, unsigned int num, unsigned short btype,
+	int zero)
 {
 	int allocated;
 	timing_t alloc_time;

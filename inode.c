@@ -2144,8 +2144,8 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 	int allocated;
 	int ret_pages = 0;
 
-	allocated = pmfs_new_log_blocks(sb, &new_inode_blocknr, num_pages,
-						PMFS_BLOCK_TYPE_4K, 1);
+	allocated = pmfs_new_log_blocks(sb, pi->pmfs_ino, &new_inode_blocknr,
+					num_pages, PMFS_BLOCK_TYPE_4K, 1);
 
 	if (allocated <= 0) {
 		pmfs_err(sb, "ERROR: no inode log page available: %d %d\n",
@@ -2164,8 +2164,9 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 
 	/* Allocate remaining pages */
 	while (num_pages) {
-		allocated = pmfs_new_log_blocks(sb, &new_inode_blocknr,
-					num_pages, PMFS_BLOCK_TYPE_4K, 1);
+		allocated = pmfs_new_log_blocks(sb, pi->pmfs_ino,
+					&new_inode_blocknr, num_pages,
+					PMFS_BLOCK_TYPE_4K, 1);
 
 		pmfs_dbg_verbose("Alloc %d log blocks @ 0x%lx\n",
 					allocated, new_inode_blocknr);

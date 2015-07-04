@@ -819,7 +819,7 @@ int pmfs_statfs(struct dentry *d, struct kstatfs *buf)
 	buf->f_namelen = PMFS_NAME_LEN;
 	pmfs_dbg_verbose("pmfs_stats: total 4k free blocks 0x%llx\n",
 		buf->f_bfree);
-	pmfs_dbg("total inodes %lu, free inodes %lu, "
+	pmfs_dbgv("total inodes %lu, free inodes %lu, "
 		"blocknodes %lu, inode blocknodes %lu\n",
 		(sbi->s_inodes_count), (sbi->s_free_inodes_count),
 		(sbi->num_blocknode_block), (sbi->num_blocknode_inode));
