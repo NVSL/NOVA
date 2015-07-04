@@ -867,37 +867,6 @@ pmfs_find_info_header(struct super_block *sb, unsigned long ino)
 	return (struct pmfs_inode_info_header *)bp;
 }
 
-#if 0
-/* Deprecated */
-static inline u64 __pmfs_find_dir_block(struct super_block *sb,
-		struct pmfs_inode_info *si, unsigned long blocknr)
-{
-	struct pmfs_inode_info_header *sih = si->header;
-	__le64 *level_ptr;
-	u64 bp = 0;
-	u32 height, bit_shift;
-	unsigned int idx;
-
-	height = sih->height;
-	bp = sih->root;
-	if (bp == 0)
-		return 0;
-
-	while (height > 0) {
-		level_ptr = (__le64 *)DRAM_ADDR(bp);
-		bit_shift = (height - 1) * META_BLK_SHIFT;
-		idx = blocknr >> bit_shift;
-		bp = le64_to_cpu(level_ptr[idx]);
-		if (bp == 0)
-			return 0;
-		blocknr = blocknr & ((1 << bit_shift) - 1);
-		height--;
-	}
-
-	return bp;
-}
-#endif
-
 static inline struct mem_addr *__pmfs_get_mem_pair(struct super_block *sb,
 		struct pmfs_inode_info *si, unsigned long blocknr)
 {
