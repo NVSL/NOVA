@@ -1181,21 +1181,6 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 	case S_IFREG:
 		inode->i_op = &pmfs_file_inode_operations;
 		inode->i_fop = &pmfs_xip_file_operations;
-#if 0
-		if (rebuild) {
-			recovered_sih = pmfs_find_info_header(sb, ino);
-			if (!recovered_sih) {
-				pmfs_dbg("%s: file %lu not recovered?\n",
-						__func__, inode->i_ino);
-				recovered_sih = pmfs_alloc_header(sb,
-							inode->i_mode);
-				recovered_sih->pmfs_inode = pi;
-				pmfs_assign_info_header(sb, ino,
-							recovered_sih, 1);
-			}
-			si->header = recovered_sih;
-		}
-#endif
 		break;
 	case S_IFDIR:
 		inode->i_op = &pmfs_dir_inode_operations;
@@ -1911,41 +1896,6 @@ int pmfs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	stat->blocks = (inode->i_blocks << inode->i_sb->s_blocksize_bits) >> 9;
 	return 0;
 }
-
-#if 0
-/* update a single inode field atomically without using a transaction */
-static int pmfs_update_single_field(struct super_block *sb, struct inode *inode,
-	struct pmfs_inode *pi, unsigned int ia_valid)
-{
-	pmfs_memunlock_inode(sb, pi);
-	switch (ia_valid) {
-		case ATTR_MODE:
-			pi->i_mode = cpu_to_le16(inode->i_mode);
-			break;
-		case ATTR_UID:
-			pi->i_uid = cpu_to_le32(i_uid_read(inode));
-			break;
-		case ATTR_GID:
-			pi->i_gid = cpu_to_le32(i_gid_read(inode));
-			break;
-		case ATTR_SIZE:
-			pi->i_size = cpu_to_le64(inode->i_size);
-			break;
-		case ATTR_ATIME:
-			pi->i_atime = cpu_to_le32(inode->i_atime.tv_sec);
-			break;
-		case ATTR_CTIME:
-			pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-			break;
-		case ATTR_MTIME:
-			pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
-			break;
-	}
-	pmfs_memlock_inode(sb, pi);
-	pmfs_flush_buffer(pi, sizeof(*pi), true);
-	return 0;
-}
-#endif
 
 static void pmfs_update_setattr_entry(struct inode *inode,
 	struct pmfs_setattr_logentry *entry, struct iattr *attr)
