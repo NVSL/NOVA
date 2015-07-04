@@ -2534,6 +2534,9 @@ void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 		return;
 	}
 
+	pmfs_dbgv("%s: inode %lu, old size %llu, new size %llu\n",
+		__func__, inode->i_ino, oldsize, newsize);
+
 	if (newsize != oldsize) {
 		pmfs_block_truncate_page(inode, newsize);
 		i_size_write(inode, newsize);
@@ -2618,10 +2621,15 @@ static void pmfs_update_setattr_entry(struct inode *inode,
 	entry->mode	= cpu_to_le16(inode->i_mode);
 	entry->uid	= cpu_to_le32(i_uid_read(inode));
 	entry->gid	= cpu_to_le32(i_gid_read(inode));
-	entry->size	= cpu_to_le64(inode->i_size);
 	entry->atime	= cpu_to_le32(inode->i_atime.tv_sec);
 	entry->ctime	= cpu_to_le32(inode->i_ctime.tv_sec);
 	entry->mtime	= cpu_to_le32(inode->i_mtime.tv_sec);
+
+	if (ia_valid & ATTR_SIZE)
+		entry->size = cpu_to_le64(attr->ia_size);
+	else
+		entry->size = cpu_to_le64(inode->i_size);
+
 	pmfs_flush_buffer(entry, sizeof(struct pmfs_setattr_logentry), 0);
 }
 
@@ -2689,6 +2697,7 @@ int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 	if (ret)
 		return ret;
 
+	/* Update inode with attr except for size */
 	setattr_copy(inode, attr);
 
 	attr_mask = ATTR_MODE | ATTR_UID | ATTR_GID | ATTR_SIZE | ATTR_ATIME
