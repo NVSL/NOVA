@@ -90,7 +90,6 @@ extern int pmfs_journal_hard_init(struct super_block *sb,
 extern int pmfs_journal_uninit(struct super_block *sb);
 extern pmfs_transaction_t *pmfs_new_transaction(struct super_block *sb,
 		int nclines);
-extern pmfs_transaction_t *pmfs_current_transaction(void);
 extern int pmfs_add_logentry(struct super_block *sb,
 		pmfs_transaction_t *trans, void *addr, uint16_t size, u8 type);
 extern int pmfs_commit_transaction(struct super_block *sb,

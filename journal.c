@@ -472,11 +472,6 @@ int pmfs_journal_uninit(struct super_block *sb)
 	return 0;
 }
 
-inline pmfs_transaction_t *pmfs_current_transaction(void)
-{
-	return (pmfs_transaction_t *)current->journal_info;
-}
-
 static int pmfs_free_logentries(int max_log_entries)
 {
 	pmfs_dbg("pmfs_free_logentries: Not Implemented\n");
@@ -492,14 +487,7 @@ pmfs_transaction_t *pmfs_new_transaction(struct super_block *sb,
 	uint32_t head, tail, req_size, avail_size;
 	uint64_t base;
 	timing_t log_time;
-#if 0
-	trans = pmfs_current_transaction();
 
-	if (trans) {
-		BUG_ON(trans->t_journal != journal);
-		return trans;
-	}
-#endif
 	/* If it is an undo log, need one more log-entry for commit record */
 	PMFS_START_TIMING(logging_t, log_time);
 
