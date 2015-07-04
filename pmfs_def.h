@@ -89,7 +89,7 @@ struct pmfs_inode {
 	__le64	i_size;		/* Size of data in bytes */
 	__le32	i_ctime;	/* Inode modification time */
 	__le32	i_mtime;	/* Inode b-tree Modification time */
-	__le32	i_dtime;	/* Deletion Time */
+	__le32	i_atime;	/* Access time */
 	__le16	i_mode;		/* File mode */
 	__le16	i_links_count;	/* Links count */
 	__le64	i_blocks;	/* Blocks count */
@@ -99,7 +99,6 @@ struct pmfs_inode {
 	__le32	i_uid;		/* Owner Uid */
 	__le32	i_gid;		/* Group Id */
 	__le32	i_generation;	/* File version (for NFS) */
-	__le32	i_atime;	/* Access time */
 	__le64	pmfs_ino;	/* pmfs inode number */
 
 	__le64	log_head;	/* Log head pointer */
@@ -108,7 +107,6 @@ struct pmfs_inode {
 	struct {
 		__le32 rdev;	/* major/minor # */
 	} dev;			/* device inode */
-	__le32 padding;
 };
 
 /*

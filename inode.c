@@ -1069,7 +1069,6 @@ int pmfs_init_inode_table(struct super_block *sb)
 	pi->i_gid = 0;
 	pi->i_links_count = cpu_to_le16(1);
 	pi->i_flags = 0;
-	pi->i_dtime = 0;
 
 	/*
 	 * Now inodes are resided in dir logs, and inode_table is
@@ -1124,7 +1123,7 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 	ino = inode->i_ino >> PMFS_INODE_BITS;
 
 	/* check if the inode is active. */
-	if (inode->i_mode == 0 || le32_to_cpu(pi->i_dtime)) {
+	if (inode->i_mode == 0 || pi->valid == 0) {
 		/* this inode is deleted */
 		ret = -ESTALE;
 		goto bad_inode;
@@ -1656,7 +1655,6 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	pmfs_memunlock_inode(sb, pi);
 	pi->i_blk_type = PMFS_DEFAULT_BLOCK_TYPE;
 	pi->i_flags = pmfs_mask_flags(mode, diri->i_flags);
-	pi->i_dtime = 0;
 	pi->log_head = 0;
 	pi->log_tail = 0;
 	pi->pmfs_ino = pmfs_ino;
