@@ -123,23 +123,6 @@ do_xip_mapping_read(struct address_space *mapping,
 
 		xip_mem = pmfs_get_block(sb, (pair->nvmm << PAGE_SHIFT));
 
-		/* If users can be writing to this page using arbitrary
-		 * virtual addresses, take care about potential aliasing
-		 * before reading the page on the kernel side.
-		 */
-//		if (mapping_writably_mapped(mapping))
-//			/* address based flush */ ;
-
-//		pmfs_dbg("Read: %p\n", xip_mem);
-		/*
-		 * Ok, we have the mem, so now we can copy it to user space...
-		 *
-		 * The actor routine returns how many bytes were actually used..
-		 * NOTE! This may not be the same as how much of a user buffer
-		 * we filled up (we may be padding etc), so we can only update
-		 * "pos" here (the actor routine has to update the user buffer
-		 * pointers and the remaining count).
-		 */
 memcpy:
 		nr = nr - offset;
 		if (nr > len - copied)
@@ -997,7 +980,7 @@ static int __pmfs_xip_file_fault(struct vm_area_struct *vma,
 	err = pmfs_get_dram_mem(inode, vma, vmf->pgoff, 1,
 						&xip_mem, &xip_pfn);
 	if (unlikely(err)) {
-		pmfs_dbg("[%s:%d] get_xip_mem failed(OOM). vm_start(0x%lx),"
+		pmfs_dbg("[%s:%d] get_dram_mem failed(OOM). vm_start(0x%lx),"
 			" vm_end(0x%lx), pgoff(0x%lx), VA(%lx)\n",
 			__func__, __LINE__, vma->vm_start, vma->vm_end,
 			vmf->pgoff, (unsigned long)vmf->virtual_address);
@@ -1038,111 +1021,6 @@ static int pmfs_xip_file_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	rcu_read_unlock();
 	PMFS_END_TIMING(mmap_fault_t, fault_time);
 	return ret;
-}
-
-static int pmfs_find_and_alloc_blocks(struct inode *inode, sector_t iblock,
-			       sector_t *data_block, int create)
-{
-	int err = -EIO;
-	u64 block;
-	pmfs_transaction_t *trans;
-	struct pmfs_inode *pi;
-
-	block = pmfs_find_nvmm_block(inode, iblock);
-
-	if (!block) {
-		struct super_block *sb = inode->i_sb;
-		if (!create) {
-			err = -ENODATA;
-			goto err;
-		}
-
-		pi = pmfs_get_inode_by_ino(sb, inode->i_ino);
-		trans = pmfs_current_transaction();
-		if (trans) {
-			err = pmfs_alloc_blocks(trans, inode, iblock, 1, true);
-			if (err) {
-				pmfs_dbg_verbose("[%s:%d] Alloc failed!\n",
-					__func__, __LINE__);
-				goto err;
-			}
-		} else {
-			/* 1 lentry for inode, 1 lentry for inode's b-tree */
-			trans = pmfs_new_transaction(sb, MAX_INODE_LENTRIES);
-			if (IS_ERR(trans)) {
-				err = PTR_ERR(trans);
-				goto err;
-			}
-
-			rcu_read_unlock();
-			mutex_lock(&inode->i_mutex);
-
-			pmfs_add_logentry(sb, trans, pi, MAX_DATA_PER_LENTRY,
-				LE_DATA);
-			err = pmfs_alloc_blocks(trans, inode, iblock, 1, true);
-
-			pmfs_commit_transaction(sb, trans);
-
-			mutex_unlock(&inode->i_mutex);
-			rcu_read_lock();
-			if (err) {
-				pmfs_dbg_verbose("[%s:%d] Alloc failed!\n",
-					__func__, __LINE__);
-				goto err;
-			}
-		}
-		block = pmfs_find_nvmm_block(inode, iblock);
-		if (!block) {
-			pmfs_dbg("[%s:%d] But alloc didn't fail!\n",
-				  __func__, __LINE__);
-			err = -ENODATA;
-			goto err;
-		}
-	}
-	pmfs_dbg_mmapvv("iblock 0x%lx allocated_block 0x%llx\n", iblock,
-			 block);
-
-	*data_block = block;
-	err = 0;
-
-err:
-	return err;
-}
-
-static inline int __pmfs_get_block(struct inode *inode, pgoff_t pgoff,
-				    int create, sector_t *result)
-{
-	int rc = 0;
-
-	rc = pmfs_find_and_alloc_blocks(inode, (sector_t)pgoff, result,
-					 create);
-	return rc;
-}
-
-int pmfs_get_xip_mem(struct address_space *mapping, pgoff_t pgoff, int create,
-		      void **kmem, unsigned long *pfn)
-{
-	int rc;
-	sector_t block = 0;
-	struct inode *inode = mapping->host;
-
-	rc = __pmfs_get_block(inode, pgoff, create, &block);
-	if (rc) {
-		pmfs_dbg1("[%s:%d] rc(%d), sb->physaddr(0x%llx), block(0x%llx),"
-			" pgoff(0x%lx), flag(0x%x), PFN(0x%lx)\n", __func__,
-			__LINE__, rc, PMFS_SB(inode->i_sb)->phys_addr,
-			block, pgoff, create, *pfn);
-		return rc;
-	}
-//	pmfs_dbg("Get block %lu\n", block);
-
-	*kmem = pmfs_get_block(inode->i_sb, block);
-	*pfn = pmfs_get_pfn(inode->i_sb, block);
-
-	pmfs_dbg_mmapvv("[%s:%d] sb->physaddr(0x%llx), block(0x%lx),"
-		" pgoff(0x%lx), flag(0x%x), PFN(0x%lx)\n", __func__, __LINE__,
-		PMFS_SB(inode->i_sb)->phys_addr, block, pgoff, create, *pfn);
-	return 0;
 }
 
 static unsigned long pmfs_data_block_size(struct vm_area_struct *vma,
@@ -1278,7 +1156,7 @@ static int __pmfs_xip_file_hpage_fault(struct vm_area_struct *vma,
 		unsigned long xip_pfn;
 		if (pmfs_get_dram_mem(inode, vma, vmf->pgoff, 1,
 						&xip_mem, &xip_pfn) != 0) {
-			pmfs_dbg("[%s:%d] get_xip_mem failed(OOM). vm_start(0x"
+			pmfs_dbg("[%s:%d] get_dram_mem failed(OOM). vm_start(0x"
 				"%lx), vm_end(0x%lx), pgoff(0x%lx), VA(%lx)\n",
 				__func__, __LINE__, vma->vm_start,
 				vma->vm_end, vmf->pgoff,
@@ -1339,8 +1217,6 @@ static inline int pmfs_has_huge_mmap(struct super_block *sb)
 int pmfs_xip_file_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	unsigned long block_sz;
-
-//	BUG_ON(!file->f_mapping->a_ops->get_xip_mem);
 
 	file_accessed(file);
 
