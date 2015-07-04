@@ -424,17 +424,10 @@ void pmfs_apply_link_change_entry(struct pmfs_inode *pi,
 	struct pmfs_link_change_entry *entry);
 
 /* inode.c */
-extern unsigned int pmfs_free_inode_subtree(struct super_block *sb,
-		__le64 root, u32 height, u32 btype, unsigned long last_blocknr);
 extern unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
 		__le64 root, u32 height, u32 btype, unsigned long last_blocknr);
-extern int __pmfs_alloc_blocks(pmfs_transaction_t *trans,
-		struct super_block *sb, struct pmfs_inode *pi,
-		unsigned long file_blocknr, unsigned int num, bool zero);
 extern int pmfs_init_inode_table(struct super_block *sb);
 int pmfs_init_inode_inuse_list(struct super_block *sb);
-extern int pmfs_alloc_blocks(pmfs_transaction_t *trans, struct inode *inode,
-		unsigned long file_blocknr, unsigned int num, bool zero);
 extern u64 pmfs_find_nvmm_block(struct inode *inode, 
 		unsigned long file_blocknr);
 extern u64 pmfs_find_inode(struct inode *inode,
