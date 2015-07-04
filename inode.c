@@ -1390,7 +1390,7 @@ static int pmfs_free_inode(struct inode *inode,
 	PMFS_START_TIMING(free_inode_t, free_time);
 	mutex_lock(&sbi->inode_table_mutex);
 
-	pmfs_dbg_verbose("free_inode: %lu free_nodes %x tot nodes %x hint %x\n",
+	pmfs_dbgv("free_inode: %lu free_nodes %lu tot nodes %lu hint %lu\n",
 		   inode->i_ino, sbi->s_free_inodes_count, sbi->s_inodes_count,
 		   sbi->s_free_inode_hint);
 	pmfs_ino = inode->i_ino >> PMFS_INODE_BITS;
@@ -1419,7 +1419,7 @@ static int pmfs_free_inode(struct inode *inode,
 		sbi->s_free_inode_hint = (PMFS_FREE_INODE_HINT_START);
 	}
 
-	pmfs_dbg_verbose("free_inode: free_nodes %x total_nodes %x hint %x\n",
+	pmfs_dbgv("free_inode: free_nodes %lu total_nodes %lu hint %lu\n",
 		   sbi->s_free_inodes_count, sbi->s_inodes_count,
 		   sbi->s_free_inode_hint);
 
@@ -1632,7 +1632,7 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	inode->i_generation = atomic_add_return(1, &sbi->next_generation);
 	inode->i_size = size;
 
-	pmfs_dbg_verbose("inode: %p free_inodes %x total_inodes %x hint %x\n",
+	pmfs_dbgv("inode: %p free_inodes %lu total_inodes %lu hint %lu\n",
 		inode, sbi->s_free_inodes_count, sbi->s_inodes_count,
 		sbi->s_free_inode_hint);
 

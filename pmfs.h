@@ -542,10 +542,10 @@ struct pmfs_sb_info {
 	atomic_t	next_generation;
 	/* inode tracking */
 	struct mutex inode_table_mutex;
-	unsigned int	s_inodes_count;  /* total inodes count (used or free) */
-	unsigned int	s_free_inodes_count;    /* free inodes count */
-	unsigned int	s_inodes_used_count;
-	unsigned int	s_free_inode_hint;
+	unsigned long	s_inodes_count;  /* total inodes count (used or free) */
+	unsigned long	s_free_inodes_count;    /* free inodes count */
+	unsigned long	s_inodes_used_count;
+	unsigned long	s_free_inode_hint;
 
 	unsigned long num_blocknode_block;
 	unsigned long num_blocknode_inode;

@@ -228,10 +228,10 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 	sbi->num_blocknode_inode =
 		le64_to_cpu(super->s_num_blocknode_inode);
 	sbi->num_free_blocks = le64_to_cpu(super->s_num_free_blocks);
-	sbi->s_inodes_count = le32_to_cpu(super->s_inodes_count);
-	sbi->s_free_inodes_count = le32_to_cpu(super->s_free_inodes_count);
-	sbi->s_inodes_used_count = le32_to_cpu(super->s_inodes_used_count);
-	sbi->s_free_inode_hint = le32_to_cpu(super->s_free_inode_hint);
+	sbi->s_inodes_count = le64_to_cpu(super->s_inodes_count);
+	sbi->s_free_inodes_count = le64_to_cpu(super->s_free_inodes_count);
+	sbi->s_inodes_used_count = le64_to_cpu(super->s_inodes_used_count);
+	sbi->s_free_inode_hint = le64_to_cpu(super->s_free_inode_hint);
 
 	pmfs_init_blockmap_from_inode(sb);
 	pmfs_init_inode_list_from_inode(sb);
@@ -406,10 +406,10 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	super->s_num_blocknode_inode =
 			cpu_to_le64(sbi->num_blocknode_inode);
 	super->s_num_free_blocks = cpu_to_le64(sbi->num_free_blocks);
-	super->s_inodes_count = cpu_to_le32(sbi->s_inodes_count);
-	super->s_free_inodes_count = cpu_to_le32(sbi->s_free_inodes_count);
-	super->s_inodes_used_count = cpu_to_le32(sbi->s_inodes_used_count);
-	super->s_free_inode_hint = cpu_to_le32(sbi->s_free_inode_hint);
+	super->s_inodes_count = cpu_to_le64(sbi->s_inodes_count);
+	super->s_free_inodes_count = cpu_to_le64(sbi->s_free_inodes_count);
+	super->s_inodes_used_count = cpu_to_le64(sbi->s_inodes_used_count);
+	super->s_free_inode_hint = cpu_to_le64(sbi->s_free_inode_hint);
 
 	pmfs_memlock_range(sb, &super->s_wtime, PMFS_FAST_MOUNT_FIELD_SIZE);
 	/* commit the transaction */
