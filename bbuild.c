@@ -939,11 +939,10 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 		return 0;
 
 	pmfs_ino = pi->pmfs_ino;
-	if (bm && pmfs_ino != 1)
+	if (bm && pmfs_ino != 1) {
 		pmfs_insert_inodetree(sb, pmfs_ino);
-
-	if (bm)
 		sbi->s_inodes_used_count++;
+	}
 
 	pmfs_dbg_verbose("%s: inode %lu, addr 0x%llx, valid %d, "
 			"head 0x%llx, tail 0x%llx\n",
@@ -994,8 +993,10 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 
 int pmfs_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 {
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi;
 	u64 root_addr = PMFS_ROOT_INO_START;
+	int ret;
 
 	/* Initialize inuse inode list */
 	if (pmfs_init_inode_inuse_list(sb) < 0)
@@ -1019,7 +1020,11 @@ int pmfs_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 		set_bit(pi->log_head >> PAGE_SHIFT, bm->bitmap_4k);
 
 	/* Start from the root iode */
-	return pmfs_recover_inode(sb, root_addr, bm, smp_processor_id(), 0);
+	ret = pmfs_recover_inode(sb, root_addr, bm, smp_processor_id(), 0);
+
+	pmfs_dbg("DFS recovery total recovered %d\n",
+				sbi->s_inodes_used_count);
+	return ret;
 }
 
 /*********************** Singlethread recovery *************************/
@@ -1372,11 +1377,12 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 			return -ENOMEM;
 	}
 
-	pmfs_dbg("%s\n", __func__);
+	pmfs_dbgv("%s\n", __func__);
 	sbi->btype = PMFS_BLOCK_TYPE_4K;
 
 	pmfs_assign_bogus_header_info(sb);
 	if (bm) {
+		sbi->s_inodes_used_count = 0;
 		ret = pmfs_dfs_recovery(sb, bm);
 	} else {
 		if (multithread)
