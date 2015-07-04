@@ -459,8 +459,6 @@ extern void pmfs_set_inode_flags(struct inode *inode, struct pmfs_inode *pi,
 extern void pmfs_get_inode_flags(struct inode *inode, struct pmfs_inode *pi);
 extern unsigned long pmfs_find_region(struct inode *inode, loff_t *offset,
 		int hole);
-extern void pmfs_truncate_del(struct inode *inode);
-extern void pmfs_truncate_add(struct inode *inode, u64 truncate_size);
 
 /* ioctl.c */
 extern long pmfs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
@@ -594,7 +592,6 @@ struct pmfs_inode_info_header {
 struct pmfs_inode_info {
 	struct pmfs_inode_info_header *header;
 	__u32   i_dir_start_lookup;
-	struct list_head i_truncated;
 	struct inode	vfs_inode;
 	struct list_head link;		/* Activate inode list */
 	u32	low_dirty;		/* Dirty low range */
@@ -664,10 +661,6 @@ struct pmfs_sb_info {
 	struct task_struct *log_cleaner_thread;
 	wait_queue_head_t  log_cleaner_wait;
 	bool redo_log;
-
-	/* truncate list related structures */
-	struct list_head s_truncate;
-	struct mutex s_truncate_lock;
 
 	/* Header tree */
 	unsigned long root;
@@ -1071,20 +1064,6 @@ static inline int pmfs_is_mounting(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = (struct pmfs_sb_info *)sb->s_fs_info;
 	return sbi->s_mount_opt & PMFS_MOUNT_MOUNTING;
-}
-
-static inline struct pmfs_inode_truncate_item * pmfs_get_truncate_item (struct 
-		super_block *sb, u64 ino)
-{
-	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, ino);
-	return (struct pmfs_inode_truncate_item *)(pi + 1);
-}
-
-static inline struct pmfs_inode_truncate_item * pmfs_get_truncate_list_head (
-		struct super_block *sb)
-{
-	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
-	return (struct pmfs_inode_truncate_item *)(pi + 1);
 }
 
 static inline void check_eof_blocks(struct super_block *sb, 

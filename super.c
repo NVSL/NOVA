@@ -600,52 +600,6 @@ out:
 	return 0;
 }
 
-static void pmfs_recover_truncate_list(struct super_block *sb)
-{
-	struct pmfs_inode_truncate_item *head = pmfs_get_truncate_list_head(sb);
-	u64 ino_next = le64_to_cpu(head->i_next_truncate);
-	struct pmfs_inode *pi;
-	struct pmfs_inode_truncate_item *li;
-	struct inode *inode;
-
-	if (ino_next == 0)
-		return;
-
-	while (ino_next != 0) {
-		pi = pmfs_get_inode_by_ino(sb, ino_next);
-		li = (struct pmfs_inode_truncate_item *)(pi + 1);
-		inode = pmfs_iget(sb, ino_next);
-		if (IS_ERR(inode))
-			break;
-		pmfs_dbg("Recover ino %llx nlink %d sz %llx:%llx\n", ino_next,
-			inode->i_nlink, pi->i_size, li->i_truncatesize);
-		if (inode->i_nlink) {
-			/* set allocation hint */
-			pmfs_set_blocksize_hint(sb, pi, 
-					le64_to_cpu(li->i_truncatesize));
-			pmfs_setsize(inode, inode->i_size,
-					le64_to_cpu(li->i_truncatesize));
-			pmfs_update_isize(inode, pi);
-		} else {
-			/* free the inode */
-			pmfs_dbg("deleting unreferenced inode %lx\n",
-				inode->i_ino);
-		}
-		iput(inode);
-		pmfs_flush_buffer(pi, CACHELINE_SIZE, false);
-		ino_next = le64_to_cpu(li->i_next_truncate);
-	}
-	PERSISTENT_MARK();
-	PERSISTENT_BARRIER();
-	/* reset the truncate_list */
-	pmfs_memunlock_range(sb, head, sizeof(*head));
-	head->i_next_truncate = 0;
-	pmfs_memlock_range(sb, head, sizeof(*head));
-	pmfs_flush_buffer(head, sizeof(*head), false);
-	PERSISTENT_MARK();
-	PERSISTENT_BARRIER();
-}
-
 static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 {
 	struct pmfs_super_block *super;
@@ -688,8 +642,6 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	clear_opt(sbi->s_mount_opt, PROTECT);
 	set_opt(sbi->s_mount_opt, HUGEIOREMAP);
 
-	INIT_LIST_HEAD(&sbi->s_truncate);
-	mutex_init(&sbi->s_truncate_lock);
 	mutex_init(&sbi->inode_table_mutex);
 	mutex_init(&sbi->s_lock);
 	spin_lock_init(&sbi->header_tree_lock);
@@ -793,7 +745,6 @@ setup_sb:
 	sb->s_xattr = NULL;
 	sb->s_flags |= MS_NOSEC;
 
-	pmfs_recover_truncate_list(sb);
 	/* If the FS was not formatted on this mount, scan the meta-data after
 	 * truncate list has been processed */
 	if ((sbi->s_mount_opt & PMFS_MOUNT_FORMAT) == 0)
@@ -1112,7 +1063,6 @@ static void init_once(void *foo)
 
 	vi->header = NULL;
 	vi->i_dir_start_lookup = 0;
-	INIT_LIST_HEAD(&vi->i_truncated);
 	INIT_LIST_HEAD(&vi->link);
 	inode_init_once(&vi->vfs_inode);
 }

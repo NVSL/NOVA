@@ -2122,8 +2122,6 @@ void pmfs_evict_inode(struct inode *inode)
 		inode->i_size = 0;
 	}
 out:
-	/* now it is safe to remove the inode from the truncate list */
-//	pmfs_truncate_del(inode);
 	/* TODO: Since we don't use page-cache, do we really need the following
 	 * call? */
 	truncate_inode_pages(&inode->i_data, 0);
@@ -2410,113 +2408,6 @@ static void pmfs_block_truncate_page(struct inode *inode, loff_t newsize)
 	pmfs_memlock_block(sb, bp);
 }
 
-#if 0
-void pmfs_truncate_del(struct inode *inode)
-{
-	struct list_head *prev;
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct super_block *sb = inode->i_sb;
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_inode_truncate_item *head = pmfs_get_truncate_list_head(sb);
-	struct pmfs_inode_truncate_item *li;
-	unsigned long ino_next;
-
-	mutex_lock(&sbi->s_truncate_lock);
-	if (list_empty(&si->i_truncated))
-		goto out;
-	/* Make sure all truncate operation is persistent before removing the
-	 * inode from the truncate list */
-	PERSISTENT_MARK();
-
-	li = pmfs_get_truncate_item(sb, inode->i_ino);
-
-	ino_next = le64_to_cpu(li->i_next_truncate);
-	prev = si->i_truncated.prev;
-
-	list_del_init(&si->i_truncated);
-	PERSISTENT_BARRIER();
-
-	/* Atomically delete the inode from the truncate list */
-	if (prev == &sbi->s_truncate) {
-		pmfs_memunlock_range(sb, head, sizeof(*head));
-		head->i_next_truncate = cpu_to_le64(ino_next);
-		pmfs_memlock_range(sb, head, sizeof(*head));
-		pmfs_flush_buffer(&head->i_next_truncate,
-			sizeof(head->i_next_truncate), false);
-	} else {
-		struct inode *i_prv = &list_entry(prev,
-			struct pmfs_inode_info, i_truncated)->vfs_inode;
-		struct pmfs_inode_truncate_item *li_prv = 
-				pmfs_get_truncate_item(sb, i_prv->i_ino);
-		pmfs_memunlock_range(sb, li_prv, sizeof(*li_prv));
-		li_prv->i_next_truncate = cpu_to_le64(ino_next);
-		pmfs_memlock_range(sb, li_prv, sizeof(*li_prv));
-		pmfs_flush_buffer(&li_prv->i_next_truncate,
-			sizeof(li_prv->i_next_truncate), false);
-	}
-	PERSISTENT_MARK();
-	PERSISTENT_BARRIER();
-out:
-	mutex_unlock(&sbi->s_truncate_lock);
-}
-
-/* PMFS maintains a so-called truncate list, which is a linked list of inodes
- * which require further processing in case of a power failure. Currently, PMFS
- * uses the truncate list for two purposes.
- * 1) When removing a file, if the i_links_count becomes zero (i.e., the file
- * is not referenced by any directory entry), the inode needs to be freed.
- * However, if the file is currently in use (e.g., opened) it can't be freed
- * until all references are closed. Hence PMFS adds the inode to the truncate
- * list during directory entry removal, and removes it from the truncate list
- * when VFS calls evict_inode. If a power failure happens before evict_inode,
- * the inode is freed during the next mount when we recover the truncate list
- * 2) When truncating a file (reducing the file size and freeing the blocks),
- * we don't want to return the freed blocks to the free list until the whole
- * truncate operation is complete. So we add the inode to the truncate list with
- * the specified truncate_size. Now we can return freed blocks to the free list
- * even before the transaction is complete. Because if a power failure happens
- * before freeing of all the blocks is complete, PMFS will free the remaining
- * blocks during the next mount when we recover the truncate list */
-void pmfs_truncate_add(struct inode *inode, u64 truncate_size)
-{
-	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode_truncate_item *head = pmfs_get_truncate_list_head(sb);
-	struct pmfs_inode_truncate_item *li;
-
-	mutex_lock(&PMFS_SB(sb)->s_truncate_lock);
-	if (!list_empty(&PMFS_I(inode)->i_truncated))
-		goto out_unlock;
-
-	li = pmfs_get_truncate_item(sb, inode->i_ino);
-
-	pmfs_memunlock_range(sb, li, sizeof(*li));
-	li->i_next_truncate = head->i_next_truncate;
-	li->i_truncatesize = cpu_to_le64(truncate_size);
-	pmfs_memlock_range(sb, li, sizeof(*li));
-	pmfs_flush_buffer(li, sizeof(*li), false);
-	/* make sure above is persistent before changing the head pointer */
-	PERSISTENT_MARK();
-	PERSISTENT_BARRIER();
-	/* Atomically insert this inode at the head of the truncate list. */
-	pmfs_memunlock_range(sb, head, sizeof(*head));
-	head->i_next_truncate = cpu_to_le64(inode->i_ino);
-	pmfs_memlock_range(sb, head, sizeof(*head));
-	pmfs_flush_buffer(&head->i_next_truncate,
-		sizeof(head->i_next_truncate), false);
-	/* No need to make the head persistent here if we are called from
-	 * within a transaction, because the transaction will provide a
-	 * subsequent persistent barrier */
-	if (pmfs_current_transaction() == NULL) {
-		PERSISTENT_MARK();
-		PERSISTENT_BARRIER();
-	}
-	list_add(&PMFS_I(inode)->i_truncated, &PMFS_SB(sb)->s_truncate);
-
-out_unlock:
-	mutex_unlock(&PMFS_SB(sb)->s_truncate_lock);
-}
-#endif
-
 void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 {
 	if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
@@ -2700,15 +2591,10 @@ int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 	/* Only after log entry is committed, we can truncate size */
 	if ((ia_valid & ATTR_SIZE) && (attr->ia_size != oldsize ||
 			pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL))) {
-//		pmfs_truncate_add(inode, attr->ia_size);
-		/* set allocation hint */
 //		pmfs_set_blocksize_hint(sb, pi, attr->ia_size);
 
 		/* now we can freely truncate the inode */
-		/* FIXME: Check if this is correct */
 		pmfs_setsize(inode, oldsize, attr->ia_size);
-		/* now it is safe to remove the inode from the truncate list */
-//		pmfs_truncate_del(inode);
 	}
 
 	PMFS_END_TIMING(setattr_t, setattr_time);

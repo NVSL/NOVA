@@ -108,19 +108,10 @@ struct pmfs_inode {
 	struct {
 		__le32 rdev;    /* major/minor # */
 	} dev;              /* device inode */
-	__le32 padding;     /* pad to ensure truncate_item starts 8-byte aligned */
+	__le32 padding;
 
 	u8	valid;		/* Is this inode valid? */
 	u64	pmfs_ino;
-};
-
-/* This is a per-inode structure and follows immediately after the 
- * struct pmfs_inode. It is used to implement the truncate linked list and is 
- * by pmfs_truncate_add(), pmfs_truncate_del(), and pmfs_recover_truncate_list()
- * functions to manage the truncate list */
-struct pmfs_inode_truncate_item {
-	__le64	i_truncatesize;     /* Size of truncated inode */
-	__le64  i_next_truncate;    /* inode num of the next truncated inode */
 };
 
 /*
