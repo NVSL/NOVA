@@ -617,8 +617,9 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	return num_blocks / pmfs_get_numblocks(btype);
 }
 
-inline int pmfs_new_data_blocks(struct super_block *sb, unsigned long *blocknr,
-		unsigned int num, unsigned short btype, int zero)
+inline int pmfs_new_data_blocks(struct super_block *sb, struct pmfs_inode *pi,
+	unsigned long *blocknr,	unsigned int num, unsigned short btype,
+	int zero)
 {
 	int allocated;
 	timing_t alloc_time;
