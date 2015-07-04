@@ -430,8 +430,6 @@ extern int pmfs_init_inode_table(struct super_block *sb);
 int pmfs_init_inode_inuse_list(struct super_block *sb);
 extern u64 pmfs_find_nvmm_block(struct inode *inode, 
 		unsigned long file_blocknr);
-extern u64 pmfs_find_inode(struct inode *inode,
-		unsigned long file_blocknr);
 int pmfs_set_blocksize_hint(struct super_block *sb, struct pmfs_inode *pi,
 		loff_t new_size);
 void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize);
@@ -818,30 +816,6 @@ static inline void memset_nt(void *dest, uint32_t dword, size_t length)
 		"movnti %%eax,(%%rdi)\n"
 		"12:\n"
 		: "=D"(dummy1), "=d" (dummy2) : "D" (dest), "a" (qword), "d" (length) : "memory", "rcx");
-}
-
-static inline u64 __pmfs_find_inode(struct super_block *sb,
-		struct pmfs_inode *pi, unsigned long blocknr)
-{
-	__le64 *level_ptr;
-	u64 bp = 0;
-	u32 height, bit_shift;
-	unsigned int idx;
-
-	height = pi->height;
-	bp = le64_to_cpu(pi->root);
-
-	while (height > 0) {
-		level_ptr = pmfs_get_block(sb, bp);
-		bit_shift = (height - 1) * META_BLK_SHIFT;
-		idx = blocknr >> bit_shift;
-		bp = le64_to_cpu(level_ptr[idx]);
-		if (bp == 0)
-			return 0;
-		blocknr = blocknr & ((1 << bit_shift) - 1);
-		height--;
-	}
-	return bp;
 }
 
 #define	DRAM_BIT	0x1UL	// DRAM
