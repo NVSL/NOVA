@@ -499,8 +499,8 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	root_i->i_size = cpu_to_le64(sb->s_blocksize);
 	root_i->i_atime = root_i->i_mtime = root_i->i_ctime =
 		cpu_to_le32(get_seconds());
-	root_i->root = 0;
-	root_i->height = 0;
+//	root_i->root = 0;
+//	root_i->height = 0;
 	root_i->pmfs_ino = 1;
 	root_i->valid = 1;
 	/* pmfs_sync_inode(root_i); */

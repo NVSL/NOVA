@@ -430,8 +430,8 @@ extern int pmfs_init_inode_table(struct super_block *sb);
 int pmfs_init_inode_inuse_list(struct super_block *sb);
 extern u64 pmfs_find_nvmm_block(struct inode *inode, 
 		unsigned long file_blocknr);
-int pmfs_set_blocksize_hint(struct super_block *sb, struct pmfs_inode *pi,
-		loff_t new_size);
+int pmfs_set_blocksize_hint(struct super_block *sb, struct inode *inode,
+	struct pmfs_inode *pi, loff_t new_size);
 void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize);
 
 extern struct inode *pmfs_iget(struct super_block *sb, unsigned long ino);

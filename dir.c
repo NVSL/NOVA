@@ -626,8 +626,8 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 
 	PMFS_START_TIMING(readdir_t, readdir_time);
 	pidir = pmfs_get_inode(sb, inode);
-	pmfs_dbg_verbose("%s: ino %llu, root 0x%llx, size %llu, pos %llu\n",
-				__func__, (u64)inode->i_ino, pidir->root,
+	pmfs_dbg_verbose("%s: ino %llu, size %llu, pos %llu\n",
+				__func__, (u64)inode->i_ino,
 				pidir->i_size, ctx->pos);
 
 	if (!sih) {

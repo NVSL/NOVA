@@ -1973,7 +1973,7 @@ int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 	/* Only after log entry is committed, we can truncate size */
 	if ((ia_valid & ATTR_SIZE) && (attr->ia_size != oldsize ||
 			pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL))) {
-//		pmfs_set_blocksize_hint(sb, pi, attr->ia_size);
+//		pmfs_set_blocksize_hint(sb, inode, pi, attr->ia_size);
 
 		/* now we can freely truncate the inode */
 		pmfs_setsize(inode, oldsize, attr->ia_size);

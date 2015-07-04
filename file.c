@@ -21,22 +21,25 @@
 #include "pmfs.h"
 #include "xip.h"
 
-static inline int pmfs_can_set_blocksize_hint(struct pmfs_inode *pi,
-					       loff_t new_size)
+static inline int pmfs_can_set_blocksize_hint(struct inode *inode,
+	struct pmfs_inode *pi, loff_t new_size)
 {
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = si->header;
+
 	/* Currently, we don't deallocate data blocks till the file is deleted.
 	 * So no changing blocksize hints once allocation is done. */
-	if (le64_to_cpu(pi->root))
+	if (sih->root)
 		return 0;
 	return 1;
 }
 
-int pmfs_set_blocksize_hint(struct super_block *sb, struct pmfs_inode *pi,
-		loff_t new_size)
+int pmfs_set_blocksize_hint(struct super_block *sb, struct inode *inode,
+	struct pmfs_inode *pi, loff_t new_size)
 {
 	unsigned short block_type;
 
-	if (!pmfs_can_set_blocksize_hint(pi, new_size))
+	if (!pmfs_can_set_blocksize_hint(inode, pi, new_size))
 		return 0;
 
 	if (new_size >= 0x40000000) {   /* 1G */
@@ -54,8 +57,8 @@ int pmfs_set_blocksize_hint(struct super_block *sb, struct pmfs_inode *pi,
 
 hint_set:
 	pmfs_dbg_verbose(
-		"Hint: new_size 0x%llx, i_size 0x%llx, root 0x%llx\n",
-		new_size, pi->i_size, le64_to_cpu(pi->root));
+		"Hint: new_size 0x%llx, i_size 0x%llx\n",
+		new_size, pi->i_size);
 	pmfs_dbg_verbose("Setting the hint to 0x%x\n", block_type);
 	pmfs_memunlock_inode(sb, pi);
 	pi->i_blk_type = block_type;
