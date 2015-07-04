@@ -1331,6 +1331,31 @@ static inline void pmfs_assign_bogus_header_info(struct super_block *sb)
 	pmfs_assign_info_header(sb, 0, NULL, 0);
 }
 
+static void pmfs_rebuild_superblock_info(struct super_block *sb,
+	pmfs_journal_t *journal, unsigned long initsize,
+	struct scan_bitmap *bm)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
+
+	/* initialize the num_free_blocks to */
+	sbi->num_free_blocks = ((unsigned long)(initsize) >> PAGE_SHIFT);
+	pmfs_init_blockmap(sb, le64_to_cpu(journal->base) + sbi->jsize);
+
+	/* Minus the block for lite journaling */
+	sbi->s_inodes_count = (sbi->num_free_blocks - 1) <<
+			(pmfs_inode_blk_shift(pi) - PMFS_INODE_BITS);
+
+	pmfs_build_blocknode_map(sb, bm);
+
+	/* Reserving basic inodes */
+	sbi->s_free_inodes_count = sbi->s_inodes_count -
+		(sbi->s_inodes_used_count + PMFS_FREE_INODE_HINT_START);
+
+	/* set the block 0 as this is used */
+	sbi->s_free_inode_hint = PMFS_FREE_INODE_HINT_START;
+}
+
 int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
@@ -1372,20 +1397,7 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	}
 
 	if (bm) {
-		/* Reserving tow inodes - Inode 0 and Inode for datablock */
-		sbi->s_free_inodes_count = sbi->s_inodes_count -
-				(sbi->s_inodes_used_count + 2);
-
-		/* set the block 0 as this is used */
-		sbi->s_free_inode_hint = PMFS_FREE_INODE_HINT_START;
-
-		/* initialize the num_free_blocks to */
-		sbi->num_free_blocks = ((unsigned long)
-					(initsize) >> PAGE_SHIFT);
-		pmfs_init_blockmap(sb, le64_to_cpu(journal->base) + sbi->jsize);
-
-		pmfs_build_blocknode_map(sb, bm);
-
+		pmfs_rebuild_superblock_info(sb, journal, initsize, bm);
 		free_bm(bm);
 	}
 
