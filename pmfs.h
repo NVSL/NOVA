@@ -1045,17 +1045,13 @@ int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
 
 /* inode.c */
 extern const struct address_space_operations pmfs_aops_xip;
-extern unsigned int pmfs_free_file_inode_subtree(struct super_block *sb,
-		__le64 root, u32 height, u32 btype, unsigned long last_blocknr);
 extern int pmfs_init_inode_table(struct super_block *sb);
 int pmfs_init_inode_inuse_list(struct super_block *sb);
 extern u64 pmfs_find_nvmm_block(struct inode *inode, 
 		unsigned long file_blocknr);
 int pmfs_set_blocksize_hint(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode *pi, loff_t new_size);
-void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize);
 extern struct inode *pmfs_iget(struct super_block *sb, unsigned long ino);
-extern void pmfs_put_inode(struct inode *inode);
 extern void pmfs_evict_inode(struct inode *inode);
 extern void pmfs_update_isize(struct inode *inode, struct pmfs_inode *pi);
 extern void pmfs_update_nlink(struct inode *inode, struct pmfs_inode *pi);
@@ -1067,7 +1063,6 @@ int pmfs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 		struct kstat *stat);
 extern void pmfs_set_inode_flags(struct inode *inode, struct pmfs_inode *pi,
 	unsigned int flags);
-extern void pmfs_get_inode_flags(struct inode *inode, struct pmfs_inode *pi);
 extern unsigned long pmfs_find_region(struct inode *inode, loff_t *offset,
 		int hole);
 void pmfs_apply_setattr_entry(struct pmfs_inode *pi,
@@ -1129,14 +1124,13 @@ extern int pmfs_statfs(struct dentry *d, struct kstatfs *buf);
 extern int pmfs_remount(struct super_block *sb, int *flags, char *data);
 struct pmfs_dir_node *pmfs_alloc_dirnode(struct super_block *sb);
 void pmfs_free_dirnode(struct super_block *sb, struct pmfs_dir_node *node);
-
-/* symlink.c */
-extern const struct inode_operations pmfs_symlink_inode_operations;
-
 int pmfs_check_integrity(struct super_block *sb,
 	struct pmfs_super_block *super);
 void *pmfs_ioremap(struct super_block *sb, phys_addr_t phys_addr,
 	ssize_t size);
+
+/* symlink.c */
+extern const struct inode_operations pmfs_symlink_inode_operations;
 
 /* xip.c */
 int pmfs_reassign_file_btree(struct super_block *sb,

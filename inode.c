@@ -1175,6 +1175,27 @@ bad_inode:
 	return ret;
 }
 
+static void pmfs_get_inode_flags(struct inode *inode, struct pmfs_inode *pi)
+{
+	unsigned int flags = inode->i_flags;
+	unsigned int pmfs_flags = le32_to_cpu(pi->i_flags);
+
+	pmfs_flags &= ~(FS_SYNC_FL | FS_APPEND_FL | FS_IMMUTABLE_FL |
+			 FS_NOATIME_FL | FS_DIRSYNC_FL);
+	if (flags & S_SYNC)
+		pmfs_flags |= FS_SYNC_FL;
+	if (flags & S_APPEND)
+		pmfs_flags |= FS_APPEND_FL;
+	if (flags & S_IMMUTABLE)
+		pmfs_flags |= FS_IMMUTABLE_FL;
+	if (flags & S_NOATIME)
+		pmfs_flags |= FS_NOATIME_FL;
+	if (flags & S_DIRSYNC)
+		pmfs_flags |= FS_DIRSYNC_FL;
+
+	pi->i_flags = cpu_to_le32(pmfs_flags);
+}
+
 static void pmfs_update_inode(struct inode *inode, struct pmfs_inode *pi)
 {
 	pmfs_memunlock_inode(inode->i_sb, pi);
@@ -1816,7 +1837,7 @@ static void pmfs_block_truncate_page(struct inode *inode, loff_t newsize)
 	pmfs_memlock_block(sb, bp);
 }
 
-void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
+static void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 {
 	/* We only support truncate regular file */
 	if (!(S_ISREG(inode->i_mode))) {
@@ -1987,27 +2008,6 @@ void pmfs_set_inode_flags(struct inode *inode, struct pmfs_inode *pi,
 	if (!pi->i_xattr)
 		inode_has_no_xattr(inode);
 	inode->i_flags |= S_DAX;
-}
-
-void pmfs_get_inode_flags(struct inode *inode, struct pmfs_inode *pi)
-{
-	unsigned int flags = inode->i_flags;
-	unsigned int pmfs_flags = le32_to_cpu(pi->i_flags);
-
-	pmfs_flags &= ~(FS_SYNC_FL | FS_APPEND_FL | FS_IMMUTABLE_FL |
-			 FS_NOATIME_FL | FS_DIRSYNC_FL);
-	if (flags & S_SYNC)
-		pmfs_flags |= FS_SYNC_FL;
-	if (flags & S_APPEND)
-		pmfs_flags |= FS_APPEND_FL;
-	if (flags & S_IMMUTABLE)
-		pmfs_flags |= FS_IMMUTABLE_FL;
-	if (flags & S_NOATIME)
-		pmfs_flags |= FS_NOATIME_FL;
-	if (flags & S_DIRSYNC)
-		pmfs_flags |= FS_DIRSYNC_FL;
-
-	pi->i_flags = cpu_to_le32(pmfs_flags);
 }
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(4,0,9)
