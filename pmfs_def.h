@@ -168,7 +168,6 @@ struct pmfs_super_block {
 	__le32		s_free_inodes_count;
 	__le32		s_inodes_used_count;
 	__le32		s_free_inode_hint;
-	__le32		s_max_inode;
 };
 
 #define PMFS_SB_STATIC_SIZE(ps) ((u64)&ps->s_start_dynamic - (u64)ps)

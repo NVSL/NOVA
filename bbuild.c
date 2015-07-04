@@ -232,7 +232,6 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 	sbi->s_free_inodes_count = le32_to_cpu(super->s_free_inodes_count);
 	sbi->s_inodes_used_count = le32_to_cpu(super->s_inodes_used_count);
 	sbi->s_free_inode_hint = le32_to_cpu(super->s_free_inode_hint);
-	sbi->s_max_inode = le32_to_cpu(super->s_max_inode);
 
 	pmfs_init_blockmap_from_inode(sb);
 	pmfs_init_inode_list_from_inode(sb);
@@ -411,7 +410,6 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	super->s_free_inodes_count = cpu_to_le32(sbi->s_free_inodes_count);
 	super->s_inodes_used_count = cpu_to_le32(sbi->s_inodes_used_count);
 	super->s_free_inode_hint = cpu_to_le32(sbi->s_free_inode_hint);
-	super->s_max_inode = cpu_to_le32(sbi->s_max_inode);
 
 	pmfs_memlock_range(sb, &super->s_wtime, PMFS_FAST_MOUNT_FIELD_SIZE);
 	/* commit the transaction */

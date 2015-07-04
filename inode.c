@@ -1587,9 +1587,6 @@ u64 pmfs_new_pmfs_inode(struct super_block *sb,
 	else
 		sbi->s_free_inode_hint = (PMFS_FREE_INODE_HINT_START);
 
-	if (i > sbi->s_max_inode)
-		sbi->s_max_inode = i;
-
 	sih = pmfs_alloc_header(sb, 0);
 	pmfs_assign_info_header(sb, free_ino, sih, 0);
 
