@@ -2410,8 +2410,8 @@ static void pmfs_block_truncate_page(struct inode *inode, loff_t newsize)
 
 void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 {
-	if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
-	      S_ISLNK(inode->i_mode))) {
+	/* We only support truncate regular file */
+	if (!(S_ISREG(inode->i_mode))) {
 		pmfs_err(inode->i_sb, "%s:wrong file mode %x\n", inode->i_mode);
 		return;
 	}
@@ -2427,12 +2427,7 @@ void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 	 * before truncating it. Also we need to munmap the truncated range
 	 * from application address space, if mmapped. */
 	/* synchronize_rcu(); */
-	if (S_ISREG(inode->i_mode))
-		__pmfs_truncate_file_blocks(inode, newsize, oldsize);
-	else if (S_ISDIR(inode->i_mode))
-		/* Do nothing */;
-	else
-		__pmfs_truncate_blocks(inode, newsize, oldsize);
+	__pmfs_truncate_file_blocks(inode, newsize, oldsize);
 }
 
 int pmfs_getattr(struct vfsmount *mnt, struct dentry *dentry,
