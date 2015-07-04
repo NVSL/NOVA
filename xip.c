@@ -994,7 +994,6 @@ static int __pmfs_xip_file_fault(struct vm_area_struct *vma,
 		return VM_FAULT_SIGBUS;
 	}
 
-//	err = pmfs_get_xip_mem(mapping, vmf->pgoff, 1, &xip_mem, &xip_pfn);
 	err = pmfs_get_dram_mem(inode, vma, vmf->pgoff, 1,
 						&xip_mem, &xip_pfn);
 	if (unlikely(err)) {
@@ -1277,8 +1276,8 @@ static int __pmfs_xip_file_hpage_fault(struct vm_area_struct *vma,
 	if (pte_none(*ptep)) {
 		void *xip_mem;
 		unsigned long xip_pfn;
-		if (pmfs_get_xip_mem(vma->vm_file->f_mapping, vmf->pgoff, 1,
-				      &xip_mem, &xip_pfn) != 0) {
+		if (pmfs_get_dram_mem(inode, vma, vmf->pgoff, 1,
+						&xip_mem, &xip_pfn) != 0) {
 			pmfs_dbg("[%s:%d] get_xip_mem failed(OOM). vm_start(0x"
 				"%lx), vm_end(0x%lx), pgoff(0x%lx), VA(%lx)\n",
 				__func__, __LINE__, vma->vm_start,
