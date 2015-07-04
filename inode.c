@@ -891,7 +891,7 @@ static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 	inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
 
 	if (!sih->root)
-		goto end_truncate_blocks;
+		return;
 
 	pmfs_dbg_verbose("truncate: pi %p iblocks %llx %llx %llx %x %llx\n", pi,
 			 pi->i_blocks, start, end, sih->height, pi->i_size);
@@ -902,14 +902,15 @@ static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 		last_blocknr = (1UL << (sih->height * meta_bits)) - 1;
 	} else {
 		if (end == 0)
-			goto end_truncate_blocks;
+			return;
 		last_blocknr = (end - 1) >> data_bits;
 		last_blocknr = pmfs_sparse_last_blocknr(sih->height,
 			last_blocknr);
 	}
 
 	if (first_blocknr > last_blocknr)
-		goto end_truncate_blocks;
+		return;
+
 	root = sih->root;
 
 	if (sih->height == 0) {
@@ -938,22 +939,12 @@ static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 
 	pmfs_memunlock_inode(sb, pi);
 	pi->i_blocks = cpu_to_le64(inode->i_blocks);
-	pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
-	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
 	pmfs_decrease_file_btree_height(sb, pi, si, start, root);
 	/* Check for the flag EOFBLOCKS is still valid after the set size */
 	check_eof_blocks(sb, pi, inode->i_size);
 	pmfs_memlock_inode(sb, pi);
-	/* now flush the inode's first cacheline which was modified */
-	pmfs_flush_buffer(pi, 1, false);
+
 	return;
-end_truncate_blocks:
-	/* we still need to update ctime and mtime */
-	pmfs_memunlock_inode(sb, pi);
-	pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
-	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-	pmfs_memlock_inode(sb, pi);
-	pmfs_flush_buffer(pi, 1, false);
 }
 
 static void __pmfs_truncate_blocks(struct inode *inode, loff_t start,
@@ -2551,13 +2542,6 @@ void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 		/* Do nothing */;
 	else
 		__pmfs_truncate_blocks(inode, newsize, oldsize);
-	/* No need to make the b-tree persistent here if we are called from
-	 * within a transaction, because the transaction will provide a
-	 * subsequent persistent barrier */
-	if (pmfs_current_transaction() == NULL) {
-		PERSISTENT_MARK();
-		PERSISTENT_BARRIER();
-	}
 }
 
 int pmfs_getattr(struct vfsmount *mnt, struct dentry *dentry,
