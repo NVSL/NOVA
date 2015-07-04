@@ -381,7 +381,6 @@ extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
 extern int pmfs_mmap(struct file *file, struct vm_area_struct *vma);
 
 /* balloc.c */
-int pmfs_setup_blocknode_map(struct super_block *sb);
 extern struct pmfs_blocknode *pmfs_alloc_block_node(struct super_block *sb);
 extern struct pmfs_blocknode *pmfs_alloc_inode_node(struct super_block *sb);
 extern void pmfs_free_block_node(struct super_block *sb,
