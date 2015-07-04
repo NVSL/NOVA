@@ -129,17 +129,15 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 	struct pmfs_blocknode_lowhigh *entry;
 	struct pmfs_blocknode *blknode;
 	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
-	unsigned long i;
-	unsigned long num_blocknode;
+	unsigned long num_blocknode = 0;
 	u64 curr_p;
 
-	num_blocknode = sbi->num_blocknode_block;
-	sbi->num_blocknode_block = 0;
 	curr_p = pi->log_head;
 	if (curr_p == 0)
 		pmfs_dbg("%s: pi head is 0!\n", __func__);
 
-	for (i = 0; i < num_blocknode; i++) {
+	sbi->num_blocknode_block = 0;
+	while (curr_p != pi->log_tail) {
 		if (is_last_entry(curr_p, size, 0)) {
 			curr_p = next_log_page(sb, curr_p);
 		}
@@ -159,12 +157,11 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 		list_add_tail(&blknode->link, &sbi->block_inuse_head);
 		pmfs_insert_blocknode_blocktree(sbi, blknode);
 
+		num_blocknode++;
 		curr_p += sizeof(struct pmfs_blocknode_lowhigh);
 	}
 
-	if (curr_p != pi->log_tail)
-		pmfs_dbg("%s: curr_p 0x%llx, tail 0x%llx, %lu blocknodes\n",
-			__func__, curr_p, pi->log_tail, num_blocknode);
+	pmfs_dbg("%s: %lu blocknodes\n", __func__, num_blocknode);
 	pmfs_free_inode_log(sb, pi);
 }
 
@@ -175,17 +172,15 @@ static void pmfs_init_inode_list_from_inode(struct super_block *sb)
 	struct pmfs_blocknode_lowhigh *entry;
 	struct pmfs_blocknode *blknode;
 	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
-	unsigned long num_blocknode;
-	unsigned long i;
+	unsigned long num_blocknode = 0;
 	u64 curr_p;
 
-	num_blocknode = sbi->num_blocknode_inode;
 	sbi->num_blocknode_inode = 0;
 	curr_p = pi->log_head;
 	if (curr_p == 0)
 		pmfs_dbg("%s: pi head is 0!\n", __func__);
 
-	for (i = 0; i < num_blocknode; i++) {
+	while (curr_p != pi->log_tail) {
 		if (is_last_entry(curr_p, size, 0)) {
 			curr_p = next_log_page(sb, curr_p);
 		}
@@ -205,12 +200,11 @@ static void pmfs_init_inode_list_from_inode(struct super_block *sb)
 		list_add_tail(&blknode->link, &sbi->inode_inuse_head);
 		pmfs_insert_blocknode_inodetree(sbi, blknode);
 
+		num_blocknode++;
 		curr_p += sizeof(struct pmfs_blocknode_lowhigh);
 	}
 
-	if (curr_p != pi->log_tail)
-		pmfs_dbg("%s: curr_p 0x%llx, tail 0x%llx, %lu blocknodes\n",
-			__func__, curr_p, pi->log_tail, num_blocknode);
+	pmfs_dbg("%s: %lu inode nodes\n", __func__, num_blocknode);
 	pmfs_free_inode_log(sb, pi);
 }
 
@@ -1022,7 +1016,7 @@ int pmfs_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	/* Start from the root iode */
 	ret = pmfs_recover_inode(sb, root_addr, bm, smp_processor_id(), 0);
 
-	pmfs_dbg("DFS recovery total recovered %d\n",
+	pmfs_dbg("DFS recovery total recovered %lu\n",
 				sbi->s_inodes_used_count);
 	return ret;
 }
