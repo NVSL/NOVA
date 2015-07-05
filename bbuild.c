@@ -880,11 +880,42 @@ static void pmfs_build_blocknode_map(struct super_block *sb,
 			bm->scan_bm_1G.bitmap_size * 8, PAGE_SHIFT_1G - 12);
 }
 
+void pmfs_print_bmentry_tree(struct single_scan_bm *scan_bm,
+	enum bm_type type)
+{
+	struct multi_set_entry *entry;
+	struct rb_node *temp;
+
+	temp = rb_first(&scan_bm->multi_set_tree);
+	while (temp) {
+		entry = container_of(temp, struct multi_set_entry, node);
+		pmfs_dbg("%s: type %d: entry bit low %lu, bit high %lu, "
+			"refcount %d\n", __func__, type, entry->bit_low,
+			entry->bit_high, entry->refcount);
+		temp = rb_next(temp);
+	}
+
+	return;
+}
+
+static void pmfs_check_bmentry(struct single_scan_bm *scan_bm,
+	enum bm_type type)
+{
+	if (scan_bm->num_entries)
+		pmfs_dbg("%s: bm type %d: still has %d entries?\n",
+			__func__, type, scan_bm->num_entries);
+
+	pmfs_print_bmentry_tree(scan_bm, type);
+}
+
 static void free_bm(struct scan_bitmap *bm)
 {
 	kfree(bm->scan_bm_4K.bitmap);
 	kfree(bm->scan_bm_2M.bitmap);
 	kfree(bm->scan_bm_1G.bitmap);
+	pmfs_check_bmentry(&bm->scan_bm_4K, BM_4K);
+	pmfs_check_bmentry(&bm->scan_bm_2M, BM_2M);
+	pmfs_check_bmentry(&bm->scan_bm_1G, BM_1G);
 	kfree(bm);
 	destroy_bmentry_cache();
 }
