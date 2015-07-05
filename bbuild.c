@@ -44,71 +44,264 @@ static void destroy_bmentry_cache(void)
 	kmem_cache_destroy(pmfs_bmentry_cachep);
 }
 
-static inline void set_scan_bm(unsigned long bit,
-	struct single_scan_bm *scan_bm, enum bm_type type)
+inline int pmfs_rbtree_compare_bmentry(struct multi_set_entry *curr,
+	unsigned long bit)
+{
+	if (bit < curr->bit_low)
+		return -1;
+	if (bit > curr->bit_high)
+		return 1;
+
+	return 0;
+}
+
+static int pmfs_find_bmentry(struct single_scan_bm *scan_bm,
+	unsigned long bit, struct multi_set_entry **entry)
+{
+	struct multi_set_entry *curr;
+	struct rb_node *temp;
+	int compVal;
+
+	temp = scan_bm->multi_set_tree.rb_node;
+
+	while (temp) {
+		curr = container_of(temp, struct multi_set_entry, node);
+		compVal = pmfs_rbtree_compare_bmentry(curr, bit);
+
+		if (compVal == -1) {
+			temp = temp->rb_left;
+		} else if (compVal == 1) {
+			temp = temp->rb_right;
+		} else {
+			*entry = curr;
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+static int pmfs_insert_bmentry(struct single_scan_bm *scan_bm,
+	struct multi_set_entry *entry)
+{
+	struct multi_set_entry *curr;
+	struct rb_node **temp, *parent;
+	int compVal;
+
+	temp = &(scan_bm->multi_set_tree.rb_node);
+	parent = NULL;
+
+	while (*temp) {
+		curr = container_of(*temp, struct multi_set_entry, node);
+		compVal = pmfs_rbtree_compare_bmentry(curr, entry->bit_low);
+		parent = *temp;
+
+		if (compVal == -1) {
+			temp = &((*temp)->rb_left);
+		} else if (compVal == 1) {
+			temp = &((*temp)->rb_right);
+		} else {
+			pmfs_dbg("%s: entry %lu - %lu already exists\n",
+				__func__, entry->bit_low, entry->bit_high);
+			return -EINVAL;
+		}
+	}
+
+	rb_link_node(&entry->node, parent, temp);
+	rb_insert_color(&entry->node, &scan_bm->multi_set_tree);
+	return 0;
+}
+
+static void pmfs_try_merge_bmentry(struct single_scan_bm *scan_bm,
+	struct multi_set_entry *curr_entry)
+{
+	struct rb_node *prev, *next;
+	struct multi_set_entry *prev_entry, *next_entry;
+
+	prev = rb_prev(&curr_entry->node);
+	if (prev) {
+		prev_entry = rb_entry(prev, struct multi_set_entry, node);
+		if (prev_entry->bit_high >= curr_entry->bit_low) {
+			pmfs_dbg("%s: ERROR: entry overlap: prev low %lu, "
+				"high %lu, curr low %lu, high %lu\n", __func__,
+				prev_entry->bit_low, prev_entry->bit_high,
+				curr_entry->bit_low, curr_entry->bit_high);
+			return;
+		}
+		if (prev_entry->bit_high + 1 == curr_entry->bit_low &&
+				prev_entry->refcount == curr_entry->refcount) {
+			rb_erase(&curr_entry->node, &scan_bm->multi_set_tree);
+			prev_entry->bit_high = curr_entry->bit_high;
+			kmem_cache_free(pmfs_bmentry_cachep, curr_entry);
+			curr_entry = prev_entry;
+		}
+	}
+
+	next = rb_next(&curr_entry->node);
+	if (next) {
+		next_entry = rb_entry(next, struct multi_set_entry, node);
+		if (curr_entry->bit_high >= next_entry->bit_low) {
+			pmfs_dbg("%s: ERROR: entry overlap: curr low %lu, "
+				"high %lu, next low %lu, high %lu\n", __func__,
+				curr_entry->bit_low, curr_entry->bit_high,
+				next_entry->bit_low, next_entry->bit_high);
+			return;
+		}
+		if (curr_entry->bit_high + 1 == next_entry->bit_low &&
+				curr_entry->refcount == next_entry->refcount) {
+			rb_erase(&next_entry->node, &scan_bm->multi_set_tree);
+			curr_entry->bit_high = next_entry->bit_high;
+			kmem_cache_free(pmfs_bmentry_cachep, next_entry);
+		}
+	}
+}
+
+static void pmfs_insert_bit_range_to_tree(struct single_scan_bm *scan_bm,
+	unsigned long bit_low, unsigned long bit_high, int refcount,
+	int try_merge)
 {
 	struct multi_set_entry *entry;
-	struct list_head *head = &(scan_bm->multi_set_head);
 
-	if (test_and_set_bit(bit, scan_bm->bitmap) == 0)
+	if (bit_low > bit_high || refcount < 2) {
+		pmfs_dbg("%s: insert invalid range: low %lu, high %lu, "
+			"refcount %d\n", __func__, bit_low, bit_high,
+			refcount);
 		return;
-
-	pmfs_dbgv("%s: type %d, bit %lu exists\n", __func__, type, bit);
-
-	if (scan_bm->multi_set_exist && bit >= scan_bm->multi_set_low &&
-			bit <= scan_bm->multi_set_high) {
-		list_for_each_entry(entry, head, link) {
-			if (entry->bit == bit) {
-				entry->refcount++;
-				return;
-			}
-		}
 	}
 
 	entry = kmem_cache_alloc(pmfs_bmentry_cachep, GFP_NOFS);
 	if (!entry)
 		PMFS_ASSERT(0);
 
-	INIT_LIST_HEAD(&entry->link);
-	entry->bit = bit;
-	entry->refcount = 2;
-	list_add_tail(&entry->link, head);
-	if (scan_bm->multi_set_low > bit || scan_bm->multi_set_exist == 0)
-		scan_bm->multi_set_low = bit;
-	if (scan_bm->multi_set_high < bit || scan_bm->multi_set_exist == 0)
-		scan_bm->multi_set_high = bit;
+	entry->bit_low = bit_low;
+	entry->bit_high = bit_high;
+	entry->refcount = refcount;
+	pmfs_insert_bmentry(scan_bm, entry);
+	if (try_merge)
+		pmfs_try_merge_bmentry(scan_bm, entry);
 	scan_bm->multi_set_exist = 1;
 }
 
-static inline void delete_bm_entry(struct single_scan_bm *scan_bm,
-	struct list_head *head, struct multi_set_entry *entry,
-	enum bm_type type)
+static void pmfs_inc_bit_in_bmentry(struct single_scan_bm *scan_bm,
+	unsigned long bit, struct multi_set_entry *entry)
 {
-	pmfs_dbgv("%s: type %d, bit %lu, ref %d\n", __func__,
-			type, entry->bit, entry->refcount);
-	entry->refcount--;
-	if (entry->refcount == 1) {
-		list_del(&entry->link);
-		/* FIXME: update multi_set_low/high */
-		kmem_cache_free(pmfs_bmentry_cachep, entry);
-		if (list_empty(head))
-			scan_bm->multi_set_exist = 0;
+	unsigned long new_bit_low, new_bit_high;
+
+	/* Single bit entry */
+	if (bit == entry->bit_low && bit == entry->bit_high) {
+		entry->refcount++;
+		return;
 	}
+
+	/* Align to left */
+	if (bit == entry->bit_low) {
+		entry->bit_low++;
+		pmfs_insert_bit_range_to_tree(scan_bm, bit, bit,
+					entry->refcount + 1, 1);
+		return;
+	}
+
+	/* Align to right */
+	if (bit == entry->bit_high) {
+		entry->bit_high--;
+		pmfs_insert_bit_range_to_tree(scan_bm, bit, bit,
+					entry->refcount + 1, 1);
+		return;
+	}
+
+	/* In the middle. Break the entry and insert new ones */
+	new_bit_low = bit + 1;
+	new_bit_high = entry->bit_high;
+	entry->bit_high = bit - 1;
+
+	pmfs_insert_bit_range_to_tree(scan_bm, bit, bit,
+					entry->refcount + 1, 0);
+
+	pmfs_insert_bit_range_to_tree(scan_bm, new_bit_low, new_bit_high,
+					entry->refcount, 0);
 }
 
-static inline void clear_scan_bm(unsigned long bit,
+static void set_scan_bm(unsigned long bit,
 	struct single_scan_bm *scan_bm, enum bm_type type)
 {
-	struct multi_set_entry *entry, *next;
-	struct list_head *head = &(scan_bm->multi_set_head);
+	struct multi_set_entry *entry;
+	int found = 0;
 
-	if (scan_bm->multi_set_exist && bit >= scan_bm->multi_set_low &&
-			bit <= scan_bm->multi_set_high) {
-		list_for_each_entry_safe(entry, next, head, link) {
-			if (entry->bit == bit) {
-				delete_bm_entry(scan_bm, head, entry, type);
-				return;
-			}
+	if (test_and_set_bit(bit, scan_bm->bitmap) == 0)
+		return;
+
+	pmfs_dbgv("%s: type %d, bit %lu exists\n", __func__, type, bit);
+
+	if (scan_bm->multi_set_exist) {
+		found = pmfs_find_bmentry(scan_bm, bit, &entry);
+		if (found == 1) {
+			pmfs_inc_bit_in_bmentry(scan_bm, bit, entry);
+			return;
+		}
+	}
+
+	pmfs_insert_bit_range_to_tree(scan_bm, bit, bit, 2, 1);
+}
+
+static void pmfs_dec_bit_in_bmentry(struct single_scan_bm *scan_bm,
+	unsigned long bit, struct multi_set_entry *entry)
+{
+	unsigned long new_bit_low, new_bit_high;
+
+	/* Single bit entry */
+	if (bit == entry->bit_low && bit == entry->bit_high) {
+		entry->refcount--;
+		if (entry->refcount == 1) {
+			rb_erase(&entry->node, &scan_bm->multi_set_tree);
+			kmem_cache_free(pmfs_bmentry_cachep, entry);
+		}
+		return;
+	}
+
+	/* Align to left */
+	if (bit == entry->bit_low) {
+		entry->bit_low++;
+		if (entry->refcount == 2)
+			return;
+		pmfs_insert_bit_range_to_tree(scan_bm, bit, bit,
+					entry->refcount - 1, 1);
+		return;
+	}
+
+	/* Align to right */
+	if (bit == entry->bit_high) {
+		entry->bit_high--;
+		if (entry->refcount == 2)
+			return;
+		pmfs_insert_bit_range_to_tree(scan_bm, bit, bit,
+					entry->refcount - 1, 1);
+		return;
+	}
+
+	/* In the middle. Break the entry and insert new ones */
+	new_bit_low = bit + 1;
+	new_bit_high = entry->bit_high;
+	entry->bit_high = bit - 1;
+
+	if (entry->refcount > 2)
+		pmfs_insert_bit_range_to_tree(scan_bm, bit, bit,
+					entry->refcount - 1, 0);
+
+	pmfs_insert_bit_range_to_tree(scan_bm, new_bit_low, new_bit_high,
+					entry->refcount, 0);
+}
+
+static void clear_scan_bm(unsigned long bit,
+	struct single_scan_bm *scan_bm, enum bm_type type)
+{
+	struct multi_set_entry *entry;
+	int found = 0;
+
+	if (scan_bm->multi_set_exist) {
+		found = pmfs_find_bmentry(scan_bm, bit, &entry);
+		if (found == 1) {
+			pmfs_dec_bit_in_bmentry(scan_bm, bit, entry);
+			return;
 		}
 	}
 
@@ -719,9 +912,9 @@ static struct scan_bitmap *alloc_bm(unsigned long initsize)
 		return NULL;
 	}
 
-	INIT_LIST_HEAD(&bm->scan_bm_4K.multi_set_head);
-	INIT_LIST_HEAD(&bm->scan_bm_2M.multi_set_head);
-	INIT_LIST_HEAD(&bm->scan_bm_1G.multi_set_head);
+	bm->scan_bm_4K.multi_set_tree = RB_ROOT;
+	bm->scan_bm_2M.multi_set_tree = RB_ROOT;
+	bm->scan_bm_1G.multi_set_tree = RB_ROOT;
 
 	if (init_bmentry_cache()) {
 		free_bm(bm);

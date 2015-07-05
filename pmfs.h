@@ -504,9 +504,10 @@ enum bm_type {
 };
 
 struct multi_set_entry {
-	unsigned long bit;
+	unsigned long bit_low;
+	unsigned long bit_high;
 	int refcount;
-	struct list_head link;
+	struct rb_node node;
 };
 
 struct single_scan_bm {
@@ -515,7 +516,7 @@ struct single_scan_bm {
 	unsigned long multi_set_low;
 	unsigned long multi_set_high;
 	int multi_set_exist;
-	struct list_head multi_set_head;	/* Multiple set bit list */
+	struct rb_root multi_set_tree;	/* Multiple set bit RB tree */
 };
 
 struct scan_bitmap {
