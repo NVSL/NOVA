@@ -762,7 +762,7 @@ static void assign_nvmm(struct pmfs_inode *pi,
 	if (bm) {
 		pmfs_dbgv("%s: inode %llu set %lu\n", __func__,
 				pi->pmfs_ino << PMFS_INODE_BITS, leaf->nvmm);
-		set_bit(leaf->nvmm, bm->bitmap_4k);
+		set_bm(leaf->nvmm, bm, BM_4K);
 	}
 }
 
@@ -813,7 +813,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 				entry = pmfs_get_block(sb, leaf->nvmm_entry);
 				entry->invalid_pages++;
 				if (bm)
-					clear_bit(leaf->nvmm, bm->bitmap_4k);
+					clear_bm(leaf->nvmm, bm, BM_4K);
 				if (free)
 					pmfs_free_data_blocks(sb, leaf->nvmm,
 						1, pi->i_blk_type, NULL, 1);
@@ -976,7 +976,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 					pmfs_get_block(sb, root->nvmm_entry);
 				entry->invalid_pages++;
 				if (bm)
-					clear_bit(root->nvmm, bm->bitmap_4k);
+					clear_bm(root->nvmm, bm, BM_4K);
 				if (free)
 					pmfs_free_data_blocks(sb, root->nvmm,
 						1, pi->i_blk_type, NULL, 1);
@@ -2593,7 +2593,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 	sih->log_pages = 1;
 	if (bm) {
 		BUG_ON(curr_p & (PAGE_SIZE - 1));
-		set_bit(curr_p >> PAGE_SHIFT, bm->bitmap_4k);
+		set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
 	}
 	while (curr_p != pi->log_tail) {
 		if (is_last_entry(curr_p,
@@ -2602,7 +2602,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 			curr_p = next_log_page(sb, curr_p);
 			if (bm) {
 				BUG_ON(curr_p & (PAGE_SIZE - 1));
-				set_bit(curr_p >> PAGE_SHIFT, bm->bitmap_4k);
+				set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
 			}
 		}
 
@@ -2663,7 +2663,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 		curr_p = next;
 		if (bm) {
 			BUG_ON(curr_p & (PAGE_SIZE - 1));
-			set_bit(curr_p >> PAGE_SHIFT, bm->bitmap_4k);
+			set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
 		}
 		curr_page = (struct pmfs_inode_log_page *)
 			pmfs_get_block(sb, curr_p);

@@ -959,6 +959,12 @@ static inline int is_dir_init_entry(struct super_block *sb,
 	return 0;
 }
 
+enum bm_type {
+	BM_4K = 0,
+	BM_2M,
+	BM_1G,
+};
+
 #include "wprotect.h"
 
 /* Function Prototypes */
@@ -1003,6 +1009,10 @@ pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
 void pmfs_free_cache_block(struct mem_addr *pair);
 
 /* bbuild.c */
+inline void set_bm(unsigned long bit, struct scan_bitmap *bm,
+	enum bm_type type);
+inline void clear_bm(unsigned long bit, struct scan_bitmap *bm,
+	enum bm_type type);
 int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 	struct scan_bitmap *bm, int cpuid, int multithread);
 void pmfs_save_blocknode_mappings_to_log(struct super_block *sb);

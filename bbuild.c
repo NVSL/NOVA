@@ -29,6 +29,42 @@
 static void pmfs_free_header(struct super_block *sb,
 	struct pmfs_inode_info_header *sih);
 
+inline void set_bm(unsigned long bit, struct scan_bitmap *bm,
+	enum bm_type type)
+{
+	switch (type) {
+		case BM_4K:
+			set_bit(bit, bm->bitmap_4k);
+			break;
+		case BM_2M:
+			set_bit(bit, bm->bitmap_2M);
+			break;
+		case BM_1G:
+			set_bit(bit, bm->bitmap_1G);
+			break;
+		default:
+			break;
+	}
+}
+
+inline void clear_bm(unsigned long bit, struct scan_bitmap *bm,
+	enum bm_type type)
+{
+	switch (type) {
+		case BM_4K:
+			clear_bit(bit, bm->bitmap_4k);
+			break;
+		case BM_2M:
+			clear_bit(bit, bm->bitmap_2M);
+			break;
+		case BM_1G:
+			clear_bit(bit, bm->bitmap_1G);
+			break;
+		default:
+			break;
+	}
+}
+
 static int pmfs_insert_inodetree(struct super_block *sb,
 	unsigned long pmfs_ino)
 {
@@ -955,7 +991,7 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 		sih->pi_addr = pi_addr;
 		if (bm && pi->log_head) {
 			BUG_ON(pi->log_head & (PAGE_SIZE - 1));
-			set_bit(pi->log_head >> PAGE_SHIFT, bm->bitmap_4k);
+			set_bm(pi->log_head >> PAGE_SHIFT, bm, BM_4K);
 		}
 		pmfs_assign_info_header(sb, pmfs_ino, sih, multithread);
 		break;
@@ -994,7 +1030,7 @@ int pmfs_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 
 	pi = pmfs_get_inode_by_ino(sb, PMFS_LITEJOURNAL_INO);
 	if (pi->log_head)
-		set_bit(pi->log_head >> PAGE_SHIFT, bm->bitmap_4k);
+		set_bm(pi->log_head >> PAGE_SHIFT, bm, BM_4K);
 
 	/* Start from the root iode */
 	ret = pmfs_recover_inode(sb, root_addr, bm, smp_processor_id(), 0);
