@@ -619,14 +619,15 @@ static unsigned long pmfs_inode_count_iblocks_recursive(struct super_block *sb,
 
 static inline
 unsigned long pmfs_inode_file_count_iblocks (struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode, __le64 root)
+	struct pmfs_inode *pi, struct inode *inode)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
-	unsigned long iblocks;
-	if (root == 0)
-		return 0;
-	iblocks = pmfs_inode_count_iblocks_recursive(sb, root, sih->height);
+	unsigned long iblocks = 0;
+
+	iblocks = pmfs_inode_count_iblocks_recursive(sb, sih->root,
+							sih->height);
+	iblocks += sih->log_pages;
 	return (iblocks << (pmfs_inode_blk_shift(pi) - sb->s_blocksize_bits));
 }
 
@@ -702,8 +703,7 @@ static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 	 * Don't trust inode->i_blocks; recalculate it by rescanning the inode
 	 */
 	if (pmfs_is_mounting(sb))
-		inode->i_blocks = pmfs_inode_file_count_iblocks(sb,
-							pi, inode, root);
+		inode->i_blocks = pmfs_inode_file_count_iblocks(sb, pi, inode);
 	else
 		inode->i_blocks -= (freed * (1 << (data_bits -
 				sb->s_blocksize_bits)));
