@@ -763,6 +763,7 @@ static void assign_nvmm(struct pmfs_inode *pi,
 		pmfs_dbgv("%s: inode %llu set %lu\n", __func__,
 				pi->pmfs_ino << PMFS_INODE_BITS, leaf->nvmm);
 		set_bm(leaf->nvmm, bm, BM_4K);
+		pi->i_blocks++;
 	}
 }
 
@@ -2667,6 +2668,9 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 		curr_page = (struct pmfs_inode_log_page *)
 			pmfs_get_block(sb, curr_p);
 	}
+
+	if (bm)
+		pi->i_blocks += sih->log_pages;
 
 //	pmfs_print_inode_log_page(sb, inode);
 	return 0;

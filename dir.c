@@ -606,6 +606,9 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb,
 			pmfs_get_block(sb, curr_p);
 	}
 
+	if (bm)
+		pi->i_blocks += sih->log_pages;
+
 //	pmfs_print_dir_tree(sb, sih, ino);
 	return 0;
 }

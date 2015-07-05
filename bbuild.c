@@ -1279,9 +1279,12 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 		return 0;
 
 	pmfs_ino = pi->pmfs_ino;
-	if (bm && pmfs_ino != 1) {
-		pmfs_insert_inodetree(sb, pmfs_ino);
-		sbi->s_inodes_used_count++;
+	if (bm) {
+		pi->i_blocks = 0;
+		if (pmfs_ino != 1) {
+			pmfs_insert_inodetree(sb, pmfs_ino);
+			sbi->s_inodes_used_count++;
+		}
 	}
 
 	pmfs_dbg_verbose("%s: inode %lu, addr 0x%llx, valid %d, "
