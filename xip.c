@@ -876,6 +876,7 @@ ssize_t pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	le64_add_cpu(&pi->i_blocks,
 			(total_blocks << (data_bits - sb->s_blocksize_bits)));
 	pmfs_memlock_inode(sb, pi);
+	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 
 	*begin = begin_tail;
 	*end = temp_tail;
