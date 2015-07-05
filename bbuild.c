@@ -109,6 +109,7 @@ static int pmfs_insert_bmentry(struct single_scan_bm *scan_bm,
 
 	rb_link_node(&entry->node, parent, temp);
 	rb_insert_color(&entry->node, &scan_bm->multi_set_tree);
+	scan_bm->num_entries++;
 	return 0;
 }
 
@@ -134,6 +135,7 @@ static void pmfs_try_merge_bmentry(struct single_scan_bm *scan_bm,
 			prev_entry->bit_high = curr_entry->bit_high;
 			kmem_cache_free(pmfs_bmentry_cachep, curr_entry);
 			curr_entry = prev_entry;
+			scan_bm->num_entries--;
 		}
 	}
 
@@ -152,6 +154,7 @@ static void pmfs_try_merge_bmentry(struct single_scan_bm *scan_bm,
 			rb_erase(&next_entry->node, &scan_bm->multi_set_tree);
 			curr_entry->bit_high = next_entry->bit_high;
 			kmem_cache_free(pmfs_bmentry_cachep, next_entry);
+			scan_bm->num_entries--;
 		}
 	}
 }
@@ -179,7 +182,6 @@ static void pmfs_insert_bit_range_to_tree(struct single_scan_bm *scan_bm,
 	pmfs_insert_bmentry(scan_bm, entry);
 	if (try_merge)
 		pmfs_try_merge_bmentry(scan_bm, entry);
-	scan_bm->multi_set_exist = 1;
 }
 
 static void pmfs_inc_bit_in_bmentry(struct single_scan_bm *scan_bm,
@@ -232,7 +234,7 @@ static void set_scan_bm(unsigned long bit,
 
 	pmfs_dbgv("%s: type %d, bit %lu exists\n", __func__, type, bit);
 
-	if (scan_bm->multi_set_exist) {
+	if (scan_bm->num_entries) {
 		found = pmfs_find_bmentry(scan_bm, bit, &entry);
 		if (found == 1) {
 			pmfs_inc_bit_in_bmentry(scan_bm, bit, entry);
@@ -254,6 +256,7 @@ static void pmfs_dec_bit_in_bmentry(struct single_scan_bm *scan_bm,
 		if (entry->refcount == 1) {
 			rb_erase(&entry->node, &scan_bm->multi_set_tree);
 			kmem_cache_free(pmfs_bmentry_cachep, entry);
+			scan_bm->num_entries--;
 		}
 		return;
 	}
@@ -297,7 +300,7 @@ static void clear_scan_bm(unsigned long bit,
 	struct multi_set_entry *entry;
 	int found = 0;
 
-	if (scan_bm->multi_set_exist) {
+	if (scan_bm->num_entries) {
 		found = pmfs_find_bmentry(scan_bm, bit, &entry);
 		if (found == 1) {
 			pmfs_dec_bit_in_bmentry(scan_bm, bit, entry);

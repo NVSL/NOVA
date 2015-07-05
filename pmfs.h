@@ -515,7 +515,7 @@ struct single_scan_bm {
 	unsigned long *bitmap;
 	unsigned long multi_set_low;
 	unsigned long multi_set_high;
-	int multi_set_exist;
+	int num_entries;
 	struct rb_root multi_set_tree;	/* Multiple set bit RB tree */
 };
 
