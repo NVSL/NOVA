@@ -92,7 +92,13 @@ struct pmfs_inode {
 	__le32	i_atime;	/* Access time */
 	__le16	i_mode;		/* File mode */
 	__le16	i_links_count;	/* Links count */
-	__le64	i_blocks;	/* Blocks count */
+
+	/*
+	 * Blocks count. This field is updated in-place;
+	 * We just make sure it is consistent upon clean umount,
+	 * and it is recovered in DFS recovery if power failure occurs.
+	 */
+	__le64	i_blocks;
 	__le64	i_xattr;	/* Extended attribute block */
 
 	/* second 48 bytes */

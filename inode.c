@@ -2343,6 +2343,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 					found_head, possible_head);
 	pmfs_dbg_verbose("Num pages %d, freed %d\n", num_pages, freed_pages);
 	sih->log_pages += num_pages - freed_pages;
+	pi->i_blocks += num_pages - freed_pages;
 	/* Don't update log tail pointer here */
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 
@@ -2376,6 +2377,7 @@ u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
 		pi->log_head = new_block;
 		pi->log_tail = new_block;
 		sih->log_pages = 1;
+		pi->i_blocks++;
 		pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 	} else {
 		num_pages = sih->log_pages >= 256 ?
@@ -2403,6 +2405,7 @@ u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
 				pmfs_get_block(sb, page_tail))->next_page
 								= new_block;
 			sih->log_pages += num_pages;
+			pi->i_blocks += num_pages;
 		}
 
 //		pmfs_dbg("After append log pages:\n");
