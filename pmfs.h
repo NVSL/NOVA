@@ -497,9 +497,25 @@ struct pmfs_inode_info {
 	u32	high_dirty;		/* Dirty high range */
 };
 
+enum bm_type {
+	BM_4K = 0,
+	BM_2M,
+	BM_1G,
+};
+
+struct multi_set_entry {
+	unsigned long bit;
+	int refcount;
+	struct list_head link;
+};
+
 struct single_scan_bm {
 	unsigned long bitmap_size;
 	unsigned long *bitmap;
+	unsigned long multi_set_low;
+	unsigned long multi_set_high;
+	int multi_set_exist;
+	struct list_head multi_set_head;	/* Multiple set bit list */
 };
 
 struct scan_bitmap {
@@ -960,12 +976,6 @@ static inline int is_dir_init_entry(struct super_block *sb,
 
 	return 0;
 }
-
-enum bm_type {
-	BM_4K = 0,
-	BM_2M,
-	BM_1G,
-};
 
 #include "wprotect.h"
 

@@ -26,18 +26,92 @@
 #include <linux/delay.h>
 #include "pmfs.h"
 
-static void pmfs_free_header(struct super_block *sb,
-	struct pmfs_inode_info_header *sih);
+static struct kmem_cache *pmfs_bmentry_cachep;
+
+static int __init init_bmentry_cache(void)
+{
+	pmfs_bmentry_cachep = kmem_cache_create("pmfs_bmentry_cache",
+					       sizeof(struct multi_set_entry),
+					       0, (SLAB_RECLAIM_ACCOUNT |
+						   SLAB_MEM_SPREAD), NULL);
+	if (pmfs_bmentry_cachep == NULL)
+		return -ENOMEM;
+	return 0;
+}
+
+static void destroy_bmentry_cache(void)
+{
+	kmem_cache_destroy(pmfs_bmentry_cachep);
+}
 
 static inline void set_scan_bm(unsigned long bit,
 	struct single_scan_bm *scan_bm, enum bm_type type)
 {
-	set_bit(bit, scan_bm->bitmap);
+	struct multi_set_entry *entry;
+	struct list_head *head = &(scan_bm->multi_set_head);
+
+	if (test_and_set_bit(bit, scan_bm->bitmap) == 0)
+		return;
+
+	pmfs_dbgv("%s: type %d, bit %lu exists\n", __func__, type, bit);
+
+	if (scan_bm->multi_set_exist && bit >= scan_bm->multi_set_low &&
+			bit <= scan_bm->multi_set_high) {
+		list_for_each_entry(entry, head, link) {
+			if (entry->bit == bit) {
+				entry->refcount++;
+				return;
+			}
+		}
+	}
+
+	entry = kmem_cache_alloc(pmfs_bmentry_cachep, GFP_NOFS);
+	if (!entry)
+		PMFS_ASSERT(0);
+
+	INIT_LIST_HEAD(&entry->link);
+	entry->bit = bit;
+	entry->refcount = 2;
+	list_add_tail(&entry->link, head);
+	if (scan_bm->multi_set_low > bit || scan_bm->multi_set_exist == 0)
+		scan_bm->multi_set_low = bit;
+	if (scan_bm->multi_set_high < bit || scan_bm->multi_set_exist == 0)
+		scan_bm->multi_set_high = bit;
+	scan_bm->multi_set_exist = 1;
+}
+
+static inline void delete_bm_entry(struct single_scan_bm *scan_bm,
+	struct list_head *head, struct multi_set_entry *entry,
+	enum bm_type type)
+{
+	pmfs_dbgv("%s: type %d, bit %lu, ref %d\n", __func__,
+			type, entry->bit, entry->refcount);
+	entry->refcount--;
+	if (entry->refcount == 1) {
+		list_del(&entry->link);
+		/* FIXME: update multi_set_low/high */
+		kmem_cache_free(pmfs_bmentry_cachep, entry);
+		if (list_empty(head))
+			scan_bm->multi_set_exist = 0;
+	}
 }
 
 static inline void clear_scan_bm(unsigned long bit,
 	struct single_scan_bm *scan_bm, enum bm_type type)
 {
+	struct multi_set_entry *entry, *next;
+	struct list_head *head = &(scan_bm->multi_set_head);
+
+	if (scan_bm->multi_set_exist && bit >= scan_bm->multi_set_low &&
+			bit <= scan_bm->multi_set_high) {
+		list_for_each_entry_safe(entry, next, head, link) {
+			if (entry->bit == bit) {
+				delete_bm_entry(scan_bm, head, entry, type);
+				return;
+			}
+		}
+	}
+
 	clear_bit(bit, scan_bm->bitmap);
 }
 
@@ -616,6 +690,7 @@ static void free_bm(struct scan_bitmap *bm)
 	kfree(bm->scan_bm_2M.bitmap);
 	kfree(bm->scan_bm_1G.bitmap);
 	kfree(bm);
+	destroy_bmentry_cache();
 }
 
 static struct scan_bitmap *alloc_bm(unsigned long initsize)
@@ -640,6 +715,15 @@ static struct scan_bitmap *alloc_bm(unsigned long initsize)
 
 	if (!bm->scan_bm_4K.bitmap || !bm->scan_bm_2M.bitmap ||
 			!bm->scan_bm_1G.bitmap) {
+		free_bm(bm);
+		return NULL;
+	}
+
+	INIT_LIST_HEAD(&bm->scan_bm_4K.multi_set_head);
+	INIT_LIST_HEAD(&bm->scan_bm_2M.multi_set_head);
+	INIT_LIST_HEAD(&bm->scan_bm_1G.multi_set_head);
+
+	if (init_bmentry_cache()) {
 		free_bm(bm);
 		return NULL;
 	}
