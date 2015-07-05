@@ -603,7 +603,7 @@ static unsigned long pmfs_inode_count_iblocks_recursive(struct super_block *sb,
 {
 	__le64 *node;
 	unsigned int i;
-	unsigned long i_blocks = 0;
+	unsigned long iblocks = 0;
 
 	if (height == 0)
 		return 1;
@@ -611,10 +611,10 @@ static unsigned long pmfs_inode_count_iblocks_recursive(struct super_block *sb,
 	for (i = 0; i < (1 << META_BLK_SHIFT); i++) {
 		if (node[i] == 0)
 			continue;
-		i_blocks += pmfs_inode_count_iblocks_recursive(sb, node[i],
+		iblocks += pmfs_inode_count_iblocks_recursive(sb, node[i],
 								height - 1);
 	}
-	return i_blocks;
+	return iblocks;
 }
 
 static inline
@@ -819,7 +819,6 @@ static int recursive_assign_blocks(struct super_block *sb,
 						1, pi->i_blk_type, NULL, 1);
 				pmfs_dbg_verbose("Free block @ %lu\n",
 							leaf->nvmm);
-				//FIXME: garbage collection
 				pi->i_blocks--;
 			}
 			if (alloc_dram) {
