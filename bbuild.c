@@ -30,13 +30,13 @@ static void pmfs_free_header(struct super_block *sb,
 	struct pmfs_inode_info_header *sih);
 
 static inline void set_scan_bm(unsigned long bit,
-	struct single_scan_bm *scan_bm)
+	struct single_scan_bm *scan_bm, enum bm_type type)
 {
 	set_bit(bit, scan_bm->bitmap);
 }
 
 static inline void clear_scan_bm(unsigned long bit,
-	struct single_scan_bm *scan_bm)
+	struct single_scan_bm *scan_bm, enum bm_type type)
 {
 	clear_bit(bit, scan_bm->bitmap);
 }
@@ -46,13 +46,13 @@ inline void set_bm(unsigned long bit, struct scan_bitmap *bm,
 {
 	switch (type) {
 		case BM_4K:
-			set_scan_bm(bit, &bm->scan_bm_4K);
+			set_scan_bm(bit, &bm->scan_bm_4K, type);
 			break;
 		case BM_2M:
-			set_scan_bm(bit, &bm->scan_bm_2M);
+			set_scan_bm(bit, &bm->scan_bm_2M, type);
 			break;
 		case BM_1G:
-			set_scan_bm(bit, &bm->scan_bm_1G);
+			set_scan_bm(bit, &bm->scan_bm_1G, type);
 			break;
 		default:
 			break;
@@ -64,13 +64,13 @@ inline void clear_bm(unsigned long bit, struct scan_bitmap *bm,
 {
 	switch (type) {
 		case BM_4K:
-			clear_scan_bm(bit, &bm->scan_bm_4K);
+			clear_scan_bm(bit, &bm->scan_bm_4K, type);
 			break;
 		case BM_2M:
-			clear_scan_bm(bit, &bm->scan_bm_2M);
+			clear_scan_bm(bit, &bm->scan_bm_2M, type);
 			break;
 		case BM_1G:
-			clear_scan_bm(bit, &bm->scan_bm_1G);
+			clear_scan_bm(bit, &bm->scan_bm_1G, type);
 			break;
 		default:
 			break;
