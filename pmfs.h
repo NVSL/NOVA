@@ -981,8 +981,8 @@ extern void pmfs_free_log_blocks(struct super_block *sb,
 	unsigned long blocknr, int num, unsigned short btype,
 	struct pmfs_blocknode **start_hint, int needlock);
 extern int pmfs_new_data_blocks(struct super_block *sb, struct pmfs_inode *pi,
-	unsigned long *blocknr, unsigned int num, unsigned short btype,
-	int zero);
+	unsigned long *blocknr, unsigned int num, unsigned long start_blk,
+	unsigned short btype, int zero, int cow);
 extern int pmfs_new_log_blocks(struct super_block *sb, unsigned long pmfs_ino,
 	unsigned long *blocknr, unsigned int num, unsigned short btype,
 	int zero);

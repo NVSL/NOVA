@@ -747,8 +747,9 @@ static int pmfs_increase_file_btree_height(struct super_block *sb,
 	return errval;
 }
 
-static void assign_nvmm(struct pmfs_file_write_entry *data,
-	struct mem_addr *leaf, struct scan_bitmap *bm, unsigned long pgoff)
+static void assign_nvmm(struct pmfs_inode *pi,
+	struct pmfs_file_write_entry *data, struct mem_addr *leaf,
+	struct scan_bitmap *bm, unsigned long pgoff)
 {
 	if (data->pgoff > pgoff || data->pgoff +
 			data->num_pages <= pgoff) {
@@ -758,8 +759,11 @@ static void assign_nvmm(struct pmfs_file_write_entry *data,
 	}
 
 	leaf->nvmm = (data->block >> PAGE_SHIFT) + pgoff - data->pgoff;
-	if (bm)
+	if (bm) {
+		pmfs_dbgv("%s: inode %llu set %lu\n", __func__,
+				pi->pmfs_ino << PMFS_INODE_BITS, leaf->nvmm);
 		set_bit(leaf->nvmm, bm->bitmap_4k);
+	}
 }
 
 static int recursive_assign_blocks(struct super_block *sb,
@@ -832,7 +836,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 			} else {
 				if (nvmm) {
 					leaf->nvmm_entry = address;
-					assign_nvmm(data, leaf, bm, pgoff);
+					assign_nvmm(pi, data, leaf, bm, pgoff);
 				} else {
 					leaf->dram = address;
 				}
@@ -937,7 +941,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			} else {
 				if (nvmm) {
 					root->nvmm_entry = address;
-					assign_nvmm(data, root, bm, 0);
+					assign_nvmm(pi, data, root, bm, 0);
 				} else {
 					root->dram = address;
 				}
@@ -995,7 +999,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			} else {
 				if (nvmm) {
 					root->nvmm_entry = address;
-					assign_nvmm(data, root, bm, 0);
+					assign_nvmm(pi, data, root, bm, 0);
 				} else {
 					root->dram = address;
 				}

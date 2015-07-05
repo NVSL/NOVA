@@ -98,7 +98,7 @@ void pmfs_print_blocknode_list(struct super_block *sb)
 	mutex_lock(&sbi->s_lock);
 	list_for_each_entry(i, head, link) {
 		count++;
-		pmfs_dbg_verbose("node low %lu, high %lu, size %lu\n",
+		pmfs_dbgv("node low %lu, high %lu, size %lu\n",
 			i->block_low, i->block_high,
 			i->block_high - i->block_low + 1);
 	}

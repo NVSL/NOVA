@@ -437,7 +437,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 
 		/* don't zero-out the allocated blocks */
 		allocated = pmfs_new_data_blocks(sb, pi, &blocknr, num_blocks,
-						pi->i_blk_type, 0);
+					start_blk, pi->i_blk_type, 0, 1);
 		pmfs_dbg_verbose("%s: alloc %d blocks @ %lu\n", __func__,
 						allocated, blocknr);
 
@@ -805,8 +805,8 @@ ssize_t pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
-		allocated = pmfs_new_data_blocks(sb, pi, &blocknr,
-					num_blocks, pi->i_blk_type, 0);
+		allocated = pmfs_new_data_blocks(sb, pi, &blocknr, num_blocks,
+					start_blk, pi->i_blk_type, 0, 0);
 		if (allocated <= 0) {
 			pmfs_err(sb, "%s alloc blocks failed!, %d\n", __func__,
 								allocated);

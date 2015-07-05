@@ -420,7 +420,7 @@ void pmfs_free_data_blocks(struct super_block *sb, unsigned long blocknr,
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	timing_t free_time;
 
-	pmfs_dbg_verbose("Free data block %lu\n", blocknr);
+	pmfs_dbgv("Free %d data block from %lu\n", num, blocknr);
 	PMFS_START_TIMING(free_data_t, free_time);
 	if (needlock)
 		mutex_lock(&sbi->s_lock);
@@ -438,7 +438,7 @@ void pmfs_free_log_blocks(struct super_block *sb, unsigned long blocknr,
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	timing_t free_time;
 
-	pmfs_dbg_verbose("Free log block %lu\n", blocknr);
+	pmfs_dbgv("Free %d log block from %lu\n", num, blocknr);
 	PMFS_START_TIMING(free_log_t, free_time);
 	if (needlock)
 		mutex_lock(&sbi->s_lock);
@@ -618,16 +618,17 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 }
 
 inline int pmfs_new_data_blocks(struct super_block *sb, struct pmfs_inode *pi,
-	unsigned long *blocknr,	unsigned int num, unsigned short btype,
-	int zero)
+	unsigned long *blocknr,	unsigned int num, unsigned long start_blk,
+	unsigned short btype, int zero, int cow)
 {
 	int allocated;
 	timing_t alloc_time;
 	PMFS_START_TIMING(new_data_blocks_t, alloc_time);
 	allocated = pmfs_new_blocks(sb, blocknr, num, btype, zero, 0);
 	PMFS_END_TIMING(new_data_blocks_t, alloc_time);
-	pmfs_dbg_verbose("%s: %d blocks @ 0x%lx\n", __func__,
-						allocated, *blocknr);
+	pmfs_dbgv("%s: inode %llu, start blk %lu, cow %d, %d blocks @ %lu\n",
+				__func__, pi->pmfs_ino << PMFS_INODE_BITS,
+				start_blk, cow, allocated, *blocknr);
 	return allocated;
 }
 
@@ -640,8 +641,9 @@ inline int pmfs_new_log_blocks(struct super_block *sb, unsigned long pmfs_ino,
 	PMFS_START_TIMING(new_log_blocks_t, alloc_time);
 	allocated = pmfs_new_blocks(sb, blocknr, num, btype, zero, 1);
 	PMFS_END_TIMING(new_log_blocks_t, alloc_time);
-	pmfs_dbg_verbose("%s: %d blocks @ 0x%lx\n", __func__,
-						allocated, *blocknr);
+	pmfs_dbgv("%s: inode %lu, %d blocks @ %lu\n", __func__,
+				pmfs_ino << PMFS_INODE_BITS, allocated,
+				*blocknr);
 	return allocated;
 }
 
