@@ -34,13 +34,13 @@ inline void set_bm(unsigned long bit, struct scan_bitmap *bm,
 {
 	switch (type) {
 		case BM_4K:
-			set_bit(bit, bm->bitmap_4k);
+			set_bit(bit, bm->scan_bm_4K.bitmap);
 			break;
 		case BM_2M:
-			set_bit(bit, bm->bitmap_2M);
+			set_bit(bit, bm->scan_bm_2M.bitmap);
 			break;
 		case BM_1G:
-			set_bit(bit, bm->bitmap_1G);
+			set_bit(bit, bm->scan_bm_1G.bitmap);
 			break;
 		default:
 			break;
@@ -52,13 +52,13 @@ inline void clear_bm(unsigned long bit, struct scan_bitmap *bm,
 {
 	switch (type) {
 		case BM_4K:
-			clear_bit(bit, bm->bitmap_4k);
+			clear_bit(bit, bm->scan_bm_4K.bitmap);
 			break;
 		case BM_2M:
-			clear_bit(bit, bm->bitmap_2M);
+			clear_bit(bit, bm->scan_bm_2M.bitmap);
 			break;
 		case BM_1G:
-			clear_bit(bit, bm->bitmap_1G);
+			clear_bit(bit, bm->scan_bm_1G.bitmap);
 			break;
 		default:
 			break;
@@ -590,19 +590,19 @@ static int __pmfs_build_blocknode_map(struct super_block *sb,
 static void pmfs_build_blocknode_map(struct super_block *sb,
 							struct scan_bitmap *bm)
 {
-	__pmfs_build_blocknode_map(sb, bm->bitmap_4k, bm->bitmap_4k_size * 8,
-		PAGE_SHIFT - 12);
-	__pmfs_build_blocknode_map(sb, bm->bitmap_2M, bm->bitmap_2M_size * 8,
-		PAGE_SHIFT_2M - 12);
-	__pmfs_build_blocknode_map(sb, bm->bitmap_1G, bm->bitmap_1G_size * 8,
-		PAGE_SHIFT_1G - 12);
+	__pmfs_build_blocknode_map(sb, bm->scan_bm_4K.bitmap,
+			bm->scan_bm_4K.bitmap_size * 8, PAGE_SHIFT - 12);
+	__pmfs_build_blocknode_map(sb, bm->scan_bm_2M.bitmap,
+			bm->scan_bm_2M.bitmap_size * 8, PAGE_SHIFT_2M - 12);
+	__pmfs_build_blocknode_map(sb, bm->scan_bm_1G.bitmap,
+			bm->scan_bm_1G.bitmap_size * 8, PAGE_SHIFT_1G - 12);
 }
 
 static void free_bm(struct scan_bitmap *bm)
 {
-	kfree(bm->bitmap_4k);
-	kfree(bm->bitmap_2M);
-	kfree(bm->bitmap_1G);
+	kfree(bm->scan_bm_4K.bitmap);
+	kfree(bm->scan_bm_2M.bitmap);
+	kfree(bm->scan_bm_1G.bitmap);
 	kfree(bm);
 }
 
@@ -614,16 +614,20 @@ static struct scan_bitmap *alloc_bm(unsigned long initsize)
 	if (!bm)
 		return NULL;
 
-	bm->bitmap_4k_size = (initsize >> (PAGE_SHIFT + 0x3)) + 1;
-	bm->bitmap_2M_size = (initsize >> (PAGE_SHIFT_2M + 0x3)) + 1;
-	bm->bitmap_1G_size = (initsize >> (PAGE_SHIFT_1G + 0x3)) + 1;
+	bm->scan_bm_4K.bitmap_size = (initsize >> (PAGE_SHIFT + 0x3)) + 1;
+	bm->scan_bm_2M.bitmap_size = (initsize >> (PAGE_SHIFT_2M + 0x3)) + 1;
+	bm->scan_bm_1G.bitmap_size = (initsize >> (PAGE_SHIFT_1G + 0x3)) + 1;
 
 	/* Alloc memory to hold the block alloc bitmap */
-	bm->bitmap_4k = kzalloc(bm->bitmap_4k_size, GFP_KERNEL);
-	bm->bitmap_2M = kzalloc(bm->bitmap_2M_size, GFP_KERNEL);
-	bm->bitmap_1G = kzalloc(bm->bitmap_1G_size, GFP_KERNEL);
+	bm->scan_bm_4K.bitmap = kzalloc(bm->scan_bm_4K.bitmap_size,
+							GFP_KERNEL);
+	bm->scan_bm_2M.bitmap = kzalloc(bm->scan_bm_2M.bitmap_size,
+							GFP_KERNEL);
+	bm->scan_bm_1G.bitmap = kzalloc(bm->scan_bm_1G.bitmap_size,
+							GFP_KERNEL);
 
-	if (!bm->bitmap_4k || !bm->bitmap_2M || !bm->bitmap_1G) {
+	if (!bm->scan_bm_4K.bitmap || !bm->scan_bm_2M.bitmap ||
+			!bm->scan_bm_1G.bitmap) {
 		free_bm(bm);
 		return NULL;
 	}

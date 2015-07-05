@@ -497,13 +497,15 @@ struct pmfs_inode_info {
 	u32	high_dirty;		/* Dirty high range */
 };
 
+struct single_scan_bm {
+	unsigned long bitmap_size;
+	unsigned long *bitmap;
+};
+
 struct scan_bitmap {
-	unsigned long bitmap_4k_size;
-	unsigned long bitmap_2M_size;
-	unsigned long bitmap_1G_size;
-	unsigned long *bitmap_4k;
-	unsigned long *bitmap_2M;
-	unsigned long *bitmap_1G;
+	struct single_scan_bm scan_bm_4K;
+	struct single_scan_bm scan_bm_2M;
+	struct single_scan_bm scan_bm_1G;
 };
 
 /*
