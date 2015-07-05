@@ -1032,6 +1032,7 @@ int pmfs_lite_journal_hard_init(struct super_block *sb)
 	if (allocated != 1 || blocknr == 0)
 		return -ENOSPC;
 
+	pi->i_blocks = 1;
 	block = pmfs_get_block_off(sb, blocknr,	PMFS_BLOCK_TYPE_4K);
 	pi->log_head = pi->log_tail = block;
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);

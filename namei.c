@@ -214,6 +214,7 @@ static int pmfs_symlink(struct inode *dir, struct dentry *dentry,
 	}
 
 	pi = pmfs_get_inode(sb, inode);
+	pi->i_blocks = 1;
 	pmfs_block_symlink(sb, pi, inode, blocknr, symname, len);
 
 	d_instantiate(dentry, inode);
