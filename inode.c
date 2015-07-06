@@ -1413,6 +1413,7 @@ static int pmfs_free_inode(struct inode *inode,
 	}
 
 	pmfs_free_inode_log(sb, pi);
+	pi->i_blocks = 0;
 	sih->pi_addr = 0;
 
 	/* increment s_free_inodes_count */
