@@ -815,12 +815,14 @@ static int recursive_assign_blocks(struct super_block *sb,
 				entry->invalid_pages++;
 				if (bm)
 					clear_bm(leaf->nvmm, bm, BM_4K);
-				if (free)
+				if (free) {
 					pmfs_free_data_blocks(sb, leaf->nvmm,
 						1, pi->i_blk_type, NULL, 1);
-				pmfs_dbg_verbose("Free block @ %lu\n",
+					pmfs_dbgv("Free block @ %lu\n",
 							leaf->nvmm);
-				pi->i_blocks--;
+				}
+				if (bm || free)
+					pi->i_blocks--;
 			}
 			if (alloc_dram) {
 				if (!leaf->page && leaf->dram == 0) {
@@ -977,12 +979,14 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 				entry->invalid_pages++;
 				if (bm)
 					clear_bm(root->nvmm, bm, BM_4K);
-				if (free)
+				if (free) {
 					pmfs_free_data_blocks(sb, root->nvmm,
 						1, pi->i_blk_type, NULL, 1);
-				pmfs_dbg_verbose("Free root block @ %lu\n",
+					pmfs_dbgv("Free root block @ %lu\n",
 						root->nvmm);
-				pi->i_blocks--;
+				}
+				if (bm || free)
+					pi->i_blocks--;
 			}
 
 			if (alloc_dram) {
