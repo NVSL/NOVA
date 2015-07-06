@@ -811,11 +811,12 @@ static int recursive_assign_blocks(struct super_block *sb,
 			leaf = (struct mem_addr *)node[i];
 			pgoff = start_pgoff + i;
 			if (leaf->nvmm_entry && nvmm) {
-				entry = pmfs_get_block(sb, leaf->nvmm_entry);
-				entry->invalid_pages++;
 				if (bm)
 					clear_bm(leaf->nvmm, bm, BM_4K);
 				if (free) {
+					entry = pmfs_get_block(sb,
+							leaf->nvmm_entry);
+					entry->invalid_pages++;
 					pmfs_free_data_blocks(sb, leaf->nvmm,
 						1, pi->i_blk_type, NULL, 1);
 					pmfs_dbgv("Free block @ %lu\n",
@@ -974,12 +975,12 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 				/* With cow we need to re-assign the root */
 				struct pmfs_file_write_entry *entry;
 
-				entry = (struct pmfs_file_write_entry *)
-					pmfs_get_block(sb, root->nvmm_entry);
-				entry->invalid_pages++;
 				if (bm)
 					clear_bm(root->nvmm, bm, BM_4K);
 				if (free) {
+					entry = pmfs_get_block(sb,
+							root->nvmm_entry);
+					entry->invalid_pages++;
 					pmfs_free_data_blocks(sb, root->nvmm,
 						1, pi->i_blk_type, NULL, 1);
 					pmfs_dbgv("Free root block @ %lu\n",
