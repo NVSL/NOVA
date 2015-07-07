@@ -576,6 +576,23 @@ static void pmfs_preprocess_dram_block(struct super_block *sb,
 	}
 }
 
+static void pmfs_postprocess_dram_block(struct super_block *sb,
+	struct pmfs_inode_info *si, struct mem_addr *pair,
+	unsigned long start_blk)
+{
+	if (OUTDATE(pair->dram))
+		pair->dram &= ~OUTDATE_BIT;
+	if (UNINIT(pair->dram))
+		pair->dram &= ~UNINIT_BIT;
+
+	pair->dram |= DIRTY_BIT;
+	if (start_blk < si->low_dirty)
+		si->low_dirty = start_blk;
+	if (start_blk > si->high_dirty)
+		si->high_dirty = start_blk;
+
+}
+
 ssize_t pmfs_page_cache_file_write(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos)
 {
@@ -678,16 +695,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		if (pair->page)
 			kunmap_atomic(kmem);
 
-		if (OUTDATE(pair->dram))
-			pair->dram &= ~OUTDATE_BIT;
-		if (UNINIT(pair->dram))
-			pair->dram &= ~UNINIT_BIT;
-
-		pair->dram |= DIRTY_BIT;
-		if (start_blk < si->low_dirty)
-			si->low_dirty = start_blk;
-		if (start_blk > si->high_dirty)
-			si->high_dirty = start_blk;
+		pmfs_postprocess_dram_block(sb, si, pair, start_blk);
 
 		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
 		if (copied > 0) {
