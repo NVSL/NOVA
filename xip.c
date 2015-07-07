@@ -705,6 +705,14 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		sih->i_size = pos;
 	}
 
+	/*
+	 * We have pre-allocated page cache for the whole write range;
+	 * if write fails, we still needs to update sih->i_size,
+	 * otherwise we may have memory leak.
+	 */
+	if (status < 0 && len + *ppos > sih->i_size)
+		sih->i_size = len + *ppos;
+
 	*ppos = pos;
 	ret = written;
 	write_breaks += step;

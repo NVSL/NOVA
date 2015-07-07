@@ -1527,8 +1527,8 @@ void pmfs_evict_inode(struct inode *inode)
 			last_blocknr = (1UL << (sih->height * META_BLK_SHIFT))
 			    - 1;
 		} else {
-			if (likely(inode->i_size))
-				last_blocknr = (inode->i_size - 1) >>
+			if (likely(sih->i_size))
+				last_blocknr = (sih->i_size - 1) >>
 					pmfs_inode_blk_shift(pi);
 			else
 				last_blocknr = 0;
