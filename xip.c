@@ -547,23 +547,52 @@ out:
 	return ret;
 }
 
+/* Handle partial and unitialized dram page */
+static void pmfs_preprocess_dram_block(struct super_block *sb,
+	struct pmfs_inode_info *si, struct mem_addr *pair, void *kmem,
+	unsigned long start_blk, size_t offset, size_t tail)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	u64 bp;
+	void *nvmm;
+
+	/* If only NVMM page presents, copy the partial block */
+	if ((OUTDATE(pair->dram)) && (offset || tail)) {
+		bp = __pmfs_find_nvmm_block(sb, si, pair, start_blk);
+		nvmm = pmfs_get_block(sb, bp);
+		memcpy(kmem, nvmm, PAGE_SIZE);
+		pair->dram &= ~UNINIT_BIT;
+	}
+
+	/* If DRAM is uninitialized, memset the partial block to 0 */
+	if ((UNINIT(pair->dram)) && (offset || tail)) {
+		if (offset)
+			memcpy(kmem, (void *)DRAM_ADDR(sbi->zeroed_page),
+					offset);
+		if (tail)
+			memcpy(kmem + tail,
+				(void *)DRAM_ADDR(sbi->zeroed_page),
+				PAGE_SIZE - tail);
+	}
+}
+
 ssize_t pmfs_page_cache_file_write(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos)
 {
 	struct address_space *mapping = filp->f_mapping;
-	struct inode    *inode = mapping->host;
+	struct inode *inode = mapping->host;
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi;
 	struct pmfs_file_write_entry entry_data;
-	ssize_t     written = 0;
-	loff_t pos;
-	size_t count, offset, copied, ret, tail;
+	struct mem_addr *pair = NULL;
 	unsigned long start_blk, num_blocks;
 	unsigned long total_blocks;
 	unsigned long page_addr = 0;
+	size_t count, offset, copied, ret, tail;
+	ssize_t	written = 0;
+	loff_t pos;
 	void* kmem;
 	size_t bytes;
 	long status = 0;
@@ -612,7 +641,6 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 					false, false, true);
 
 	while (num_blocks > 0) {
-		struct mem_addr *pair = NULL;
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
 		page_addr = 0;
@@ -638,28 +666,9 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 		pmfs_dbg_verbose("Write: 0x%lx\n", page_addr);
 
 		tail = (offset + bytes) & (PAGE_SIZE - 1);
-		/* If only NVMM page presents, copy the partial block */
-		if ((OUTDATE(pair->dram)) && (offset || tail)) {
-			u64 bp;
-			void *nvmm;
 
-			bp = __pmfs_find_nvmm_block(sb, si, pair, start_blk);
-			nvmm = pmfs_get_block(sb, bp);
-			memcpy(kmem, nvmm, PAGE_SIZE);
-			pair->dram &= ~UNINIT_BIT;
-		}
-
-		/* If DRAM is uninitialized, memset the partial block to 0 */
-		if ((UNINIT(pair->dram)) && (offset || tail)) {
-			if (offset)
-				memcpy(kmem,
-					(void *)DRAM_ADDR(sbi->zeroed_page),
-					offset);
-			if (tail)
-				memcpy(kmem + tail,
-					(void *)DRAM_ADDR(sbi->zeroed_page),
-					PAGE_SIZE - tail);
-		}
+		pmfs_preprocess_dram_block(sb, si, pair, kmem,
+						start_blk, offset, tail);
 
 		/* Now copy from user buf */
 		PMFS_START_TIMING(memcpy_w_dram_t, memcpy_time);
