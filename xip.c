@@ -150,6 +150,8 @@ memcpy:
 			kunmap_atomic(xip_mem);
 
 		if (left) {
+			pmfs_dbg("%s error: bytes %lu, left %lu\n",
+				__func__, nr, left);
 			error = -EFAULT;
 			goto out;
 		}
@@ -497,9 +499,12 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 			count -= copied;
 			num_blocks -= allocated;
 		}
-		if (unlikely(copied != bytes))
+		if (unlikely(copied != bytes)) {
+			pmfs_dbg("%s error: %p, bytes %lu, copied %lu\n",
+				__func__, kmem, bytes, copied);
 			if (status >= 0)
 				status = -EFAULT;
+		}
 		if (status < 0)
 			break;
 
@@ -684,9 +689,12 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 			count -= copied;
 			num_blocks -= 1;
 		}
-		if (unlikely(copied != bytes))
+		if (unlikely(copied != bytes)) {
+			pmfs_dbg("%s error: %p, bytes %lu, copied %lu\n",
+				__func__, kmem, bytes, copied);
 			if (status >= 0)
 				status = -EFAULT;
+		}
 		if (status < 0)
 			break;
 	}
@@ -755,9 +763,12 @@ static ssize_t pmfs_flush_dram_to_nvmm(struct super_block *sb,
 			count -= copied;
 			kmem += offset + copied;
 		}
-		if (unlikely(copied != bytes))
+		if (unlikely(copied != bytes)) {
+			pmfs_dbg("%s error: %p, bytes %lu, copied %lu\n",
+				__func__, kmem, bytes, copied);
 			if (status >= 0)
 				status = -EFAULT;
+		}
 		if (status < 0) {
 			ret = status;
 			goto out;
@@ -858,9 +869,12 @@ ssize_t pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 			count -= copied;
 			num_blocks -= allocated;
 		}
-		if (unlikely(copied != bytes))
+		if (unlikely(copied != bytes)) {
+			pmfs_dbg("%s error: %p, bytes %lu, copied %lu\n",
+				__func__, kmem, bytes, copied);
 			if (status >= 0)
 				status = -EFAULT;
+		}
 		if (status < 0) {
 			ret = status;
 			goto out;
