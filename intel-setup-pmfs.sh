@@ -3,7 +3,7 @@
 umount /mnt/ramdisk
 rmmod pmfs
 rmmod pmem
-insmod pmfs.ko measure_timing=0 support_clwb=1
+insmod pmfs.ko measure_timing=0 support_clwb=0
 
 sleep 1
 
