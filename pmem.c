@@ -41,8 +41,8 @@ MODULE_PARM_DESC(support_clwb, "CLWB support");
 /* ======================= Timing ========================= */
 enum timing_category {
 	ioremap_t,
-	xip_read_t,
-	xip_write_t,
+	dax_read_t,
+	dax_write_t,
 	memcpy_r_nvmm_t,
 	memcpy_w_nvmm_t,
 	partial_block_t,
@@ -53,8 +53,8 @@ enum timing_category {
 const char *Timingstring[TIMING_NUM] =
 {
 	"ioremap",
-	"xip_read",
-	"xip_write",
+	"dax_read",
+	"dax_write",
 	"memcpy_read_nvmm",
 	"memcpy_write_nvmm",
 	"handle_partial_block",
