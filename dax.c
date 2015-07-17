@@ -1,7 +1,7 @@
 /*
  * BRIEF DESCRIPTION
  *
- * XIP operations.
+ * DAX operations.
  *
  * Copyright 2012-2013 Intel Corporation
  * Copyright 2009-2011 Marco Stornelli <marco.stornelli@gmail.com>
@@ -14,10 +14,10 @@
 #include <asm/cpufeature.h>
 #include <asm/pgtable.h>
 #include "pmfs.h"
-#include "xip.h"
+#include "dax.h"
 
 static ssize_t
-do_xip_mapping_read(struct address_space *mapping,
+do_dax_mapping_read(struct address_space *mapping,
 		    struct file_ra_state *_ra,
 		    struct file *filp,
 		    char __user *buf,
@@ -58,8 +58,8 @@ do_xip_mapping_read(struct address_space *mapping,
 	do {
 		unsigned long nr, left;
 		unsigned long addr = 0;
-		void *xip_mem = NULL;
-//		unsigned long xip_pfn;
+		void *dax_mem = NULL;
+//		unsigned long dax_pfn;
 		int zero = 0;
 		int dram_copy = 0;
 
@@ -83,9 +83,9 @@ do_xip_mapping_read(struct address_space *mapping,
 		addr = pmfs_get_dram_addr(pair);
 		if (addr) {
 			nr = PAGE_SIZE;
-			xip_mem = (void *)DRAM_ADDR(addr);
+			dax_mem = (void *)DRAM_ADDR(addr);
 			pmfs_dbg_verbose("%s: memory @ 0x%lx\n", __func__,
-					(unsigned long)xip_mem);
+					(unsigned long)dax_mem);
 			if (unlikely(OUTDATE(pair->dram))) {
 				pmfs_dbg("%s: inode %lu DRAM page %lu is "
 					"out-of-date\n", __func__,
@@ -121,7 +121,7 @@ do_xip_mapping_read(struct address_space *mapping,
 			nr = PAGE_SIZE;
 		}
 
-		xip_mem = pmfs_get_block(sb, (pair->nvmm << PAGE_SHIFT));
+		dax_mem = pmfs_get_block(sb, (pair->nvmm << PAGE_SHIFT));
 
 memcpy:
 		nr = nr - offset;
@@ -136,7 +136,7 @@ memcpy:
 
 		if (!zero)
 			left = __copy_to_user(buf + copied,
-						xip_mem + offset, nr);
+						dax_mem + offset, nr);
 		else
 			left = __clear_user(buf + copied, nr);
 
@@ -147,7 +147,7 @@ memcpy:
 		}
 
 		if (pair->page)
-			kunmap_atomic(xip_mem);
+			kunmap_atomic(dax_mem);
 
 		if (left) {
 			pmfs_dbg("%s ERROR!: bytes %lu, left %lu\n",
@@ -173,12 +173,12 @@ out:
 }
 
 ssize_t
-xip_file_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
+dax_file_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
 {
 	if (!access_ok(VERIFY_WRITE, buf, len))
 		return -EFAULT;
 
-	return do_xip_mapping_read(filp->f_mapping, &filp->f_ra, filp,
+	return do_dax_mapping_read(filp->f_mapping, &filp->f_ra, filp,
 			    buf, len, ppos);
 }
 
@@ -187,17 +187,17 @@ xip_file_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
  * concurrent truncate operation. No problem for write because we held
  * i_mutex.
  */
-ssize_t pmfs_xip_file_read(struct file *filp, char __user *buf,
+ssize_t pmfs_dax_file_read(struct file *filp, char __user *buf,
 			    size_t len, loff_t *ppos)
 {
 	ssize_t res;
-	timing_t xip_read_time;
+	timing_t dax_read_time;
 
-	PMFS_START_TIMING(xip_read_t, xip_read_time);
+	PMFS_START_TIMING(dax_read_t, dax_read_time);
 //	rcu_read_lock();
-	res = xip_file_read(filp, buf, len, ppos);
+	res = dax_file_read(filp, buf, len, ppos);
 //	rcu_read_unlock();
-	PMFS_END_TIMING(xip_read_t, xip_read_time);
+	PMFS_END_TIMING(dax_read_t, dax_read_time);
 	return res;
 }
 
@@ -928,7 +928,7 @@ out:
 	return ret;
 }
 
-ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
+ssize_t pmfs_dax_file_write(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos)
 {
 	if (filp->f_flags & O_DIRECT)
@@ -990,17 +990,17 @@ static int pmfs_get_dram_mem(struct inode *inode, struct vm_area_struct *vma,
 	return 0;
 }
 
-/* OOM err return with xip file fault handlers doesn't mean anything.
+/* OOM err return with dax file fault handlers doesn't mean anything.
  * It would just cause the OS to go an unnecessary killing spree !
  */
-static int __pmfs_xip_file_fault(struct vm_area_struct *vma,
+static int __pmfs_dax_file_fault(struct vm_area_struct *vma,
 				  struct vm_fault *vmf)
 {
 	struct address_space *mapping = vma->vm_file->f_mapping;
 	struct inode *inode = mapping->host;
 	pgoff_t size;
-	void *xip_mem;
-	unsigned long xip_pfn;
+	void *dax_mem;
+	unsigned long dax_pfn;
 	int err;
 
 	size = (i_size_read(inode) + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
@@ -1013,7 +1013,7 @@ static int __pmfs_xip_file_fault(struct vm_area_struct *vma,
 	}
 
 	err = pmfs_get_dram_mem(inode, vma, vmf->pgoff, 1,
-						&xip_mem, &xip_pfn);
+						&dax_mem, &dax_pfn);
 	if (unlikely(err)) {
 		pmfs_dbg("[%s:%d] get_dram_mem failed(OOM). vm_start(0x%lx),"
 			" vm_end(0x%lx), pgoff(0x%lx), VA(%lx)\n",
@@ -1030,9 +1030,9 @@ static int __pmfs_xip_file_fault(struct vm_area_struct *vma,
 			"BlockSz(0x%lx), VA(0x%lx)->PA(0x%lx)\n", __func__,
 			__LINE__, vma->vm_start, vma->vm_end, vmf->pgoff,
 			PAGE_SIZE, (unsigned long)vmf->virtual_address,
-			(unsigned long)xip_pfn << PAGE_SHIFT);
+			(unsigned long)dax_pfn << PAGE_SHIFT);
 
-	err = vm_insert_mixed(vma, (unsigned long)vmf->virtual_address, xip_pfn);
+	err = vm_insert_mixed(vma, (unsigned long)vmf->virtual_address, dax_pfn);
 
 	if (err == -ENOMEM)
 		return VM_FAULT_SIGBUS;
@@ -1045,14 +1045,14 @@ static int __pmfs_xip_file_fault(struct vm_area_struct *vma,
 	return VM_FAULT_NOPAGE;
 }
 
-static int pmfs_xip_file_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+static int pmfs_dax_file_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	int ret = 0;
 	timing_t fault_time;
 
 	PMFS_START_TIMING(mmap_fault_t, fault_time);
 	rcu_read_lock();
-	ret = __pmfs_xip_file_fault(vma, vmf);
+	ret = __pmfs_dax_file_fault(vma, vmf);
 	rcu_read_unlock();
 	PMFS_END_TIMING(mmap_fault_t, fault_time);
 	return ret;
@@ -1110,7 +1110,7 @@ use_4K_mappings:
 	return PAGE_SIZE;
 }
 
-static inline pte_t *pmfs_xip_hugetlb_pte_offset(struct mm_struct *mm,
+static inline pte_t *pmfs_dax_hugetlb_pte_offset(struct mm_struct *mm,
 						  unsigned long	addr,
 						  unsigned long *sz)
 {
@@ -1144,7 +1144,7 @@ static pte_t pmfs_make_huge_pte(struct vm_area_struct *vma,
 	return entry;
 }
 
-static int __pmfs_xip_file_hpage_fault(struct vm_area_struct *vma,
+static int __pmfs_dax_file_hpage_fault(struct vm_area_struct *vma,
 					struct vm_fault *vmf)
 {
 	int ret;
@@ -1187,10 +1187,10 @@ static int __pmfs_xip_file_hpage_fault(struct vm_area_struct *vma,
 	 */
 	mutex_lock(&pmfs_instantiation_mutex);
 	if (pte_none(*ptep)) {
-		void *xip_mem;
-		unsigned long xip_pfn;
+		void *dax_mem;
+		unsigned long dax_pfn;
 		if (pmfs_get_dram_mem(inode, vma, vmf->pgoff, 1,
-						&xip_mem, &xip_pfn) != 0) {
+						&dax_mem, &dax_pfn) != 0) {
 			pmfs_dbg("[%s:%d] get_dram_mem failed(OOM). vm_start(0x"
 				"%lx), vm_end(0x%lx), pgoff(0x%lx), VA(%lx)\n",
 				__func__, __LINE__, vma->vm_start,
@@ -1200,11 +1200,11 @@ static int __pmfs_xip_file_hpage_fault(struct vm_area_struct *vma,
 			goto out_mutex;
 		}
 
-		/* VA has already been aligned. Align xip_pfn to block_sz. */
-		xip_pfn <<= PAGE_SHIFT;
-		xip_pfn &= ~(block_sz - 1);
-		xip_pfn >>= PAGE_SHIFT;
-		new_pte = pmfs_make_huge_pte(vma, xip_pfn, block_sz,
+		/* VA has already been aligned. Align dax_pfn to block_sz. */
+		dax_pfn <<= PAGE_SHIFT;
+		dax_pfn &= ~(block_sz - 1);
+		dax_pfn >>= PAGE_SHIFT;
+		new_pte = pmfs_make_huge_pte(vma, dax_pfn, block_sz,
 					      ((vma->vm_flags & VM_WRITE) &&
 					       (vma->vm_flags & VM_SHARED)));
 		/* FIXME: Is lock necessary ? */
@@ -1223,23 +1223,23 @@ out_mutex:
 	return ret;
 }
 
-static int pmfs_xip_file_hpage_fault(struct vm_area_struct *vma,
+static int pmfs_dax_file_hpage_fault(struct vm_area_struct *vma,
 							struct vm_fault *vmf)
 {
 	int ret = 0;
 
 	rcu_read_lock();
-	ret = __pmfs_xip_file_hpage_fault(vma, vmf);
+	ret = __pmfs_dax_file_hpage_fault(vma, vmf);
 	rcu_read_unlock();
 	return ret;
 }
 
-static const struct vm_operations_struct pmfs_xip_vm_ops = {
-	.fault	= pmfs_xip_file_fault,
+static const struct vm_operations_struct pmfs_dax_vm_ops = {
+	.fault	= pmfs_dax_file_fault,
 };
 
-static const struct vm_operations_struct pmfs_xip_hpage_vm_ops = {
-	.fault	= pmfs_xip_file_hpage_fault,
+static const struct vm_operations_struct pmfs_dax_hpage_vm_ops = {
+	.fault	= pmfs_dax_file_hpage_fault,
 };
 
 static inline int pmfs_has_huge_mmap(struct super_block *sb)
@@ -1249,7 +1249,7 @@ static inline int pmfs_has_huge_mmap(struct super_block *sb)
 	return sbi->s_mount_opt & PMFS_MOUNT_HUGEMMAP;
 }
 
-int pmfs_xip_file_mmap(struct file *file, struct vm_area_struct *vma)
+int pmfs_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	unsigned long block_sz;
 
@@ -1263,14 +1263,14 @@ int pmfs_xip_file_mmap(struct file *file, struct vm_area_struct *vma)
 	    (block_sz == PUD_SIZE || block_sz == PMD_SIZE)) {
 		/* vma->vm_flags |= (VM_XIP_HUGETLB | VM_SHARED | VM_DONTCOPY); */
 		vma->vm_flags |= VM_XIP_HUGETLB;
-		vma->vm_ops = &pmfs_xip_hpage_vm_ops;
+		vma->vm_ops = &pmfs_dax_hpage_vm_ops;
 		pmfs_dbg_mmaphuge("[%s:%d] MMAP HUGEPAGE vm_start(0x%lx),"
 			" vm_end(0x%lx), vm_flags(0x%lx), "
 			"vm_page_prot(0x%lx)\n", __func__,
 			__LINE__, vma->vm_start, vma->vm_end, vma->vm_flags,
 			pgprot_val(vma->vm_page_prot));
 	} else {
-		vma->vm_ops = &pmfs_xip_vm_ops;
+		vma->vm_ops = &pmfs_dax_vm_ops;
 		pmfs_dbg_mmap4k("[%s:%d] MMAP 4KPAGE vm_start(0x%lx),"
 			" vm_end(0x%lx), vm_flags(0x%lx), "
 			"vm_page_prot(0x%lx)\n", __func__,

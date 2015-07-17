@@ -636,7 +636,7 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->mode = (S_IRUGO | S_IXUGO | S_IWUSR);
 	sbi->uid = current_fsuid();
 	sbi->gid = current_fsgid();
-	set_opt(sbi->s_mount_opt, XIP);
+	set_opt(sbi->s_mount_opt, DAX);
 	clear_opt(sbi->s_mount_opt, PROTECT);
 	set_opt(sbi->s_mount_opt, HUGEIOREMAP);
 
@@ -856,9 +856,9 @@ static int pmfs_show_options(struct seq_file *seq, struct dentry *root)
 		seq_puts(seq, ",hugemmap");
 	if (test_opt(root->d_sb, HUGEIOREMAP))
 		seq_puts(seq, ",hugeioremap");
-	/* xip not enabled by default */
-	if (test_opt(root->d_sb, XIP))
-		seq_puts(seq, ",xip");
+	/* dax not enabled by default */
+	if (test_opt(root->d_sb, DAX))
+		seq_puts(seq, ",dax");
 
 	return 0;
 }

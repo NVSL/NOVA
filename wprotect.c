@@ -54,7 +54,7 @@ int pmfs_writeable(void *vaddr, unsigned long size, int rw)
 	return 0;
 }
 
-int pmfs_xip_mem_protect(struct super_block *sb, void *vaddr,
+int pmfs_dax_mem_protect(struct super_block *sb, void *vaddr,
 			  unsigned long size, int rw)
 {
 	if (!pmfs_is_wprotected(sb))

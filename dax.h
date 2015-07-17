@@ -1,7 +1,7 @@
 /*
  * BRIEF DESCRIPTION
  *
- * XIP operations.
+ * DAX operations.
  *
  * Copyright 2012-2013 Intel Corporation
  * Copyright 2009-2011 Marco Stornelli <marco.stornelli@gmail.com>
@@ -10,8 +10,8 @@
  * warranty of any kind, whether express or implied.
  */
 
-ssize_t pmfs_xip_file_read(struct file *filp, char __user *buf, size_t len,
+ssize_t pmfs_dax_file_read(struct file *filp, char __user *buf, size_t len,
 			    loff_t *ppos);
-ssize_t pmfs_xip_file_write(struct file *filp, const char __user *buf,
+ssize_t pmfs_dax_file_write(struct file *filp, const char __user *buf,
 		size_t len, loff_t *ppos);
-int pmfs_xip_file_mmap(struct file *file, struct vm_area_struct *vma);
+int pmfs_dax_file_mmap(struct file *file, struct vm_area_struct *vma);

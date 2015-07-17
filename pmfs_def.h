@@ -32,7 +32,7 @@
 #define PMFS_MOUNT_PROTECT 0x000001            /* wprotect CR0.WP */
 #define PMFS_MOUNT_XATTR_USER 0x000002         /* Extended user attributes */
 #define PMFS_MOUNT_POSIX_ACL 0x000004          /* POSIX Access Control Lists */
-#define PMFS_MOUNT_XIP 0x000008                /* Execute in place */
+#define PMFS_MOUNT_DAX 0x000008                /* Direct Access */
 #define PMFS_MOUNT_ERRORS_CONT 0x000010        /* Continue on errors */
 #define PMFS_MOUNT_ERRORS_RO 0x000020          /* Remount fs ro on errors */
 #define PMFS_MOUNT_ERRORS_PANIC 0x000040       /* Panic on errors */

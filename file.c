@@ -19,7 +19,7 @@
 #include <linux/falloc.h>
 #include <asm/mman.h>
 #include "pmfs.h"
-#include "xip.h"
+#include "dax.h"
 
 static inline int pmfs_can_set_blocksize_hint(struct inode *inode,
 	struct pmfs_inode *pi, loff_t new_size)
@@ -437,16 +437,16 @@ pmfs_get_unmapped_area(struct file *file, unsigned long addr,
 	return vm_unmapped_area(&info);
 }
 
-const struct file_operations pmfs_xip_file_operations = {
+const struct file_operations pmfs_dax_file_operations = {
 	.llseek			= pmfs_llseek,
-	.read			= pmfs_xip_file_read,
-	.write			= pmfs_xip_file_write,
+	.read			= pmfs_dax_file_read,
+	.write			= pmfs_dax_file_write,
 //	.write			= pmfs_cow_file_write,
-//	.aio_read		= xip_file_aio_read,
-//	.aio_write		= xip_file_aio_write,
+//	.aio_read		= dax_file_aio_read,
+//	.aio_write		= dax_file_aio_write,
 	.read_iter		= generic_file_read_iter,
 	.write_iter		= generic_file_write_iter,
-	.mmap			= pmfs_xip_file_mmap,
+	.mmap			= pmfs_dax_file_mmap,
 	.open			= pmfs_open,
 	.fsync			= pmfs_fsync,
 	.flush			= pmfs_flush,

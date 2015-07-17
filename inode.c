@@ -22,7 +22,7 @@
 #include <linux/types.h>
 #include <linux/ratelimit.h>
 #include "pmfs.h"
-#include "xip.h"
+#include "dax.h"
 
 unsigned int blk_type_to_shift[PMFS_BLOCK_TYPE_MAX] = {12, 21, 30};
 uint32_t blk_type_to_size[PMFS_BLOCK_TYPE_MAX] = {0x1000, 0x200000, 0x40000000};
@@ -1147,12 +1147,12 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 	}
 
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
-	inode->i_mapping->a_ops = &pmfs_aops_xip;
+	inode->i_mapping->a_ops = &pmfs_aops_dax;
 
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFREG:
 		inode->i_op = &pmfs_file_inode_operations;
-		inode->i_fop = &pmfs_xip_file_operations;
+		inode->i_fop = &pmfs_dax_file_operations;
 		break;
 	case S_IFDIR:
 		inode->i_op = &pmfs_dir_inode_operations;
@@ -1662,8 +1662,8 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	switch (type) {
 		case TYPE_CREATE:
 			inode->i_op = &pmfs_file_inode_operations;
-			inode->i_mapping->a_ops = &pmfs_aops_xip;
-			inode->i_fop = &pmfs_xip_file_operations;
+			inode->i_mapping->a_ops = &pmfs_aops_dax;
+			inode->i_fop = &pmfs_dax_file_operations;
 			break;
 		case TYPE_MKNOD:
 			init_special_inode(inode, mode, rdev);
@@ -1671,12 +1671,12 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 			break;
 		case TYPE_SYMLINK:
 			inode->i_op = &pmfs_symlink_inode_operations;
-			inode->i_mapping->a_ops = &pmfs_aops_xip;
+			inode->i_mapping->a_ops = &pmfs_aops_dax;
 			break;
 		case TYPE_MKDIR:
 			inode->i_op = &pmfs_dir_inode_operations;
 			inode->i_fop = &pmfs_dir_operations;
-			inode->i_mapping->a_ops = &pmfs_aops_xip;
+			inode->i_mapping->a_ops = &pmfs_aops_dax;
 			set_nlink(inode, 2);
 			break;
 		default:
@@ -2033,7 +2033,7 @@ static ssize_t pmfs_direct_IO(int rw, struct kiocb *iocb,
 	iv = iter->iov;
 	for (seg = 0; seg < nr_segs; seg++) {
 		if (rw == READ) {
-			err = pmfs_xip_file_read(filp, iv->iov_base,
+			err = pmfs_dax_file_read(filp, iv->iov_base,
 					iv->iov_len, &offset);
 		} else if (rw == WRITE) {
 			err = pmfs_cow_file_write(filp, iv->iov_base,
@@ -2084,7 +2084,7 @@ static ssize_t pmfs_direct_IO(struct kiocb *iocb,
 	iv = iter->iov;
 	for (seg = 0; seg < nr_segs; seg++) {
 		if (iov_iter_rw(iter) == READ) {
-			err = pmfs_xip_file_read(filp, iv->iov_base,
+			err = pmfs_dax_file_read(filp, iv->iov_base,
 					iv->iov_len, &offset);
 		} else if (iov_iter_rw(iter) == WRITE) {
 			err = pmfs_cow_file_write(filp, iv->iov_base,
@@ -2685,7 +2685,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 	return 0;
 }
 
-const struct address_space_operations pmfs_aops_xip = {
+const struct address_space_operations pmfs_aops_dax = {
 	.direct_IO		= pmfs_direct_IO,
-	/*.xip_mem_protect	= pmfs_xip_mem_protect,*/
+	/*.dax_mem_protect	= pmfs_dax_mem_protect,*/
 };

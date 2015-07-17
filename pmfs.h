@@ -150,7 +150,7 @@ enum timing_category {
 	setattr_t,
 
 	/* I/O operations */
-	xip_read_t,
+	dax_read_t,
 	cow_write_t,
 	page_cache_write_t,
 	copy_to_nvmm_t,
@@ -1041,6 +1041,16 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread);
  * Inodes and files operations
  */
 
+/* dax.c */
+int pmfs_reassign_file_btree(struct super_block *sb,
+	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
+	u64 begin_tail);
+ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
+          size_t len, loff_t *ppos, bool need_mutex);
+ssize_t pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
+	struct pmfs_inode *pi, loff_t pos, size_t count, u64 *begin,
+	u64 *end);
+
 /* dir.c */
 extern const struct file_operations pmfs_dir_operations;
 int pmfs_append_dir_init_entries(struct super_block *sb,
@@ -1062,13 +1072,13 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb,
 
 /* file.c */
 extern const struct inode_operations pmfs_file_inode_operations;
-extern const struct file_operations pmfs_xip_file_operations;
+extern const struct file_operations pmfs_dax_file_operations;
 int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync);
 int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
 	pte_t **ptep, int category);
 
 /* inode.c */
-extern const struct address_space_operations pmfs_aops_xip;
+extern const struct address_space_operations pmfs_aops_dax;
 extern int pmfs_init_inode_table(struct super_block *sb);
 int pmfs_init_inode_inuse_list(struct super_block *sb);
 extern u64 pmfs_find_nvmm_block(struct inode *inode, 
@@ -1152,16 +1162,6 @@ void *pmfs_ioremap(struct super_block *sb, phys_addr_t phys_addr,
 
 /* symlink.c */
 extern const struct inode_operations pmfs_symlink_inode_operations;
-
-/* xip.c */
-int pmfs_reassign_file_btree(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
-	u64 begin_tail);
-ssize_t pmfs_cow_file_write(struct file *filp, const char __user *buf,
-          size_t len, loff_t *ppos, bool need_mutex);
-ssize_t pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
-	struct pmfs_inode *pi, loff_t pos, size_t count, u64 *begin,
-	u64 *end);
 
 /* pmfs_stats.c */
 void pmfs_print_timing_stats(struct super_block *sb);

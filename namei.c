@@ -15,7 +15,7 @@
 #include <linux/fs.h>
 #include <linux/pagemap.h>
 #include "pmfs.h"
-#include "xip.h"
+#include "dax.h"
 
 static ino_t pmfs_inode_by_name(struct inode *dir, struct qstr *entry,
 				 struct pmfs_dir_logentry **res_entry)

@@ -22,7 +22,7 @@ const char *Timingstring[TIMING_NUM] =
 	"remove_entry",
 	"setattr",
 
-	"xip_read",
+	"dax_read",
 	"cow_write",
 	"page_cache_write",
 	"copy_to_nvmm",
@@ -134,9 +134,9 @@ void pmfs_print_IO_stats(struct super_block *sb)
 {
 	printk("=========== PMFS I/O stats ===========\n");
 	printk("Read %llu, bytes %llu, average %llu\n",
-		Countstats[xip_read_t], read_bytes,
-		Countstats[xip_read_t] ?
-			read_bytes / Countstats[xip_read_t] : 0);
+		Countstats[dax_read_t], read_bytes,
+		Countstats[dax_read_t] ?
+			read_bytes / Countstats[dax_read_t] : 0);
 	printk("COW write %llu, bytes %llu, average %llu, "
 		"write breaks %lu, average %llu\n",
 		Countstats[cow_write_t], cow_write_bytes,

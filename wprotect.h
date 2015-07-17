@@ -45,7 +45,7 @@ static inline void pmfs_sync_inode(struct pmfs_inode *pi)
 #endif
 
 extern int pmfs_writeable(void *vaddr, unsigned long size, int rw);
-extern int pmfs_xip_mem_protect(struct super_block *sb,
+extern int pmfs_dax_mem_protect(struct super_block *sb,
 				 void *vaddr, unsigned long size, int rw);
 
 static inline int pmfs_is_protected(struct super_block *sb)
