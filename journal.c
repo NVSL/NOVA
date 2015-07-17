@@ -31,6 +31,7 @@
 #include "pmfs.h"
 #include "journal.h"
 
+# if 0
 static void dump_transaction(struct pmfs_sb_info *sbi,
 		pmfs_transaction_t *trans)
 {
@@ -849,7 +850,7 @@ int pmfs_recover_journal(struct super_block *sb)
 		pmfs_recover_undo_journal(sb);
 	return 0;
 }
-
+#endif
 
 /**************************** Lite journal ******************************/
 

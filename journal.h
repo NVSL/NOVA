@@ -81,6 +81,7 @@ typedef struct pmfs_transaction {
 	struct pmfs_transaction *parent;
 } pmfs_transaction_t;
 
+#if 0
 extern pmfs_transaction_t *pmfs_alloc_transaction(void);
 extern void pmfs_free_transaction(pmfs_transaction_t *trans);
 
@@ -97,6 +98,7 @@ extern int pmfs_commit_transaction(struct super_block *sb,
 extern int pmfs_abort_transaction(struct super_block *sb,
 			pmfs_transaction_t *trans);
 extern int pmfs_recover_journal(struct super_block *sb);
+#endif
 
 /* Lite journal */
 struct pmfs_lite_journal_entry {

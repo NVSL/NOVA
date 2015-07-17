@@ -460,10 +460,10 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	pmfs_init_blockmap(sb, journal_data_start + sbi->jsize);
 	pmfs_memlock_range(sb, super, journal_data_start);
 
-	if (pmfs_journal_hard_init(sb, journal_data_start, sbi->jsize) < 0) {
-		printk(KERN_ERR "Journal hard initialization failed\n");
-		return ERR_PTR(-EINVAL);
-	}
+//	if (pmfs_journal_hard_init(sb, journal_data_start, sbi->jsize) < 0) {
+//		printk(KERN_ERR "Journal hard initialization failed\n");
+//		return ERR_PTR(-EINVAL);
+//	}
 
 	if (pmfs_lite_journal_hard_init(sb) < 0) {
 		printk(KERN_ERR "Lite journal hard initialization failed\n");
@@ -695,21 +695,23 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 
 	super = pmfs_get_super(sb);
 
-	if (pmfs_journal_soft_init(sb)) {
-		retval = -EINVAL;
-		printk(KERN_ERR "Journal initialization failed\n");
-		goto out;
-	}
+//	if (pmfs_journal_soft_init(sb)) {
+//		retval = -EINVAL;
+//		printk(KERN_ERR "Journal initialization failed\n");
+//		goto out;
+//	}
+
 	if (pmfs_lite_journal_soft_init(sb)) {
 		retval = -EINVAL;
 		printk(KERN_ERR "Lite journal initialization failed\n");
 		goto out;
 	}
-	if (pmfs_recover_journal(sb)) {
-		retval = -EINVAL;
-		printk(KERN_ERR "Journal recovery failed\n");
-		goto out;
-	}
+
+//	if (pmfs_recover_journal(sb)) {
+//		retval = -EINVAL;
+//		printk(KERN_ERR "Journal recovery failed\n");
+//		goto out;
+//	}
 
 	if (pmfs_check_integrity(sb, super) == 0) {
 		pmfs_dbg("Memory contains invalid pmfs %x:%x\n",
@@ -928,7 +930,7 @@ static void pmfs_put_super(struct super_block *sb)
 		pmfs_save_inode_list_to_log(sb);
 		/* Save everything before blocknode mapping! */
 		pmfs_save_blocknode_mappings_to_log(sb);
-		pmfs_journal_uninit(sb);
+//		pmfs_journal_uninit(sb);
 		pmfs_iounmap(sbi->virt_addr, size, pmfs_is_wprotected(sb));
 		sbi->virt_addr = NULL;
 		release_mem_region(sbi->phys_addr, size);
