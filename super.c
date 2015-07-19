@@ -168,7 +168,7 @@ static loff_t pmfs_max_size(int bits)
 enum {
 	Opt_addr, Opt_bpi, Opt_size, Opt_jsize,
 	Opt_num_inodes, Opt_mode, Opt_uid,
-	Opt_gid, Opt_blocksize, Opt_wprotect, Opt_wprotectold,
+	Opt_gid, Opt_blocksize, Opt_wprotect,
 	Opt_err_cont, Opt_err_panic, Opt_err_ro,
 	Opt_hugemmap, Opt_nohugeioremap, Opt_dbgmask, Opt_err
 };
@@ -183,7 +183,6 @@ static const match_table_t tokens = {
 	{ Opt_uid,	     "uid=%u"		  },
 	{ Opt_gid,	     "gid=%u"		  },
 	{ Opt_wprotect,	     "wprotect"		  },
-	{ Opt_wprotectold,   "wprotectold"	  },
 	{ Opt_err_cont,	     "errors=continue"	  },
 	{ Opt_err_panic,     "errors=panic"	  },
 	{ Opt_err_ro,	     "errors=remount-ro"  },
@@ -316,13 +315,6 @@ static int pmfs_parse_options(char *options, struct pmfs_sb_info *sbi,
 			set_opt(sbi->s_mount_opt, PROTECT);
 			pmfs_info
 				("PMFS: Enabling new Write Protection (CR0.WP)\n");
-			break;
-		case Opt_wprotectold:
-			if (remount)
-				goto bad_opt;
-			set_opt(sbi->s_mount_opt, PROTECT_OLD);
-			pmfs_info
-				("PMFS: Enabling old Write Protection (PAGE RW Bit)\n");
 			break;
 		case Opt_hugemmap:
 			if (remount)
@@ -858,7 +850,6 @@ static int pmfs_show_options(struct seq_file *seq, struct dentry *root)
 		seq_puts(seq, ",hugemmap");
 	if (test_opt(root->d_sb, HUGEIOREMAP))
 		seq_puts(seq, ",hugeioremap");
-	/* dax not enabled by default */
 	if (test_opt(root->d_sb, DAX))
 		seq_puts(seq, ",dax");
 

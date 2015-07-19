@@ -38,9 +38,8 @@
 #define PMFS_MOUNT_ERRORS_PANIC 0x000040       /* Panic on errors */
 #define PMFS_MOUNT_HUGEMMAP 0x000080           /* Huge mappings with mmap */
 #define PMFS_MOUNT_HUGEIOREMAP 0x000100        /* Huge mappings with ioremap */
-#define PMFS_MOUNT_PROTECT_OLD 0x000200        /* wprotect PAGE RW Bit */
-#define PMFS_MOUNT_FORMAT      0x000400        /* was FS formatted on mount? */
-#define PMFS_MOUNT_MOUNTING    0x000800        /* FS currently being mounted */
+#define PMFS_MOUNT_FORMAT      0x000200        /* was FS formatted on mount? */
+#define PMFS_MOUNT_MOUNTING    0x000400        /* FS currently being mounted */
 
 /*
  * Maximal count of links to a file
