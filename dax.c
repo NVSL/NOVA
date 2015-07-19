@@ -958,7 +958,9 @@ static int pmfs_get_dram_mem(struct inode *inode, struct vm_area_struct *vma,
 	struct mem_addr *pair = NULL;
 	vm_flags_t vm_flags = vma->vm_flags;
 	unsigned long addr = 0;
-	u64 bp;
+	unsigned long blocknr = 0;
+	int allocated;
+	u64 bp, mmap_block;
 	void *nvmm;
 	int err;
 
@@ -971,32 +973,56 @@ static int pmfs_get_dram_mem(struct inode *inode, struct vm_area_struct *vma,
 		return -EINVAL;
 	}
 
-	addr = pmfs_get_dram_addr(pair);
-	if (addr == 0 || (pair->dram & OUTDATE_BIT)) {
-		if (addr == 0) {
-			err = pmfs_new_cache_block(sb, pair, 0, 0);
-			if (err)
-				return err;
-			addr = pmfs_get_dram_addr(pair);
+	/* If pagecache is enabled, use dram mmap */
+	if (pmfs_has_page_cache(sb)) {
+		addr = pmfs_get_dram_addr(pair);
+		if (addr == 0 || (pair->dram & OUTDATE_BIT)) {
+			if (addr == 0) {
+				err = pmfs_new_cache_block(sb, pair, 0, 0);
+				if (err)
+					return err;
+				addr = pmfs_get_dram_addr(pair);
+			}
+			/* Copy from NVMM to dram */
+			bp = __pmfs_find_nvmm_block(sb, si, pair, pgoff);
+			nvmm = pmfs_get_block(sb, bp);
+			memcpy((void *)DRAM_ADDR(addr), nvmm, PAGE_SIZE);
+			pair->dram &= ~OUTDATE_BIT;
+			pair->dram &= ~UNINIT_BIT;
 		}
-		/* Copy from NVMM to dram */
-		bp = __pmfs_find_nvmm_block(sb, si, pair, pgoff);
-		nvmm = pmfs_get_block(sb, bp);
-		__copy_from_user((void *)DRAM_ADDR(addr),
-					nvmm, PAGE_SIZE);
-		pair->dram &= ~OUTDATE_BIT;
-		pair->dram &= ~UNINIT_BIT;
-	}
 
-	if (vm_flags & VM_WRITE)
-		pair->dram |= MMAP_WRITE_BIT;
+		if (vm_flags & VM_WRITE)
+			pair->dram |= MMAP_WRITE_BIT;
 
-	*kmem = (void *)DRAM_ADDR(addr);
-	if (pair->page) {
-		kunmap_atomic((void *)addr);
-		*pfn = page_to_pfn(pair->page);
+		*kmem = (void *)DRAM_ADDR(addr);
+		if (pair->page) {
+			kunmap_atomic((void *)addr);
+			*pfn = page_to_pfn(pair->page);
+		} else {
+			*pfn = vmalloc_to_pfn(*kmem);
+		}
 	} else {
-		*pfn = vmalloc_to_pfn(*kmem);
+		if (pair->nvmm_mmap) {
+			mmap_block = pair->nvmm_mmap << PAGE_SHIFT;
+		} else {
+			allocated = pmfs_new_data_blocks(sb, pi, &blocknr, 1,
+						pgoff, pi->i_blk_type, 0, 1);
+
+			if (allocated <= 0) {
+				pmfs_err(sb, "%s alloc blocks failed!, %d\n",
+						__func__, allocated);
+				return allocated;
+			}
+
+			pair->nvmm_mmap = blocknr;
+			mmap_block = blocknr << PAGE_SHIFT;
+			/* Copy from NVMM to dram */
+			bp = __pmfs_find_nvmm_block(sb, si, pair, pgoff);
+			nvmm = pmfs_get_block(sb, bp);
+			memcpy(pmfs_get_block(sb, mmap_block), nvmm,
+							PAGE_SIZE);
+		}
+		*pfn = pmfs_get_pfn(sb, mmap_block);
 	}
 
 	return 0;
