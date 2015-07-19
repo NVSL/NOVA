@@ -373,6 +373,7 @@ struct mem_addr {
 	unsigned long nvmm_entry;	// NVMM inode entry
 	unsigned long nvmm;		// NVMM blocknr
 	unsigned long dram;		// DRAM virtual address
+	unsigned long nvmm_mmap;	// NVMM mmap blocknr
 	struct page *page;
 };
 
