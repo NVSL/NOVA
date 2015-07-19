@@ -40,6 +40,7 @@
 #define PMFS_MOUNT_HUGEIOREMAP 0x000100        /* Huge mappings with ioremap */
 #define PMFS_MOUNT_FORMAT      0x000200        /* was FS formatted on mount? */
 #define PMFS_MOUNT_MOUNTING    0x000400        /* FS currently being mounted */
+#define PMFS_MOUNT_PAGECACHE   0x000800        /* DRAM write page cache */
 
 /*
  * Maximal count of links to a file

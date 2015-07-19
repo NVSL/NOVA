@@ -928,13 +928,25 @@ out:
 	return ret;
 }
 
+static inline int pmfs_has_page_cache(struct super_block *sb)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+
+	return sbi->s_mount_opt & PMFS_MOUNT_PAGECACHE;
+}
+
 ssize_t pmfs_dax_file_write(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos)
 {
-	if (filp->f_flags & O_DIRECT)
+	if (!pmfs_has_page_cache(filp->f_mapping->host->i_sb)) {
 		return pmfs_cow_file_write(filp, buf, len, ppos, true);
-	else
-		return pmfs_page_cache_file_write(filp, buf, len, ppos);
+	} else {
+		if (filp->f_flags & O_DIRECT)
+			return pmfs_cow_file_write(filp, buf, len, ppos, true);
+		else
+			return pmfs_page_cache_file_write(filp, buf, len,
+								ppos);
+	}
 }
 
 static int pmfs_get_dram_mem(struct inode *inode, struct vm_area_struct *vma,
