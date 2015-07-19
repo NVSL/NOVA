@@ -80,23 +80,25 @@ do_dax_mapping_read(struct address_space *mapping,
 			goto memcpy;
 		}
 
-		addr = pmfs_get_dram_addr(pair);
-		if (addr) {
-			nr = PAGE_SIZE;
-			dax_mem = (void *)DRAM_ADDR(addr);
-			pmfs_dbg_verbose("%s: memory @ 0x%lx\n", __func__,
-					(unsigned long)dax_mem);
-			if (unlikely(OUTDATE(pair->dram))) {
-				pmfs_dbg("%s: inode %lu DRAM page %lu is "
-					"out-of-date\n", __func__,
-					inode->i_ino, index);
-			} else if (unlikely(UNINIT(pair->dram))) {
-				pmfs_dbg("%s: inode %lu DRAM page %lu is "
-					"unitialized\n", __func__,
-					inode->i_ino, index);
-			} else {
-				dram_copy = 1;
-				goto memcpy;
+		if (pmfs_has_page_cache(sb)) {
+			addr = pmfs_get_dram_addr(pair);
+			if (addr) {
+				nr = PAGE_SIZE;
+				dax_mem = (void *)DRAM_ADDR(addr);
+				pmfs_dbgv("%s: memory @ 0x%lx\n", __func__,
+						(unsigned long)dax_mem);
+				if (unlikely(OUTDATE(pair->dram))) {
+					pmfs_dbg("%s: inode %lu DRAM page %lu "
+						"is out-of-date\n", __func__,
+						inode->i_ino, index);
+				} else if (unlikely(UNINIT(pair->dram))) {
+					pmfs_dbg("%s: inode %lu DRAM page %lu "
+						"is unitialized\n", __func__,
+						inode->i_ino, index);
+				} else {
+					dram_copy = 1;
+					goto memcpy;
+				}
 			}
 		}
 
@@ -168,7 +170,7 @@ out:
 		file_accessed(filp);
 
 	read_bytes += copied;
-	pmfs_dbg_verbose("%s returned %zu\n", __func__, copied);
+	pmfs_dbgv("%s returned %zu\n", __func__, copied);
 	return (copied ? copied : error);
 }
 
@@ -743,13 +745,6 @@ out:
 	return ret;
 }
 
-static inline int pmfs_has_page_cache(struct super_block *sb)
-{
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-
-	return sbi->s_mount_opt & PMFS_MOUNT_PAGECACHE;
-}
-
 static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 	struct inode *inode, struct pmfs_inode *pi, loff_t pos,
 	size_t count, void *kmem)
@@ -1000,7 +995,7 @@ static int pmfs_get_dram_pfn(struct super_block *sb,
 
 static int pmfs_get_nvmm_pfn(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_info *si, struct mem_addr *pair, pgoff_t pgoff,
-	void **kmem, unsigned long *pfn)
+	vm_flags_t vm_flags, void **kmem, unsigned long *pfn)
 {
 	u64 bp, mmap_block;
 	unsigned long blocknr = 0;
@@ -1030,6 +1025,10 @@ static int pmfs_get_nvmm_pfn(struct super_block *sb, struct pmfs_inode *pi,
 		nvmm = pmfs_get_block(sb, bp);
 		memcpy(mmap_addr, nvmm,	PAGE_SIZE);
 	}
+
+	if (vm_flags & VM_WRITE)
+		pair->nvmm_mmap_write = 1;
+
 	*kmem = mmap_addr;
 	*pfn = pmfs_get_pfn(sb, mmap_block);
 
@@ -1063,7 +1062,8 @@ static int pmfs_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 		ret = pmfs_get_dram_pfn(sb, si, pair, pgoff, vm_flags,
 						kmem, pfn);
 	} else {
-		ret = pmfs_get_nvmm_pfn(sb, pi, si, pair, pgoff, kmem, pfn);
+		ret = pmfs_get_nvmm_pfn(sb, pi, si, pair, pgoff, vm_flags,
+						kmem, pfn);
 	}
 
 	return ret;

@@ -28,6 +28,7 @@
 #include <linux/version.h>
 #include <linux/kthread.h>
 #include <linux/uio.h>
+#include <asm/tlbflush.h>
 
 #include "pmfs_def.h"
 #include "journal.h"
@@ -368,12 +369,15 @@ enum alloc_type {
 #define	TEST_KZALLOC	5
 #define	TEST_PAGEALLOC	6
 #define	TEST_PAGEZALLOC	7
+#define	TEST_NVMM	8
 
 struct mem_addr {
 	unsigned long nvmm_entry;	// NVMM inode entry
 	unsigned long nvmm;		// NVMM blocknr
-	unsigned long dram;		// DRAM virtual address
+	unsigned long dram;		// DRAM virtual address.
+					// Lowest 12 bits contain flag bits.
 	unsigned long nvmm_mmap;	// NVMM mmap blocknr
+	int nvmm_mmap_write;		// NVMM mmap for write?
 	struct page *page;
 };
 
@@ -913,6 +917,13 @@ static inline int pmfs_is_mounting(struct super_block *sb)
 	return sbi->s_mount_opt & PMFS_MOUNT_MOUNTING;
 }
 
+static inline int pmfs_has_page_cache(struct super_block *sb)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+
+	return sbi->s_mount_opt & PMFS_MOUNT_PAGECACHE;
+}
+
 static inline void check_eof_blocks(struct super_block *sb, 
 		struct pmfs_inode *pi, loff_t size)
 {
@@ -1076,7 +1087,7 @@ extern const struct inode_operations pmfs_file_inode_operations;
 extern const struct file_operations pmfs_dax_file_operations;
 int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync);
 int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
-	pte_t **ptep, int category);
+	int category, int set_clean);
 
 /* inode.c */
 extern const struct address_space_operations pmfs_aops_dax;

@@ -108,11 +108,10 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 	PMFS_END_TIMING(malloc_test_t, malloc_time);
 
 	for (i = 0; i < size; i++) {
-		pte_t *ptep;
 		int dirty;
 
 		dirty = pmfs_is_page_dirty(current->active_mm,
-				(unsigned long)addr[i],	&ptep, category);
+				(unsigned long)addr[i],	category, 0);
 		if (dirty)
 			pmfs_dbg("page 0x%lx is dirty\n",
 					(unsigned long)addr[i]);

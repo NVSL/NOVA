@@ -108,12 +108,12 @@ static loff_t pmfs_llseek(struct file *file, loff_t offset, int origin)
 }
 
 int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
-	pte_t **ptep, int category)
+	int category, int set_clean)
 {
 	pgd_t *pgd;
 	pud_t *pud;
 	pmd_t *pmd;
-	pte_t *pte;
+	pte_t *ptep, pte;
 	int ret = 0;
 
 	if (!mm) {
@@ -145,20 +145,25 @@ int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
 		goto out;
 	}
 
-	pte = pte_offset_map(pmd, address);
-	if (!pte_present(*pte)) {
+	ptep = pte_offset_map(pmd, address);
+	if (!pte_present(*ptep)) {
 		pmfs_dbg("%s: pte not found for 0x%lx\n", __func__, address);
 		goto out;
 	}
 
-	if (pte_dirty(*pte)) {
+	if (pte_dirty(*ptep)) {
 		pmfs_dbg("%s: page is dirty: 0x%lx\n", __func__, address);
 		ret = 1;
+		if (set_clean) {
+			pte = *ptep;
+			pte = pte_mkclean(pte);
+			set_pte_at(mm, address, ptep, pte);
+			__flush_tlb_one(address);
+		}
 	} else {
 		pmfs_dbg("%s: page is clean: 0x%lx\n", __func__, address);
 	}
 
-	*ptep = pte;
 out:
 	spin_unlock(&mm->page_table_lock);
 	return ret;
@@ -178,10 +183,27 @@ static inline int pmfs_set_page_clean(struct mm_struct *mm,
 	return 0;
 }
 
-/* FIXME: Assuming mmaped pages are dirty */
-static inline int pmfs_check_page_dirty(struct mem_addr *pair)
+static inline int pmfs_check_page_dirty(struct super_block *sb,
+	struct mem_addr *pair)
 {
-	return IS_DIRTY(pair->dram) || IS_MAPPED(pair->dram);
+	int ret;
+
+	if (pmfs_has_page_cache(sb)) {
+		ret = IS_DIRTY(pair->dram) || IS_MAPPED(pair->dram);
+	} else {
+//		u64 nvmm_block;
+//		unsigned long nvmm_addr;
+
+		if (pair->nvmm_mmap == 0)
+			return 0;
+
+//		nvmm_block = pair->nvmm_mmap << PAGE_SHIFT;
+//		nvmm_addr = (unsigned long)pmfs_get_block(sb, nvmm_block);
+//		ret = pmfs_is_page_dirty(&init_mm, nvmm_addr, TEST_NVMM, 1);
+		ret = pair->nvmm_mmap_write;
+	}
+
+	return ret;
 }
 
 static unsigned long pmfs_get_dirty_range(struct super_block *sb,
@@ -205,7 +227,7 @@ static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 
 		pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
 		if (pair) {
-			if (pmfs_check_page_dirty(pair)) {
+			if (pmfs_check_page_dirty(sb, pair)) {
 				if (flush_bytes == 0)
 					dirty_start = temp;
 				flush_bytes += bytes;
