@@ -296,12 +296,17 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	if (mapping_mapped(mapping))
 		mmaped = 1;
 
+	if (!pmfs_has_page_cache(sb) && mmaped == 0)
+		goto persist;
+
 	mutex_lock(&inode->i_mutex);
 
 	/* Check the dirty range */
 	pi = pmfs_get_inode(sb, inode);
-	if (mmaped == 0 && si->low_dirty > si->high_dirty)
+	if (mmaped == 0 && si->low_dirty > si->high_dirty) {
+		mutex_unlock(&inode->i_mutex);
 		goto persist;
+	}
 
 	end += 1; /* end is inclusive. We like our indices normal please! */
 
@@ -366,11 +371,12 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	}
 
+	mutex_unlock(&inode->i_mutex);
+
 persist:
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
 	PMFS_END_TIMING(fsync_t, fsync_time);
-	mutex_unlock(&inode->i_mutex);
 
 	return ret;
 }
