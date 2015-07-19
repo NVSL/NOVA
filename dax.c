@@ -1026,7 +1026,7 @@ static int pmfs_get_nvmm_pfn(struct super_block *sb, struct pmfs_inode *pi,
 	return 0;
 }
 
-static int pmfs_get_dram_mem(struct inode *inode, struct vm_area_struct *vma,
+static int pmfs_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 	pgoff_t pgoff, int create, void **kmem, unsigned long *pfn)
 {
 	struct super_block *sb = inode->i_sb;
@@ -1045,7 +1045,10 @@ static int pmfs_get_dram_mem(struct inode *inode, struct vm_area_struct *vma,
 		return -EINVAL;
 	}
 
-	/* If pagecache is enabled, use dram mmap */
+	/*
+	 * If pagecache is enabled, use dram mmap,
+	 * otherwise use nvmm mmap.
+	 */
 	if (pmfs_has_page_cache(sb)) {
 		ret = pmfs_get_dram_pfn(sb, si, pair, pgoff, vm_flags,
 						kmem, pfn);
@@ -1078,10 +1081,10 @@ static int __pmfs_dax_file_fault(struct vm_area_struct *vma,
 		return VM_FAULT_SIGBUS;
 	}
 
-	err = pmfs_get_dram_mem(inode, vma, vmf->pgoff, 1,
+	err = pmfs_get_mmap_addr(inode, vma, vmf->pgoff, 1,
 						&dax_mem, &dax_pfn);
 	if (unlikely(err)) {
-		pmfs_dbg("[%s:%d] get_dram_mem failed(OOM). vm_start(0x%lx),"
+		pmfs_dbg("[%s:%d] get_mmap_addr failed(OOM). vm_start(0x%lx),"
 			" vm_end(0x%lx), pgoff(0x%lx), VA(%lx)\n",
 			__func__, __LINE__, vma->vm_start, vma->vm_end,
 			vmf->pgoff, (unsigned long)vmf->virtual_address);
@@ -1255,9 +1258,9 @@ static int __pmfs_dax_file_hpage_fault(struct vm_area_struct *vma,
 	if (pte_none(*ptep)) {
 		void *dax_mem;
 		unsigned long dax_pfn;
-		if (pmfs_get_dram_mem(inode, vma, vmf->pgoff, 1,
+		if (pmfs_get_mmap_addr(inode, vma, vmf->pgoff, 1,
 						&dax_mem, &dax_pfn) != 0) {
-			pmfs_dbg("[%s:%d] get_dram_mem failed(OOM). vm_start(0x"
+			pmfs_dbg("[%s:%d] get_mmap_addr failed. vm_start(0x"
 				"%lx), vm_end(0x%lx), pgoff(0x%lx), VA(%lx)\n",
 				__func__, __LINE__, vma->vm_start,
 				vma->vm_end, vmf->pgoff,
