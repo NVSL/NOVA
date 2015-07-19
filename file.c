@@ -281,6 +281,8 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	if (mmaped == 0 && si->low_dirty > si->high_dirty)
 		goto persist;
 
+	end += 1; /* end is inclusive. We like our indices normal please! */
+
 	isize = i_size_read(inode);
 
 	if ((unsigned long)end > (unsigned long)isize)
