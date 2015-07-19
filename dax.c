@@ -743,14 +743,23 @@ out:
 	return ret;
 }
 
-static ssize_t pmfs_flush_dram_to_nvmm(struct super_block *sb,
+static inline int pmfs_has_page_cache(struct super_block *sb)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+
+	return sbi->s_mount_opt & PMFS_MOUNT_PAGECACHE;
+}
+
+static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 	struct inode *inode, struct pmfs_inode *pi, loff_t pos,
 	size_t count, void *kmem)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct mem_addr *pair;
 	unsigned long start_blk;
-	unsigned long addr;
+	unsigned long dram_addr;
+	u64 nvmm_block;
+	void *nvmm_addr;
 	loff_t offset;
 	size_t bytes, copied;
 	ssize_t written = 0;
@@ -765,21 +774,29 @@ static ssize_t pmfs_flush_dram_to_nvmm(struct super_block *sb,
 			bytes = count;
 
 		pair = pmfs_get_mem_pair(sb, pi, si, start_blk);
-		if (pair == NULL) {
-			pmfs_err(sb, "%s dram page not found!\n", __func__);
+		if (pair == NULL || (pair->dram == 0 && pair->page == NULL &&
+				pair->nvmm_mmap == 0)) {
+			pmfs_err(sb, "%s mmap page not found!\n", __func__);
 			ret = -EINVAL;
 			goto out;
 		}
 
-		addr = pmfs_get_dram_addr(pair);
-		copied = bytes - __copy_from_user_inatomic_nocache(kmem +
-				offset, (void *)DRAM_ADDR(addr) + offset,
+		if (pmfs_has_page_cache(sb)) {
+			dram_addr = pmfs_get_dram_addr(pair);
+			copied = bytes - __copy_from_user_inatomic_nocache(kmem
+				+ offset, (void *)DRAM_ADDR(dram_addr) + offset,
 				bytes);
 
-		if (pair->page)
-			kunmap_atomic((void *)addr);
+			if (pair->page)
+				kunmap_atomic((void *)dram_addr);
 
-		pair->dram &= ~DIRTY_BIT;
+			pair->dram &= ~DIRTY_BIT;
+		} else {
+			nvmm_block = pair->nvmm_mmap << PAGE_SHIFT;
+			nvmm_addr = pmfs_get_block(sb, nvmm_block);
+			copied = bytes - __copy_from_user_inatomic_nocache(kmem
+				+ offset, nvmm_addr + offset, bytes);
+		}
 
 		if (copied > 0) {
 			status = copied;
@@ -862,7 +879,7 @@ ssize_t pmfs_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 							bytes, kmem);
 
 		PMFS_START_TIMING(memcpy_w_wb_t, memcpy_time);
-		copied = pmfs_flush_dram_to_nvmm(sb, inode, pi, pos, bytes,
+		copied = pmfs_flush_mmap_to_nvmm(sb, inode, pi, pos, bytes,
 							kmem);
 		PMFS_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
@@ -926,13 +943,6 @@ out:
 	PMFS_END_TIMING(copy_to_nvmm_t, copy_to_nvmm_time);
 	fsync_bytes += written;
 	return ret;
-}
-
-static inline int pmfs_has_page_cache(struct super_block *sb)
-{
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-
-	return sbi->s_mount_opt & PMFS_MOUNT_PAGECACHE;
 }
 
 ssize_t pmfs_dax_file_write(struct file *filp, const char __user *buf,
