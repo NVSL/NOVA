@@ -1360,7 +1360,6 @@ static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
 	if (!i) {
 		pmfs_dbg("%s ERROR: %lu - %lu not found\n", __func__,
 				new_block_low, new_block_high);
-		mutex_unlock(&sbi->inode_table_mutex);
 		return;
 	}
 
