@@ -1282,6 +1282,9 @@ static int pmfs_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
 	unsigned long new_block_low;
 	unsigned long new_block_high;
 	unsigned long MAX_INODE = 1UL << 31;
+	timing_t alloc_time;
+
+	PMFS_START_TIMING(alloc_unused_inode_t, alloc_time);
 
 	list_for_each_entry(i, head, link) {
 		if (i->link.next == head) {
@@ -1335,6 +1338,7 @@ static int pmfs_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
 	*ino = new_block_low;
 
 	pmfs_dbg_verbose("Alloc ino %lu\n", *ino);
+	PMFS_END_TIMING(alloc_unused_inode_t, alloc_time);
 	return 0;
 }
 
@@ -1348,6 +1352,9 @@ static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
 	struct pmfs_blocknode *free_blocknode= NULL;
 	struct pmfs_blocknode *curr_node;
 	unsigned long step = 0;
+	timing_t free_time;
+
+	PMFS_START_TIMING(free_inuse_inode_t, free_time);
 
 	new_block_low = ino;
 	new_block_high = ino;
@@ -1412,6 +1419,7 @@ block_found:
 	if (free_blocknode)
 		__pmfs_free_blocknode(free_blocknode);
 	free_steps += step;
+	PMFS_END_TIMING(free_inuse_inode_t, free_time);
 }
 
 /*

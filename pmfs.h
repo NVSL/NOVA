@@ -189,6 +189,8 @@ enum timing_category {
 	delete_dir_tree_t,
 	free_inode_t,
 	evict_inode_t,
+	alloc_unused_inode_t,
+	free_inuse_inode_t,
 	mmap_fault_t,
 	malloc_test_t,
 

@@ -56,6 +56,8 @@ const char *Timingstring[TIMING_NUM] =
 	"delete_dir_tree",
 	"free_inode",
 	"evict_inode",
+	"alloc_unused_inode",
+	"free_inuse_inode",
 	"mmap_page_fault",
 	"malloc_test",
 };
