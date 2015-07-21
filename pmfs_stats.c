@@ -55,6 +55,7 @@ const char *Timingstring[TIMING_NUM] =
 	"delete_file_tree",
 	"delete_dir_tree",
 	"free_inode",
+	"free_inode_log",
 	"evict_inode",
 	"alloc_unused_inode",
 	"free_inuse_inode",

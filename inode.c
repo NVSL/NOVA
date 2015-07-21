@@ -2535,9 +2535,12 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 	int num_free = 0;
 	u32 btype = pi->i_blk_type;
 	struct pmfs_blocknode *start_hint = NULL;
+	timing_t free_time;
 
 	if (pi->log_head == 0 || pi->log_tail == 0)
 		return;
+
+	PMFS_START_TIMING(free_inode_log_t, free_time);
 
 	curr_block = pi->log_head;
 	mutex_lock(&sbi->s_lock);
@@ -2571,6 +2574,7 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 	/* FIXME: make this atomic */
 	pi->log_head = pi->log_tail = 0;
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+	PMFS_END_TIMING(free_inode_log_t, free_time);
 }
 
 int pmfs_free_dram_resource(struct super_block *sb,

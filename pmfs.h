@@ -188,6 +188,7 @@ enum timing_category {
 	delete_file_tree_t,
 	delete_dir_tree_t,
 	free_inode_t,
+	free_inode_log_t,
 	evict_inode_t,
 	alloc_unused_inode_t,
 	free_inuse_inode_t,
