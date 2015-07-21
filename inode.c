@@ -1433,7 +1433,6 @@ static int pmfs_free_inode(struct inode *inode,
 	timing_t free_time;
 
 	PMFS_START_TIMING(free_inode_t, free_time);
-	mutex_lock(&sbi->inode_table_mutex);
 
 	pmfs_dbgv("free_inode: %lu free_nodes %lu tot nodes %lu hint %lu\n",
 		   inode->i_ino, sbi->s_free_inodes_count, sbi->s_inodes_count,
@@ -1452,6 +1451,7 @@ static int pmfs_free_inode(struct inode *inode,
 	pi->i_blocks = 0;
 	sih->pi_addr = 0;
 
+	mutex_lock(&sbi->inode_table_mutex);
 	/* increment s_free_inodes_count */
 	if (pmfs_ino < (sbi->s_free_inode_hint))
 		sbi->s_free_inode_hint = (pmfs_ino);
