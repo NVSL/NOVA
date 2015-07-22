@@ -115,10 +115,6 @@ struct pmfs_inode {
 	} dev;			/* device inode */
 };
 
-/*
- * #define PMFS_NAME_LEN (PMFS_INODE_SIZE - offsetof(struct pmfs_inode,
- *         i_d.d_name) - 1)
- */
 
 #define PMFS_SB_SIZE 512       /* must be power of two */
 
@@ -180,15 +176,15 @@ struct pmfs_super_block {
 #define PMFS_FAST_MOUNT_FIELD_SIZE  (36)
 
 /* The root inode follows immediately after the redundant super block */
-#define PMFS_ROOT_INO		(PMFS_INODE_SIZE)
-#define PMFS_BLOCKNODE_INO	(PMFS_ROOT_INO + PMFS_INODE_SIZE)
-#define PMFS_INODELIST_INO	(PMFS_BLOCKNODE_INO + PMFS_INODE_SIZE)
-#define PMFS_LITEJOURNAL_INO	(PMFS_INODELIST_INO + PMFS_INODE_SIZE)
+#define PMFS_ROOT_INO		(1)
+#define PMFS_BLOCKNODE_INO	(2)
+#define PMFS_INODELIST_INO	(3)
+#define PMFS_LITEJOURNAL_INO	(4)
 
 #define	PMFS_ROOT_INO_START	(PMFS_SB_SIZE * 2)
 
-/* INODE HINT START at 5 */
-#define PMFS_FREE_INODE_HINT_START      (5)
+/* INODE HINT START at 16 */
+#define PMFS_FREE_INODE_HINT_START      (16)
 
 #define	PMFS_NORMAL_INODE_START	PMFS_FREE_INODE_HINT_START
 
