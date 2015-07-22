@@ -347,99 +347,6 @@ inline void clear_bm(unsigned long bit, struct scan_bitmap *bm,
 	}
 }
 
-static int pmfs_insert_inodetree(struct super_block *sb,
-	unsigned long pmfs_ino)
-{
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_blocknode *curr = NULL, *prev = NULL, *next = NULL;
-	struct pmfs_blocknode *new_node;
-	struct rb_node **temp, *parent;
-	int compVal;
-
-	temp = &(sbi->inode_inuse_tree.rb_node);
-	parent = NULL;
-
-	while (*temp) {
-		curr = container_of(*temp, struct pmfs_blocknode, node);
-		compVal = pmfs_rbtree_compare_blocknode(curr, pmfs_ino);
-		parent = *temp;
-
-		if (compVal == -1) {
-			temp = &((*temp)->rb_left);
-		} else if (compVal == 1) {
-			temp = &((*temp)->rb_right);
-		} else {
-			pmfs_dbg("%s: ino %lu exists in entry %lu - %lu\n",
-				__func__, pmfs_ino, curr->block_low,
-				curr->block_high);
-			return 0;
-		}
-	}
-
-	if (pmfs_ino < curr->block_low) {
-		next = curr;
-		prev = list_entry(curr->link.prev, struct pmfs_blocknode, link);
-	} else {
-		prev = curr;
-		next = list_entry(curr->link.next, struct pmfs_blocknode, link);
-	}
-
-	if (pmfs_ino == curr->block_low - 1) {
-		curr->block_low = pmfs_ino;
-		if (prev && prev->block_high + 1 == pmfs_ino) {
-			prev->block_high = curr->block_high;
-			list_del(&curr->link);
-			rb_erase(&curr->node,
-					&sbi->inode_inuse_tree);
-			sbi->num_blocknode_inode--;
-		}
-		return 0;
-	}
-
-	if (pmfs_ino == curr->block_high + 1) {
-		curr->block_high = pmfs_ino;
-		if (next && next->block_low - 1 == pmfs_ino) {
-			curr->block_high = next->block_high;
-			list_del(&next->link);
-			rb_erase(&next->node,
-					&sbi->inode_inuse_tree);
-			sbi->num_blocknode_inode--;
-		}
-		return 0;
-	}
-
-	if (pmfs_ino < curr->block_low) {
-		if (prev && prev->block_high + 1 == pmfs_ino) {
-			prev->block_high = pmfs_ino;
-			return 0;
-		}
-		goto insert;
-	}
-
-	if (pmfs_ino > curr->block_high) {
-		if (next && next->block_low - 1 == pmfs_ino) {
-			next->block_low = pmfs_ino;
-			return 0;
-		}
-		goto insert;
-	}
-
-	pmfs_dbg("%s ERROR: ino %lu, entry %lu - %lu\n",
-			__func__, pmfs_ino, curr->block_low,
-			curr->block_high);
-	return -EINVAL;
-
-insert:
-	new_node = pmfs_alloc_inode_node(sb);
-	PMFS_ASSERT(new_node);
-	new_node->block_low = new_node->block_high = pmfs_ino;
-	list_add(&new_node->link, &prev->link);
-	rb_link_node(&new_node->node, parent, temp);
-	rb_insert_color(&new_node->node, &sbi->inode_inuse_tree);
-	sbi->num_blocknode_inode++;
-	return 0;
-}
-
 static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
@@ -483,49 +390,6 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 	pmfs_free_inode_log(sb, pi);
 }
 
-static void pmfs_init_inode_list_from_inode(struct super_block *sb)
-{
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, PMFS_INODELIST_INO);
-	struct pmfs_blocknode_lowhigh *entry;
-	struct pmfs_blocknode *blknode;
-	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
-	unsigned long num_blocknode = 0;
-	u64 curr_p;
-
-	sbi->num_blocknode_inode = 0;
-	curr_p = pi->log_head;
-	if (curr_p == 0)
-		pmfs_dbg("%s: pi head is 0!\n", __func__);
-
-	while (curr_p != pi->log_tail) {
-		if (is_last_entry(curr_p, size, 0)) {
-			curr_p = next_log_page(sb, curr_p);
-		}
-
-		if (curr_p == 0) {
-			pmfs_dbg("%s: curr_p is NULL!\n", __func__);
-			PMFS_ASSERT(0);
-		}
-
-		entry = (struct pmfs_blocknode_lowhigh *)pmfs_get_block(sb,
-							curr_p);
-		blknode = pmfs_alloc_inode_node(sb);
-		if (blknode == NULL)
-			PMFS_ASSERT(0);
-		blknode->block_low = entry->block_low;
-		blknode->block_high = entry->block_high;
-		list_add_tail(&blknode->link, &sbi->inode_inuse_head);
-		pmfs_insert_blocknode_inodetree(sbi, blknode);
-
-		num_blocknode++;
-		curr_p += sizeof(struct pmfs_blocknode_lowhigh);
-	}
-
-	pmfs_dbg("%s: %lu inode nodes\n", __func__, num_blocknode);
-	pmfs_free_inode_log(sb, pi);
-}
-
 static bool pmfs_can_skip_full_scan(struct super_block *sb)
 {
 	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
@@ -543,7 +407,6 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 	atomic64_set(&sbi->s_curr_ino, super->s_curr_ino);
 
 	pmfs_init_blockmap_from_inode(sb);
-	pmfs_init_inode_list_from_inode(sb);
 
 	return true;
 }
@@ -621,48 +484,6 @@ static u64 pmfs_append_alive_inode_entry(struct super_block *sb,
 out:
 	PMFS_END_TIMING(append_entry_t, append_time);
 	return curr_p;
-}
-
-void pmfs_save_inode_list_to_log(struct super_block *sb)
-{
-	unsigned long num_blocks;
-	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_INODELIST_INO);
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct list_head *head = &(sbi->inode_inuse_head);
-	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
-	struct pmfs_blocknode *i;
-	int step = 0;
-	u64 curr_entry = 0;
-	u64 temp_tail;
-	u64 new_block;
-	int allocated;
-
-	num_blocks = sbi->num_blocknode_inode / BLOCKNODE_PER_PAGE;
-	if (sbi->num_blocknode_inode % BLOCKNODE_PER_PAGE)
-		num_blocks++;
-
-	allocated = pmfs_allocate_inode_log_pages(sb, pi, num_blocks,
-						&new_block);
-	if (allocated != num_blocks) {
-		pmfs_dbg("Error saving inode list: %d\n", allocated);
-		return;
-	}
-
-	pi->log_head = new_block;
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
-
-	temp_tail = new_block;
-	list_for_each_entry(i, head, link) {
-		step++;
-		curr_entry = pmfs_append_blocknode_entry(sb, i, temp_tail);
-		temp_tail = curr_entry + size;
-	}
-
-	pmfs_update_tail(pi, temp_tail);
-
-	pmfs_dbg("%s: %lu inode nodes, step %d, pi head 0x%llx, tail 0x%llx\n",
-		__func__, sbi->num_blocknode_inode, step, pi->log_head,
-		pi->log_tail);
 }
 
 void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
@@ -1267,7 +1088,6 @@ out:
 int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 	struct scan_bitmap *bm, int cpuid, int multithread)
 {
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode_info_header *sih;
 	struct pmfs_inode *pi;
 	unsigned long pmfs_ino;
@@ -1282,10 +1102,6 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 	pmfs_ino = pi->pmfs_ino;
 	if (bm) {
 		pi->i_blocks = 0;
-		if (pmfs_ino != 1) {
-			pmfs_insert_inodetree(sb, pmfs_ino);
-			sbi->s_inodes_used_count++;
-		}
 		if (pmfs_ino > bm->highest_inuse_ino)
 			bm->highest_inuse_ino = pmfs_ino;
 	}
@@ -1343,10 +1159,6 @@ int pmfs_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	struct pmfs_inode *pi;
 	u64 root_addr = PMFS_ROOT_INO_START;
 	int ret;
-
-	/* Initialize inuse inode list */
-	if (pmfs_init_inode_inuse_list(sb) < 0)
-		return -EINVAL;
 
 	/* Handle special inodes */
 	pi = pmfs_get_inode_by_ino(sb, PMFS_INODELIST_INO);

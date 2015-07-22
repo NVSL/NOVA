@@ -473,9 +473,6 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	if (pmfs_init_inode_table(sb) < 0)
 		return ERR_PTR(-EINVAL);
 
-	if (pmfs_init_inode_inuse_list(sb) < 0)
-		return ERR_PTR(-EINVAL);
-
 	pmfs_memunlock_range(sb, super, PMFS_SB_SIZE*2);
 	pmfs_sync_super(super);
 	pmfs_memlock_range(sb, super, PMFS_SB_SIZE*2);
@@ -643,9 +640,6 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	mutex_init(&sbi->inode_table_mutex);
 	mutex_init(&sbi->s_lock);
 	spin_lock_init(&sbi->header_tree_lock);
-
-	INIT_LIST_HEAD(&sbi->inode_inuse_head);
-	sbi->inode_inuse_tree = RB_ROOT;
 
 	if (pmfs_new_meta_block(sb, &sbi->zeroed_page, 1, 0))
 		goto out;
@@ -928,7 +922,6 @@ static void pmfs_put_super(struct super_block *sb)
 	/* It's unmount time, so unmap the pmfs memory */
 	if (sbi->virt_addr) {
 		pmfs_free_header_tree(sb);
-		pmfs_save_inode_list_to_log(sb);
 		/* Save everything before blocknode mapping! */
 		pmfs_save_blocknode_mappings_to_log(sb);
 //		pmfs_journal_uninit(sb);
@@ -943,13 +936,6 @@ static void pmfs_put_super(struct super_block *sb)
 		i = list_first_entry(head, struct pmfs_blocknode, link);
 		list_del(&i->link);
 		pmfs_free_block_node(sb, i);
-	}
-
-	head = &(sbi->inode_inuse_head);
-	while (!list_empty(head)) {
-		i = list_first_entry(head, struct pmfs_blocknode, link);
-		list_del(&i->link);
-		pmfs_free_inode_node(sb, i);
 	}
 
 	pmfs_free_meta_block(sb, sbi->zeroed_page);

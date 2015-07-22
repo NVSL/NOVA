@@ -592,10 +592,6 @@ struct pmfs_sb_info {
 	u8 btype;
 	spinlock_t header_tree_lock;
 
-	/* Track inuse inodes */
-	struct list_head inode_inuse_head;
-	struct rb_root	inode_inuse_tree;
-
 	/* ZEROED page for cache page initialized */
 	unsigned long zeroed_page;
 };
@@ -1042,7 +1038,6 @@ inline void clear_bm(unsigned long bit, struct scan_bitmap *bm,
 int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 	struct scan_bitmap *bm, int cpuid, int multithread);
 void pmfs_save_blocknode_mappings_to_log(struct super_block *sb);
-void pmfs_save_inode_list_to_log(struct super_block *sb);
 unsigned int pmfs_free_header_tree(struct super_block *sb);
 struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
 	u16 i_mode);
@@ -1093,7 +1088,6 @@ int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
 /* inode.c */
 extern const struct address_space_operations pmfs_aops_dax;
 extern int pmfs_init_inode_table(struct super_block *sb);
-int pmfs_init_inode_inuse_list(struct super_block *sb);
 extern u64 pmfs_find_nvmm_block(struct inode *inode, 
 		unsigned long file_blocknr);
 int pmfs_set_blocksize_hint(struct super_block *sb, struct inode *inode,
