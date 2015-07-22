@@ -1444,6 +1444,9 @@ u64 pmfs_new_pmfs_inode(struct super_block *sb,
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	long free_ino = 0;
 	u64 ino = 0;
+	timing_t new_inode_time;
+
+	PMFS_START_TIMING(new_pmfs_inode_t, new_inode_time);
 
 	sbi->s_free_inodes_count -= 1;
 
@@ -1457,6 +1460,8 @@ u64 pmfs_new_pmfs_inode(struct super_block *sb,
 
 	ino = free_ino;
 	*return_sih = sih;
+
+	PMFS_END_TIMING(new_pmfs_inode_t, new_inode_time);
 	return ino;
 }
 
@@ -1474,12 +1479,14 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	int errval;
 	timing_t new_inode_time;
 
-	PMFS_START_TIMING(new_inode_t, new_inode_time);
+	PMFS_START_TIMING(new_vfs_inode_t, new_inode_time);
 	sb = dir->i_sb;
 	sbi = (struct pmfs_sb_info *)sb->s_fs_info;
 	inode = new_inode(sb);
-	if (!inode)
-		return ERR_PTR(-ENOMEM);
+	if (!inode) {
+		errval = -ENOMEM;
+		goto fail2;
+	}
 
 	inode_init_owner(inode, dir, mode);
 	inode->i_blocks = inode->i_size = 0;
@@ -1489,8 +1496,10 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	inode->i_size = size;
 
 	diri = pmfs_get_inode(sb, dir);
-	if (!diri)
-		return ERR_PTR(-EACCES);
+	if (!diri) {
+		errval = -EACCES;
+		goto fail2;
+	}
 
 	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
 	pmfs_dbg_verbose("%s: allocating inode %llu @ 0x%llx\n",
@@ -1553,12 +1562,13 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	}
 
 	pmfs_flush_buffer(&pi, PMFS_INODE_SIZE, 0);
-	PMFS_END_TIMING(new_inode_t, new_inode_time);
+	PMFS_END_TIMING(new_vfs_inode_t, new_inode_time);
 	return inode;
 fail1:
 	make_bad_inode(inode);
 	iput(inode);
-	PMFS_END_TIMING(new_inode_t, new_inode_time);
+fail2:
+	PMFS_END_TIMING(new_vfs_inode_t, new_inode_time);
 	return ERR_PTR(errval);
 }
 
