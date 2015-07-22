@@ -1212,7 +1212,7 @@ static struct inode *pmfs_nfs_get_inode(struct super_block *sb,
 	if (ino < PMFS_ROOT_INO)
 		return ERR_PTR(-ESTALE);
 
-	if ((ino >> PMFS_INODE_BITS) > (sbi->s_inodes_count))
+	if (ino > (sbi->s_inodes_count))
 		return ERR_PTR(-ESTALE);
 
 	inode = pmfs_iget(sb, ino);

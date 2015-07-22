@@ -606,9 +606,9 @@ static u64 pmfs_append_alive_inode_entry(struct super_block *sb,
 		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct pmfs_alive_inode_entry *)pmfs_get_block(sb, curr_p);
-	if (sih->ino != pi->pmfs_ino << PMFS_INODE_BITS)
+	if (sih->ino != pi->pmfs_ino)
 		pmfs_dbg("%s: inode number not match! sih %llu, pi %llu\n",
-			__func__, sih->ino, pi->pmfs_ino << PMFS_INODE_BITS);
+			__func__, sih->ino, pi->pmfs_ino);
 	entry->pi_addr = sih->pi_addr;
 	pmfs_dbg_verbose("append entry alive inode %llu, pmfs inode 0x%llx "
 			"@ 0x%llx\n",
@@ -1177,7 +1177,6 @@ fail:
 	return errval;
 }
 
-/* Ino is divided by INODE_BITS */
 int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 	struct pmfs_inode_info_header *sih, int multithread)
 {
@@ -1254,7 +1253,7 @@ int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 			goto out;
 	}
 	if (sih)
-		sih->ino = ino << PMFS_INODE_BITS;
+		sih->ino = ino;
 	errval = 0;
 out:
 	if (multithread)

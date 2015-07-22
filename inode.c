@@ -794,7 +794,7 @@ static void assign_nvmm(struct pmfs_inode *pi,
 	leaf->nvmm = (data->block >> PAGE_SHIFT) + pgoff - data->pgoff;
 	if (bm) {
 		pmfs_dbgv("%s: inode %llu set %lu\n", __func__,
-				pi->pmfs_ino << PMFS_INODE_BITS, leaf->nvmm);
+				pi->pmfs_ino, leaf->nvmm);
 		set_bm(leaf->nvmm, bm, BM_4K);
 		pi->i_blocks++;
 	}
@@ -1174,7 +1174,7 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 //	set_nlink(inode, le16_to_cpu(pi->i_links_count));
 	inode->i_generation = le32_to_cpu(pi->i_generation);
 	pmfs_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
-	ino = inode->i_ino >> PMFS_INODE_BITS;
+	ino = inode->i_ino;
 
 	/* check if the inode is active. */
 	if (inode->i_mode == 0 || pi->valid == 0) {
@@ -1445,7 +1445,7 @@ static int pmfs_free_inode(struct inode *inode,
 	pmfs_dbgv("free_inode: %lu free_nodes %lu tot nodes %lu hint %lu\n",
 		   inode->i_ino, sbi->s_free_inodes_count, sbi->s_inodes_count,
 		   sbi->s_free_inode_hint);
-	pmfs_ino = inode->i_ino >> PMFS_INODE_BITS;
+	pmfs_ino = inode->i_ino;
 
 	pi = pmfs_get_inode(sb, inode);
 
@@ -1500,7 +1500,7 @@ struct inode *pmfs_iget(struct super_block *sb, unsigned long ino)
 
 	if (ino == PMFS_ROOT_INO) {
 		si = PMFS_I(inode);
-		sih = pmfs_find_info_header(sb, ino >> PMFS_INODE_BITS);
+		sih = pmfs_find_info_header(sb, ino);
 		if (sih)
 			si->header = sih;
 		else
@@ -1508,7 +1508,7 @@ struct inode *pmfs_iget(struct super_block *sb, unsigned long ino)
 		pi_addr = PMFS_ROOT_INO_START;
 	} else {
 		si = PMFS_I(inode);
-		sih = pmfs_find_info_header(sb, ino >> PMFS_INODE_BITS);
+		sih = pmfs_find_info_header(sb, ino);
 		if (!sih) {
 			pmfs_dbg("%s: sih for ino %lu not found!\n",
 					__func__, ino);
@@ -1653,7 +1653,7 @@ u64 pmfs_new_pmfs_inode(struct super_block *sb,
 	pmfs_assign_info_header(sb, free_ino, sih, 0);
 
 	mutex_unlock(&sbi->inode_table_mutex);
-	ino = free_ino << PMFS_INODE_BITS;
+	ino = free_ino;
 	*return_sih = sih;
 	return ino;
 }
@@ -1669,7 +1669,7 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	struct pmfs_inode *diri = NULL;
 	struct pmfs_inode_info *si;
 	struct pmfs_inode *pi;
-	int pmfs_ino, errval;
+	int errval;
 	timing_t new_inode_time;
 
 	PMFS_START_TIMING(new_inode_t, new_inode_time);
@@ -1693,8 +1693,6 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	diri = pmfs_get_inode(sb, dir);
 	if (!diri)
 		return ERR_PTR(-EACCES);
-
-	pmfs_ino = ino >> PMFS_INODE_BITS;
 
 	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
 	pmfs_dbg_verbose("%s: allocating inode %llu @ 0x%llx\n",
@@ -1737,7 +1735,7 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	pi->i_flags = pmfs_mask_flags(mode, diri->i_flags);
 	pi->log_head = 0;
 	pi->log_tail = 0;
-	pi->pmfs_ino = pmfs_ino;
+	pi->pmfs_ino = ino;
 	pi->valid = 1;
 	pmfs_memlock_inode(sb, pi);
 
@@ -2626,7 +2624,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 	struct pmfs_setattr_logentry *attr_entry = NULL;
 	struct pmfs_link_change_entry *link_change_entry = NULL;
 	struct pmfs_inode_log_page *curr_page;
-	u64 ino = pi->pmfs_ino << PMFS_INODE_BITS;
+	u64 ino = pi->pmfs_ino;
 	void *addr;
 	u64 curr_p;
 	u64 next;

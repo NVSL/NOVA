@@ -470,7 +470,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb,
 	struct pmfs_setattr_logentry *attr_entry = NULL;
 	struct pmfs_link_change_entry *link_change_entry = NULL;
 	struct pmfs_inode_log_page *curr_page;
-	u64 ino = pi->pmfs_ino << PMFS_INODE_BITS;
+	u64 ino = pi->pmfs_ino;
 	unsigned short de_len;
 	void *addr;
 	u64 curr_p;
@@ -666,7 +666,6 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 				pmfs_get_block(sb, curr->nvmm);
 		if (entry->ino) {
 			ino = le64_to_cpu(entry->ino);
-			ino >>= PMFS_INODE_BITS;
 			child_sih = pmfs_find_info_header(sb, ino);
 			pmfs_dbg_verbose("ctx: ino %llu, name %*.s, "
 					"name_len %u, de_len %u\n",

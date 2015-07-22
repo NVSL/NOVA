@@ -108,8 +108,6 @@ extern unsigned int pmfs_dbgmask;
 #define PMFS_OTHER_FLMASK (FS_NODUMP_FL | FS_NOATIME_FL)
 #define PMFS_FL_USER_VISIBLE (FS_FL_USER_VISIBLE | PMFS_EOFBLOCKS_FL)
 
-#define INODES_PER_BLOCK(bt) (1 << (blk_type_to_shift[bt] - PMFS_INODE_BITS))
-
 /* IOCTLs */
 #define	FS_PMFS_FSYNC			0xBCD0000E
 #define	PMFS_PRINT_TIMING		0xBCD00010
@@ -491,7 +489,7 @@ struct pmfs_inode_info_header {
 	u16	i_mode;			/* Dir or file? */
 	u32	log_pages;		/* Num of log pages */
 	u64	i_size;
-	u64	ino;			/* Times of PMFS_INODE_SIZE */
+	u64	ino;
 	u64	pi_addr;
 	struct rb_root	dir_tree;	/* Dir name entry tree root */
 };
@@ -743,7 +741,6 @@ static inline void memset_nt(void *dest, uint32_t dword, size_t length)
 
 extern struct kmem_cache *pmfs_mempair_cachep;
 
-/* ino is divided by PMFS_INODE_SIZE */
 static inline struct pmfs_inode_info_header *
 pmfs_find_info_header(struct super_block *sb, unsigned long ino)
 {
@@ -849,7 +846,7 @@ static inline struct pmfs_inode *pmfs_get_basic_inode(struct super_block *sb,
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 
 	return (struct pmfs_inode *)(sbi->virt_addr + PMFS_SB_SIZE * 2 +
-				 inode_number - PMFS_INODE_SIZE);
+				 (inode_number - 1) * PMFS_INODE_SIZE);
 }
 
 /* If this is part of a read-modify-write of the inode metadata,

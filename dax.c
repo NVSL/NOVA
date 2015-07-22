@@ -348,7 +348,7 @@ int pmfs_reassign_file_btree(struct super_block *sb,
 
 		if (curr_p == 0) {
 			pmfs_err(sb, "%s: File inode %llu log is NULL!\n",
-				__func__, pi->pmfs_ino << PMFS_INODE_BITS);
+				__func__, pi->pmfs_ino);
 			return -EINVAL;
 		}
 

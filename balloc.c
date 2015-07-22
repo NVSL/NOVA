@@ -627,8 +627,8 @@ inline int pmfs_new_data_blocks(struct super_block *sb, struct pmfs_inode *pi,
 	allocated = pmfs_new_blocks(sb, blocknr, num, btype, zero, 0);
 	PMFS_END_TIMING(new_data_blocks_t, alloc_time);
 	pmfs_dbgv("%s: inode %llu, start blk %lu, cow %d, %d blocks @ %lu\n",
-				__func__, pi->pmfs_ino << PMFS_INODE_BITS,
-				start_blk, cow, allocated, *blocknr);
+				__func__, pi->pmfs_ino,	start_blk, cow,
+				allocated, *blocknr);
 	return allocated;
 }
 
@@ -642,8 +642,7 @@ inline int pmfs_new_log_blocks(struct super_block *sb, unsigned long pmfs_ino,
 	allocated = pmfs_new_blocks(sb, blocknr, num, btype, zero, 1);
 	PMFS_END_TIMING(new_log_blocks_t, alloc_time);
 	pmfs_dbgv("%s: inode %lu, %d blocks @ %lu\n", __func__,
-				pmfs_ino << PMFS_INODE_BITS, allocated,
-				*blocknr);
+				pmfs_ino, allocated, *blocknr);
 	return allocated;
 }
 
