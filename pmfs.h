@@ -529,6 +529,7 @@ struct scan_bitmap {
 	struct single_scan_bm scan_bm_4K;
 	struct single_scan_bm scan_bm_2M;
 	struct single_scan_bm scan_bm_1G;
+	unsigned long highest_inuse_ino;
 };
 
 /*
@@ -570,7 +571,7 @@ struct pmfs_sb_info {
 	unsigned long	s_inodes_count;  /* total inodes count (used or free) */
 	unsigned long	s_free_inodes_count;    /* free inodes count */
 	unsigned long	s_inodes_used_count;
-	unsigned long	s_free_inode_hint;
+	atomic64_t	s_curr_ino;
 
 	unsigned long num_blocknode_block;
 	unsigned long num_blocknode_inode;

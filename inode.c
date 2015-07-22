@@ -1128,7 +1128,8 @@ int pmfs_init_inode_table(struct super_block *sb)
 	/* inode 0 is considered invalid and hence never used */
 	sbi->s_free_inodes_count =
 		(sbi->s_inodes_count - PMFS_FREE_INODE_HINT_START);
-	sbi->s_free_inode_hint = (PMFS_FREE_INODE_HINT_START);
+
+	atomic64_set(&sbi->s_curr_ino, PMFS_FREE_INODE_HINT_START);
 
 	return 0;
 }
@@ -1442,9 +1443,9 @@ static int pmfs_free_inode(struct inode *inode,
 
 	PMFS_START_TIMING(free_inode_t, free_time);
 
-	pmfs_dbgv("free_inode: %lu free_nodes %lu tot nodes %lu hint %lu\n",
+	pmfs_dbgv("free_inode: %lu free_nodes %lu tot nodes %lu curr %ld\n",
 		   inode->i_ino, sbi->s_free_inodes_count, sbi->s_inodes_count,
-		   sbi->s_free_inode_hint);
+		   atomic64_read(&sbi->s_curr_ino));
 	pmfs_ino = inode->i_ino;
 
 	pi = pmfs_get_inode(sb, inode);
@@ -1460,9 +1461,6 @@ static int pmfs_free_inode(struct inode *inode,
 	sih->pi_addr = 0;
 
 	mutex_lock(&sbi->inode_table_mutex);
-	/* increment s_free_inodes_count */
-	if (pmfs_ino < (sbi->s_free_inode_hint))
-		sbi->s_free_inode_hint = (pmfs_ino);
 
 	sbi->s_free_inodes_count += 1;
 
@@ -1470,12 +1468,7 @@ static int pmfs_free_inode(struct inode *inode,
 	    (sbi->s_inodes_count) - PMFS_FREE_INODE_HINT_START) {
 		/* filesystem is empty */
 		pmfs_dbg_verbose("fs is empty!\n");
-		sbi->s_free_inode_hint = (PMFS_FREE_INODE_HINT_START);
 	}
-
-	pmfs_dbgv("free_inode: free_nodes %lu total_nodes %lu hint %lu\n",
-		   sbi->s_free_inodes_count, sbi->s_inodes_count,
-		   sbi->s_free_inode_hint);
 
 	pmfs_free_inuse_inode(sb, pmfs_ino);
 	mutex_unlock(&sbi->inode_table_mutex);
@@ -1631,7 +1624,7 @@ u64 pmfs_new_pmfs_inode(struct super_block *sb,
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	unsigned long free_ino = 0;
 	u64 ino = 0;
-	int i, ret;
+	int ret;
 
 	mutex_lock(&sbi->inode_table_mutex);
 	ret = pmfs_alloc_unused_inode(sb, &free_ino);
@@ -1643,11 +1636,7 @@ u64 pmfs_new_pmfs_inode(struct super_block *sb,
 
 	sbi->s_free_inodes_count -= 1;
 
-	i = (sbi->s_free_inode_hint);
-	if (i < (sbi->s_inodes_count) - 1)
-		sbi->s_free_inode_hint = (i + 1);
-	else
-		sbi->s_free_inode_hint = (PMFS_FREE_INODE_HINT_START);
+	atomic64_inc_return(&sbi->s_curr_ino);
 
 	sih = pmfs_alloc_header(sb, 0);
 	pmfs_assign_info_header(sb, free_ino, sih, 0);
@@ -1685,10 +1674,6 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 
 	inode->i_generation = atomic_add_return(1, &sbi->next_generation);
 	inode->i_size = size;
-
-	pmfs_dbgv("inode: %p free_inodes %lu total_inodes %lu hint %lu\n",
-		inode, sbi->s_free_inodes_count, sbi->s_inodes_count,
-		sbi->s_free_inode_hint);
 
 	diri = pmfs_get_inode(sb, dir);
 	if (!diri)

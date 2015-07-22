@@ -167,7 +167,7 @@ struct pmfs_super_block {
 	__le64		s_inodes_count;
 	__le64		s_free_inodes_count;
 	__le64		s_inodes_used_count;
-	__le64		s_free_inode_hint;
+	__le64		s_curr_ino;
 };
 
 #define PMFS_SB_STATIC_SIZE(ps) ((u64)&ps->s_start_dynamic - (u64)ps)
@@ -183,8 +183,8 @@ struct pmfs_super_block {
 
 #define	PMFS_ROOT_INO_START	(PMFS_SB_SIZE * 2)
 
-/* INODE HINT START at 16 */
-#define PMFS_FREE_INODE_HINT_START      (16)
+/* INODE HINT START at 15 */
+#define PMFS_FREE_INODE_HINT_START      (15)
 
 #define	PMFS_NORMAL_INODE_START	PMFS_FREE_INODE_HINT_START
 

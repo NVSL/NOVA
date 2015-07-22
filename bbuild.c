@@ -539,7 +539,8 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 	sbi->s_inodes_count = le64_to_cpu(super->s_inodes_count);
 	sbi->s_free_inodes_count = le64_to_cpu(super->s_free_inodes_count);
 	sbi->s_inodes_used_count = le64_to_cpu(super->s_inodes_used_count);
-	sbi->s_free_inode_hint = le64_to_cpu(super->s_free_inode_hint);
+
+	atomic64_set(&sbi->s_curr_ino, super->s_curr_ino);
 
 	pmfs_init_blockmap_from_inode(sb);
 	pmfs_init_inode_list_from_inode(sb);
@@ -706,7 +707,7 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	super->s_inodes_count = cpu_to_le64(sbi->s_inodes_count);
 	super->s_free_inodes_count = cpu_to_le64(sbi->s_free_inodes_count);
 	super->s_inodes_used_count = cpu_to_le64(sbi->s_inodes_used_count);
-	super->s_free_inode_hint = cpu_to_le64(sbi->s_free_inode_hint);
+	super->s_curr_ino = atomic64_read(&sbi->s_curr_ino);
 
 	pmfs_memlock_range(sb, &super->s_wtime, PMFS_FAST_MOUNT_FIELD_SIZE);
 	pmfs_flush_buffer(super, PMFS_SB_SIZE, 1);
@@ -949,6 +950,7 @@ static struct scan_bitmap *alloc_bm(unsigned long initsize)
 	bm->scan_bm_4K.multi_set_tree = RB_ROOT;
 	bm->scan_bm_2M.multi_set_tree = RB_ROOT;
 	bm->scan_bm_1G.multi_set_tree = RB_ROOT;
+	bm->highest_inuse_ino = 0;
 
 	if (init_bmentry_cache()) {
 		free_bm(bm);
@@ -1284,6 +1286,8 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 			pmfs_insert_inodetree(sb, pmfs_ino);
 			sbi->s_inodes_used_count++;
 		}
+		if (pmfs_ino > bm->highest_inuse_ino)
+			bm->highest_inuse_ino = pmfs_ino;
 	}
 
 	pmfs_dbg_verbose("%s: inode %lu, addr 0x%llx, valid %d, "
@@ -1675,6 +1679,7 @@ static void pmfs_rebuild_superblock_info(struct super_block *sb,
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
+	unsigned long curr_ino;
 
 	/* initialize the num_free_blocks to */
 	sbi->num_free_blocks = ((unsigned long)(initsize) >> PAGE_SHIFT);
@@ -1690,8 +1695,12 @@ static void pmfs_rebuild_superblock_info(struct super_block *sb,
 	sbi->s_free_inodes_count = sbi->s_inodes_count -
 		(sbi->s_inodes_used_count + PMFS_FREE_INODE_HINT_START);
 
-	/* set the block 0 as this is used */
-	sbi->s_free_inode_hint = PMFS_FREE_INODE_HINT_START;
+	if (bm->highest_inuse_ino >= PMFS_FREE_INODE_HINT_START)
+		curr_ino = bm->highest_inuse_ino;
+	else
+		curr_ino = PMFS_FREE_INODE_HINT_START;
+
+	atomic64_set(&sbi->s_curr_ino, curr_ino);
 }
 
 int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
