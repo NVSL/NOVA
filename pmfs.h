@@ -570,6 +570,7 @@ struct pmfs_sb_info {
 	unsigned long	s_inodes_used_count;
 	atomic64_t	s_curr_ino;
 
+	int cpus;
 	unsigned long num_blocknode_block;
 	unsigned long num_blocknode_inode;
 

@@ -781,6 +781,10 @@ setup_sb:
 		sizeof(struct pmfs_dir_logentry),
 		sizeof(struct pmfs_setattr_logentry),
 		sizeof(struct pmfs_link_change_entry));
+
+	sbi->cpus = num_online_cpus();
+	pmfs_dbg("%d cpus online\n", sbi->cpus);
+
 	PMFS_END_TIMING(mount_t, mount_time);
 	return retval;
 out:
