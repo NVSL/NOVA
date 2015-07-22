@@ -164,9 +164,6 @@ struct pmfs_super_block {
 	__le32		s_wtime;            /* write time */
 	/* fields for fast mount support. Always keep them together */
 	__le64		s_num_free_blocks;
-	__le64		s_inodes_count;
-	__le64		s_free_inodes_count;
-	__le64		s_inodes_used_count;
 	__le64		s_curr_ino;
 };
 

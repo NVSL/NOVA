@@ -400,9 +400,6 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 		return false;
 
 	sbi->num_free_blocks = le64_to_cpu(super->s_num_free_blocks);
-	sbi->s_inodes_count = le64_to_cpu(super->s_inodes_count);
-	sbi->s_free_inodes_count = le64_to_cpu(super->s_free_inodes_count);
-	sbi->s_inodes_used_count = le64_to_cpu(super->s_inodes_used_count);
 
 	atomic64_set(&sbi->s_curr_ino, super->s_curr_ino);
 
@@ -525,9 +522,6 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 
 	super->s_wtime = cpu_to_le32(get_seconds());
 	super->s_num_free_blocks = cpu_to_le64(sbi->num_free_blocks);
-	super->s_inodes_count = cpu_to_le64(sbi->s_inodes_count);
-	super->s_free_inodes_count = cpu_to_le64(sbi->s_free_inodes_count);
-	super->s_inodes_used_count = cpu_to_le64(sbi->s_inodes_used_count);
 	super->s_curr_ino = atomic64_read(&sbi->s_curr_ino);
 
 	pmfs_memlock_range(sb, &super->s_wtime, PMFS_FAST_MOUNT_FIELD_SIZE);
@@ -1490,22 +1484,13 @@ static void pmfs_rebuild_superblock_info(struct super_block *sb,
 	struct scan_bitmap *bm)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
 	unsigned long curr_ino;
 
 	/* initialize the num_free_blocks to */
 	sbi->num_free_blocks = ((unsigned long)(initsize) >> PAGE_SHIFT);
 	pmfs_init_blockmap(sb, le64_to_cpu(journal->base) + sbi->jsize);
 
-	/* Minus the block for lite journaling */
-	sbi->s_inodes_count = (sbi->num_free_blocks - 1) <<
-			(pmfs_inode_blk_shift(pi) - PMFS_INODE_BITS);
-
 	pmfs_build_blocknode_map(sb, bm);
-
-	/* Reserving basic inodes */
-	sbi->s_free_inodes_count = sbi->s_inodes_count -
-		(sbi->s_inodes_used_count + PMFS_FREE_INODE_HINT_START);
 
 	if (bm->highest_inuse_ino >= PMFS_FREE_INODE_HINT_START)
 		curr_ino = bm->highest_inuse_ino;

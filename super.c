@@ -810,15 +810,14 @@ int pmfs_statfs(struct dentry *d, struct kstatfs *buf)
 	count = sbi->block_end;
 	buf->f_blocks = sbi->block_end;
 	buf->f_bfree = buf->f_bavail = pmfs_count_free_blocks(sb);
-	buf->f_files = (sbi->s_inodes_count);
-	buf->f_ffree = (sbi->s_free_inodes_count);
+	buf->f_files = LONG_MAX;
+	buf->f_ffree = LONG_MAX - atomic64_read(&sbi->s_curr_ino);
 	buf->f_namelen = PMFS_NAME_LEN;
 	pmfs_dbg_verbose("pmfs_stats: total 4k free blocks 0x%llx\n",
 		buf->f_bfree);
-	pmfs_dbgv("total inodes %lu, free inodes %lu, "
-		"blocknodes %lu, inode blocknodes %lu\n",
-		(sbi->s_inodes_count), (sbi->s_free_inodes_count),
-		(sbi->num_blocknode_block), (sbi->num_blocknode_inode));
+	pmfs_dbgv("curr inuse inode %lu, blocknodes %lu\n",
+		atomic64_read(&sbi->s_curr_ino),
+		sbi->num_blocknode_block);
 	return 0;
 }
 
@@ -1193,13 +1192,12 @@ static struct file_system_type pmfs_fs_type = {
 static struct inode *pmfs_nfs_get_inode(struct super_block *sb,
 					 u64 ino, u32 generation)
 {
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct inode *inode;
 
 	if (ino < PMFS_ROOT_INO)
 		return ERR_PTR(-ESTALE);
 
-	if (ino > (sbi->s_inodes_count))
+	if (ino > LONG_MAX)
 		return ERR_PTR(-ESTALE);
 
 	inode = pmfs_iget(sb, ino);
