@@ -1165,10 +1165,6 @@ int pmfs_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	sbi->s_inodes_used_count = 0;
 
 	/* Handle special inodes */
-	pi = pmfs_get_inode_by_ino(sb, PMFS_INODELIST_INO);
-	pi->log_head = pi->log_tail = 0;
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
-
 	pi = pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
 	pi->log_head = pi->log_tail = 0;
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);

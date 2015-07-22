@@ -178,8 +178,7 @@ struct pmfs_super_block {
 /* The root inode follows immediately after the redundant super block */
 #define PMFS_ROOT_INO		(1)
 #define PMFS_BLOCKNODE_INO	(2)
-#define PMFS_INODELIST_INO	(3)
-#define PMFS_LITEJOURNAL_INO	(4)
+#define PMFS_LITEJOURNAL_INO	(3)
 
 #define	PMFS_ROOT_INO_START	(PMFS_SB_SIZE * 2)
 
