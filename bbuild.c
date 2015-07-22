@@ -1088,6 +1088,7 @@ out:
 int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 	struct scan_bitmap *bm, int cpuid, int multithread)
 {
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode_info_header *sih;
 	struct pmfs_inode *pi;
 	unsigned long pmfs_ino;
@@ -1102,6 +1103,7 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 	pmfs_ino = pi->pmfs_ino;
 	if (bm) {
 		pi->i_blocks = 0;
+		sbi->s_inodes_used_count++;
 		if (pmfs_ino > bm->highest_inuse_ino)
 			bm->highest_inuse_ino = pmfs_ino;
 	}
@@ -1159,6 +1161,8 @@ int pmfs_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	struct pmfs_inode *pi;
 	u64 root_addr = PMFS_ROOT_INO_START;
 	int ret;
+
+	sbi->s_inodes_used_count = 0;
 
 	/* Handle special inodes */
 	pi = pmfs_get_inode_by_ino(sb, PMFS_INODELIST_INO);
