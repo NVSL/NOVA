@@ -74,6 +74,8 @@ void pmfs_delete_free_lists(struct super_block *sb)
 void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct list_head *head = &(sbi->shared_block_free_head);
+	struct rb_root *tree = &(sbi->shared_block_free_tree);
 	unsigned long num_used_block;
 	struct pmfs_blocknode *blknode;
 	struct free_list *free_list;
@@ -89,8 +91,8 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 	blknode->block_low = sbi->block_start + num_used_block;
 	blknode->block_high = sbi->block_end - 1;
 	sbi->num_free_blocks -= num_used_block;
-	pmfs_insert_blocknode_blocktree(sbi, blknode);
-	list_add(&blknode->link, &sbi->shared_block_free_head);
+	pmfs_insert_blocknode_blocktree(sbi, tree, blknode);
+	list_add(&blknode->link, head);
 	pmfs_dbg_verbose("%s: Add: %lx %lx\n", __func__, blknode->block_low,
 					blknode->block_high);
 
@@ -238,7 +240,7 @@ inline int pmfs_rbtree_compare_blocknode(struct pmfs_blocknode *curr,
 	return 0;
 }
 
-static int pmfs_find_blocknode(struct pmfs_sb_info *sbi,
+static int pmfs_find_blocknode(struct pmfs_sb_info *sbi, struct rb_root *tree,
 	unsigned long new_block_low, unsigned long *step,
 	struct pmfs_blocknode **ret_node)
 {
@@ -246,7 +248,7 @@ static int pmfs_find_blocknode(struct pmfs_sb_info *sbi,
 	struct rb_node *temp;
 	int compVal;
 
-	temp = sbi->shared_block_free_tree.rb_node;
+	temp = tree->rb_node;
 
 	while (temp) {
 		curr = container_of(temp, struct pmfs_blocknode, node);
@@ -267,20 +269,20 @@ static int pmfs_find_blocknode(struct pmfs_sb_info *sbi,
 }
 
 inline int pmfs_find_blocknode_blocktree(struct pmfs_sb_info *sbi,
-	unsigned long new_block_low, unsigned long *step,
+	struct rb_root *tree, unsigned long new_block_low, unsigned long *step,
 	struct pmfs_blocknode **ret_node)
 {
-	return pmfs_find_blocknode(sbi, new_block_low, step, ret_node);
+	return pmfs_find_blocknode(sbi, tree, new_block_low, step, ret_node);
 }
 
 static int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
-	struct pmfs_blocknode *new_node)
+	struct rb_root *tree, struct pmfs_blocknode *new_node)
 {
 	struct pmfs_blocknode *curr;
 	struct rb_node **temp, *parent;
 	int compVal;
 
-	temp = &(sbi->shared_block_free_tree.rb_node);
+	temp = &(tree->rb_node);
 	parent = NULL;
 
 	while (*temp) {
@@ -302,23 +304,23 @@ static int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
 	}
 
 	rb_link_node(&new_node->node, parent, temp);
-	rb_insert_color(&new_node->node, &sbi->shared_block_free_tree);
+	rb_insert_color(&new_node->node, tree);
 
 	return 0;
 }
 
 inline int pmfs_insert_blocknode_blocktree(struct pmfs_sb_info *sbi,
-	struct pmfs_blocknode *new_node)
+	struct rb_root *tree, struct pmfs_blocknode *new_node)
 {
-	return pmfs_insert_blocknode(sbi, new_node);
+	return pmfs_insert_blocknode(sbi, tree, new_node);
 }
 
 static int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
+	struct list_head *head, struct rb_root *tree,
 	unsigned long new_block_low, unsigned long new_block_high,
 	struct pmfs_blocknode **prev, struct pmfs_blocknode **next,
 	struct pmfs_blocknode **start_hint)
 {
-	struct list_head *head = &(sbi->shared_block_free_head);
 	struct pmfs_blocknode *ret_node = NULL;
 	unsigned long step = 0;
 	int ret;
@@ -344,7 +346,7 @@ static int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
 		}
 	}
 
-	ret = pmfs_find_blocknode_blocktree(sbi, new_block_low,
+	ret = pmfs_find_blocknode_blocktree(sbi, tree, new_block_low,
 						&step, &ret_node);
 	if (ret) {
 		pmfs_dbg("%s ERROR: %lu - %lu already in free list\n",
@@ -387,6 +389,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct list_head *head = &(sbi->shared_block_free_head);
+	struct rb_root *tree = &(sbi->shared_block_free_tree);
 	unsigned long new_block_low;
 	unsigned long new_block_high;
 	unsigned long num_blocks = 0;
@@ -414,8 +417,8 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 
 	pmfs_dbgv("Free: %lu - %lu\n", new_block_low, new_block_high);
 
-	ret = pmfs_find_free_slot(sbi, new_block_low, new_block_high,
-					&prev, &next, start_hint);
+	ret = pmfs_find_free_slot(sbi, head, tree, new_block_low,
+				new_block_high,	&prev, &next, start_hint);
 
 	if (ret) {
 		pmfs_dbg("%s: find free slot fail: %d\n", __func__, ret);
@@ -425,7 +428,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	if (prev && next && (new_block_low == prev->block_high + 1) &&
 		(new_block_high + 1 == next->block_low)) {
 		/* fits the hole */
-		rb_erase(&next->node, &sbi->shared_block_free_tree);
+		rb_erase(&next->node, tree);
 		list_del(&next->link);
 		free_blocknode = next;
 		sbi->num_blocknode--;
@@ -458,7 +461,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	}
 	curr_node->block_low = new_block_low;
 	curr_node->block_high = new_block_high;
-	pmfs_insert_blocknode_blocktree(sbi, curr_node);
+	pmfs_insert_blocknode_blocktree(sbi, tree, curr_node);
 	if (prev)
 		list_add(&curr_node->link, &prev->link);
 	else if (next)
@@ -600,6 +603,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct list_head *head = &(sbi->shared_block_free_head);
+	struct rb_root *tree = &(sbi->shared_block_free_tree);
 	struct pmfs_blocknode *curr;
 	struct pmfs_blocknode *free_blocknode = NULL;
 	struct free_list *free_list;
@@ -634,7 +638,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 				continue;
 
 			/* Otherwise, allocate the whole blocknode */
-			rb_erase(&curr->node, &sbi->shared_block_free_tree);
+			rb_erase(&curr->node, tree);
 			list_del(&curr->link);
 			free_blocknode = curr;
 			sbi->num_blocknode--;

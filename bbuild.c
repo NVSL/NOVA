@@ -350,6 +350,8 @@ inline void clear_bm(unsigned long bit, struct scan_bitmap *bm,
 static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct list_head *head = &(sbi->shared_block_free_head);
+	struct rb_root *tree = &(sbi->shared_block_free_tree);
 	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
 	struct pmfs_blocknode_lowhigh *entry;
 	struct pmfs_blocknode *blknode;
@@ -379,8 +381,8 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 			PMFS_ASSERT(0);
 		blknode->block_low = entry->block_low;
 		blknode->block_high = entry->block_high;
-		list_add_tail(&blknode->link, &sbi->shared_block_free_head);
-		pmfs_insert_blocknode_blocktree(sbi, blknode);
+		list_add_tail(&blknode->link, head);
+		pmfs_insert_blocknode_blocktree(sbi, tree, blknode);
 
 		num_blocknode++;
 		curr_p += sizeof(struct pmfs_blocknode_lowhigh);
@@ -550,6 +552,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct list_head *head = &(sbi->shared_block_free_head);
+	struct rb_root *tree = &(sbi->shared_block_free_tree);
 	struct pmfs_blocknode *i, *next_i;
 	struct pmfs_blocknode *free_blocknode= NULL;
 	unsigned long num_blocks = 0;
@@ -587,8 +590,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 			/* Fill the gap completely */
 			if (next_i) {
 				i->block_high = next_i->block_high;
-				rb_erase(&next_i->node,
-					&sbi->shared_block_free_tree);
+				rb_erase(&next_i->node, tree);
 				list_del(&next_i->link);
 				free_blocknode = next_i;
 			} else {
@@ -623,7 +625,8 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 				curr_node->block_low = new_block_low;
 				curr_node->block_high = new_block_high;
 				list_add(&curr_node->link, &i->link);
-				pmfs_insert_blocknode_blocktree(sbi, curr_node);
+				pmfs_insert_blocknode_blocktree(sbi, tree,
+								curr_node);
 			}
 			found = 1;
 			break;
@@ -641,7 +644,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 			curr_node->block_low = new_block_low;
 			curr_node->block_high = new_block_high;
 			list_add(&curr_node->link, &i->link);
-			pmfs_insert_blocknode_blocktree(sbi, curr_node);
+			pmfs_insert_blocknode_blocktree(sbi, tree, curr_node);
 			found = 1;
 			break;
 		}

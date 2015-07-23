@@ -1036,12 +1036,7 @@ extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
 inline int pmfs_rbtree_compare_blocknode(struct pmfs_blocknode *curr,
 	unsigned long new_block_low);
 inline int pmfs_insert_blocknode_blocktree(struct pmfs_sb_info *sbi,
-	struct pmfs_blocknode *new_node);
-inline int pmfs_insert_blocknode_inodetree(struct pmfs_sb_info *sbi,
-	struct pmfs_blocknode *new_node);
-inline struct pmfs_blocknode *
-pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
-	unsigned long new_block_low, unsigned long *step);
+	struct rb_root *tree, struct pmfs_blocknode *new_node);
 void pmfs_free_cache_block(struct mem_addr *pair);
 
 /* bbuild.c */
