@@ -331,13 +331,10 @@ found:
 	if (prev && next && (new_block_low == prev->block_high + 1) &&
 		(new_block_high + 1 == next->block_low)) {
 		/* fits the hole */
-		if (start_hint)
-			*start_hint = pmfs_next_blocknode(prev, head);
 		rb_erase(&next->node, &sbi->block_free_tree);
 		list_del(&next->link);
 		free_blocknode = next;
 		sbi->num_blocknode_block--;
-		sbi->num_free_blocks += num_blocks;
 		prev->block_high = next->block_high;
 		if (start_hint)
 			*start_hint = prev;
@@ -346,7 +343,6 @@ found:
 	if (prev && (new_block_low == prev->block_high + 1)) {
 		/* Aligns left */
 		prev->block_high += num_blocks;
-		sbi->num_free_blocks += num_blocks;
 		if (start_hint)
 			*start_hint = prev;
 		goto block_found;
@@ -354,7 +350,6 @@ found:
 	if (next && (new_block_high + 1 == next->block_low)) {
 		/* Aligns right */
 		next->block_low -= num_blocks;
-		sbi->num_free_blocks += num_blocks;
 		if (start_hint)
 			*start_hint = next;
 		goto block_found;
@@ -377,7 +372,6 @@ found:
 	else
 		list_add(&curr_node->link, &sbi->block_free_head);
 
-	sbi->num_free_blocks += num_blocks;
 	if (start_hint)
 		*start_hint = curr_node;
 	goto block_found;
@@ -389,9 +383,10 @@ found:
 		pmfs_error_mng(sb, "Unable to free data block %lu - %lu\n",
 				 new_block_low, new_block_high);
 //	dump_stack();
+	return;
 
 block_found:
-
+	sbi->num_free_blocks += num_blocks;
 	if (free_blocknode)
 		__pmfs_free_blocknode(free_blocknode);
 	free_steps += step;
