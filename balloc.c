@@ -46,6 +46,31 @@ int pmfs_alloc_block_free_lists(struct pmfs_sb_info *sbi)
 	return 0;
 }
 
+void pmfs_delete_free_lists(struct super_block *sb)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct free_list *free_list;
+	struct pmfs_blocknode *curr;
+	struct list_head *head;
+	int i;
+
+	pmfs_print_free_lists(sb);
+
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = &sbi->free_lists[i];
+		head = &(free_list->block_free_head);
+		while (!list_empty(head)) {
+			curr = list_first_entry(head, struct pmfs_blocknode,
+								link);
+			list_del(&curr->link);
+			pmfs_free_blocknode(sb, curr);
+		}
+	}
+
+	kfree(sbi->free_lists);
+	sbi->free_lists = NULL;
+}
+
 void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);

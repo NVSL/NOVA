@@ -1009,6 +1009,7 @@ extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
 
 /* balloc.c */
 int pmfs_alloc_block_free_lists(struct pmfs_sb_info *sbi);
+void pmfs_delete_free_lists(struct super_block *sb);
 extern struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb);
 extern void pmfs_free_blocknode(struct super_block *sb,
 	struct pmfs_blocknode *bnode);

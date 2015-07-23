@@ -922,9 +922,7 @@ static void pmfs_put_super(struct super_block *sb)
 		pmfs_free_blocknode(sb, i);
 	}
 
-	pmfs_print_free_lists(sb);
-	kfree(sbi->free_lists);
-	sbi->free_lists = NULL;
+	pmfs_delete_free_lists(sb);
 
 	pmfs_free_meta_block(sb, sbi->zeroed_page);
 	pmfs_detect_memory_leak(sb);
