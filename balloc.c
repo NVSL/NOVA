@@ -100,6 +100,8 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 	per_list_blocks = sbi->block_end / sbi->cpus;
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = &sbi->free_lists[i];
+		head = &(free_list->block_free_head);
+		tree = &(free_list->block_free_tree);
 		free_list->block_start = per_list_blocks * i;
 		free_list->block_end = free_list->block_start +
 						per_list_blocks - 1;
@@ -108,6 +110,16 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 			free_list->block_start += num_used_block;
 			free_list->num_free_blocks -= num_used_block;
 		}
+
+		blknode = pmfs_alloc_blocknode(sb);
+		if (blknode == NULL)
+			PMFS_ASSERT(0);
+		blknode->block_low = free_list->block_start;
+		blknode->block_high = free_list->block_end;
+		sbi->num_free_blocks -= num_used_block;
+		pmfs_insert_blocknode_blocktree(sbi, tree, blknode);
+		list_add(&blknode->link, head);
+
 		free_list->alloc_count = 0;
 		free_list->free_count = 0;
 		free_list->allocated_blocks = 0;
@@ -388,8 +400,8 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	int log_block)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct list_head *head = &(sbi->shared_block_free_head);
-	struct rb_root *tree = &(sbi->shared_block_free_tree);
+	struct list_head *head;
+	struct rb_root *tree;
 	unsigned long new_block_low;
 	unsigned long new_block_high;
 	unsigned long num_blocks = 0;
@@ -410,6 +422,9 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	cpuid = smp_processor_id();
 	free_list = &sbi->free_lists[cpuid];
 	free_list->free_count++;
+
+	head = &(free_list->block_free_head);
+	tree = &(free_list->block_free_tree);
 
 	num_blocks = pmfs_get_numblocks(btype) * num;
 	new_block_low = blocknr;
@@ -602,8 +617,8 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 		unsigned int num, unsigned short btype, int zero, int log_page)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct list_head *head = &(sbi->shared_block_free_head);
-	struct rb_root *tree = &(sbi->shared_block_free_tree);
+	struct list_head *head;
+	struct rb_root *tree;
 	struct pmfs_blocknode *curr;
 	struct pmfs_blocknode *free_blocknode = NULL;
 	struct free_list *free_list;
@@ -626,6 +641,9 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	cpuid = smp_processor_id();
 	free_list = &sbi->free_lists[cpuid];
 	free_list->alloc_count++;
+
+	head = &(free_list->block_free_head);
+	tree = &(free_list->block_free_tree);
 
 	list_for_each_entry(curr, head, link) {
 		step++;
