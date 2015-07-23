@@ -361,7 +361,7 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 	if (curr_p == 0)
 		pmfs_dbg("%s: pi head is 0!\n", __func__);
 
-	sbi->num_blocknode_block = 0;
+	sbi->num_blocknode = 0;
 	while (curr_p != pi->log_tail) {
 		if (is_last_entry(curr_p, size, 0)) {
 			curr_p = next_log_page(sb, curr_p);
@@ -499,8 +499,8 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	u64 temp_tail;
 
 	/* Allocate log pages before save blocknode mappings */
-	num_blocks = sbi->num_blocknode_block / BLOCKNODE_PER_PAGE;
-	if (sbi->num_blocknode_block % BLOCKNODE_PER_PAGE)
+	num_blocks = sbi->num_blocknode / BLOCKNODE_PER_PAGE;
+	if (sbi->num_blocknode % BLOCKNODE_PER_PAGE)
 		num_blocks++;
 
 	allocated = pmfs_allocate_inode_log_pages(sb, pi, num_blocks,
@@ -541,7 +541,7 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	pmfs_update_tail(pi, temp_tail);
 
 	pmfs_dbg("%s: %lu blocknodes, step %d, pi head 0x%llx, tail 0x%llx\n",
-		__func__, sbi->num_blocknode_block, step, pi->log_head,
+		__func__, sbi->num_blocknode, step, pi->log_head,
 		pi->log_tail);
 }
 

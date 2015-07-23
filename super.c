@@ -802,7 +802,7 @@ int pmfs_statfs(struct dentry *d, struct kstatfs *buf)
 		buf->f_bfree);
 	pmfs_dbgv("curr inuse inode %lu, blocknodes %lu\n",
 		atomic64_read(&sbi->s_curr_ino),
-		sbi->num_blocknode_block);
+		sbi->num_blocknode);
 	return 0;
 }
 
@@ -937,14 +937,7 @@ void __pmfs_free_blocknode(struct pmfs_blocknode *bnode)
 void pmfs_free_blocknode(struct super_block *sb, struct pmfs_blocknode *bnode)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	sbi->num_blocknode_block--;
-	__pmfs_free_blocknode(bnode);
-}
-
-void pmfs_free_inode_node(struct super_block *sb, struct pmfs_blocknode *bnode)
-{
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	sbi->num_blocknode_inode--;
+	sbi->num_blocknode--;
 	__pmfs_free_blocknode(bnode);
 }
 
@@ -967,19 +960,7 @@ struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb)
 	p = (struct pmfs_blocknode *)
 		kmem_cache_alloc(pmfs_blocknode_cachep, GFP_NOFS);
 	if (p) {
-		sbi->num_blocknode_block++;
-	}
-	return p;
-}
-
-struct pmfs_blocknode *pmfs_alloc_inode_node(struct super_block *sb)
-{
-	struct pmfs_blocknode *p;
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	p = (struct pmfs_blocknode *)
-		kmem_cache_alloc(pmfs_blocknode_cachep, GFP_NOFS);
-	if (p) {
-		sbi->num_blocknode_inode++;
+		sbi->num_blocknode++;
 	}
 	return p;
 }

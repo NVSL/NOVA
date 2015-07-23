@@ -355,7 +355,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 		rb_erase(&next->node, &sbi->block_free_tree);
 		list_del(&next->link);
 		free_blocknode = next;
-		sbi->num_blocknode_block--;
+		sbi->num_blocknode--;
 		prev->block_high = next->block_high;
 		if (start_hint)
 			*start_hint = prev;
@@ -558,7 +558,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 			rb_erase(&curr->node, &sbi->block_free_tree);
 			list_del(&curr->link);
 			free_blocknode = curr;
-			sbi->num_blocknode_block--;
+			sbi->num_blocknode--;
 			found = 1;
 			num_blocks = curr_blocks;
 			new_block_low = curr->block_low;

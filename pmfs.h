@@ -570,8 +570,7 @@ struct pmfs_sb_info {
 	atomic64_t	s_curr_ino;
 
 	int cpus;
-	unsigned long num_blocknode_block;
-	unsigned long num_blocknode_inode;
+	unsigned long num_blocknode;
 
 	/* Journaling related structures */
 	uint32_t    next_transaction_id;
@@ -991,10 +990,7 @@ extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
 
 /* balloc.c */
 extern struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb);
-extern struct pmfs_blocknode *pmfs_alloc_inode_node(struct super_block *sb);
 extern void pmfs_free_blocknode(struct super_block *sb,
-	struct pmfs_blocknode *bnode);
-extern void pmfs_free_inode_node(struct super_block *sb,
 	struct pmfs_blocknode *bnode);
 extern void pmfs_init_blockmap(struct super_block *sb,
 		unsigned long init_used_size);
