@@ -1186,6 +1186,7 @@ void pmfs_clear_stats(void);
 void pmfs_print_inode_log(struct super_block *sb, struct inode *inode);
 void pmfs_print_inode_log_page(struct super_block *sb, struct inode *inode);
 void pmfs_print_inode_log_blocknode(struct super_block *sb, struct inode *inode);
+void pmfs_print_free_lists(struct super_block *sb);
 void pmfs_detect_memory_leak(struct super_block *sb);
 
 #endif /* __PMFS_H */

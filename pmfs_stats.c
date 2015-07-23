@@ -299,6 +299,28 @@ out:
 	pmfs_dbg("All %lu pages\n", count);
 }
 
+void pmfs_print_free_lists(struct super_block *sb)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct free_list *free_list;
+	int i;
+
+	pmfs_dbg("======== PMFS per-CPU free list allocation stats ========\n");
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = &sbi->free_lists[i];
+		pmfs_dbg("Free list %d: block start %lu, block end %lu, "
+			"num_blocks %lu\n",
+			i, free_list->block_start, free_list->block_end,
+			free_list->block_end - free_list->block_start + 1);
+
+		pmfs_dbg("Free list %d: num_free_blocks %lu, alloc count %lu, "
+			"free count %lu, allocated blocks %lu, "
+			"freed blocks %lu\n", i, free_list->num_free_blocks,
+			free_list->alloc_count,	free_list->free_count,
+			free_list->allocated_blocks, free_list->freed_blocks);
+	}
+}
+
 void pmfs_detect_memory_leak(struct super_block *sb)
 {
 	if (atomic64_read(&meta_alloc) != atomic64_read(&meta_free))
