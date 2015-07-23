@@ -55,16 +55,6 @@ static struct kmem_cache *pmfs_transaction_cachep;
 /* FIXME: should the following variable be one per PMFS instance? */
 unsigned int pmfs_dbgmask = 0;
 
-#ifdef CONFIG_PMFS_TEST
-static void *first_pmfs_super;
-
-struct pmfs_super_block *get_pmfs_super(void)
-{
-	return (struct pmfs_super_block *)first_pmfs_super;
-}
-EXPORT_SYMBOL(get_pmfs_super);
-#endif
-
 void pmfs_error_mng(struct super_block *sb, const char *fmt, ...)
 {
 	va_list args;
@@ -401,10 +391,6 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 		printk(KERN_ERR "ioremap of the pmfs image failed(1)\n");
 		return ERR_PTR(-EINVAL);
 	}
-#ifdef CONFIG_PMFS_TEST
-	if (!first_pmfs_super)
-		first_pmfs_super = sbi->virt_addr;
-#endif
 
 	pmfs_dbg_verbose("pmfs: Default block size set to 4K\n");
 	blocksize = sbi->blocksize = PMFS_DEF_BLOCK_SIZE_4K;
@@ -724,11 +710,6 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	/* Check that the root inode is in a sane state */
 	pmfs_root_check(sb, root_pi);
 
-#ifdef CONFIG_PMFS_TEST
-	if (!first_pmfs_super)
-		first_pmfs_super = sbi->virt_addr;
-#endif
-
 	/* Set it all up.. */
 setup_sb:
 	sb->s_magic = le16_to_cpu(super->s_magic);
@@ -916,11 +897,6 @@ static void pmfs_put_super(struct super_block *sb)
 	u64 size = le64_to_cpu(ps->s_size);
 	struct pmfs_blocknode *i;
 	struct list_head *head;
-
-#ifdef CONFIG_PMFS_TEST
-	if (first_pmfs_super == sbi->virt_addr)
-		first_pmfs_super = NULL;
-#endif
 
 	/* It's unmount time, so unmap the pmfs memory */
 	if (sbi->virt_addr) {

@@ -1150,9 +1150,6 @@ void pmfs_apply_link_change_entry(struct pmfs_inode *pi,
 	struct pmfs_link_change_entry *entry);
 
 /* super.c */
-#ifdef CONFIG_PMFS_TEST
-extern struct pmfs_super_block *get_pmfs_super(void);
-#endif
 extern void __pmfs_free_blocknode(struct pmfs_blocknode *bnode);
 extern struct super_block *pmfs_read_super(struct super_block *sb, void *data,
 	int silent);
