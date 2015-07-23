@@ -44,6 +44,7 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 					blknode->block_high);
 }
 
+#if 0
 static struct pmfs_blocknode *pmfs_next_blocknode(struct pmfs_blocknode *i,
 						  struct list_head *head)
 {
@@ -51,6 +52,7 @@ static struct pmfs_blocknode *pmfs_next_blocknode(struct pmfs_blocknode *i,
 		return NULL;
 	return list_first_entry(&i->link, typeof(*i), link);
 }
+#endif
 
 static inline void pmfs_free_dram_page(unsigned long page_addr)
 {
@@ -242,6 +244,72 @@ inline int pmfs_insert_blocknode_blocktree(struct pmfs_sb_info *sbi,
 	return pmfs_insert_blocknode(sbi, new_node);
 }
 
+static int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
+	unsigned long new_block_low, unsigned long new_block_high,
+	struct pmfs_blocknode **prev, struct pmfs_blocknode **next,
+	struct pmfs_blocknode **start_hint)
+{
+	struct list_head *head = &(sbi->block_free_head);
+	struct pmfs_blocknode *ret_node = NULL;
+	unsigned long step = 0;
+	int ret;
+
+	if (start_hint && *start_hint &&
+	    new_block_low > (*start_hint)->block_high) {
+		*prev = *start_hint;
+
+		while (step <= 3) {
+			if ((*prev)->link.next == head) {
+				*next = NULL;
+				return 0;
+			}
+
+			*next = list_entry((*prev)->link.next,
+					struct pmfs_blocknode, link);
+
+			if (new_block_high < (*next)->block_low)
+				return 0;
+
+			*prev = *next;
+			step++;
+		}
+	}
+
+	ret = pmfs_find_blocknode_blocktree(sbi, new_block_low,
+						&step, &ret_node);
+	if (ret) {
+		pmfs_dbg("%s ERROR: %lu - %lu already in free list\n",
+			__func__, new_block_low, new_block_high);
+		return -EINVAL;
+	}
+
+	if (!ret_node) {
+		*prev = *next = NULL;
+	} else if (ret_node->block_high < new_block_low) {
+		*prev = ret_node;
+		if ((*prev)->link.next == head)
+			*next = NULL;
+		else
+			*next = list_entry((*prev)->link.next,
+					struct pmfs_blocknode, link);
+	} else if (ret_node->block_low > new_block_high) {
+		*next = ret_node;
+		if ((*next)->link.prev == head)
+			*prev = NULL;
+		else
+			*prev = list_entry((*next)->link.prev,
+					struct pmfs_blocknode, link);
+	} else {
+		pmfs_dbg("%s ERROR: %lu - %lu overlaps with existing node "
+			"%lu - %lu\n", __func__, new_block_low,
+			new_block_high, ret_node->block_low,
+			ret_node->block_high);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 /* Caller must hold the super_block lock.  If start_hint is provided, it is
  * only valid until the caller releases the super_block lock. */
 static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
@@ -255,7 +323,6 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	unsigned long num_blocks = 0;
 	struct pmfs_blocknode *prev = NULL;
 	struct pmfs_blocknode *next = NULL;
-	struct pmfs_blocknode *ret_node = NULL;
 	struct pmfs_blocknode *free_blocknode= NULL;
 	struct pmfs_blocknode *curr_node;
 	unsigned long step = 0;
@@ -274,60 +341,14 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 
 	pmfs_dbgv("Free: %lu - %lu\n", new_block_low, new_block_high);
 
-	if (start_hint && *start_hint &&
-	    new_block_low > (*start_hint)->block_high) {
-		prev = *start_hint;
+	ret = pmfs_find_free_slot(sbi, new_block_low, new_block_high,
+					&prev, &next, start_hint);
 
-		while (step <= 3) {
-			if (prev->link.next == head) {
-				next = NULL;
-				goto found;
-			}
-
-			next = list_entry(prev->link.next,
-						typeof(*prev), link);
-
-			if (new_block_high < next->block_low)
-				goto found;
-
-			prev = next;
-			step++;
-		}
-	}
-
-	ret = pmfs_find_blocknode_blocktree(sbi, new_block_low,
-						&step, &ret_node);
 	if (ret) {
-		pmfs_dbg("%s ERROR: %lu - %lu already in free list\n",
-			__func__, new_block_low, new_block_high);
+		pmfs_dbg("%s: find free slot fail: %d\n", __func__, ret);
 		return;
 	}
 
-	if (!ret_node) {
-		prev = next = NULL;
-	} else if (ret_node->block_high < new_block_low) {
-		prev = ret_node;
-		if (prev->link.next == head)
-			next = NULL;
-		else
-			next = list_entry(prev->link.next,
-						typeof(*prev), link);
-	} else if (ret_node->block_low > new_block_high) {
-		next = ret_node;
-		if (next->link.prev == head)
-			prev = NULL;
-		else
-			prev = list_entry(next->link.prev,
-						typeof(*next), link);
-	} else {
-		pmfs_dbg("%s ERROR: %lu - %lu overlaps with existing node "
-			"%lu - %lu\n", __func__, new_block_low,
-			new_block_high, ret_node->block_low,
-			ret_node->block_high);
-		return;
-	}
-
-found:
 	if (prev && next && (new_block_low == prev->block_high + 1) &&
 		(new_block_high + 1 == next->block_low)) {
 		/* fits the hole */
