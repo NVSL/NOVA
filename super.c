@@ -636,6 +636,9 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	set_opt(sbi->s_mount_opt, MOUNTING);
 	initsize = sbi->initsize;
 
+	if (pmfs_alloc_block_free_lists(sbi))
+		goto out;
+
 	/* Init a new pmfs instance */
 	if (initsize) {
 		root_pi = pmfs_init(sb, initsize);
@@ -763,9 +766,6 @@ setup_sb:
 		sizeof(struct pmfs_setattr_logentry),
 		sizeof(struct pmfs_link_change_entry));
 
-	sbi->cpus = num_online_cpus();
-	pmfs_dbg("%d cpus online\n", sbi->cpus);
-
 	PMFS_END_TIMING(mount_t, mount_time);
 	return retval;
 out:
@@ -777,6 +777,11 @@ out:
 	if (sbi->zeroed_page) {
 		pmfs_free_meta_block(sb, sbi->zeroed_page);
 		sbi->zeroed_page = 0;
+	}
+
+	if (sbi->free_lists) {
+		kfree(sbi->free_lists);
+		sbi->free_lists = NULL;
 	}
 
 	kfree(sbi);
@@ -916,6 +921,9 @@ static void pmfs_put_super(struct super_block *sb)
 		list_del(&i->link);
 		pmfs_free_blocknode(sb, i);
 	}
+
+	kfree(sbi->free_lists);
+	sbi->free_lists = NULL;
 
 	pmfs_free_meta_block(sb, sbi->zeroed_page);
 	pmfs_detect_memory_leak(sb);

@@ -23,6 +23,29 @@
 #include <linux/bitops.h>
 #include "pmfs.h"
 
+int pmfs_alloc_block_free_lists(struct pmfs_sb_info *sbi)
+{
+	struct free_list *free_list;
+	int i;
+
+	sbi->cpus = num_online_cpus();
+	pmfs_dbg("%s: %d cpus online\n", __func__, sbi->cpus);
+
+	sbi->free_lists = kzalloc(sbi->cpus * sizeof(struct free_list),
+							GFP_KERNEL);
+
+	if (!sbi->free_lists)
+		return -ENOMEM;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = &sbi->free_lists[i];
+		INIT_LIST_HEAD(&free_list->block_free_head);
+		free_list->block_free_tree = RB_ROOT;
+	}
+
+	return 0;
+}
+
 void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);

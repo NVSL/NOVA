@@ -530,6 +530,18 @@ struct scan_bitmap {
 	unsigned long highest_inuse_ino;
 };
 
+struct free_list {
+	struct list_head block_free_head;
+	struct rb_root	block_free_tree;
+	unsigned long	block_start;
+	unsigned long	block_end;
+	unsigned long	num_free_blocks;
+	unsigned long	alloc_count;
+	unsigned long	free_count;
+	unsigned long	allocated_blocks;
+	unsigned long	freed_blocks;
+};
+
 /*
  * PMFS super-block data in memory
  */
@@ -590,6 +602,9 @@ struct pmfs_sb_info {
 
 	/* ZEROED page for cache page initialized */
 	unsigned long zeroed_page;
+
+	/* Per-CPU free block list */
+	struct free_list *free_lists;
 };
 
 static inline struct pmfs_sb_info *PMFS_SB(struct super_block *sb)
@@ -989,6 +1004,7 @@ static inline int is_dir_init_entry(struct super_block *sb,
 extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
 
 /* balloc.c */
+int pmfs_alloc_block_free_lists(struct pmfs_sb_info *sbi);
 extern struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb);
 extern void pmfs_free_blocknode(struct super_block *sb,
 	struct pmfs_blocknode *bnode);
