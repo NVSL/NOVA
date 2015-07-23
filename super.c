@@ -914,7 +914,7 @@ static void pmfs_put_super(struct super_block *sb)
 	while (!list_empty(head)) {
 		i = list_first_entry(head, struct pmfs_blocknode, link);
 		list_del(&i->link);
-		pmfs_free_block_node(sb, i);
+		pmfs_free_blocknode(sb, i);
 	}
 
 	pmfs_free_meta_block(sb, sbi->zeroed_page);
@@ -934,7 +934,7 @@ void __pmfs_free_blocknode(struct pmfs_blocknode *bnode)
 	kmem_cache_free(pmfs_blocknode_cachep, bnode);
 }
 
-void pmfs_free_block_node(struct super_block *sb, struct pmfs_blocknode *bnode)
+void pmfs_free_blocknode(struct super_block *sb, struct pmfs_blocknode *bnode)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	sbi->num_blocknode_block--;
@@ -960,7 +960,7 @@ inline pmfs_transaction_t *pmfs_alloc_transaction(void)
 		kmem_cache_alloc(pmfs_transaction_cachep, GFP_NOFS);
 }
 
-struct pmfs_blocknode *pmfs_alloc_block_node(struct super_block *sb)
+struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb)
 {
 	struct pmfs_blocknode *p;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);

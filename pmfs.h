@@ -990,9 +990,9 @@ static inline int is_dir_init_entry(struct super_block *sb,
 extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
 
 /* balloc.c */
-extern struct pmfs_blocknode *pmfs_alloc_block_node(struct super_block *sb);
+extern struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb);
 extern struct pmfs_blocknode *pmfs_alloc_inode_node(struct super_block *sb);
-extern void pmfs_free_block_node(struct super_block *sb,
+extern void pmfs_free_blocknode(struct super_block *sb,
 	struct pmfs_blocknode *bnode);
 extern void pmfs_free_inode_node(struct super_block *sb,
 	struct pmfs_blocknode *bnode);

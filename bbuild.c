@@ -374,7 +374,7 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 
 		entry = (struct pmfs_blocknode_lowhigh *)pmfs_get_block(sb,
 							curr_p);
-		blknode = pmfs_alloc_block_node(sb);
+		blknode = pmfs_alloc_blocknode(sb);
 		if (blknode == NULL)
 			PMFS_ASSERT(0);
 		blknode->block_low = entry->block_low;
@@ -614,7 +614,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 				next_i->block_low = new_block_low;
 			} else {
 				/* right node does NOT exist */
-				curr_node = pmfs_alloc_block_node(sb);
+				curr_node = pmfs_alloc_blocknode(sb);
 				PMFS_ASSERT(curr_node);
 				if (curr_node == NULL) {
 					errval = -ENOSPC;
@@ -632,7 +632,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 		if ((new_block_low > (i->block_high + 1)) &&
 			(new_block_high < (next_block_low - 1))) {
 			/* Aligns somewhere in the middle */
-			curr_node = pmfs_alloc_block_node(sb);
+			curr_node = pmfs_alloc_blocknode(sb);
 			PMFS_ASSERT(curr_node);
 			if (curr_node == NULL) {
 				errval = -ENOSPC;
@@ -652,7 +652,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 	}	
 
 	if (free_blocknode)
-		pmfs_free_block_node(sb, free_blocknode);
+		pmfs_free_blocknode(sb, free_blocknode);
 
 	if (found == 0) {
 		return -ENOSPC;

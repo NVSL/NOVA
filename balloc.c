@@ -32,7 +32,7 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 	num_used_block = (init_used_size + sb->s_blocksize - 1) >>
 		sb->s_blocksize_bits;
 
-	blknode = pmfs_alloc_block_node(sb);
+	blknode = pmfs_alloc_blocknode(sb);
 	if (blknode == NULL)
 		PMFS_ASSERT(0);
 	blknode->block_low = sbi->block_start + num_used_block;
@@ -377,7 +377,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	}
 
 	/* Aligns somewhere in the middle */
-	curr_node = pmfs_alloc_block_node(sb);
+	curr_node = pmfs_alloc_blocknode(sb);
 	PMFS_ASSERT(curr_node);
 	if (curr_node == NULL) {
 		/* returning without freeing the block*/
