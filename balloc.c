@@ -59,7 +59,7 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 	if (blknode == NULL)
 		PMFS_ASSERT(0);
 	blknode->block_low = sbi->block_start + num_used_block;
-	blknode->block_high = sbi->block_end;
+	blknode->block_high = sbi->block_end - 1;
 	sbi->num_free_blocks -= num_used_block;
 	pmfs_insert_blocknode_blocktree(sbi, blknode);
 	list_add(&blknode->link, &sbi->shared_block_free_head);
