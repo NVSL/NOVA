@@ -369,7 +369,9 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	struct pmfs_blocknode *next = NULL;
 	struct pmfs_blocknode *free_blocknode= NULL;
 	struct pmfs_blocknode *curr_node;
+	struct free_list *free_list;
 	unsigned long step = 0;
+	int cpuid;
 	int ret;
 
 	if (num <= 0) {
@@ -377,11 +379,13 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 		return;
 	}
 
+	cpuid = smp_processor_id();
+	free_list = &sbi->free_lists[cpuid];
+	free_list->free_count++;
+
 	num_blocks = pmfs_get_numblocks(btype) * num;
 	new_block_low = blocknr;
 	new_block_high = blocknr + num_blocks - 1;
-
-	BUG_ON(list_empty(head));
 
 	pmfs_dbgv("Free: %lu - %lu\n", new_block_low, new_block_high);
 
@@ -435,7 +439,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	else if (next)
 		list_add_tail(&curr_node->link, &next->link);
 	else
-		list_add(&curr_node->link, &sbi->shared_block_free_head);
+		list_add(&curr_node->link, head);
 
 	if (start_hint)
 		*start_hint = curr_node;
@@ -451,6 +455,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	return;
 
 block_found:
+	free_list->freed_blocks += num_blocks;
 	sbi->num_free_blocks += num_blocks;
 	if (free_blocknode)
 		__pmfs_free_blocknode(free_blocknode);
@@ -572,12 +577,14 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	struct list_head *head = &(sbi->shared_block_free_head);
 	struct pmfs_blocknode *curr;
 	struct pmfs_blocknode *free_blocknode = NULL;
+	struct free_list *free_list;
 	void *bp;
 	unsigned long num_blocks = 0;
 	unsigned long curr_blocks;
 	bool found = 0;
 	unsigned long new_block_low;
 	unsigned long step = 0;
+	int cpuid;
 
 	num_blocks = num * pmfs_get_numblocks(btype);
 	if (num_blocks == 0)
@@ -587,6 +594,9 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 		return -ENOSPC;
 
 	mutex_lock(&sbi->s_lock);
+	cpuid = smp_processor_id();
+	free_list = &sbi->free_lists[cpuid];
+	free_list->alloc_count++;
 
 	list_for_each_entry(curr, head, link) {
 		step++;
@@ -623,6 +633,8 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 		else
 			alloc_data_pages += num_blocks;
 	}	
+
+	free_list->allocated_blocks += num_blocks;
 
 	mutex_unlock(&sbi->s_lock);
 
