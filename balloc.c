@@ -51,6 +51,9 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	unsigned long num_used_block;
 	struct pmfs_blocknode *blknode;
+	struct free_list *free_list;
+	unsigned long per_list_blocks;
+	int i;
 
 	num_used_block = (init_used_size + sb->s_blocksize - 1) >>
 		sb->s_blocksize_bits;
@@ -65,6 +68,24 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 	list_add(&blknode->link, &sbi->shared_block_free_head);
 	pmfs_dbg_verbose("%s: Add: %lx %lx\n", __func__, blknode->block_low,
 					blknode->block_high);
+
+	/* Divide the block range among per-CPU free lists */
+	per_list_blocks = sbi->block_end / sbi->cpus;
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = &sbi->free_lists[i];
+		free_list->block_start = per_list_blocks * i;
+		free_list->block_end = free_list->block_start +
+						per_list_blocks - 1;
+		free_list->num_free_blocks = per_list_blocks;
+		if (i == 0) {
+			free_list->block_start += num_used_block;
+			free_list->num_free_blocks -= num_used_block;
+		}
+		free_list->alloc_count = 0;
+		free_list->free_count = 0;
+		free_list->allocated_blocks = 0;
+		free_list->freed_blocks = 0;
+	}
 }
 
 #if 0
