@@ -35,11 +35,11 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 	blknode = pmfs_alloc_block_node(sb);
 	if (blknode == NULL)
 		PMFS_ASSERT(0);
-	blknode->block_low = sbi->block_start;
-	blknode->block_high = sbi->block_start + num_used_block - 1;
+	blknode->block_low = sbi->block_start + num_used_block;
+	blknode->block_high = sbi->block_end;
 	sbi->num_free_blocks -= num_used_block;
 	pmfs_insert_blocknode_blocktree(sbi, blknode);
-	list_add(&blknode->link, &sbi->block_inuse_head);
+	list_add(&blknode->link, &sbi->block_free_head);
 	pmfs_dbg_verbose("%s: Add: %lx %lx\n", __func__, blknode->block_low,
 					blknode->block_high);
 }
@@ -167,14 +167,15 @@ inline int pmfs_rbtree_compare_blocknode(struct pmfs_blocknode *curr,
 	return 0;
 }
 
-static struct pmfs_blocknode *pmfs_find_blocknode(struct pmfs_sb_info *sbi,
-	unsigned long new_block_low, unsigned long *step)
+static int pmfs_find_blocknode(struct pmfs_sb_info *sbi,
+	unsigned long new_block_low, unsigned long *step,
+	struct pmfs_blocknode **ret_node)
 {
-	struct pmfs_blocknode *curr;
+	struct pmfs_blocknode *curr = NULL;
 	struct rb_node *temp;
 	int compVal;
 
-	temp = sbi->block_inuse_tree.rb_node;
+	temp = sbi->block_free_tree.rb_node;
 
 	while (temp) {
 		curr = container_of(temp, struct pmfs_blocknode, node);
@@ -186,18 +187,19 @@ static struct pmfs_blocknode *pmfs_find_blocknode(struct pmfs_sb_info *sbi,
 		} else if (compVal == 1) {
 			temp = temp->rb_right;
 		} else {
-			return curr;
+			return 1;
 		}
 	}
 
-	return NULL;
+	*ret_node = curr;
+	return 0;
 }
 
-inline struct pmfs_blocknode *
-pmfs_find_blocknode_blocktree(struct pmfs_sb_info *sbi,
-	unsigned long new_block_low, unsigned long *step)
+inline int pmfs_find_blocknode_blocktree(struct pmfs_sb_info *sbi,
+	unsigned long new_block_low, unsigned long *step,
+	struct pmfs_blocknode **ret_node)
 {
-	return pmfs_find_blocknode(sbi, new_block_low, step);
+	return pmfs_find_blocknode(sbi, new_block_low, step, ret_node);
 }
 
 static int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
@@ -207,7 +209,7 @@ static int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
 	struct rb_node **temp, *parent;
 	int compVal;
 
-	temp = &(sbi->block_inuse_tree.rb_node);
+	temp = &(sbi->block_free_tree.rb_node);
 	parent = NULL;
 
 	while (*temp) {
@@ -229,7 +231,7 @@ static int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
 	}
 
 	rb_link_node(&new_node->node, parent, temp);
-	rb_insert_color(&new_node->node, &sbi->block_inuse_tree);
+	rb_insert_color(&new_node->node, &sbi->block_free_tree);
 
 	return 0;
 }
@@ -242,19 +244,22 @@ inline int pmfs_insert_blocknode_blocktree(struct pmfs_sb_info *sbi,
 
 /* Caller must hold the super_block lock.  If start_hint is provided, it is
  * only valid until the caller releases the super_block lock. */
-static void __pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
+static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	int num, unsigned short btype, struct pmfs_blocknode **start_hint,
 	int log_block)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct list_head *head = &(sbi->block_inuse_head);
+	struct list_head *head = &(sbi->block_free_head);
 	unsigned long new_block_low;
 	unsigned long new_block_high;
 	unsigned long num_blocks = 0;
-	struct pmfs_blocknode *i = NULL;
+	struct pmfs_blocknode *prev = NULL;
+	struct pmfs_blocknode *next = NULL;
+	struct pmfs_blocknode *ret_node = NULL;
 	struct pmfs_blocknode *free_blocknode= NULL;
 	struct pmfs_blocknode *curr_node;
 	unsigned long step = 0;
+	int ret;
 
 	if (num <= 0) {
 		pmfs_dbg("%s ERROR: free %d\n", __func__, num);
@@ -267,86 +272,115 @@ static void __pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 
 	BUG_ON(list_empty(head));
 
-	pmfs_dbg_verbose("Free: %lu - %lu\n", new_block_low, new_block_high);
+	pmfs_dbgv("Free: %lu - %lu\n", new_block_low, new_block_high);
 
 	if (start_hint && *start_hint &&
-	    new_block_low >= (*start_hint)->block_low) {
-		i = *start_hint;
+	    new_block_low > (*start_hint)->block_high) {
+		prev = *start_hint;
 
 		while (step <= 3) {
-			if ((new_block_low >= i->block_low) &&
-				(new_block_high <= i->block_high)) {
-				goto Found;
+			if (prev->link.next == head) {
+				next = NULL;
+				goto found;
 			}
 
-			if (new_block_high < i->block_low)
-				break;
+			next = list_entry(prev->link.next,
+						typeof(*prev), link);
 
-			if (i->link.next == head)
-				break;
-			else
-				i = list_entry(i->link.next, typeof(*i), link);
+			if (new_block_high < next->block_low)
+				goto found;
+
+			prev = next;
 			step++;
 		}
 	}
 
-	i = pmfs_find_blocknode_blocktree(sbi, new_block_low, &step);
-	if (!i) {
-		pmfs_dbg("%s ERROR: %lu - %lu not found\n", __func__,
-				new_block_low, new_block_high);
+	ret = pmfs_find_blocknode_blocktree(sbi, new_block_low,
+						&step, &ret_node);
+	if (ret) {
+		pmfs_dbg("%s ERROR: %lu - %lu already in free list\n",
+			__func__, new_block_low, new_block_high);
 		return;
 	}
 
-Found:
-	if ((new_block_low == i->block_low) &&
-		(new_block_high == i->block_high)) {
-		/* fits entire datablock */
+	if (!ret_node) {
+		prev = next = NULL;
+	} else if (ret_node->block_high < new_block_low) {
+		prev = ret_node;
+		if (prev->link.next == head)
+			next = NULL;
+		else
+			next = list_entry(prev->link.next,
+						typeof(*prev), link);
+	} else if (ret_node->block_low > new_block_high) {
+		next = ret_node;
+		if (next->link.prev == head)
+			prev = NULL;
+		else
+			prev = list_entry(next->link.prev,
+						typeof(*next), link);
+	} else {
+		pmfs_dbg("%s ERROR: %lu - %lu overlaps with existing node "
+			"%lu - %lu\n", __func__, new_block_low,
+			new_block_high, ret_node->block_low,
+			ret_node->block_high);
+		return;
+	}
+
+found:
+	if (prev && next && (new_block_low == prev->block_high + 1) &&
+		(new_block_high + 1 == next->block_low)) {
+		/* fits the hole */
 		if (start_hint)
-			*start_hint = pmfs_next_blocknode(i, head);
-		rb_erase(&i->node, &sbi->block_inuse_tree);
-		list_del(&i->link);
-		free_blocknode = i;
+			*start_hint = pmfs_next_blocknode(prev, head);
+		rb_erase(&next->node, &sbi->block_free_tree);
+		list_del(&next->link);
+		free_blocknode = next;
 		sbi->num_blocknode_block--;
 		sbi->num_free_blocks += num_blocks;
+		prev->block_high = next->block_high;
+		if (start_hint)
+			*start_hint = prev;
 		goto block_found;
 	}
-	if ((new_block_low == i->block_low) &&
-		(new_block_high < i->block_high)) {
+	if (prev && (new_block_low == prev->block_high + 1)) {
 		/* Aligns left */
-		i->block_low = new_block_high + 1;
+		prev->block_high += num_blocks;
 		sbi->num_free_blocks += num_blocks;
 		if (start_hint)
-			*start_hint = i;
+			*start_hint = prev;
 		goto block_found;
 	}
-	if ((new_block_low > i->block_low) &&
-		(new_block_high == i->block_high)) {
+	if (next && (new_block_high + 1 == next->block_low)) {
 		/* Aligns right */
-		i->block_high = new_block_low - 1;
+		next->block_low -= num_blocks;
 		sbi->num_free_blocks += num_blocks;
 		if (start_hint)
-			*start_hint = pmfs_next_blocknode(i, head);
+			*start_hint = next;
 		goto block_found;
 	}
-	if ((new_block_low > i->block_low) &&
-		(new_block_high < i->block_high)) {
-		/* Aligns somewhere in the middle */
-		curr_node = pmfs_alloc_block_node(sb);
-		PMFS_ASSERT(curr_node);
-		if (curr_node == NULL) {
-			/* returning without freeing the block*/
-			goto block_found;
-		}
-		curr_node->block_low = new_block_high + 1;
-		curr_node->block_high = i->block_high;
-		i->block_high = new_block_low - 1;
-		pmfs_insert_blocknode_blocktree(sbi, curr_node);
-		list_add(&curr_node->link, &i->link);
-		sbi->num_free_blocks += num_blocks;
-		if (start_hint)
-			*start_hint = curr_node;
+
+	/* Aligns somewhere in the middle */
+	curr_node = pmfs_alloc_block_node(sb);
+	PMFS_ASSERT(curr_node);
+	if (curr_node == NULL) {
+		/* returning without freeing the block*/
 		goto block_found;
 	}
+	curr_node->block_low = new_block_low;
+	curr_node->block_high = new_block_high;
+	pmfs_insert_blocknode_blocktree(sbi, curr_node);
+	if (prev)
+		list_add(&curr_node->link, &prev->link);
+	else if (next)
+		list_add_tail(&curr_node->link, &next->link);
+	else
+		list_add(&curr_node->link, &sbi->block_free_head);
+
+	sbi->num_free_blocks += num_blocks;
+	if (start_hint)
+		*start_hint = curr_node;
+	goto block_found;
 
 	if (log_block)
 		pmfs_error_mng(sb, "Unable to free log block %lu - %lu\n",
@@ -354,8 +388,6 @@ Found:
 	else
 		pmfs_error_mng(sb, "Unable to free data block %lu - %lu\n",
 				 new_block_low, new_block_high);
-	pmfs_error_mng(sb, "Found inuse block %lu - %lu\n",
-				 i->block_low, i->block_high);
 //	dump_stack();
 
 block_found:
@@ -402,7 +434,7 @@ void pmfs_free_data_blocks(struct super_block *sb, unsigned long blocknr,
 	PMFS_START_TIMING(free_data_t, free_time);
 	if (needlock)
 		mutex_lock(&sbi->s_lock);
-	__pmfs_free_blocks(sb, blocknr, num, btype, start_hint, 0);
+	pmfs_free_blocks(sb, blocknr, num, btype, start_hint, 0);
 	free_data_pages += num;
 	if (needlock)
 		mutex_unlock(&sbi->s_lock);
@@ -420,7 +452,7 @@ void pmfs_free_log_blocks(struct super_block *sb, unsigned long blocknr,
 	PMFS_START_TIMING(free_log_t, free_time);
 	if (needlock)
 		mutex_lock(&sbi->s_lock);
-	__pmfs_free_blocks(sb, blocknr, num, btype, start_hint, 1);
+	pmfs_free_blocks(sb, blocknr, num, btype, start_hint, 1);
 	free_log_pages += num;
 	if (needlock)
 		mutex_unlock(&sbi->s_lock);
@@ -477,15 +509,14 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 		unsigned int num, unsigned short btype, int zero, int log_page)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct list_head *head = &(sbi->block_inuse_head);
-	struct pmfs_blocknode *i, *next_i;
-	struct pmfs_blocknode *free_blocknode= NULL;
+	struct list_head *head = &(sbi->block_free_head);
+	struct pmfs_blocknode *curr;
+	struct pmfs_blocknode *free_blocknode = NULL;
 	void *bp;
 	unsigned long num_blocks = 0;
+	unsigned long curr_blocks;
 	bool found = 0;
-	unsigned long next_block_low;
 	unsigned long new_block_low;
-	unsigned long new_block_high;
 	unsigned long step = 0;
 
 	num_blocks = num * pmfs_get_numblocks(btype);
@@ -497,66 +528,34 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 
 	mutex_lock(&sbi->s_lock);
 
-	list_for_each_entry(i, head, link) {
+	list_for_each_entry(curr, head, link) {
 		step++;
-		if (i->link.next == head) {
-			next_i = NULL;
-			next_block_low = sbi->block_end;
-		} else {
-			next_i = list_entry(i->link.next, typeof(*i), link);
-			next_block_low = next_i->block_low;
-		}
 
-		new_block_low = i->block_high + 1;
-		new_block_high = new_block_low + num_blocks - 1;
+		curr_blocks = curr->block_high - curr->block_low + 1;
 
-		if (new_block_high >= next_block_low) {
+		if (num_blocks >= curr_blocks) {
 			/* Superpage allocation must succeed */
-			if (btype > 0)
+			if (btype > 0 && num_blocks > curr_blocks)
 				continue;
 
-			/* Otherwise, allocate the hole */
-			if (next_i) {
-				i->block_high = next_i->block_high;
-				rb_erase(&next_i->node,
-					&sbi->block_inuse_tree);
-				list_del(&next_i->link);
-				free_blocknode = next_i;
-				sbi->num_blocknode_block--;
-			} else {
-				i->block_high = new_block_high;
-			}
+			/* Otherwise, allocate the whole blocknode */
+			rb_erase(&curr->node, &sbi->block_free_tree);
+			list_del(&curr->link);
+			free_blocknode = curr;
+			sbi->num_blocknode_block--;
 			found = 1;
-			num_blocks = next_block_low - new_block_low;
+			num_blocks = curr_blocks;
+			new_block_low = curr->block_low;
 			break;
 		}
 
-		if ((new_block_low == (i->block_high + 1)) &&
-			(new_block_high == (next_block_low - 1)))
-		{
-			/* Fill the gap completely */
-			if (next_i) {
-				i->block_high = next_i->block_high;
-				rb_erase(&next_i->node,
-					&sbi->block_inuse_tree);
-				list_del(&next_i->link);
-				free_blocknode = next_i;
-				sbi->num_blocknode_block--;
-			} else {
-				i->block_high = new_block_high;
-			}
-			found = 1;
-			break;
-		}
-
-		if ((new_block_low == (i->block_high + 1)) &&
-			(new_block_high < (next_block_low - 1))) {
-			/* Aligns to left */
-			i->block_high = new_block_high;
-			found = 1;
-			break;
-		}
+		/* Allocate partial blocknode */
+		new_block_low = curr->block_low;
+		curr->block_low += num_blocks;
+		found = 1;
+		break;
 	}
+
 	if (found == 1) {
 		sbi->num_free_blocks -= num_blocks;
 		if (log_page)

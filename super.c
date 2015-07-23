@@ -614,8 +614,8 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	atomic_set(&sbi->next_generation, random);
 
 	/* Init with default values */
-	INIT_LIST_HEAD(&sbi->block_inuse_head);
-	sbi->block_inuse_tree = RB_ROOT;
+	INIT_LIST_HEAD(&sbi->block_free_head);
+	sbi->block_free_tree = RB_ROOT;
 	sbi->mode = (S_IRUGO | S_IXUGO | S_IWUSR);
 	sbi->uid = current_fsuid();
 	sbi->gid = current_fsgid();
@@ -910,7 +910,7 @@ static void pmfs_put_super(struct super_block *sb)
 	}
 
 	/* Free all the pmfs_blocknodes */
-	head = &(sbi->block_inuse_head);
+	head = &(sbi->block_free_head);
 	while (!list_empty(head)) {
 		i = list_first_entry(head, struct pmfs_blocknode, link);
 		list_del(&i->link);

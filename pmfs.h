@@ -472,7 +472,6 @@ struct pmfs_alive_inode_entry {
 
 #define	BLOCKNODE_PER_PAGE	254
 
-/* This is also used for inode inuse */
 struct pmfs_blocknode {
 	struct list_head link;
 	struct rb_node node;
@@ -541,8 +540,8 @@ struct pmfs_sb_info {
 	 */
 	phys_addr_t	phys_addr;
 	void		*virt_addr;
-	struct list_head block_inuse_head;
-	struct rb_root	block_inuse_tree;
+	struct list_head block_free_head;
+	struct rb_root	block_free_tree;
 	unsigned long	block_start;
 	unsigned long	block_end;
 	unsigned long	num_free_blocks;

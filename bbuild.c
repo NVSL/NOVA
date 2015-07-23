@@ -379,7 +379,7 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 			PMFS_ASSERT(0);
 		blknode->block_low = entry->block_low;
 		blknode->block_high = entry->block_high;
-		list_add_tail(&blknode->link, &sbi->block_inuse_head);
+		list_add_tail(&blknode->link, &sbi->block_free_head);
 		pmfs_insert_blocknode_blocktree(sbi, blknode);
 
 		num_blocknode++;
@@ -488,7 +488,7 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	unsigned long num_blocks;
 	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct list_head *head = &(sbi->block_inuse_head);
+	struct list_head *head = &(sbi->block_free_head);
 	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
 	struct pmfs_blocknode *i;
 	struct pmfs_super_block *super;
@@ -549,7 +549,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 	unsigned long low, unsigned long high)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct list_head *head = &(sbi->block_inuse_head);
+	struct list_head *head = &(sbi->block_free_head);
 	struct pmfs_blocknode *i, *next_i;
 	struct pmfs_blocknode *free_blocknode= NULL;
 	unsigned long num_blocks = 0;
@@ -588,7 +588,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 			if (next_i) {
 				i->block_high = next_i->block_high;
 				rb_erase(&next_i->node,
-					&sbi->block_inuse_tree);
+					&sbi->block_free_tree);
 				list_del(&next_i->link);
 				free_blocknode = next_i;
 			} else {
