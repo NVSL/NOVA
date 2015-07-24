@@ -536,6 +536,7 @@ struct free_list {
 	unsigned long	block_start;
 	unsigned long	block_end;
 	unsigned long	num_free_blocks;
+	unsigned long	num_blocknode;
 	unsigned long	alloc_count;
 	unsigned long	free_count;
 	unsigned long	allocated_blocks;

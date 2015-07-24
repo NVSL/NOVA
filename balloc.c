@@ -104,6 +104,7 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 		blknode->block_high = free_list->block_end;
 		pmfs_insert_blocknode_blocktree(sbi, tree, blknode);
 
+		free_list->num_blocknode = 1;
 		free_list->alloc_count = 0;
 		free_list->free_count = 0;
 		free_list->allocated_blocks = 0;
@@ -408,6 +409,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 		(new_block_high + 1 == next->block_low)) {
 		/* fits the hole */
 		rb_erase(&next->node, tree);
+		free_list->num_blocknode--;
 		free_blocknode = next;
 		prev->block_high = next->block_high;
 		goto block_found;
@@ -433,6 +435,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	curr_node->block_low = new_block_low;
 	curr_node->block_high = new_block_high;
 	pmfs_insert_blocknode_blocktree(sbi, tree, curr_node);
+	free_list->num_blocknode++;
 
 block_found:
 	free_list->freed_blocks += num_blocks;
@@ -586,6 +589,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 
 			/* Otherwise, allocate the whole blocknode */
 			rb_erase(&curr->node, tree);
+			free_list->num_blocknode--;
 			free_blocknode = curr;
 			found = 1;
 			num_blocks = curr_blocks;
