@@ -87,7 +87,7 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 		blknode->block_low = free_list->block_start;
 		blknode->block_high = free_list->block_end;
 		pmfs_insert_blocknode_blocktree(sbi, tree, blknode);
-
+		free_list->first_node = blknode;
 		free_list->num_blocknode = 1;
 	}
 }
@@ -415,6 +415,8 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	curr_node->block_low = new_block_low;
 	curr_node->block_high = new_block_high;
 	pmfs_insert_blocknode_blocktree(sbi, tree, curr_node);
+	if (!prev)
+		free_list->first_node = curr_node;
 	free_list->num_blocknode++;
 
 block_found:
@@ -528,7 +530,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct rb_root *tree;
-	struct pmfs_blocknode *curr;
+	struct pmfs_blocknode *curr, *next = NULL;
 	struct pmfs_blocknode *free_blocknode = NULL;
 	struct free_list *free_list;
 	void *bp;
@@ -537,7 +539,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	bool found = 0;
 	unsigned long new_block_low;
 	unsigned long step = 0;
-	struct rb_node *temp;
+	struct rb_node *temp, *next_node;
 	int cpuid;
 
 	num_blocks = num * pmfs_get_numblocks(btype);
@@ -548,12 +550,14 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	free_list = &sbi->free_lists[cpuid];
 	free_list->alloc_count++;
 
-	if (free_list->num_free_blocks < num_blocks)
-		goto fail;
+	if (free_list->num_free_blocks < num_blocks || !free_list->first_node) {
+		put_cpu();
+		return -ENOMEM;
+	}
 
 	tree = &(free_list->block_free_tree);
+	temp = &(free_list->first_node->node);
 
-	temp = rb_first(tree);
 	while (temp) {
 		step++;
 		curr = container_of(temp, struct pmfs_blocknode, node);
@@ -568,6 +572,14 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 			}
 
 			/* Otherwise, allocate the whole blocknode */
+			if (curr == free_list->first_node) {
+				next_node = rb_next(temp);
+				if (next_node)
+					next = container_of(next_node,
+						struct pmfs_blocknode, node);
+				free_list->first_node = next;
+			}
+
 			rb_erase(&curr->node, tree);
 			free_list->num_blocknode--;
 			free_blocknode = curr;
@@ -594,7 +606,6 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	free_list->allocated_blocks += num_blocks;
 	free_list->num_free_blocks -= num_blocks;
 
-fail:
 	put_cpu();
 
 	if (free_blocknode)

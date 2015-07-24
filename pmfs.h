@@ -535,6 +535,7 @@ struct scan_bitmap {
 
 struct free_list {
 	struct rb_root	block_free_tree;
+	struct pmfs_blocknode *first_node;
 	unsigned long	block_start;
 	unsigned long	block_end;
 	unsigned long	num_free_blocks;

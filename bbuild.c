@@ -388,6 +388,8 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 		pmfs_insert_blocknode_blocktree(sbi,
 				&free_list->block_free_tree, blknode);
 		free_list->num_blocknode++;
+		if (free_list->num_blocknode == 1)
+			free_list->first_node = blknode;
 		free_list->num_free_blocks +=
 			blknode->block_high - blknode->block_low + 1;
 		curr_p += sizeof(struct pmfs_blocknode_lowhigh);
@@ -546,6 +548,7 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	temp_tail = new_block;
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = &sbi->free_lists[i];
+		/* Save in increasing order */
 		temp = rb_first(&free_list->block_free_tree);
 		while (temp) {
 			curr = container_of(temp, struct pmfs_blocknode,
