@@ -539,6 +539,7 @@ struct free_list {
 	unsigned long	free_count;
 	unsigned long	allocated_blocks;
 	unsigned long	freed_blocks;
+	u64		padding[8];	/* Cache line break */
 };
 
 /*

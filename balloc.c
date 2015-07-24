@@ -114,7 +114,6 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 			PMFS_ASSERT(0);
 		blknode->block_low = free_list->block_start;
 		blknode->block_high = free_list->block_end;
-		sbi->num_free_blocks -= num_used_block;
 		pmfs_insert_blocknode_blocktree(sbi, tree, blknode);
 
 		free_list->alloc_count = 0;
@@ -420,7 +419,6 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 		/* fits the hole */
 		rb_erase(&next->node, tree);
 		free_blocknode = next;
-		sbi->num_blocknode--;
 		prev->block_high = next->block_high;
 		if (start_hint)
 			*start_hint = prev;
@@ -457,7 +455,6 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 
 block_found:
 	free_list->freed_blocks += num_blocks;
-	sbi->num_free_blocks += num_blocks;
 	free_list->num_free_blocks += num_blocks;
 	put_cpu();
 	if (free_blocknode)
@@ -592,9 +589,6 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	if (num_blocks == 0)
 		return -EINVAL;
 
-	if (sbi->num_free_blocks < num_blocks)
-		return -ENOSPC;
-
 	cpuid = get_cpu();
 	free_list = &sbi->free_lists[cpuid];
 	free_list->alloc_count++;
@@ -621,7 +615,6 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 			/* Otherwise, allocate the whole blocknode */
 			rb_erase(&curr->node, tree);
 			free_blocknode = curr;
-			sbi->num_blocknode--;
 			found = 1;
 			num_blocks = curr_blocks;
 			new_block_low = curr->block_low;
@@ -636,7 +629,6 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	}
 
 	if (found == 1) {
-		sbi->num_free_blocks -= num_blocks;
 		if (log_page)
 			alloc_log_pages += num_blocks;
 		else
@@ -710,5 +702,14 @@ inline int pmfs_new_log_blocks(struct super_block *sb, unsigned long pmfs_ino,
 unsigned long pmfs_count_free_blocks(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	return sbi->num_free_blocks; 
+	struct free_list *free_list;
+	unsigned long num_free_blocks = 0;
+	int i;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = &sbi->free_lists[i];
+		num_free_blocks += free_list->num_free_blocks;
+	}
+
+	return num_free_blocks;
 }
