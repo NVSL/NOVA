@@ -350,20 +350,20 @@ inline void clear_bm(unsigned long bit, struct scan_bitmap *bm,
 static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct list_head *head = &(sbi->shared_block_free_head);
-	struct rb_root *tree = &(sbi->shared_block_free_tree);
 	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
+	struct free_list *free_list;
 	struct pmfs_blocknode_lowhigh *entry;
 	struct pmfs_blocknode *blknode;
 	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
-	unsigned long num_blocknode = 0;
 	u64 curr_p;
+	u64 cpuid;
 
 	curr_p = pi->log_head;
-	if (curr_p == 0)
+	if (curr_p == 0) {
 		pmfs_dbg("%s: pi head is 0!\n", __func__);
+		return;
+	}
 
-	sbi->num_blocknode = 0;
 	while (curr_p != pi->log_tail) {
 		if (is_last_entry(curr_p, size, 0)) {
 			curr_p = next_log_page(sb, curr_p);
@@ -372,6 +372,7 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 		if (curr_p == 0) {
 			pmfs_dbg("%s: curr_p is NULL!\n", __func__);
 			PMFS_ASSERT(0);
+			break;
 		}
 
 		entry = (struct pmfs_blocknode_lowhigh *)pmfs_get_block(sb,
@@ -379,16 +380,19 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 		blknode = pmfs_alloc_blocknode(sb);
 		if (blknode == NULL)
 			PMFS_ASSERT(0);
-		blknode->block_low = entry->block_low;
-		blknode->block_high = entry->block_high;
-		list_add_tail(&blknode->link, head);
-		pmfs_insert_blocknode_blocktree(sbi, tree, blknode);
-
-		num_blocknode++;
+		cpuid = le64_to_cpu(entry->cpuid);
+		blknode->block_low = le64_to_cpu(entry->block_low);
+		blknode->block_high = le64_to_cpu(entry->block_high);
+		/* FIXME: Assume NR_CPUS not change */
+		free_list = &sbi->free_lists[cpuid];
+		pmfs_insert_blocknode_blocktree(sbi,
+				&free_list->block_free_tree, blknode);
+		free_list->num_blocknode++;
+		free_list->num_free_blocks +=
+			blknode->block_high - blknode->block_low + 1;
 		curr_p += sizeof(struct pmfs_blocknode_lowhigh);
 	}
 
-	pmfs_dbg("%s: %lu blocknodes\n", __func__, num_blocknode);
 	pmfs_free_inode_log(sb, pi);
 }
 

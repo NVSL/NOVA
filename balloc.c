@@ -89,10 +89,6 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 		pmfs_insert_blocknode_blocktree(sbi, tree, blknode);
 
 		free_list->num_blocknode = 1;
-		free_list->alloc_count = 0;
-		free_list->free_count = 0;
-		free_list->allocated_blocks = 0;
-		free_list->freed_blocks = 0;
 	}
 }
 
