@@ -284,10 +284,10 @@ struct pmfs_file_write_entry {
 } __attribute((__packed__));
 
 struct	pmfs_inode_page_tail {
-	u64	padding1;
-	u64	padding2;
-	u64	padding3;
-	u64	next_page;
+	__le64	padding1;
+	__le64	padding2;
+	__le64	padding3;
+	__le64	next_page;
 } __attribute((__packed__));
 
 #define	ENTRIES_PER_PAGE	127
@@ -463,15 +463,17 @@ static inline int pmfs_calc_checksum(u8 *data, int n)
 }
 
 struct pmfs_blocknode_lowhigh {
-       __le64 block_low;
-       __le64 block_high;
+	__le64 cpuid;
+	__le64 padding;
+	__le64 block_low;
+	__le64 block_high;
 };
 
 struct pmfs_alive_inode_entry {
-       __le64 pi_addr;
+	__le64 pi_addr;
 };
 
-#define	BLOCKNODE_PER_PAGE	254
+#define	BLOCKNODE_PER_PAGE	127
 
 struct pmfs_blocknode {
 	struct list_head link;

@@ -48,24 +48,8 @@ int pmfs_alloc_block_free_lists(struct pmfs_sb_info *sbi)
 void pmfs_delete_free_lists(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct free_list *free_list;
-	struct pmfs_blocknode *curr;
-	struct rb_node *temp;
-	int i;
 
-	pmfs_print_free_lists(sb);
-
-	for (i = 0; i < sbi->cpus; i++) {
-		free_list = &sbi->free_lists[i];
-		temp = rb_first(&free_list->block_free_tree);
-		while (temp) {
-			curr = container_of(temp, struct pmfs_blocknode,
-								node);
-			temp = rb_next(temp);
-			pmfs_free_blocknode(sb, curr);
-		}
-	}
-
+	/* Each tree is freed in save_blocknode_mappings */
 	kfree(sbi->free_lists);
 	sbi->free_lists = NULL;
 }
