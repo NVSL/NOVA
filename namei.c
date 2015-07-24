@@ -209,7 +209,7 @@ static int pmfs_symlink(struct inode *dir, struct dentry *dentry,
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
 		pmfs_free_log_blocks(sb, blocknr, 1,
-					PMFS_BLOCK_TYPE_4K, NULL, 1);
+					PMFS_BLOCK_TYPE_4K, INVALID_CPU);
 		goto out_fail1;
 	}
 

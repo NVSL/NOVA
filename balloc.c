@@ -326,7 +326,7 @@ inline int pmfs_insert_blocknode_blocktree(struct pmfs_sb_info *sbi,
 static int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
 	struct rb_root *tree, unsigned long new_block_low,
 	unsigned long new_block_high, struct pmfs_blocknode **prev,
-	struct pmfs_blocknode **next, struct pmfs_blocknode **start_hint)
+	struct pmfs_blocknode **next)
 {
 	struct pmfs_blocknode *ret_node = NULL;
 	unsigned long step = 0;
@@ -368,11 +368,8 @@ static int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
 	return 0;
 }
 
-/* Caller must hold the super_block lock.  If start_hint is provided, it is
- * only valid until the caller releases the super_block lock. */
 static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
-	int num, unsigned short btype, struct pmfs_blocknode **start_hint,
-	int log_block)
+	int num, unsigned short btype, int cpuid)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct rb_root *tree;
@@ -385,7 +382,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	struct pmfs_blocknode *curr_node;
 	struct free_list *free_list;
 	unsigned long step = 0;
-	int cpuid;
+	int need_get_cpu = 0;
 	int ret;
 
 	if (num <= 0) {
@@ -393,7 +390,11 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 		return;
 	}
 
-	cpuid = get_cpu();
+	if (cpuid == INVALID_CPU) {
+		need_get_cpu = 1;
+		cpuid = get_cpu();
+	}
+
 	free_list = &sbi->free_lists[cpuid];
 	free_list->free_count++;
 
@@ -406,11 +407,12 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	pmfs_dbgv("Free: %lu - %lu\n", new_block_low, new_block_high);
 
 	ret = pmfs_find_free_slot(sbi, tree, new_block_low,
-				new_block_high,	&prev, &next, start_hint);
+				new_block_high,	&prev, &next);
 
 	if (ret) {
 		pmfs_dbg("%s: find free slot fail: %d\n", __func__, ret);
-		put_cpu();
+		if (need_get_cpu)
+			put_cpu();
 		return;
 	}
 
@@ -420,22 +422,16 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 		rb_erase(&next->node, tree);
 		free_blocknode = next;
 		prev->block_high = next->block_high;
-		if (start_hint)
-			*start_hint = prev;
 		goto block_found;
 	}
 	if (prev && (new_block_low == prev->block_high + 1)) {
 		/* Aligns left */
 		prev->block_high += num_blocks;
-		if (start_hint)
-			*start_hint = prev;
 		goto block_found;
 	}
 	if (next && (new_block_high + 1 == next->block_low)) {
 		/* Aligns right */
 		next->block_low -= num_blocks;
-		if (start_hint)
-			*start_hint = next;
 		goto block_found;
 	}
 
@@ -450,13 +446,11 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	curr_node->block_high = new_block_high;
 	pmfs_insert_blocknode_blocktree(sbi, tree, curr_node);
 
-	if (start_hint)
-		*start_hint = curr_node;
-
 block_found:
 	free_list->freed_blocks += num_blocks;
 	free_list->num_free_blocks += num_blocks;
-	put_cpu();
+	if (need_get_cpu)
+		put_cpu();
 	if (free_blocknode)
 		__pmfs_free_blocknode(free_blocknode);
 	free_steps += step;
@@ -489,36 +483,26 @@ void pmfs_free_cache_block(struct mem_addr *pair)
 }
 
 void pmfs_free_data_blocks(struct super_block *sb, unsigned long blocknr,
-	int num, unsigned short btype, struct pmfs_blocknode **start_hint,
-	int needlock)
+	int num, unsigned short btype, int cpuid)
 {
 	timing_t free_time;
 
 	pmfs_dbgv("Free %d data block from %lu\n", num, blocknr);
 	PMFS_START_TIMING(free_data_t, free_time);
-//	if (needlock)
-//		preempt_disable();
-	pmfs_free_blocks(sb, blocknr, num, btype, start_hint, 0);
+	pmfs_free_blocks(sb, blocknr, num, btype, cpuid);
 	free_data_pages += num;
-//	if (needlock)
-//		preempt_enable();
 	PMFS_END_TIMING(free_data_t, free_time);
 }
 
 void pmfs_free_log_blocks(struct super_block *sb, unsigned long blocknr,
-	int num, unsigned short btype, struct pmfs_blocknode **start_hint,
-	int needlock)
+	int num, unsigned short btype, int cpuid)
 {
 	timing_t free_time;
 
 	pmfs_dbgv("Free %d log block from %lu\n", num, blocknr);
 	PMFS_START_TIMING(free_log_t, free_time);
-//	if (needlock)
-//		preempt_disable();
-	pmfs_free_blocks(sb, blocknr, num, btype, start_hint, 1);
+	pmfs_free_blocks(sb, blocknr, num, btype, cpuid);
 	free_log_pages += num;
-//	if (needlock)
-//		preempt_enable();
 	PMFS_END_TIMING(free_log_t, free_time);
 }
 
@@ -569,7 +553,7 @@ out:
 
 /* Return how many blocks allocated */
 static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
-		unsigned int num, unsigned short btype, int zero, int log_page)
+	unsigned int num, unsigned short btype, int zero, int log_page)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct rb_root *tree;
