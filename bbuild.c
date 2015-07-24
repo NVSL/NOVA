@@ -1512,7 +1512,7 @@ static void pmfs_rebuild_superblock_info(struct super_block *sb,
 
 	/* initialize the num_free_blocks to */
 	sbi->num_free_blocks = ((unsigned long)(initsize) >> PAGE_SHIFT);
-	pmfs_init_blockmap(sb, le64_to_cpu(journal->base) + sbi->jsize);
+	pmfs_init_blockmap(sb, le64_to_cpu(journal->base) + sbi->jsize, 1);
 
 	pmfs_build_blocknode_map(sb, bm);
 

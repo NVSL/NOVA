@@ -54,7 +54,8 @@ void pmfs_delete_free_lists(struct super_block *sb)
 	sbi->free_lists = NULL;
 }
 
-void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
+void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size,
+	int power_failure)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct rb_root *tree;
@@ -75,20 +76,24 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size)
 		free_list->block_start = per_list_blocks * i;
 		free_list->block_end = free_list->block_start +
 						per_list_blocks - 1;
-		free_list->num_free_blocks = per_list_blocks;
-		if (i == 0) {
-			free_list->block_start += num_used_block;
-			free_list->num_free_blocks -= num_used_block;
-		}
 
-		blknode = pmfs_alloc_blocknode(sb);
-		if (blknode == NULL)
-			PMFS_ASSERT(0);
-		blknode->block_low = free_list->block_start;
-		blknode->block_high = free_list->block_end;
-		pmfs_insert_blocknode_blocktree(sbi, tree, blknode);
-		free_list->first_node = blknode;
-		free_list->num_blocknode = 1;
+		/* For a power failure recovery, update these fields later */
+		if (power_failure == 0) {
+			free_list->num_free_blocks = per_list_blocks;
+			if (i == 0) {
+				free_list->block_start += num_used_block;
+				free_list->num_free_blocks -= num_used_block;
+			}
+
+			blknode = pmfs_alloc_blocknode(sb);
+			if (blknode == NULL)
+				PMFS_ASSERT(0);
+			blknode->block_low = free_list->block_start;
+			blknode->block_high = free_list->block_end;
+			pmfs_insert_blocknode_blocktree(sbi, tree, blknode);
+			free_list->first_node = blknode;
+			free_list->num_blocknode = 1;
+		}
 	}
 }
 

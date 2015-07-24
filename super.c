@@ -443,7 +443,7 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	super->s_journal_offset = cpu_to_le64(journal_meta_start);
 	super->s_inode_table_offset = cpu_to_le64(inode_table_start);
 
-	pmfs_init_blockmap(sb, journal_data_start + sbi->jsize);
+	pmfs_init_blockmap(sb, journal_data_start + sbi->jsize, 0);
 	pmfs_memlock_range(sb, super, journal_data_start);
 
 //	if (pmfs_journal_hard_init(sb, journal_data_start, sbi->jsize) < 0) {
