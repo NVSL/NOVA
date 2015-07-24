@@ -531,7 +531,6 @@ struct scan_bitmap {
 };
 
 struct free_list {
-	struct list_head block_free_head;
 	struct rb_root	block_free_tree;
 	unsigned long	block_start;
 	unsigned long	block_end;

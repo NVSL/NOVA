@@ -965,7 +965,7 @@ struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb)
 	struct pmfs_blocknode *p;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	p = (struct pmfs_blocknode *)
-		kmem_cache_alloc(pmfs_blocknode_cachep, GFP_NOFS);
+		kmem_cache_alloc(pmfs_blocknode_cachep, GFP_NOFS | GFP_ATOMIC);
 	if (p) {
 		sbi->num_blocknode++;
 	}

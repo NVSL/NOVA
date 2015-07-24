@@ -288,7 +288,6 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 	unsigned int freed = 0, bzero;
 	int start, end;
 	bool mpty, all_range_freed = true;
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	unsigned long pgoff;
 	struct pmfs_file_write_entry *entry;
 	struct mem_addr *pair;
@@ -303,7 +302,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 
 	if (height == 1) {
 		struct pmfs_blocknode *start_hint = NULL;
-		mutex_lock(&sbi->s_lock);
+//		preempt_disable();
 		for (i = first_index; i <= last_index; i++) {
 			if (unlikely(!node[i]))
 				continue;
@@ -350,7 +349,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 		if (start_blocknr)
 			pmfs_free_data_blocks(sb, start_blocknr,
 				num_free, btype, &start_hint, 0);
-		mutex_unlock(&sbi->s_lock);
+//		preempt_enable();
 	} else {
 		for (i = first_index; i <= last_index; i++) {
 			if (unlikely(!node[i]))
@@ -2322,7 +2321,6 @@ u64 pmfs_append_file_write_entry(struct super_block *sb, struct pmfs_inode *pi,
 
 void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 {
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode_log_page *curr_page;
 	u64 curr_block;
 	unsigned long blocknr, start_blocknr = 0;
@@ -2337,7 +2335,7 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 	PMFS_START_TIMING(free_inode_log_t, free_time);
 
 	curr_block = pi->log_head;
-	mutex_lock(&sbi->s_lock);
+//	preempt_disable();
 	while (curr_block) {
 		curr_page = (struct pmfs_inode_log_page *)pmfs_get_block(sb,
 							curr_block);
@@ -2363,7 +2361,7 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 	}
 	pmfs_free_log_blocks(sb, start_blocknr,	num_free, btype,
 					&start_hint, 0);
-	mutex_unlock(&sbi->s_lock);
+//	preempt_enable();
 
 	/* FIXME: make this atomic */
 	pi->log_head = pi->log_tail = 0;
