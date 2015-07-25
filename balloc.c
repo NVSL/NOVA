@@ -606,6 +606,8 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned long num_blocks = 0;
 	unsigned long ret_blocks = 0;
 	unsigned long new_block_low = 0;
+	struct rb_node *temp;
+	struct pmfs_blocknode *first;
 	int cpuid;
 
 	num_blocks = num * pmfs_get_numblocks(btype);
@@ -621,15 +623,16 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 			"blocknode %lu\n", __func__, cpuid,
 			free_list->num_free_blocks, num_blocks,
 			free_list->num_blocknode);
-		if (free_list->first_node) {
-			pmfs_dbg("first node: %lu - %lu\n",
-				free_list->first_node->block_low,
-				free_list->first_node->block_high);
+		if (free_list->num_free_blocks >= num_blocks) {
+			pmfs_dbg("first node is NULL "
+				"but still has free blocks\n");
+			temp = rb_first(&free_list->block_free_tree);
+			first = container_of(temp, struct pmfs_blocknode, node);
+			free_list->first_node = first;
 		} else {
-			pmfs_dbg("first node is NULL!\n");
+			put_cpu();
+			return -ENOMEM;
 		}
-		put_cpu();
-		return -ENOMEM;
 	}
 
 	ret_blocks = pmfs_alloc_blocks_in_free_list(sb, free_list, btype,
