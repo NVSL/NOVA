@@ -708,16 +708,51 @@ static int __pmfs_build_blocknode_map(struct super_block *sb,
 	}
 	return 0;
 }
-	
-static void pmfs_build_blocknode_map(struct super_block *sb,
-							struct scan_bitmap *bm)
+
+static void pmfs_update_4K_map(struct super_block *sb,
+	struct scan_bitmap *bm,	unsigned long *bitmap,
+	unsigned long bsize, unsigned long scale)
 {
+	unsigned long next = 0;
+	unsigned long low = 0;
+	int i;
+
+	while (1) {
+		next = find_next_bit(bitmap, bsize, next);
+		if (next == bsize)
+			break;
+		low = next;
+		next = find_next_zero_bit(bitmap, bsize, next);
+		for (i = (low << scale); i < (next << scale); i++)
+			set_bm(i, bm, BM_4K);
+		if (next == bsize)
+			break;
+	}
+}
+
+static void pmfs_build_blocknode_map(struct super_block *sb,
+	struct scan_bitmap *bm, unsigned long used_size)
+{
+	unsigned long num_used_block;
+	int i;
+
+	/*
+	 * We are using free lists. Set 2M and 1G blocks in 4K map,
+	 * and use 4K map to rebuild block map.
+	 */
+	pmfs_update_4K_map(sb, bm, bm->scan_bm_2M.bitmap,
+		bm->scan_bm_2M.bitmap_size * 8, PAGE_SHIFT_2M - 12);
+	pmfs_update_4K_map(sb, bm, bm->scan_bm_1G.bitmap,
+		bm->scan_bm_1G.bitmap_size * 8, PAGE_SHIFT_1G - 12);
+
+	/* Set initial used pages */
+	num_used_block = (used_size + sb->s_blocksize - 1) >>
+					sb->s_blocksize_bits;
+	for (i = 0; i < num_used_block; i++)
+		set_bm(i, bm, BM_4K);
+
 	__pmfs_build_blocknode_map(sb, bm->scan_bm_4K.bitmap,
 			bm->scan_bm_4K.bitmap_size * 8, PAGE_SHIFT - 12);
-	__pmfs_build_blocknode_map(sb, bm->scan_bm_2M.bitmap,
-			bm->scan_bm_2M.bitmap_size * 8, PAGE_SHIFT_2M - 12);
-	__pmfs_build_blocknode_map(sb, bm->scan_bm_1G.bitmap,
-			bm->scan_bm_1G.bitmap_size * 8, PAGE_SHIFT_1G - 12);
 }
 
 void pmfs_print_bmentry_tree(struct single_scan_bm *scan_bm,
@@ -1508,13 +1543,15 @@ static void pmfs_rebuild_superblock_info(struct super_block *sb,
 	struct scan_bitmap *bm)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	unsigned long used_size;
 	unsigned long curr_ino;
 
 	/* initialize the num_free_blocks to */
 	sbi->num_free_blocks = ((unsigned long)(initsize) >> PAGE_SHIFT);
-	pmfs_init_blockmap(sb, le64_to_cpu(journal->base) + sbi->jsize, 1);
+	used_size = le64_to_cpu(journal->base) + sbi->jsize;
+	pmfs_init_blockmap(sb, used_size, 1);
 
-	pmfs_build_blocknode_map(sb, bm);
+	pmfs_build_blocknode_map(sb, bm, used_size);
 
 	if (bm->highest_inuse_ino >= PMFS_FREE_INODE_HINT_START)
 		curr_ino = bm->highest_inuse_ino;
