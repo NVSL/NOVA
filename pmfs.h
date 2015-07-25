@@ -122,6 +122,7 @@ extern unsigned int pmfs_dbgmask;
 
 #define	READDIR_END			0x1
 #define	INVALID_CPU			(-1)
+#define	SHARED_CPU			(65536)
 
 extern unsigned int blk_type_to_shift[PMFS_BLOCK_TYPE_MAX];
 extern unsigned int blk_type_to_size[PMFS_BLOCK_TYPE_MAX];
@@ -664,6 +665,17 @@ static inline void *pmfs_get_block(struct super_block *sb, u64 block)
 	return block ? ((void *)ps + block) : NULL;
 }
 
+static inline
+struct free_list *pmfs_get_free_list(struct super_block *sb, int cpu)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+
+	if (cpu < sbi->cpus)
+		return &sbi->free_lists[cpu];
+	else
+		return &sbi->shared_free_list;
+}
+
 /* uses CPU instructions to atomically write up to 8 bytes */
 static inline void pmfs_memcpy_atomic (void *dst, const void *src, u8 size)
 {
@@ -1010,7 +1022,7 @@ static inline int is_dir_init_entry(struct super_block *sb,
 extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
 
 /* balloc.c */
-int pmfs_alloc_block_free_lists(struct pmfs_sb_info *sbi);
+int pmfs_alloc_block_free_lists(struct super_block *sb);
 void pmfs_delete_free_lists(struct super_block *sb);
 extern struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb);
 extern void pmfs_free_blocknode(struct super_block *sb,

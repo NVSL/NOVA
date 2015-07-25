@@ -383,8 +383,9 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 		cpuid = le64_to_cpu(entry->cpuid);
 		blknode->block_low = le64_to_cpu(entry->block_low);
 		blknode->block_high = le64_to_cpu(entry->block_high);
+
 		/* FIXME: Assume NR_CPUS not change */
-		free_list = &sbi->free_lists[cpuid];
+		free_list = pmfs_get_free_list(sb, cpuid);
 		pmfs_insert_blocknode_blocktree(sbi,
 				&free_list->block_free_tree, blknode);
 		free_list->num_blocknode++;
@@ -490,13 +491,34 @@ out:
 	return curr_p;
 }
 
+static u64 pmfs_save_free_list_blocknodes(struct super_block *sb, int cpu,
+	u64 temp_tail)
+{
+	struct free_list *free_list;
+	struct pmfs_blocknode *curr;
+	struct rb_node *temp;
+	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
+	u64 curr_entry = 0;
+
+	free_list = pmfs_get_free_list(sb, cpu);
+	/* Save in increasing order */
+	temp = rb_first(&free_list->block_free_tree);
+	while (temp) {
+		curr = container_of(temp, struct pmfs_blocknode, node);
+		curr_entry = pmfs_append_blocknode_entry(sb, curr,
+							cpu, temp_tail);
+		temp_tail = curr_entry + size;
+		temp = rb_next(temp);
+		pmfs_free_blocknode(sb, curr);
+	}
+
+	return temp_tail;
+}
+
 void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 {
 	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
-	struct pmfs_blocknode *curr;
-	struct rb_node *temp;
 	struct pmfs_super_block *super;
 	struct free_list *free_list;
 	unsigned long num_blocknode = 0;
@@ -504,15 +526,17 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	int step = 0;
 	int allocated;
 	u64 new_block = 0;
-	u64 curr_entry = 0;
 	u64 temp_tail;
 	int i;
 
 	/* Allocate log pages before save blocknode mappings */
 	for (i = 0; i < sbi->cpus; i++) {
-		free_list = &sbi->free_lists[i];
+		free_list = pmfs_get_free_list(sb, i);
 		num_blocknode += free_list->num_blocknode;
 	}
+
+	free_list = pmfs_get_free_list(sb, SHARED_CPU);
+	num_blocknode += free_list->num_blocknode;
 
 	num_pages = num_blocknode / BLOCKNODE_PER_PAGE;
 	if (num_blocknode % BLOCKNODE_PER_PAGE)
@@ -547,20 +571,10 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 
 	temp_tail = new_block;
 	for (i = 0; i < sbi->cpus; i++) {
-		free_list = &sbi->free_lists[i];
-		/* Save in increasing order */
-		temp = rb_first(&free_list->block_free_tree);
-		while (temp) {
-			curr = container_of(temp, struct pmfs_blocknode,
-								node);
-			curr_entry = pmfs_append_blocknode_entry(sb, curr,
-							i, temp_tail);
-			temp_tail = curr_entry + size;
-			temp = rb_next(temp);
-			pmfs_free_blocknode(sb, curr);
-		}
+		temp_tail = pmfs_save_free_list_blocknodes(sb, i, temp_tail);
 	}
 
+	temp_tail = pmfs_save_free_list_blocknodes(sb, SHARED_CPU, temp_tail);
 	pmfs_update_tail(pi, temp_tail);
 
 	pmfs_dbg("%s: %lu blocknodes, step %d, pi head 0x%llx, tail 0x%llx\n",
@@ -580,7 +594,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 	num_blocks = high - low + 1;
 	pmfs_dbgv("%s: cpu %d, low %lu, high %lu, num %lu\n",
 		__func__, cpuid, low, high, num_blocks);
-	free_list = &sbi->free_lists[cpuid];
+	free_list = pmfs_get_free_list(sb, cpuid);
 	tree = &(free_list->block_free_tree);
 
 	blknode = pmfs_alloc_blocknode(sb);
@@ -607,7 +621,7 @@ static int __pmfs_build_blocknode_map(struct super_block *sb,
 	unsigned long start, end;
 	int cpuid = 0;
 
-	free_list = &sbi->free_lists[cpuid];
+	free_list = pmfs_get_free_list(sb, cpuid);
 	start = free_list->block_start;
 	end = free_list->block_end + 1;
 	while (1) {
@@ -616,9 +630,10 @@ static int __pmfs_build_blocknode_map(struct super_block *sb,
 			break;
 		if (next == end) {
 			if (cpuid == sbi->cpus - 1)
-				break;
-			cpuid++;
-			free_list = &sbi->free_lists[cpuid];
+				cpuid = SHARED_CPU;
+			else
+				cpuid++;
+			free_list = pmfs_get_free_list(sb, cpuid);
 			start = free_list->block_start;
 			end = free_list->block_end + 1;
 			continue;
@@ -636,9 +651,10 @@ static int __pmfs_build_blocknode_map(struct super_block *sb,
 			break;
 		if (next == end) {
 			if (cpuid == sbi->cpus - 1)
-				break;
-			cpuid++;
-			free_list = &sbi->free_lists[cpuid];
+				cpuid = SHARED_CPU;
+			else
+				cpuid++;
+			free_list = pmfs_get_free_list(sb, cpuid);
 			start = free_list->block_start;
 			end = free_list->block_end + 1;
 		}

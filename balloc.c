@@ -23,8 +23,9 @@
 #include <linux/bitops.h>
 #include "pmfs.h"
 
-int pmfs_alloc_block_free_lists(struct pmfs_sb_info *sbi)
+int pmfs_alloc_block_free_lists(struct super_block *sb)
 {
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct free_list *free_list;
 	int i;
 
@@ -38,7 +39,7 @@ int pmfs_alloc_block_free_lists(struct pmfs_sb_info *sbi)
 		return -ENOMEM;
 
 	for (i = 0; i < sbi->cpus; i++) {
-		free_list = &sbi->free_lists[i];
+		free_list = pmfs_get_free_list(sb, i);
 		free_list->block_free_tree = RB_ROOT;
 	}
 
@@ -71,7 +72,7 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size,
 	/* Divide the block range among per-CPU free lists */
 	per_list_blocks = sbi->block_end / sbi->cpus;
 	for (i = 0; i < sbi->cpus; i++) {
-		free_list = &sbi->free_lists[i];
+		free_list = pmfs_get_free_list(sb, i);
 		tree = &(free_list->block_free_tree);
 		free_list->block_start = per_list_blocks * i;
 		free_list->block_end = free_list->block_start +
@@ -369,7 +370,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 		cpuid = get_cpu();
 	}
 
-	free_list = &sbi->free_lists[cpuid];
+	free_list = pmfs_get_free_list(sb, cpuid);
 	free_list->free_count++;
 
 	tree = &(free_list->block_free_tree);
@@ -533,7 +534,6 @@ out:
 static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned int num, unsigned short btype, int zero, int log_page)
 {
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct rb_root *tree;
 	struct pmfs_blocknode *curr, *next = NULL;
 	struct pmfs_blocknode *free_blocknode = NULL;
@@ -552,7 +552,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 		return -EINVAL;
 
 	cpuid = get_cpu();
-	free_list = &sbi->free_lists[cpuid];
+	free_list = pmfs_get_free_list(sb, cpuid);
 	free_list->alloc_count++;
 
 	if (free_list->num_free_blocks < num_blocks || !free_list->first_node) {
@@ -679,9 +679,13 @@ unsigned long pmfs_count_free_blocks(struct super_block *sb)
 	int i;
 
 	for (i = 0; i < sbi->cpus; i++) {
-		free_list = &sbi->free_lists[i];
+		free_list = pmfs_get_free_list(sb, i);
 		num_free_blocks += free_list->num_free_blocks;
 	}
 
+	free_list = pmfs_get_free_list(sb, SHARED_CPU);
+	num_free_blocks += free_list->num_free_blocks;
 	return num_free_blocks;
 }
+
+

@@ -637,7 +637,7 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	set_opt(sbi->s_mount_opt, MOUNTING);
 	initsize = sbi->initsize;
 
-	if (pmfs_alloc_block_free_lists(sbi))
+	if (pmfs_alloc_block_free_lists(sb))
 		goto out;
 
 	/* Init a new pmfs instance */
