@@ -1484,7 +1484,6 @@ static void pmfs_rebuild_superblock_info(struct super_block *sb,
 	unsigned long curr_ino;
 
 	/* initialize the num_free_blocks to */
-	sbi->num_free_blocks = ((unsigned long)(initsize) >> PAGE_SHIFT);
 	used_size = le64_to_cpu(journal->base) + sbi->jsize;
 	pmfs_init_blockmap(sb, used_size, 1);
 

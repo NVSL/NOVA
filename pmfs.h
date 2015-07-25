@@ -558,15 +558,8 @@ struct pmfs_sb_info {
 	phys_addr_t	phys_addr;
 	void		*virt_addr;
 
-	/* Shared block pool */
-	struct list_head shared_block_free_head;
-	struct rb_root	shared_block_free_tree;
-
 	unsigned long	block_start;
 	unsigned long	block_end;
-	/* Total # free blocks */
-	unsigned long	num_free_blocks;
-	struct mutex 	s_lock;	/* protects the SB's buffer-head */
 
 	/*
 	 * Backing store option:
@@ -614,6 +607,10 @@ struct pmfs_sb_info {
 
 	/* Per-CPU free block list */
 	struct free_list *free_lists;
+
+	/* Shared free block list */
+	struct mutex 	s_lock;	/* protects the SB's buffer-head */
+	struct free_list shared_free_list;
 };
 
 static inline struct pmfs_sb_info *PMFS_SB(struct super_block *sb)

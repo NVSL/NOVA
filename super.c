@@ -386,7 +386,6 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	sbi->virt_addr = pmfs_ioremap(sb, sbi->phys_addr, size);
 	sbi->block_start = (unsigned long)0;
 	sbi->block_end = ((unsigned long)(size) >> PAGE_SHIFT);
-	sbi->num_free_blocks = ((unsigned long)(size) >> PAGE_SHIFT);
 
 	if (!sbi->virt_addr) {
 		printk(KERN_ERR "ioremap of the pmfs image failed(1)\n");
@@ -617,8 +616,7 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	atomic_set(&sbi->next_generation, random);
 
 	/* Init with default values */
-	INIT_LIST_HEAD(&sbi->shared_block_free_head);
-	sbi->shared_block_free_tree = RB_ROOT;
+	sbi->shared_free_list.block_free_tree = RB_ROOT;
 	sbi->mode = (S_IRUGO | S_IXUGO | S_IWUSR);
 	sbi->uid = current_fsuid();
 	sbi->gid = current_fsgid();
@@ -903,8 +901,6 @@ static void pmfs_put_super(struct super_block *sb)
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_super_block *ps = pmfs_get_super(sb);
 	u64 size = le64_to_cpu(ps->s_size);
-	struct pmfs_blocknode *i;
-	struct list_head *head;
 
 	/* It's unmount time, so unmap the pmfs memory */
 //	pmfs_print_free_lists(sb);
@@ -916,14 +912,6 @@ static void pmfs_put_super(struct super_block *sb)
 		pmfs_iounmap(sbi->virt_addr, size, pmfs_is_wprotected(sb));
 		sbi->virt_addr = NULL;
 		release_mem_region(sbi->phys_addr, size);
-	}
-
-	/* Free all the pmfs_blocknodes */
-	head = &(sbi->shared_block_free_head);
-	while (!list_empty(head)) {
-		i = list_first_entry(head, struct pmfs_blocknode, link);
-		list_del(&i->link);
-		pmfs_free_blocknode(sb, i);
 	}
 
 	pmfs_delete_free_lists(sb);

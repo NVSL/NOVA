@@ -91,12 +91,8 @@ atomic64_t header_free = ATOMIC_INIT(0);
 
 void pmfs_print_blocknode_list(struct super_block *sb)
 {
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct list_head *head = &(sbi->shared_block_free_head);
-	struct pmfs_blocknode *i;
-	unsigned long count = 0;
-
 	printk("=========== PMFS blocknode stats ===========\n");
+# if 0
 	mutex_lock(&sbi->s_lock);
 	list_for_each_entry(i, head, link) {
 		count++;
@@ -106,6 +102,7 @@ void pmfs_print_blocknode_list(struct super_block *sb)
 	}
 	mutex_unlock(&sbi->s_lock);
 	printk("All: %lu nodes\n", count);
+#endif
 	printk("Alloc %llu, alloc steps %lu, average %llu\n",
 		Countstats[new_data_blocks_t], alloc_steps,
 		Countstats[new_data_blocks_t] ?
