@@ -2304,7 +2304,7 @@ u64 pmfs_append_file_write_entry(struct super_block *sb, struct pmfs_inode *pi,
 
 	curr_p = pmfs_get_append_head(sb, pi, sih, tail, size, 0, 1);
 	if (curr_p == 0)
-		BUG();
+		return curr_p;
 
 	entry = (struct pmfs_file_write_entry *)pmfs_get_block(sb, curr_p);
 	__copy_from_user_inatomic_nocache(entry, data,
