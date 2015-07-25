@@ -569,142 +569,79 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 }
 
 static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
-	unsigned long low, unsigned long high)
+	int cpuid, unsigned long low, unsigned long high)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct list_head *head = &(sbi->shared_block_free_head);
-	struct rb_root *tree = &(sbi->shared_block_free_tree);
-	struct pmfs_blocknode *i, *next_i;
-	struct pmfs_blocknode *free_blocknode= NULL;
+	struct free_list *free_list;
+	struct rb_root *tree;
+	struct pmfs_blocknode *blknode = NULL;
 	unsigned long num_blocks = 0;
-	struct pmfs_blocknode *curr_node;
-	int errval = 0;
-	bool found = 0;
-	unsigned long next_block_low;
-	unsigned long new_block_low;
-	unsigned long new_block_high;
 
-	//num_blocks = pmfs_get_numblocks(btype);
-
-	new_block_low = low;
-	new_block_high = high;
 	num_blocks = high - low + 1;
+	pmfs_dbgv("%s: cpu %d, low %lu, high %lu, num %lu\n",
+		__func__, cpuid, low, high, num_blocks);
+	free_list = &sbi->free_lists[cpuid];
+	tree = &(free_list->block_free_tree);
 
-	list_for_each_entry(i, head, link) {
-		if (i->link.next == head) {
-			next_i = NULL;
-			next_block_low = sbi->block_end;
-		} else {
-			next_i = list_entry(i->link.next, typeof(*i), link);
-			next_block_low = next_i->block_low;
-		}
+	blknode = pmfs_alloc_blocknode(sb);
+	if (blknode == NULL)
+		return -ENOMEM;
+	blknode->block_low = low;
+	blknode->block_high = high;
+	pmfs_insert_blocknode_blocktree(sbi, tree, blknode);
+	if (!free_list->first_node)
+		free_list->first_node = blknode;
+	free_list->num_blocknode++;
+	free_list->num_free_blocks += num_blocks;
 
-
-		if (new_block_high >= next_block_low) {
-			/* Does not fit - skip to next blocknode */
-			continue;
-		}
-
-		if ((new_block_low == (i->block_high + 1)) &&
-			(new_block_high == (next_block_low - 1)))
-		{
-			/* Fill the gap completely */
-			if (next_i) {
-				i->block_high = next_i->block_high;
-				rb_erase(&next_i->node, tree);
-				list_del(&next_i->link);
-				free_blocknode = next_i;
-			} else {
-				i->block_high = new_block_high;
-			}
-			found = 1;
-			break;
-		}
-
-		if ((new_block_low == (i->block_high + 1)) &&
-			(new_block_high < (next_block_low - 1))) {
-			/* Aligns to left */
-			i->block_high = new_block_high;
-			found = 1;
-			break;
-		}
-
-		if ((new_block_low > (i->block_high + 1)) &&
-			(new_block_high == (next_block_low - 1))) {
-			/* Aligns to right */
-			if (next_i) {
-				/* right node exist */
-				next_i->block_low = new_block_low;
-			} else {
-				/* right node does NOT exist */
-				curr_node = pmfs_alloc_blocknode(sb);
-				PMFS_ASSERT(curr_node);
-				if (curr_node == NULL) {
-					errval = -ENOSPC;
-					break;
-				}
-				curr_node->block_low = new_block_low;
-				curr_node->block_high = new_block_high;
-				list_add(&curr_node->link, &i->link);
-				pmfs_insert_blocknode_blocktree(sbi, tree,
-								curr_node);
-			}
-			found = 1;
-			break;
-		}
-
-		if ((new_block_low > (i->block_high + 1)) &&
-			(new_block_high < (next_block_low - 1))) {
-			/* Aligns somewhere in the middle */
-			curr_node = pmfs_alloc_blocknode(sb);
-			PMFS_ASSERT(curr_node);
-			if (curr_node == NULL) {
-				errval = -ENOSPC;
-				break;
-			}
-			curr_node->block_low = new_block_low;
-			curr_node->block_high = new_block_high;
-			list_add(&curr_node->link, &i->link);
-			pmfs_insert_blocknode_blocktree(sbi, tree, curr_node);
-			found = 1;
-			break;
-		}
-	}
-	
-	if (found == 1) {
-		sbi->num_free_blocks -= num_blocks;
-	}	
-
-	if (free_blocknode)
-		pmfs_free_blocknode(sb, free_blocknode);
-
-	if (found == 0) {
-		return -ENOSPC;
-	}
-
-
-	return errval;
+	return 0;
 }
 
 static int __pmfs_build_blocknode_map(struct super_block *sb,
 	unsigned long *bitmap, unsigned long bsize, unsigned long scale)
 {
-	unsigned long next = 1;
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct free_list *free_list;
+	unsigned long next = 0;
 	unsigned long low = 0;
+	unsigned long start, end;
+	int cpuid = 0;
 
+	free_list = &sbi->free_lists[cpuid];
+	start = free_list->block_start;
+	end = free_list->block_end + 1;
 	while (1) {
-		next = find_next_bit(bitmap, bsize, next);
+		next = find_next_zero_bit(bitmap, end, start);
 		if (next == bsize)
 			break;
+		if (next == end) {
+			if (cpuid == sbi->cpus - 1)
+				break;
+			cpuid++;
+			free_list = &sbi->free_lists[cpuid];
+			start = free_list->block_start;
+			end = free_list->block_end + 1;
+			continue;
+		}
+
 		low = next;
-		next = find_next_zero_bit(bitmap, bsize, next);
-		if (pmfs_alloc_insert_blocknode_map(sb, low << scale ,
-				(next << scale) - 1)) {
-			printk("PMFS: Error could not insert 0x%lx-0x%lx\n",
+		next = find_next_bit(bitmap, end, next);
+		if (pmfs_alloc_insert_blocknode_map(sb, cpuid,
+				low << scale , (next << scale) - 1)) {
+			pmfs_dbg("Error: could not insert %lu - %lu\n",
 				low << scale, ((next << scale) - 1));
 		}
+		start = next;
 		if (next == bsize)
 			break;
+		if (next == end) {
+			if (cpuid == sbi->cpus - 1)
+				break;
+			cpuid++;
+			free_list = &sbi->free_lists[cpuid];
+			start = free_list->block_start;
+			end = free_list->block_end + 1;
+		}
 	}
 	return 0;
 }

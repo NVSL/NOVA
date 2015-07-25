@@ -377,6 +377,7 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 {
 	unsigned long blocksize;
 	u64 journal_meta_start, journal_data_start, inode_table_start;
+	pmfs_journal_t *journal;
 	struct pmfs_inode *root_i;
 	struct pmfs_super_block *super;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
@@ -446,6 +447,8 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	pmfs_init_blockmap(sb, journal_data_start + sbi->jsize, 0);
 	pmfs_memlock_range(sb, super, journal_data_start);
 
+	journal = pmfs_get_journal(sb);
+	journal->base = cpu_to_le64(journal_data_start);
 //	if (pmfs_journal_hard_init(sb, journal_data_start, sbi->jsize) < 0) {
 //		printk(KERN_ERR "Journal hard initialization failed\n");
 //		return ERR_PTR(-EINVAL);
@@ -904,6 +907,7 @@ static void pmfs_put_super(struct super_block *sb)
 	struct list_head *head;
 
 	/* It's unmount time, so unmap the pmfs memory */
+//	pmfs_print_free_lists(sb);
 	if (sbi->virt_addr) {
 		pmfs_free_header_tree(sb);
 		/* Save everything before blocknode mapping! */

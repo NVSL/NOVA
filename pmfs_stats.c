@@ -309,9 +309,10 @@ void pmfs_print_free_lists(struct super_block *sb)
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = &sbi->free_lists[i];
 		pmfs_dbg("Free list %d: block start %lu, block end %lu, "
-			"num_blocks %lu\n",
+			"num_blocks %lu, blocknode %lu\n",
 			i, free_list->block_start, free_list->block_end,
-			free_list->block_end - free_list->block_start + 1);
+			free_list->block_end - free_list->block_start + 1,
+			free_list->num_blocknode);
 
 		pmfs_dbg("Free list %d: num_free_blocks %lu, alloc count %lu, "
 			"free count %lu, allocated blocks %lu, "
