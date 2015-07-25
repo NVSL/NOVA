@@ -556,6 +556,17 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	free_list->alloc_count++;
 
 	if (free_list->num_free_blocks < num_blocks || !free_list->first_node) {
+		pmfs_dbg("%s: cpu %d, free_blocks %lu, required %lu, "
+			"blocknode %lu\n", __func__, cpuid,
+			free_list->num_free_blocks, num_blocks,
+			free_list->num_blocknode);
+		if (free_list->first_node) {
+			pmfs_dbg("first node: %lu - %lu\n",
+				free_list->first_node->block_low,
+				free_list->first_node->block_high);
+		} else {
+			pmfs_dbg("first node is NULL!\n");
+		}
 		put_cpu();
 		return -ENOMEM;
 	}
