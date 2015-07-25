@@ -530,46 +530,17 @@ out:
 	return err;
 }
 
-/* Return how many blocks allocated */
-static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
-	unsigned int num, unsigned short btype, int zero, int log_page)
+static unsigned long pmfs_alloc_blocks_in_free_list(struct super_block *sb,
+	struct free_list *free_list, unsigned short btype,
+	unsigned long num_blocks, unsigned long *new_block_low)
 {
 	struct rb_root *tree;
 	struct pmfs_blocknode *curr, *next = NULL;
 	struct pmfs_blocknode *free_blocknode = NULL;
-	struct free_list *free_list;
-	void *bp;
-	unsigned long num_blocks = 0;
+	struct rb_node *temp, *next_node;
 	unsigned long curr_blocks;
 	bool found = 0;
-	unsigned long new_block_low;
 	unsigned long step = 0;
-	struct rb_node *temp, *next_node;
-	int cpuid;
-
-	num_blocks = num * pmfs_get_numblocks(btype);
-	if (num_blocks == 0)
-		return -EINVAL;
-
-	cpuid = get_cpu();
-	free_list = pmfs_get_free_list(sb, cpuid);
-	free_list->alloc_count++;
-
-	if (free_list->num_free_blocks < num_blocks || !free_list->first_node) {
-		pmfs_dbg("%s: cpu %d, free_blocks %lu, required %lu, "
-			"blocknode %lu\n", __func__, cpuid,
-			free_list->num_free_blocks, num_blocks,
-			free_list->num_blocknode);
-		if (free_list->first_node) {
-			pmfs_dbg("first node: %lu - %lu\n",
-				free_list->first_node->block_low,
-				free_list->first_node->block_high);
-		} else {
-			pmfs_dbg("first node is NULL!\n");
-		}
-		put_cpu();
-		return -ENOMEM;
-	}
 
 	tree = &(free_list->block_free_tree);
 	temp = &(free_list->first_node->node);
@@ -601,36 +572,78 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 			free_blocknode = curr;
 			found = 1;
 			num_blocks = curr_blocks;
-			new_block_low = curr->block_low;
+			*new_block_low = curr->block_low;
 			break;
 		}
 
 		/* Allocate partial blocknode */
-		new_block_low = curr->block_low;
+		*new_block_low = curr->block_low;
 		curr->block_low += num_blocks;
 		found = 1;
 		break;
 	}
 
-	if (found == 1) {
-		if (log_page)
-			alloc_log_pages += num_blocks;
-		else
-			alloc_data_pages += num_blocks;
-	}	
-
 	free_list->allocated_blocks += num_blocks;
 	free_list->num_free_blocks -= num_blocks;
-
-	put_cpu();
 
 	if (free_blocknode)
 		__pmfs_free_blocknode(free_blocknode);
 
-	if (found == 0) {
-		alloc_steps += step;
+	alloc_steps += step;
+
+	if (found == 0)
 		return -ENOSPC;
+
+	return num_blocks;
+}
+
+/* Return how many blocks allocated */
+static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
+	unsigned int num, unsigned short btype, int zero, int log_page)
+{
+	struct free_list *free_list;
+	void *bp;
+	unsigned long num_blocks = 0;
+	unsigned long ret_blocks = 0;
+	unsigned long new_block_low = 0;
+	int cpuid;
+
+	num_blocks = num * pmfs_get_numblocks(btype);
+	if (num_blocks == 0)
+		return -EINVAL;
+
+	cpuid = get_cpu();
+	free_list = pmfs_get_free_list(sb, cpuid);
+	free_list->alloc_count++;
+
+	if (free_list->num_free_blocks < num_blocks || !free_list->first_node) {
+		pmfs_dbg("%s: cpu %d, free_blocks %lu, required %lu, "
+			"blocknode %lu\n", __func__, cpuid,
+			free_list->num_free_blocks, num_blocks,
+			free_list->num_blocknode);
+		if (free_list->first_node) {
+			pmfs_dbg("first node: %lu - %lu\n",
+				free_list->first_node->block_low,
+				free_list->first_node->block_high);
+		} else {
+			pmfs_dbg("first node is NULL!\n");
+		}
+		put_cpu();
+		return -ENOMEM;
 	}
+
+	ret_blocks = pmfs_alloc_blocks_in_free_list(sb, free_list, btype,
+						num_blocks, &new_block_low);
+
+	if (ret_blocks <= 0 || new_block_low == 0)
+		return -ENOSPC;
+
+	put_cpu();
+
+	if (log_page)
+		alloc_log_pages += ret_blocks;
+	else
+		alloc_data_pages += ret_blocks;
 
 	if (zero) {
 		size_t size;
@@ -643,14 +656,13 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 			size = 0x1 << 21;
 		else
 			size = 0x1 << 30;
-		memset_nt(bp, 0, PAGE_SIZE * num_blocks);
+		memset_nt(bp, 0, PAGE_SIZE * ret_blocks);
 		pmfs_memlock_block(sb, bp);
 	}
 	*blocknr = new_block_low;
 
-	pmfs_dbg_verbose("Alloc %u NVMM blocks 0x%lx\n", num, *blocknr);
-	alloc_steps += step;
-	return num_blocks / pmfs_get_numblocks(btype);
+	pmfs_dbg_verbose("Alloc %lu NVMM blocks 0x%lx\n", ret_blocks, *blocknr);
+	return ret_blocks / pmfs_get_numblocks(btype);
 }
 
 inline int pmfs_new_data_blocks(struct super_block *sb, struct pmfs_inode *pi,
