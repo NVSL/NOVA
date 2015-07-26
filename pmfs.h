@@ -1033,11 +1033,9 @@ extern void pmfs_init_blockmap(struct super_block *sb,
 	unsigned long init_used_size, int power_failure);
 extern void pmfs_free_meta_block(struct super_block *sb, unsigned long blocknr);
 extern void pmfs_free_data_blocks(struct super_block *sb,
-	unsigned long blocknr, int num, unsigned short btype,
-	int cpuid);
+	unsigned long blocknr, int num, unsigned short btype);
 extern void pmfs_free_log_blocks(struct super_block *sb,
-	unsigned long blocknr, int num, unsigned short btype,
-	int cpuid);
+	unsigned long blocknr, int num, unsigned short btype);
 extern int pmfs_new_data_blocks(struct super_block *sb, struct pmfs_inode *pi,
 	unsigned long *blocknr, unsigned int num, unsigned long start_blk,
 	unsigned short btype, int zero, int cow);

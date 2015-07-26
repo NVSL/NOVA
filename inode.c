@@ -291,7 +291,6 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 	unsigned long pgoff;
 	struct pmfs_file_write_entry *entry;
 	struct mem_addr *pair;
-	int cpuid;
 	unsigned long start_blocknr = 0, num_free = 0;
 
 	node = (__le64 *)block;
@@ -302,7 +301,6 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 	end = last_index = last_blocknr >> node_bits;
 
 	if (height == 1) {
-		cpuid = get_cpu();
 		for (i = first_index; i <= last_index; i++) {
 			if (unlikely(!node[i]))
 				continue;
@@ -326,7 +324,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 					} else {
 						/* A new start */
 						pmfs_free_data_blocks(sb, start_blocknr,
-							num_free, btype, cpuid);
+							num_free, btype);
 						start_blocknr = pair->nvmm;
 						num_free = 1;
 					}
@@ -337,7 +335,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 
 			if (pair->nvmm_mmap) {
 				pmfs_free_data_blocks(sb, pair->nvmm_mmap, 1,
-							btype, cpuid);
+							btype);
 				pair->nvmm_mmap = 0;
 				pair->nvmm_mmap_write = 0;
 			}
@@ -348,8 +346,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 		}
 		if (start_blocknr)
 			pmfs_free_data_blocks(sb, start_blocknr,
-				num_free, btype, cpuid);
-		put_cpu();
+				num_free, btype);
 	} else {
 		for (i = first_index; i <= last_index; i++) {
 			if (unlikely(!node[i]))
@@ -434,7 +431,7 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 			/* Also free the nvmm mmap page */
 			if (pair->nvmm_mmap) {
 				pmfs_free_data_blocks(sb, pair->nvmm_mmap, 1,
-							btype, INVALID_CPU);
+							btype);
 				pair->nvmm_mmap = 0;
 				pair->nvmm_mmap_write = 0;
 			}
@@ -498,13 +495,13 @@ void pmfs_free_mem_addr(struct super_block *sb, __le64 addr, u32 btype)
 		entry = (struct pmfs_file_write_entry *)
 				pmfs_get_block(sb, pair->nvmm_entry);
 		entry->invalid_pages++;
-		pmfs_free_data_blocks(sb, pair->nvmm, 1, btype, INVALID_CPU);
+		pmfs_free_data_blocks(sb, pair->nvmm, 1, btype);
 		pair->nvmm_entry = 0;
 		pair->nvmm = 0;
 	}
 
 	if (pair->nvmm_mmap) {
-		pmfs_free_data_blocks(sb, pair->nvmm_mmap, 1, btype, INVALID_CPU);
+		pmfs_free_data_blocks(sb, pair->nvmm_mmap, 1, btype);
 		pair->nvmm_mmap = 0;
 		pair->nvmm_mmap_write = 0;
 	}
@@ -571,7 +568,7 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 		}
 		if (pair->nvmm_mmap) {
 			pmfs_free_data_blocks(sb, pair->nvmm_mmap, 1,
-							btype, INVALID_CPU);
+							btype);
 			pair->nvmm_mmap = 0;
 			pair->nvmm_mmap_write = 0;
 		}
@@ -852,7 +849,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 							leaf->nvmm_entry);
 					entry->invalid_pages++;
 					pmfs_free_data_blocks(sb, leaf->nvmm,
-						1, pi->i_blk_type, INVALID_CPU);
+						1, pi->i_blk_type);
 					pmfs_dbgv("Free block @ %lu\n",
 							leaf->nvmm);
 				}
@@ -1018,7 +1015,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 							root->nvmm_entry);
 					entry->invalid_pages++;
 					pmfs_free_data_blocks(sb, root->nvmm,
-						1, pi->i_blk_type, INVALID_CPU);
+						1, pi->i_blk_type);
 					pmfs_dbgv("Free root block @ %lu\n",
 						root->nvmm);
 				}
@@ -2114,7 +2111,7 @@ static void free_curr_page(struct super_block *sb, struct pmfs_inode *pi,
 	last_page->page_tail.next_page = curr_page->page_tail.next_page;
 	pmfs_flush_buffer(&last_page->page_tail.next_page, CACHELINE_SIZE, 1);
 	pmfs_free_log_blocks(sb, pmfs_get_blocknr(sb, curr_head, btype),
-					1, btype, INVALID_CPU);
+					1, btype);
 }
 
 int pmfs_inode_log_garbage_collection(struct super_block *sb,
@@ -2194,7 +2191,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 		pmfs_dbg_verbose("Free log head block 0x%llx\n",
 					curr >> PAGE_SHIFT);
 		pmfs_free_log_blocks(sb, pmfs_get_blocknr(sb, curr, btype),
-					1, btype, INVALID_CPU);
+					1, btype);
 	}
 	PMFS_END_TIMING(log_gc_t, gc_time);
 	return 0;
@@ -2326,7 +2323,6 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 	unsigned long blocknr, start_blocknr = 0;
 	int num_free = 0;
 	u32 btype = pi->i_blk_type;
-	int cpuid;
 	timing_t free_time;
 
 	if (pi->log_head == 0 || pi->log_tail == 0)
@@ -2335,7 +2331,6 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 	PMFS_START_TIMING(free_inode_log_t, free_time);
 
 	curr_block = pi->log_head;
-	cpuid = get_cpu();
 	while (curr_block) {
 		curr_page = (struct pmfs_inode_log_page *)pmfs_get_block(sb,
 							curr_block);
@@ -2353,14 +2348,13 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 			} else {
 				/* A new start */
 				pmfs_free_log_blocks(sb, start_blocknr,
-					num_free, btype, cpuid);
+					num_free, btype);
 				start_blocknr = blocknr;
 				num_free = 1;
 			}
 		}
 	}
-	pmfs_free_log_blocks(sb, start_blocknr,	num_free, btype, cpuid);
-	put_cpu();
+	pmfs_free_log_blocks(sb, start_blocknr,	num_free, btype);
 
 	/* FIXME: make this atomic */
 	pi->log_head = pi->log_tail = 0;

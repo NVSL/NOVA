@@ -346,7 +346,7 @@ static int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
 }
 
 static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
-	int num, unsigned short btype, int cpuid)
+	int num, unsigned short btype)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct rb_root *tree;
@@ -359,7 +359,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	struct pmfs_blocknode *curr_node;
 	struct free_list *free_list;
 	unsigned long step = 0;
-	int need_get_cpu = 0;
+	int cpuid;
 	int ret;
 
 	if (num <= 0) {
@@ -367,12 +367,12 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 		return;
 	}
 
-	if (cpuid == INVALID_CPU) {
-		need_get_cpu = 1;
-		cpuid = get_cpu();
-	}
+	cpuid = blocknr / sbi->per_list_blocks;
+	if (cpuid >= sbi->cpus)
+		cpuid = SHARED_CPU;
 
 	free_list = pmfs_get_free_list(sb, cpuid);
+	spin_lock(&free_list->s_lock);
 	free_list->free_count++;
 
 	tree = &(free_list->block_free_tree);
@@ -388,8 +388,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 
 	if (ret) {
 		pmfs_dbg("%s: find free slot fail: %d\n", __func__, ret);
-		if (need_get_cpu)
-			put_cpu();
+		spin_unlock(&free_list->s_lock);
 		return;
 	}
 
@@ -430,8 +429,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 block_found:
 	free_list->freed_blocks += num_blocks;
 	free_list->num_free_blocks += num_blocks;
-	if (need_get_cpu)
-		put_cpu();
+	spin_unlock(&free_list->s_lock);
 	if (free_blocknode)
 		__pmfs_free_blocknode(free_blocknode);
 	free_steps += step;
@@ -464,25 +462,25 @@ void pmfs_free_cache_block(struct mem_addr *pair)
 }
 
 void pmfs_free_data_blocks(struct super_block *sb, unsigned long blocknr,
-	int num, unsigned short btype, int cpuid)
+	int num, unsigned short btype)
 {
 	timing_t free_time;
 
 	pmfs_dbgv("Free %d data block from %lu\n", num, blocknr);
 	PMFS_START_TIMING(free_data_t, free_time);
-	pmfs_free_blocks(sb, blocknr, num, btype, cpuid);
+	pmfs_free_blocks(sb, blocknr, num, btype);
 	free_data_pages += num;
 	PMFS_END_TIMING(free_data_t, free_time);
 }
 
 void pmfs_free_log_blocks(struct super_block *sb, unsigned long blocknr,
-	int num, unsigned short btype, int cpuid)
+	int num, unsigned short btype)
 {
 	timing_t free_time;
 
 	pmfs_dbgv("Free %d log block from %lu\n", num, blocknr);
 	PMFS_START_TIMING(free_log_t, free_time);
-	pmfs_free_blocks(sb, blocknr, num, btype, cpuid);
+	pmfs_free_blocks(sb, blocknr, num, btype);
 	free_log_pages += num;
 	PMFS_END_TIMING(free_log_t, free_time);
 }
@@ -616,8 +614,9 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	if (num_blocks == 0)
 		return -EINVAL;
 
-	cpuid = get_cpu();
+	cpuid = smp_processor_id();
 	free_list = pmfs_get_free_list(sb, cpuid);
+	spin_lock(&free_list->s_lock);
 	free_list->alloc_count++;
 
 	if (free_list->num_free_blocks < num_blocks || !free_list->first_node) {
@@ -632,7 +631,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 			first = container_of(temp, struct pmfs_blocknode, node);
 			free_list->first_node = first;
 		} else {
-			put_cpu();
+			spin_unlock(&free_list->s_lock);
 			return -ENOMEM;
 		}
 	}
@@ -643,7 +642,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	if (ret_blocks <= 0 || new_block_low == 0)
 		return -ENOSPC;
 
-	put_cpu();
+	spin_unlock(&free_list->s_lock);
 
 	if (log_page)
 		alloc_log_pages += ret_blocks;
