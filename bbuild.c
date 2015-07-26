@@ -347,6 +347,18 @@ inline void clear_bm(unsigned long bit, struct scan_bitmap *bm,
 	}
 }
 
+static int get_cpuid(struct pmfs_sb_info *sbi, unsigned long blocknr)
+{
+	int cpuid;
+
+	cpuid = blocknr / sbi->per_list_blocks;
+
+	if (cpuid >= sbi->cpus)
+		cpuid = SHARED_CPU;
+
+	return cpuid;
+}
+
 static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
@@ -380,9 +392,9 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 		blknode = pmfs_alloc_blocknode(sb);
 		if (blknode == NULL)
 			PMFS_ASSERT(0);
-		cpuid = le64_to_cpu(entry->cpuid);
 		blknode->block_low = le64_to_cpu(entry->block_low);
 		blknode->block_high = le64_to_cpu(entry->block_high);
+		cpuid = get_cpuid(sbi, blknode->block_low);
 
 		/* FIXME: Assume NR_CPUS not change */
 		free_list = pmfs_get_free_list(sb, cpuid);
@@ -416,7 +428,7 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 }
 
 static u64 pmfs_append_blocknode_entry(struct super_block *sb,
-	struct pmfs_blocknode *curr, int cpuid, u64 tail)
+	struct pmfs_blocknode *curr, u64 tail)
 {
 	u64 curr_p;
 	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
@@ -437,7 +449,6 @@ static u64 pmfs_append_blocknode_entry(struct super_block *sb,
 		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct pmfs_blocknode_lowhigh *)pmfs_get_block(sb, curr_p);
-	entry->cpuid = cpu_to_le64(cpuid);
 	entry->block_low = cpu_to_le64(curr->block_low);
 	entry->block_high = cpu_to_le64(curr->block_high);
 	pmfs_dbg_verbose("append entry block low %lu, high %lu\n",
@@ -505,8 +516,7 @@ static u64 pmfs_save_free_list_blocknodes(struct super_block *sb, int cpu,
 	temp = rb_first(&free_list->block_free_tree);
 	while (temp) {
 		curr = container_of(temp, struct pmfs_blocknode, node);
-		curr_entry = pmfs_append_blocknode_entry(sb, curr,
-							cpu, temp_tail);
+		curr_entry = pmfs_append_blocknode_entry(sb, curr, temp_tail);
 		temp_tail = curr_entry + size;
 		temp = rb_next(temp);
 		pmfs_free_blocknode(sb, curr);

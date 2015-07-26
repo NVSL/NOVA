@@ -464,8 +464,6 @@ static inline int pmfs_calc_checksum(u8 *data, int n)
 }
 
 struct pmfs_blocknode_lowhigh {
-	__le64 cpuid;
-	__le64 padding;
 	__le64 block_low;
 	__le64 block_high;
 };
@@ -474,7 +472,7 @@ struct pmfs_alive_inode_entry {
 	__le64 pi_addr;
 };
 
-#define	BLOCKNODE_PER_PAGE	127
+#define	BLOCKNODE_PER_PAGE	254
 
 struct pmfs_blocknode {
 	struct list_head link;
