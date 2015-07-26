@@ -577,9 +577,9 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	temp_tail = pmfs_save_free_list_blocknodes(sb, SHARED_CPU, temp_tail);
 	pmfs_update_tail(pi, temp_tail);
 
-	pmfs_dbg("%s: %lu blocknodes, step %d, pi head 0x%llx, tail 0x%llx\n",
-		__func__, sbi->num_blocknode, step, pi->log_head,
-		pi->log_tail);
+	pmfs_dbg("%s: %lu blocknodes, %lu log pages, step %d, pi head 0x%llx, "
+		"tail 0x%llx\n", __func__, num_blocknode, num_pages,
+		step, pi->log_head, pi->log_tail);
 }
 
 static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
