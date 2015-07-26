@@ -281,6 +281,10 @@ setversion_out:
 		pmfs_inode_log_recovery(sb, multithread);
 		return 0;
 	}
+	case PMFS_PRINT_FREE_LISTS: {
+		pmfs_print_free_lists(sb);
+		return 0;
+	}
 	default:
 		return -ENOTTY;
 	}
