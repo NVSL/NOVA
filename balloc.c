@@ -41,7 +41,7 @@ int pmfs_alloc_block_free_lists(struct super_block *sb)
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = pmfs_get_free_list(sb, i);
 		free_list->block_free_tree = RB_ROOT;
-		spin_lock_init(&free_list->s_lock);
+		mutex_init(&free_list->s_lock);
 	}
 
 	return 0;
@@ -372,7 +372,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 		cpuid = SHARED_CPU;
 
 	free_list = pmfs_get_free_list(sb, cpuid);
-	spin_lock(&free_list->s_lock);
+	mutex_lock(&free_list->s_lock);
 	free_list->free_count++;
 
 	tree = &(free_list->block_free_tree);
@@ -388,7 +388,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 
 	if (ret) {
 		pmfs_dbg("%s: find free slot fail: %d\n", __func__, ret);
-		spin_unlock(&free_list->s_lock);
+		mutex_unlock(&free_list->s_lock);
 		return;
 	}
 
@@ -429,7 +429,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 block_found:
 	free_list->freed_blocks += num_blocks;
 	free_list->num_free_blocks += num_blocks;
-	spin_unlock(&free_list->s_lock);
+	mutex_unlock(&free_list->s_lock);
 	if (free_blocknode)
 		__pmfs_free_blocknode(free_blocknode);
 	free_steps += step;
@@ -616,7 +616,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 
 	cpuid = smp_processor_id();
 	free_list = pmfs_get_free_list(sb, cpuid);
-	spin_lock(&free_list->s_lock);
+	mutex_lock(&free_list->s_lock);
 	free_list->alloc_count++;
 
 	if (free_list->num_free_blocks < num_blocks || !free_list->first_node) {
@@ -631,7 +631,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 			first = container_of(temp, struct pmfs_blocknode, node);
 			free_list->first_node = first;
 		} else {
-			spin_unlock(&free_list->s_lock);
+			mutex_unlock(&free_list->s_lock);
 			return -ENOMEM;
 		}
 	}
@@ -639,10 +639,10 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	ret_blocks = pmfs_alloc_blocks_in_free_list(sb, free_list, btype,
 						num_blocks, &new_block_low);
 
+	mutex_unlock(&free_list->s_lock);
+
 	if (ret_blocks <= 0 || new_block_low == 0)
 		return -ENOSPC;
-
-	spin_unlock(&free_list->s_lock);
 
 	if (log_page)
 		alloc_log_pages += ret_blocks;
