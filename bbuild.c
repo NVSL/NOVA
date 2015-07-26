@@ -756,9 +756,9 @@ static struct scan_bitmap *alloc_bm(unsigned long initsize)
 	if (!bm)
 		return NULL;
 
-	bm->scan_bm_4K.bitmap_size = (initsize >> (PAGE_SHIFT + 0x3)) + 1;
-	bm->scan_bm_2M.bitmap_size = (initsize >> (PAGE_SHIFT_2M + 0x3)) + 1;
-	bm->scan_bm_1G.bitmap_size = (initsize >> (PAGE_SHIFT_1G + 0x3)) + 1;
+	bm->scan_bm_4K.bitmap_size = (initsize >> (PAGE_SHIFT + 0x3));
+	bm->scan_bm_2M.bitmap_size = (initsize >> (PAGE_SHIFT_2M + 0x3));
+	bm->scan_bm_1G.bitmap_size = (initsize >> (PAGE_SHIFT_1G + 0x3));
 
 	/* Alloc memory to hold the block alloc bitmap */
 	bm->scan_bm_4K.bitmap = kzalloc(bm->scan_bm_4K.bitmap_size,
