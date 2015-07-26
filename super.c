@@ -156,8 +156,8 @@ static loff_t pmfs_max_size(int bits)
 }
 
 enum {
-	Opt_addr, Opt_bpi, Opt_size, Opt_jsize,
-	Opt_num_inodes, Opt_mode, Opt_uid,
+	Opt_addr, Opt_bpi, Opt_size,
+	Opt_mode, Opt_uid,
 	Opt_gid, Opt_blocksize, Opt_wprotect,
 	Opt_err_cont, Opt_err_panic, Opt_err_ro,
 	Opt_hugemmap, Opt_nohugeioremap, Opt_pagecache,
@@ -168,8 +168,6 @@ static const match_table_t tokens = {
 	{ Opt_addr,	     "physaddr=%x"	  },
 	{ Opt_bpi,	     "bpi=%u"		  },
 	{ Opt_size,	     "init=%s"		  },
-	{ Opt_jsize,     "jsize=%s"		  },
-	{ Opt_num_inodes,"num_inodes=%u"  },
 	{ Opt_mode,	     "mode=%o"		  },
 	{ Opt_uid,	     "uid=%u"		  },
 	{ Opt_gid,	     "gid=%u"		  },
@@ -263,28 +261,6 @@ static int pmfs_parse_options(char *options, struct pmfs_sb_info *sbi,
 				goto bad_val;
 			sbi->initsize = memparse(args[0].from, &rest);
 			set_opt(sbi->s_mount_opt, FORMAT);
-			break;
-		case Opt_jsize:
-			if (remount)
-				goto bad_opt;
-			/* memparse() will accept a K/M/G without a digit */
-			if (!isdigit(*args[0].from))
-				goto bad_val;
-			sbi->jsize = memparse(args[0].from, &rest);
-			/* make sure journal size is integer power of 2 */
-			if (sbi->jsize & (sbi->jsize - 1) ||
-				sbi->jsize < PMFS_MINIMUM_JOURNAL_SIZE) {
-				pmfs_dbg("Invalid jsize: "
-					"must be whole power of 2 & >= 64KB\n");
-				goto bad_val;
-			}
-			break;
-		case Opt_num_inodes:
-			if (remount)
-				goto bad_opt;
-			if (match_int(&args[0], &option))
-				goto bad_val;
-			sbi->num_inodes = option;
 			break;
 		case Opt_err_panic:
 			clear_opt(sbi->s_mount_opt, ERRORS_CONT);
