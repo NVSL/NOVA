@@ -322,6 +322,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 		return - ENOMEM;
 	}
 	pi->log_tail = pi->log_head = new_block;
+	pi->i_blocks = 1;
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 
 	de_entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, new_block);
