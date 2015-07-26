@@ -453,6 +453,7 @@ static int pmfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	pmfs_rebuild_dir_inode_tree(sb, pi, pi_addr, sih, NULL);
 
 	pidir = pmfs_get_inode(sb, dir);
+	dir->i_blocks = pidir->i_blocks;
 	inc_nlink(dir);
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);

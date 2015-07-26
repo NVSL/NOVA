@@ -296,6 +296,7 @@ static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
 		*curr_tail = inode_start + PMFS_INODE_SIZE;
 	}
 
+	dir->i_blocks = pidir->i_blocks;
 	PMFS_END_TIMING(append_entry_t, append_time);
 	return curr_p;
 }
