@@ -550,6 +550,8 @@ struct free_list {
 	u64		padding[8];	/* Cache line break */
 };
 
+#define	RESERVED_BLOCKS	1
+
 /*
  * PMFS super-block data in memory
  */
@@ -585,18 +587,12 @@ struct pmfs_sb_info {
 	struct mutex inode_table_mutex;
 	unsigned long	s_inodes_used_count;
 	atomic64_t	s_curr_ino;
+	unsigned long	reserved_blocks;
 
 	struct mutex 	s_lock;	/* protects the SB's buffer-head */
 
 	/* Journaling related structures */
-	uint32_t    next_transaction_id;
-	uint32_t    jsize;
-	void       *journal_base_addr;
-	struct mutex journal_mutex;
 	struct mutex lite_journal_mutex;
-	struct task_struct *log_cleaner_thread;
-	wait_queue_head_t  log_cleaner_wait;
-	bool redo_log;
 
 	/* Header tree */
 	unsigned long root;
@@ -1029,8 +1025,7 @@ void pmfs_delete_free_lists(struct super_block *sb);
 extern struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb);
 extern void pmfs_free_blocknode(struct super_block *sb,
 	struct pmfs_blocknode *bnode);
-extern void pmfs_init_blockmap(struct super_block *sb,
-	unsigned long init_used_size, int recovery);
+extern void pmfs_init_blockmap(struct super_block *sb, int recovery);
 extern void pmfs_free_meta_block(struct super_block *sb, unsigned long blocknr);
 extern void pmfs_free_data_blocks(struct super_block *sb,
 	unsigned long blocknr, int num, unsigned short btype);

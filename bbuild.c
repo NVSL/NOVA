@@ -694,8 +694,9 @@ static void pmfs_update_4K_map(struct super_block *sb,
 }
 
 static void pmfs_build_blocknode_map(struct super_block *sb,
-	struct scan_bitmap *bm, unsigned long used_size)
+	struct scan_bitmap *bm)
 {
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	unsigned long num_used_block;
 	int i;
 
@@ -709,8 +710,7 @@ static void pmfs_build_blocknode_map(struct super_block *sb,
 		bm->scan_bm_1G.bitmap_size * 8, PAGE_SHIFT_1G - 12);
 
 	/* Set initial used pages */
-	num_used_block = (used_size + sb->s_blocksize - 1) >>
-					sb->s_blocksize_bits;
+	num_used_block = sbi->reserved_blocks;
 	for (i = 0; i < num_used_block; i++)
 		set_bm(i, bm, BM_4K);
 
@@ -1502,15 +1502,12 @@ static inline void pmfs_assign_bogus_header_info(struct super_block *sb)
 }
 
 static void pmfs_rebuild_superblock_info(struct super_block *sb,
-	pmfs_journal_t *journal, unsigned long initsize,
 	struct scan_bitmap *bm)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	unsigned long used_size;
 	unsigned long curr_ino;
 
-	used_size = le64_to_cpu(journal->base) + sbi->jsize;
-	pmfs_build_blocknode_map(sb, bm, used_size);
+	pmfs_build_blocknode_map(sb, bm);
 
 	if (bm->highest_inuse_ino >= PMFS_FREE_INODE_HINT_START)
 		curr_ino = bm->highest_inuse_ino;
@@ -1525,9 +1522,7 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_super_block *super = pmfs_get_super(sb);
 	unsigned long initsize = le64_to_cpu(super->s_size);
-	pmfs_journal_t *journal = pmfs_get_journal(sb);
 	struct scan_bitmap *bm = NULL;
-	unsigned long used_size;
 	bool value = false;
 	int ret;
 	timing_t recovery_time;
@@ -1537,8 +1532,7 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	sbi->block_end = ((unsigned long)(initsize) >> PAGE_SHIFT);
 
 	/* initialize free list info */
-	used_size = le64_to_cpu(journal->base) + sbi->jsize;
-	pmfs_init_blockmap(sb, used_size, 1);
+	pmfs_init_blockmap(sb, 1);
 
 	value = pmfs_can_skip_full_scan(sb);
 	if (value) {
@@ -1565,7 +1559,7 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	}
 
 	if (bm) {
-		pmfs_rebuild_superblock_info(sb, journal, initsize, bm);
+		pmfs_rebuild_superblock_info(sb, bm);
 		free_bm(bm);
 	}
 

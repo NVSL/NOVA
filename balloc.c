@@ -56,8 +56,7 @@ void pmfs_delete_free_lists(struct super_block *sb)
 	sbi->free_lists = NULL;
 }
 
-void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size,
-	int recovery)
+void pmfs_init_blockmap(struct super_block *sb, int recovery)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct rb_root *tree;
@@ -67,8 +66,7 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size,
 	unsigned long per_list_blocks;
 	int i;
 
-	num_used_block = (init_used_size + sb->s_blocksize - 1) >>
-		sb->s_blocksize_bits;
+	num_used_block = sbi->reserved_blocks;
 
 	/* Divide the block range among per-CPU free lists */
 	per_list_blocks = sbi->block_end / sbi->cpus;

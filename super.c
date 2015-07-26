@@ -323,7 +323,7 @@ bad_opt:
 	return -EINVAL;
 }
 
-static bool pmfs_check_size (struct super_block *sb, unsigned long size)
+static bool pmfs_check_size(struct super_block *sb, unsigned long size)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	unsigned long minimum_size, num_blocks;
@@ -338,8 +338,6 @@ static bool pmfs_check_size (struct super_block *sb, unsigned long size)
 	else
 		num_blocks = 1;
 	minimum_size += (num_blocks << sb->s_blocksize_bits);
-	/* space required for journal */
-	minimum_size += sbi->jsize;
 
 	if (size < minimum_size)
 	    return false;
@@ -352,8 +350,8 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 				      unsigned long size)
 {
 	unsigned long blocksize;
-	u64 journal_meta_start, journal_data_start, inode_table_start;
-	pmfs_journal_t *journal;
+	u64 journal_meta_start, inode_table_start;
+	unsigned long reserved_space, reserved_blocks;
 	struct pmfs_inode *root_i;
 	struct pmfs_super_block *super;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
@@ -399,35 +397,27 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	}
 
 	/* Reserve space for 8 special inodes */
-	journal_data_start = PMFS_SB_SIZE * 4;
-	journal_data_start = (journal_data_start + blocksize - 1) &
-		~(blocksize - 1);
+	reserved_space = PMFS_SB_SIZE * 4;
+	reserved_blocks = (reserved_space + blocksize - 1) / blocksize;
+	if (reserved_blocks > sbi->reserved_blocks) {
+		pmfs_dbg("Reserved %lu blocks, require %lu blocks\n",
+			sbi->reserved_blocks, reserved_blocks);
+		sbi->reserved_blocks = reserved_blocks;
+	}
 
-	pmfs_dbg_verbose("journal meta start %llx data start 0x%llx, "
-		"journal size 0x%x, inode_table 0x%llx\n", journal_meta_start,
-		journal_data_start, sbi->jsize, inode_table_start);
 	pmfs_dbg_verbose("max file name len %d\n", (unsigned int)PMFS_NAME_LEN);
 
 	super = pmfs_get_super(sb);
-	pmfs_memunlock_range(sb, super, journal_data_start);
 
 	/* clear out super-block and inode table */
-	memset_nt(super, 0, journal_data_start);
+	memset_nt(super, 0, reserved_space);
 	super->s_size = cpu_to_le64(size);
 	super->s_blocksize = cpu_to_le32(blocksize);
 	super->s_magic = cpu_to_le16(PMFS_SUPER_MAGIC);
 	super->s_journal_offset = cpu_to_le64(journal_meta_start);
 	super->s_inode_table_offset = cpu_to_le64(inode_table_start);
 
-	pmfs_init_blockmap(sb, journal_data_start + sbi->jsize, 0);
-	pmfs_memlock_range(sb, super, journal_data_start);
-
-	journal = pmfs_get_journal(sb);
-	journal->base = cpu_to_le64(journal_data_start);
-//	if (pmfs_journal_hard_init(sb, journal_data_start, sbi->jsize) < 0) {
-//		printk(KERN_ERR "Journal hard initialization failed\n");
-//		return ERR_PTR(-EINVAL);
-//	}
+	pmfs_init_blockmap(sb, 0);
 
 	if (pmfs_lite_journal_hard_init(sb) < 0) {
 		printk(KERN_ERR "Lite journal hard initialization failed\n");
@@ -443,8 +433,6 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 
 	pmfs_flush_buffer(super, PMFS_SB_SIZE, false);
 	pmfs_flush_buffer((char *)super + PMFS_SB_SIZE, sizeof(*super), false);
-
-//	pmfs_new_data_blocks(sb, &blocknr, 1, PMFS_BLOCK_TYPE_4K, 1);
 
 	pmfs_dbg_verbose("Allocate root inode\n");
 	root_i = pmfs_get_inode_by_ino(sb, PMFS_ROOT_INO);
@@ -476,10 +464,9 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 
 static inline void set_default_opts(struct pmfs_sb_info *sbi)
 {
-	/* set_opt(sbi->s_mount_opt, PROTECT); */
 	set_opt(sbi->s_mount_opt, HUGEIOREMAP);
 	set_opt(sbi->s_mount_opt, ERRORS_CONT);
-	sbi->jsize = PMFS_DEFAULT_JOURNAL_SIZE;
+	sbi->reserved_blocks = RESERVED_BLOCKS;
 }
 
 static void pmfs_root_check(struct super_block *sb, struct pmfs_inode *root_pi)
@@ -656,23 +643,11 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 
 	super = pmfs_get_super(sb);
 
-//	if (pmfs_journal_soft_init(sb)) {
-//		retval = -EINVAL;
-//		printk(KERN_ERR "Journal initialization failed\n");
-//		goto out;
-//	}
-
 	if (pmfs_lite_journal_soft_init(sb)) {
 		retval = -EINVAL;
 		printk(KERN_ERR "Lite journal initialization failed\n");
 		goto out;
 	}
-
-//	if (pmfs_recover_journal(sb)) {
-//		retval = -EINVAL;
-//		printk(KERN_ERR "Journal recovery failed\n");
-//		goto out;
-//	}
 
 	if (pmfs_check_integrity(sb, super) == 0) {
 		pmfs_dbg("Memory contains invalid pmfs %x:%x\n",
@@ -883,7 +858,6 @@ static void pmfs_put_super(struct super_block *sb)
 		pmfs_free_header_tree(sb);
 		/* Save everything before blocknode mapping! */
 		pmfs_save_blocknode_mappings_to_log(sb);
-//		pmfs_journal_uninit(sb);
 		pmfs_iounmap(sbi->virt_addr, size, pmfs_is_wprotected(sb));
 		sbi->virt_addr = NULL;
 		release_mem_region(sbi->phys_addr, size);
