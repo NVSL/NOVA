@@ -597,6 +597,26 @@ static unsigned long pmfs_alloc_blocks_in_free_list(struct super_block *sb,
 	return num_blocks;
 }
 
+/* Find out the free list with most free blocks */
+static int pmfs_get_candidate_free_list(struct super_block *sb)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct free_list *free_list;
+	int cpuid = 0;
+	int num_free_blocks = 0;
+	int i;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = pmfs_get_free_list(sb, i);
+		if (free_list->num_free_blocks > num_free_blocks) {
+			cpuid = i;
+			num_free_blocks = free_list->num_free_blocks;
+		}
+	}
+
+	return cpuid;
+}
+
 /* Return how many blocks allocated */
 static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned int num, unsigned short btype, int zero, int log_page)
@@ -609,16 +629,19 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	struct rb_node *temp;
 	struct pmfs_blocknode *first;
 	int cpuid;
+	int retried = 0;
 
 	num_blocks = num * pmfs_get_numblocks(btype);
 	if (num_blocks == 0)
 		return -EINVAL;
 
 	cpuid = smp_processor_id();
+
+try_again:
 	free_list = pmfs_get_free_list(sb, cpuid);
 	mutex_lock(&free_list->s_lock);
-	free_list->alloc_count++;
 
+	free_list->alloc_count++;
 	if (free_list->num_free_blocks < num_blocks || !free_list->first_node) {
 		pmfs_dbg("%s: cpu %d, free_blocks %lu, required %lu, "
 			"blocknode %lu\n", __func__, cpuid,
@@ -632,7 +655,11 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 			free_list->first_node = first;
 		} else {
 			mutex_unlock(&free_list->s_lock);
-			return -ENOMEM;
+			retried++;
+			if (retried >= 3)
+				return -ENOMEM;
+			cpuid = pmfs_get_candidate_free_list(sb);
+			goto try_again;
 		}
 	}
 
