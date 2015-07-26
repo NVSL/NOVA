@@ -41,6 +41,7 @@ int pmfs_alloc_block_free_lists(struct super_block *sb)
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = pmfs_get_free_list(sb, i);
 		free_list->block_free_tree = RB_ROOT;
+		spin_lock_init(&free_list->s_lock);
 	}
 
 	return 0;
@@ -71,6 +72,7 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size,
 
 	/* Divide the block range among per-CPU free lists */
 	per_list_blocks = sbi->block_end / sbi->cpus;
+	sbi->per_list_blocks = per_list_blocks;
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = pmfs_get_free_list(sb, i);
 		tree = &(free_list->block_free_tree);

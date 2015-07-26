@@ -535,6 +535,7 @@ struct scan_bitmap {
 };
 
 struct free_list {
+	spinlock_t s_lock;
 	struct rb_root	block_free_tree;
 	struct pmfs_blocknode *first_node;
 	unsigned long	block_start;
@@ -610,6 +611,7 @@ struct pmfs_sb_info {
 	struct free_list *free_lists;
 
 	/* Shared free block list */
+	unsigned long per_list_blocks;
 	struct mutex 	s_lock;	/* protects the SB's buffer-head */
 	struct free_list shared_free_list;
 };
