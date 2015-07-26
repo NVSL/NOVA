@@ -118,18 +118,6 @@ struct pmfs_inode {
 
 #define PMFS_SB_SIZE 512       /* must be power of two */
 
-typedef struct pmfs_journal {
-	__le64     base;
-	__le32     size;
-	__le32     head;
-	/* the next three fields must be in the same order and together.
-	 * tail and gen_id must fall in the same 8-byte quadword */
-	__le32     tail;
-	__le16     gen_id;   /* generation id of the log */
-	__le16     pad;
-	__le16     redo_logging;
-} pmfs_journal_t;
-
 
 /*
  * Structure of the super block in PMFS
@@ -150,8 +138,6 @@ struct pmfs_super_block {
 	__le32		s_blocksize;        /* blocksize in bytes */
 	__le64		s_size;             /* total size of fs in bytes */
 	char		s_volume_name[16];  /* volume name */
-	/* points to the location of pmfs_journal_t */
-	__le64          s_journal_offset;
 	/* points to the location of struct pmfs_inode for the inode table */
 	__le64          s_inode_table_offset;
 

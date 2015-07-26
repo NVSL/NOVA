@@ -631,14 +631,6 @@ static inline struct pmfs_super_block *pmfs_get_super(struct super_block *sb)
 	return (struct pmfs_super_block *)sbi->virt_addr;
 }
 
-static inline pmfs_journal_t *pmfs_get_journal(struct super_block *sb)
-{
-	struct pmfs_super_block *ps = pmfs_get_super(sb);
-
-	return (pmfs_journal_t *)((char *)ps +
-			le64_to_cpu(ps->s_journal_offset));
-}
-
 static inline struct pmfs_inode *pmfs_get_inode_table(struct super_block *sb)
 {
 	struct pmfs_super_block *ps = pmfs_get_super(sb);

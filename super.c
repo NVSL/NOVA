@@ -50,7 +50,6 @@ static const struct export_operations pmfs_export_ops;
 static struct kmem_cache *pmfs_inode_cachep;
 static struct kmem_cache *pmfs_dirnode_cachep;
 static struct kmem_cache *pmfs_blocknode_cachep;
-static struct kmem_cache *pmfs_transaction_cachep;
 
 /* FIXME: should the following variable be one per PMFS instance? */
 unsigned int pmfs_dbgmask = 0;
@@ -350,7 +349,7 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 				      unsigned long size)
 {
 	unsigned long blocksize;
-	u64 journal_meta_start, inode_table_start;
+	u64 inode_table_start;
 	unsigned long reserved_space, reserved_blocks;
 	struct pmfs_inode *root_i;
 	struct pmfs_super_block *super;
@@ -376,16 +375,11 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 		sbi->blocksize = blocksize;
 
 	if (!pmfs_check_size(sb, size)) {
-		pmfs_dbg("Specified PMFS size too small 0x%lx. Either increase"
-			" PMFS size, or reduce num. of inodes (minimum 32)" 
-			" or journal size (minimum 64KB)\n", size);
+		pmfs_dbg("Specified PMFS size too small 0x%lx.\n", size);
 		return ERR_PTR(-EINVAL);
 	}
 
-	journal_meta_start = sizeof(struct pmfs_super_block);
-	journal_meta_start = (journal_meta_start + CACHELINE_SIZE - 1) &
-		~(CACHELINE_SIZE - 1);
-	inode_table_start = journal_meta_start + sizeof(pmfs_journal_t);
+	inode_table_start = sizeof(struct pmfs_super_block);
 	inode_table_start = (inode_table_start + CACHELINE_SIZE - 1) &
 		~(CACHELINE_SIZE - 1);
 
@@ -414,7 +408,6 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	super->s_size = cpu_to_le64(size);
 	super->s_blocksize = cpu_to_le32(blocksize);
 	super->s_magic = cpu_to_le16(PMFS_SUPER_MAGIC);
-	super->s_journal_offset = cpu_to_le64(journal_meta_start);
 	super->s_inode_table_offset = cpu_to_le64(inode_table_start);
 
 	pmfs_init_blockmap(sb, 0);
@@ -872,11 +865,6 @@ static void pmfs_put_super(struct super_block *sb)
 	kfree(sbi);
 }
 
-inline void pmfs_free_transaction(pmfs_transaction_t *trans)
-{
-	kmem_cache_free(pmfs_transaction_cachep, trans);
-}
-
 void __pmfs_free_blocknode(struct pmfs_blocknode *bnode)
 {
 	kmem_cache_free(pmfs_blocknode_cachep, bnode);
@@ -891,12 +879,6 @@ void pmfs_free_dirnode(struct super_block *sb, struct pmfs_dir_node *node)
 {
 	kmem_cache_free(pmfs_dirnode_cachep, node);
 	atomic64_inc(&dirnode_free);
-}
-
-inline pmfs_transaction_t *pmfs_alloc_transaction(void)
-{
-	return (pmfs_transaction_t *)
-		kmem_cache_alloc(pmfs_transaction_cachep, GFP_NOFS);
 }
 
 struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb)
@@ -1011,25 +993,6 @@ static int __init init_header_cache(void)
 	if (pmfs_header_cachep == NULL)
 		return -ENOMEM;
 	return 0;
-}
-
-static int __init init_transaction_cache(void)
-{
-	pmfs_transaction_cachep = kmem_cache_create("pmfs_journal_transaction",
-			sizeof(pmfs_transaction_t), 0, (SLAB_RECLAIM_ACCOUNT |
-			SLAB_MEM_SPREAD), NULL);
-	if (pmfs_transaction_cachep == NULL) {
-		pmfs_dbg("PMFS: failed to init transaction cache\n");
-		return -ENOMEM;
-	}
-	return 0;
-}
-
-static void destroy_transaction_cache(void)
-{
-	if (pmfs_transaction_cachep)
-		kmem_cache_destroy(pmfs_transaction_cachep);
-	pmfs_transaction_cachep = NULL;
 }
 
 static void destroy_inodecache(void)
@@ -1148,43 +1111,37 @@ static int __init init_pmfs_fs(void)
 	if (rc)
 		return rc;
 
-	rc = init_transaction_cache();
+	rc = init_inodecache();
 	if (rc)
 		goto out1;
 
-	rc = init_inodecache();
+	rc = init_dirnode_cache();
 	if (rc)
 		goto out2;
 
-	rc = init_dirnode_cache();
+	rc = init_mempair_cache();
 	if (rc)
 		goto out3;
 
-	rc = init_mempair_cache();
+	rc = init_header_cache();
 	if (rc)
 		goto out4;
 
-	rc = init_header_cache();
-	if (rc)
-		goto out5;
-
 	rc = register_filesystem(&pmfs_fs_type);
 	if (rc)
-		goto out6;
+		goto out5;
 
 	PMFS_END_TIMING(init_t, init_time);
 	return 0;
 
-out6:
-	destroy_header_cache();
 out5:
-	destroy_mempair_cache();
+	destroy_header_cache();
 out4:
-	destroy_dirnode_cache();
+	destroy_mempair_cache();
 out3:
-	destroy_inodecache();
+	destroy_dirnode_cache();
 out2:
-	destroy_transaction_cache();
+	destroy_inodecache();
 out1:
 	destroy_blocknode_cache();
 	return rc;
@@ -1197,7 +1154,6 @@ static void __exit exit_pmfs_fs(void)
 	destroy_dirnode_cache();
 	destroy_mempair_cache();
 	destroy_blocknode_cache();
-	destroy_transaction_cache();
 	destroy_header_cache();
 }
 

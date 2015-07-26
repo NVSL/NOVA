@@ -69,17 +69,6 @@ typedef struct {
 	char     data[48];
 } pmfs_logentry_t;
 
-/* volatile data structure to describe a transaction */
-typedef struct pmfs_transaction {
-	u32              transaction_id;
-	u16              num_entries;
-	u16              num_used;
-	u16              gen_id;
-	u16              status;
-	pmfs_journal_t  *t_journal;
-	pmfs_logentry_t *start_addr;
-	struct pmfs_transaction *parent;
-} pmfs_transaction_t;
 
 #if 0
 extern pmfs_transaction_t *pmfs_alloc_transaction(void);
