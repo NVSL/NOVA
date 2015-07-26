@@ -586,8 +586,7 @@ struct pmfs_sb_info {
 	unsigned long	s_inodes_used_count;
 	atomic64_t	s_curr_ino;
 
-	int cpus;
-	unsigned long num_blocknode;
+	struct mutex 	s_lock;	/* protects the SB's buffer-head */
 
 	/* Journaling related structures */
 	uint32_t    next_transaction_id;
@@ -608,12 +607,12 @@ struct pmfs_sb_info {
 	/* ZEROED page for cache page initialized */
 	unsigned long zeroed_page;
 
+	int cpus;
 	/* Per-CPU free block list */
 	struct free_list *free_lists;
 
 	/* Shared free block list */
 	unsigned long per_list_blocks;
-	struct mutex 	s_lock;	/* protects the SB's buffer-head */
 	struct free_list shared_free_list;
 };
 

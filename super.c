@@ -807,9 +807,7 @@ int pmfs_statfs(struct dentry *d, struct kstatfs *buf)
 	buf->f_namelen = PMFS_NAME_LEN;
 	pmfs_dbg_verbose("pmfs_stats: total 4k free blocks 0x%llx\n",
 		buf->f_bfree);
-	pmfs_dbgv("curr inuse inode %lu, blocknodes %lu\n",
-		atomic64_read(&sbi->s_curr_ino),
-		sbi->num_blocknode);
+	pmfs_dbgv("curr inuse inode %lu\n", atomic64_read(&sbi->s_curr_ino));
 	return 0;
 }
 
@@ -936,8 +934,6 @@ void __pmfs_free_blocknode(struct pmfs_blocknode *bnode)
 
 void pmfs_free_blocknode(struct super_block *sb, struct pmfs_blocknode *bnode)
 {
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	sbi->num_blocknode--;
 	__pmfs_free_blocknode(bnode);
 }
 
@@ -956,12 +952,8 @@ inline pmfs_transaction_t *pmfs_alloc_transaction(void)
 struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb)
 {
 	struct pmfs_blocknode *p;
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	p = (struct pmfs_blocknode *)
 		kmem_cache_alloc(pmfs_blocknode_cachep, GFP_NOFS | GFP_ATOMIC);
-	if (p) {
-		sbi->num_blocknode++;
-	}
 	return p;
 }
 
