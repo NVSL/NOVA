@@ -2173,7 +2173,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 			break;
 	}
 
-	page_tail = (curr_tail & ~INVALID_MASK) + LAST_ENTRY;
+	page_tail = PAGE_TAIL(curr_tail);
 	((struct pmfs_inode_page_tail *)
 		pmfs_get_block(sb, page_tail))->next_page = new_block;
 
@@ -2242,7 +2242,7 @@ u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
 						new_block, allocated);
 		} else {
 			/* FIXME: Disable GC for dir inode by now */
-			page_tail = (curr_p & ~INVALID_MASK) + LAST_ENTRY;
+			page_tail = PAGE_TAIL(curr_p);
 			((struct pmfs_inode_page_tail *)
 				pmfs_get_block(sb, page_tail))->next_page
 								= new_block;
@@ -2335,7 +2335,7 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 	curr_block = pi->log_head;
 	while (curr_block) {
 		if (curr_block & INVALID_MASK) {
-			pmfs_dbg("%s: ERROR: invalid block %lu\n",
+			pmfs_dbg("%s: ERROR: invalid block %llu\n",
 					__func__, curr_block);
 			break;
 		}
