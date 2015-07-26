@@ -394,9 +394,10 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	reserved_space = PMFS_SB_SIZE * 4;
 	reserved_blocks = (reserved_space + blocksize - 1) / blocksize;
 	if (reserved_blocks > sbi->reserved_blocks) {
-		pmfs_dbg("Reserved %lu blocks, require %lu blocks\n",
+		pmfs_dbg("Reserved %lu blocks, require %lu blocks. "
+			"Increase reserved blocks number.\n",
 			sbi->reserved_blocks, reserved_blocks);
-		sbi->reserved_blocks = reserved_blocks;
+		return ERR_PTR(-EINVAL);
 	}
 
 	pmfs_dbg_verbose("max file name len %d\n", (unsigned int)PMFS_NAME_LEN);
