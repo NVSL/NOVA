@@ -57,7 +57,7 @@ void pmfs_delete_free_lists(struct super_block *sb)
 }
 
 void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size,
-	int power_failure)
+	int recovery)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct rb_root *tree;
@@ -80,8 +80,8 @@ void pmfs_init_blockmap(struct super_block *sb, unsigned long init_used_size,
 		free_list->block_end = free_list->block_start +
 						per_list_blocks - 1;
 
-		/* For a power failure recovery, update these fields later */
-		if (power_failure == 0) {
+		/* For recovery, update these fields later */
+		if (recovery == 0) {
 			free_list->num_free_blocks = per_list_blocks;
 			if (i == 0) {
 				free_list->block_start += num_used_block;

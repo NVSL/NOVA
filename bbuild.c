@@ -1499,10 +1499,7 @@ static void pmfs_rebuild_superblock_info(struct super_block *sb,
 	unsigned long used_size;
 	unsigned long curr_ino;
 
-	/* initialize the num_free_blocks to */
 	used_size = le64_to_cpu(journal->base) + sbi->jsize;
-	pmfs_init_blockmap(sb, used_size, 1);
-
 	pmfs_build_blocknode_map(sb, bm, used_size);
 
 	if (bm->highest_inuse_ino >= PMFS_FREE_INODE_HINT_START)
@@ -1520,6 +1517,7 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	unsigned long initsize = le64_to_cpu(super->s_size);
 	pmfs_journal_t *journal = pmfs_get_journal(sb);
 	struct scan_bitmap *bm = NULL;
+	unsigned long used_size;
 	bool value = false;
 	int ret;
 	timing_t recovery_time;
@@ -1527,6 +1525,10 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	PMFS_START_TIMING(recovery_t, recovery_time);
 	sbi->block_start = (unsigned long)0;
 	sbi->block_end = ((unsigned long)(initsize) >> PAGE_SHIFT);
+
+	/* initialize free list info */
+	used_size = le64_to_cpu(journal->base) + sbi->jsize;
+	pmfs_init_blockmap(sb, used_size, 1);
 
 	value = pmfs_can_skip_full_scan(sb);
 	if (value) {
