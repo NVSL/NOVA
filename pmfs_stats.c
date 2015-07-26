@@ -306,14 +306,14 @@ void pmfs_print_free_lists(struct super_block *sb)
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = pmfs_get_free_list(sb, i);
 		pmfs_dbg("Free list %d: block start %lu, block end %lu, "
-			"num_blocks %lu, blocknode %lu\n",
+			"num_blocks %lu, num_free_blocks %lu, blocknode %lu\n",
 			i, free_list->block_start, free_list->block_end,
 			free_list->block_end - free_list->block_start + 1,
-			free_list->num_blocknode);
+			free_list->num_free_blocks, free_list->num_blocknode);
 
-		pmfs_dbg("Free list %d: num_free_blocks %lu, alloc count %lu, "
+		pmfs_dbg("Free list %d: alloc count %lu, "
 			"free count %lu, allocated blocks %lu, "
-			"freed blocks %lu\n", i, free_list->num_free_blocks,
+			"freed blocks %lu\n", i,
 			free_list->alloc_count,	free_list->free_count,
 			free_list->allocated_blocks, free_list->freed_blocks);
 	}
@@ -321,14 +321,14 @@ void pmfs_print_free_lists(struct super_block *sb)
 	i = SHARED_CPU;
 	free_list = pmfs_get_free_list(sb, i);
 	pmfs_dbg("Free list %d: block start %lu, block end %lu, "
-		"num_blocks %lu, blocknode %lu\n",
+		"num_blocks %lu, num_free_blocks %lu, blocknode %lu\n",
 		i, free_list->block_start, free_list->block_end,
 		free_list->block_end - free_list->block_start + 1,
-		free_list->num_blocknode);
+		free_list->num_free_blocks, free_list->num_blocknode);
 
-	pmfs_dbg("Free list %d: num_free_blocks %lu, alloc count %lu, "
+	pmfs_dbg("Free list %d: alloc count %lu, "
 		"free count %lu, allocated blocks %lu, "
-		"freed blocks %lu\n", i, free_list->num_free_blocks,
+		"freed blocks %lu\n", i,
 		free_list->alloc_count,	free_list->free_count,
 		free_list->allocated_blocks, free_list->freed_blocks);
 }
