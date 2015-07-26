@@ -1576,13 +1576,13 @@ static bool pmfs_is_inode_dirty(struct inode *inode, struct pmfs_inode *pi)
 						"size not sync\n");
 			retval = true;
 	}
-#endif
 
 	if (inode->i_blocks != le64_to_cpu(pi->i_blocks)) {
 			printk_ratelimited(KERN_ERR "dirty check: "
 						"blocks not sync\n");
 			retval = true;
 	}
+#endif
 
 	if (inode->i_mode != le16_to_cpu(pi->i_mode) ||
 		i_uid_read(inode) != le32_to_cpu(pi->i_uid) ||
