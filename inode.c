@@ -2354,7 +2354,8 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 			}
 		}
 	}
-	pmfs_free_log_blocks(sb, start_blocknr,	num_free, btype);
+	if (start_blocknr)
+		pmfs_free_log_blocks(sb, start_blocknr,	num_free, btype);
 
 	/* FIXME: make this atomic */
 	pi->log_head = pi->log_tail = 0;

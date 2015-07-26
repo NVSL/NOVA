@@ -467,6 +467,10 @@ void pmfs_free_data_blocks(struct super_block *sb, unsigned long blocknr,
 	timing_t free_time;
 
 	pmfs_dbgv("Free %d data block from %lu\n", num, blocknr);
+	if (blocknr == 0) {
+		pmfs_dbg("%s: ERROR: %lu, %d\n", __func__, blocknr, num);
+		return;
+	}
 	PMFS_START_TIMING(free_data_t, free_time);
 	pmfs_free_blocks(sb, blocknr, num, btype);
 	free_data_pages += num;
@@ -479,6 +483,10 @@ void pmfs_free_log_blocks(struct super_block *sb, unsigned long blocknr,
 	timing_t free_time;
 
 	pmfs_dbgv("Free %d log block from %lu\n", num, blocknr);
+	if (blocknr == 0) {
+		pmfs_dbg("%s: ERROR: %lu, %d\n", __func__, blocknr, num);
+		return;
+	}
 	PMFS_START_TIMING(free_log_t, free_time);
 	pmfs_free_blocks(sb, blocknr, num, btype);
 	free_log_pages += num;
