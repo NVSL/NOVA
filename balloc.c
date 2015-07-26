@@ -643,7 +643,7 @@ try_again:
 
 	free_list->alloc_count++;
 	if (free_list->num_free_blocks < num_blocks || !free_list->first_node) {
-		pmfs_dbg("%s: cpu %d, free_blocks %lu, required %lu, "
+		pmfs_dbgv("%s: cpu %d, free_blocks %lu, required %lu, "
 			"blocknode %lu\n", __func__, cpuid,
 			free_list->num_free_blocks, num_blocks,
 			free_list->num_blocknode);
