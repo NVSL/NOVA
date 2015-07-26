@@ -2119,6 +2119,7 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 	u64 curr_tail, u64 new_block, int num_pages)
 {
 	u64 curr, next, possible_head = 0;
+	u64 page_tail;
 	int found_head = 0;
 	struct pmfs_inode_log_page *last_page = NULL;
 	struct pmfs_inode_log_page *curr_page = NULL;
@@ -2172,8 +2173,9 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 			break;
 	}
 
+	page_tail = (curr_tail & ~INVALID_MASK) + LAST_ENTRY;
 	((struct pmfs_inode_page_tail *)
-		pmfs_get_block(sb, curr_tail))->next_page = new_block;
+		pmfs_get_block(sb, page_tail))->next_page = new_block;
 
 	curr = pi->log_head;
 
@@ -2332,6 +2334,11 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 
 	curr_block = pi->log_head;
 	while (curr_block) {
+		if (curr_block & INVALID_MASK) {
+			pmfs_dbg("%s: ERROR: invalid block %lu\n",
+					__func__, curr_block);
+			break;
+		}
 		curr_page = (struct pmfs_inode_log_page *)pmfs_get_block(sb,
 							curr_block);
 		blocknr = pmfs_get_blocknr(sb, le64_to_cpu(curr_block),
