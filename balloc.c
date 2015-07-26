@@ -98,16 +98,6 @@ void pmfs_init_blockmap(struct super_block *sb, int recovery)
 	}
 }
 
-#if 0
-static struct pmfs_blocknode *pmfs_next_blocknode(struct pmfs_blocknode *i,
-						  struct list_head *head)
-{
-	if (list_is_last(&i->link, head))
-		return NULL;
-	return list_first_entry(&i->link, typeof(*i), link);
-}
-#endif
-
 static inline void pmfs_free_dram_page(unsigned long page_addr)
 {
 	if ((page_addr & DRAM_BIT) == 0) {
@@ -661,10 +651,10 @@ try_again:
 			free_list->first_node = first;
 		} else {
 			mutex_unlock(&free_list->s_lock);
-			retried++;
 			if (retried >= 3)
 				return -ENOMEM;
 			cpuid = pmfs_get_candidate_free_list(sb);
+			retried++;
 			goto try_again;
 		}
 	}
