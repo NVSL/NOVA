@@ -26,6 +26,7 @@
 #include <linux/delay.h>
 #include "pmfs.h"
 
+static unsigned long alive_inode;
 static struct kmem_cache *pmfs_bmentry_cachep;
 
 static int __init init_bmentry_cache(void)
@@ -478,8 +479,10 @@ static u64 pmfs_append_alive_inode_entry(struct super_block *sb,
 				next_log_page(sb, curr_p) == 0)) {
 		curr_p = pmfs_extend_inode_log(sb, inode_table,
 						inode_table_sih, curr_p, 0);
-		if (curr_p == 0)
+		if (curr_p == 0) {
+			pmfs_dbg("%s: failed to extend log\n", __func__);
 			goto out;
+		}
 	}
 
 	if (is_last_entry(curr_p, size, 0))
@@ -499,6 +502,7 @@ static u64 pmfs_append_alive_inode_entry(struct super_block *sb,
 	inode_table->log_tail = curr_p + size;
 out:
 	PMFS_END_TIMING(append_entry_t, append_time);
+	alive_inode++;
 	return curr_p;
 }
 
@@ -961,7 +965,8 @@ unsigned int pmfs_free_header_tree(struct super_block *sb)
 	pmfs_free_header(sb, inode_table_sih);
 	pmfs_flush_buffer(&inode_table->log_head, CACHELINE_SIZE, 1);
 	sbi->root = sbi->height = 0;
-	pmfs_dbg("%s: freed %u\n", __func__, freed);
+	pmfs_dbg("%s: freed %u, alive inode %lu\n",
+				__func__, freed, alive_inode);
 	return freed;
 }
 
