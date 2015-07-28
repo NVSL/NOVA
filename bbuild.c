@@ -521,7 +521,7 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 	return true;
 }
 
-static u64 pmfs_append_blocknode_entry(struct super_block *sb,
+static u64 pmfs_append_range_node_entry(struct super_block *sb,
 	struct pmfs_range_node *curr, u64 tail)
 {
 	u64 curr_p;
@@ -599,7 +599,7 @@ out:
 	return curr_p;
 }
 
-static u64 pmfs_save_blocknode_to_log(struct super_block *sb,
+static u64 pmfs_save_range_nodes_to_log(struct super_block *sb,
 	struct rb_root *tree, u64 temp_tail)
 {
 	struct pmfs_range_node *curr;
@@ -611,10 +611,10 @@ static u64 pmfs_save_blocknode_to_log(struct super_block *sb,
 	temp = rb_first(tree);
 	while (temp) {
 		curr = container_of(temp, struct pmfs_range_node, node);
-		curr_entry = pmfs_append_blocknode_entry(sb, curr, temp_tail);
+		curr_entry = pmfs_append_range_node_entry(sb, curr, temp_tail);
 		temp_tail = curr_entry + size;
 		temp = rb_next(temp);
-		pmfs_free_blocknode(sb, curr);
+		pmfs_free_range_node(curr);
 	}
 
 	return temp_tail;
@@ -626,7 +626,7 @@ static u64 pmfs_save_free_list_blocknodes(struct super_block *sb, int cpu,
 	struct free_list *free_list;
 
 	free_list = pmfs_get_free_list(sb, cpu);
-	temp_tail = pmfs_save_blocknode_to_log(sb, &free_list->block_free_tree,
+	temp_tail = pmfs_save_range_nodes_to_log(sb, &free_list->block_free_tree,
 								temp_tail);
 	return temp_tail;
 }
@@ -655,7 +655,7 @@ void pmfs_save_inode_list_to_log(struct super_block *sb)
 	pi->log_head = new_block;
 	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 
-	temp_tail = pmfs_save_blocknode_to_log(sb, &sbi->inode_inuse_tree,
+	temp_tail = pmfs_save_range_nodes_to_log(sb, &sbi->inode_inuse_tree,
 								new_block);
 	pmfs_update_tail(pi, temp_tail);
 
@@ -730,7 +730,7 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 		step, pi->log_head, pi->log_tail);
 }
 
-static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
+static int pmfs_insert_blocknode_map(struct super_block *sb,
 	int cpuid, unsigned long low, unsigned long high)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
@@ -789,7 +789,7 @@ static int __pmfs_build_blocknode_map(struct super_block *sb,
 
 		low = next;
 		next = find_next_bit(bitmap, end, next);
-		if (pmfs_alloc_insert_blocknode_map(sb, cpuid,
+		if (pmfs_insert_blocknode_map(sb, cpuid,
 				low << scale , (next << scale) - 1)) {
 			pmfs_dbg("Error: could not insert %lu - %lu\n",
 				low << scale, ((next << scale) - 1));

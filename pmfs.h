@@ -1019,6 +1019,7 @@ int pmfs_alloc_block_free_lists(struct super_block *sb);
 void pmfs_delete_free_lists(struct super_block *sb);
 inline struct pmfs_range_node *pmfs_alloc_blocknode(struct super_block *sb);
 inline struct pmfs_range_node *pmfs_alloc_inode_node(struct super_block *sb);
+inline void pmfs_free_range_node(struct pmfs_range_node *node);
 inline void pmfs_free_blocknode(struct super_block *sb,
 	struct pmfs_range_node *bnode);
 inline void pmfs_free_inode_node(struct super_block *sb,

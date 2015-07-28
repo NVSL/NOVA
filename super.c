@@ -868,7 +868,7 @@ static void pmfs_put_super(struct super_block *sb)
 	kfree(sbi);
 }
 
-static inline void pmfs_free_range_node(struct pmfs_range_node *node)
+inline void pmfs_free_range_node(struct pmfs_range_node *node)
 {
 	kmem_cache_free(pmfs_range_node_cachep, node);
 }
