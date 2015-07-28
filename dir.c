@@ -90,7 +90,7 @@ static inline struct pmfs_dir_node *pmfs_find_dir_node(struct super_block *sb,
 }
 
 static int pmfs_insert_dir_node_by_name(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
+	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih, u64 ino,
 	const char *name, int namelen, u64 dir_entry)
 {
 	struct pmfs_dir_node *curr, *new;
@@ -124,6 +124,7 @@ static int pmfs_insert_dir_node_by_name(struct super_block *sb,
 		return -ENOMEM;
 
 	new->nvmm = dir_entry;
+	new->ino = ino;
 	rb_link_node(&new->node, parent, temp);
 	rb_insert_color(&new->node, &sih->dir_tree);
 //	pmfs_print_dir_tree(sb, inode);
@@ -132,15 +133,15 @@ static int pmfs_insert_dir_node_by_name(struct super_block *sb,
 }
 
 static inline int pmfs_insert_dir_node(struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode, struct dentry *dentry,
-	u64 dir_entry)
+	struct pmfs_inode *pi, struct inode *inode, u64 ino,
+	struct dentry *dentry, u64 dir_entry)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
 
-	return pmfs_insert_dir_node_by_name(sb, pi, sih, name,
+	return pmfs_insert_dir_node_by_name(sb, pi, sih, ino, name,
 						namelen, dir_entry);
 }
 
@@ -391,7 +392,7 @@ int pmfs_add_entry(struct dentry *dentry, u64 *pi_addr, u64 ino, int inc_link,
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, pi_addr, ino,
 				dentry,	loglen, tail, inc_link, new_inode,
 				&curr_tail);
-	pmfs_insert_dir_node(sb, pidir, dir, dentry, curr_entry);
+	pmfs_insert_dir_node(sb, pidir, dir, ino, dentry, curr_entry);
 	*new_tail = curr_tail;
 	PMFS_END_TIMING(add_entry_t, add_entry_time);
 	return 0;
@@ -438,8 +439,9 @@ inline int pmfs_replay_add_entry(struct super_block *sb, struct pmfs_inode *pi,
 		return -EINVAL;
 
 	pmfs_dbg_verbose("%s: add %s\n", __func__, entry->name);
-	return pmfs_insert_dir_node_by_name(sb, pi, sih, entry->name,
-					entry->name_len, curr_p);
+	return pmfs_insert_dir_node_by_name(sb, pi, sih,
+			__le64_to_cpu(entry->ino), entry->name,
+			entry->name_len, curr_p);
 }
 
 inline int pmfs_replay_remove_entry(struct super_block *sb,
