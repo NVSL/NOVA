@@ -89,20 +89,9 @@ atomic64_t dirnode_free = ATOMIC_INIT(0);
 atomic64_t header_alloc = ATOMIC_INIT(0);
 atomic64_t header_free = ATOMIC_INIT(0);
 
-void pmfs_print_blocknode_list(struct super_block *sb)
+void pmfs_print_alloc_stats(struct super_block *sb)
 {
-	printk("=========== PMFS blocknode stats ===========\n");
-# if 0
-	mutex_lock(&sbi->s_lock);
-	list_for_each_entry(i, head, link) {
-		count++;
-		pmfs_dbgv("node low %lu, high %lu, size %lu\n",
-			i->block_low, i->block_high,
-			i->block_high - i->block_low + 1);
-	}
-	mutex_unlock(&sbi->s_lock);
-	printk("All: %lu nodes\n", count);
-#endif
+	printk("=========== PMFS allocation stats ===========\n");
 	printk("Alloc %llu, alloc steps %lu, average %llu\n",
 		Countstats[new_data_blocks_t], alloc_steps,
 		Countstats[new_data_blocks_t] ?
@@ -118,11 +107,6 @@ void pmfs_print_blocknode_list(struct super_block *sb)
 			checked_pages / Countstats[log_gc_t] : 0,
 		gc_pages, Countstats[log_gc_t] ?
 			gc_pages / Countstats[log_gc_t] : 0);
-}
-
-void pmfs_print_malloc_stats(struct super_block *sb)
-{
-	printk("======== PMFS NVMM malloc stats ========\n");
 	printk("Allocated %lu data pages\n", alloc_data_pages);
 	printk("Freed %lu data pages\n", free_data_pages);
 	printk("Allocated %lu log pages\n", alloc_log_pages);
@@ -177,8 +161,7 @@ void pmfs_print_timing_stats(struct super_block *sb)
 		}
 	}
 
-	pmfs_print_blocknode_list(sb);
-	pmfs_print_malloc_stats(sb);
+	pmfs_print_alloc_stats(sb);
 	pmfs_print_IO_stats(sb);
 }
 
@@ -228,7 +211,7 @@ void pmfs_print_inode_log(struct super_block *sb, struct inode *inode)
 	}
 }
 
-void pmfs_print_inode_log_page(struct super_block *sb, struct inode *inode)
+void pmfs_print_inode_log_pages(struct super_block *sb, struct inode *inode)
 {
 	struct pmfs_inode *pi;
 	struct pmfs_inode_info *si = PMFS_I(inode);
@@ -263,37 +246,6 @@ void pmfs_print_inode_log_page(struct super_block *sb, struct inode *inode)
 	pmfs_dbg("Pi %lu: log used %d pages, has %d pages, "
 			"si reports %d pages\n", inode->i_ino, used, count,
 			sih->log_pages);
-}
-
-void pmfs_print_inode_log_blocknode(struct super_block *sb,
-		struct inode *inode)
-{
-	struct pmfs_inode *pi;
-	struct pmfs_inode_page_tail *tail;
-	size_t entry_size = sizeof(struct pmfs_file_write_entry);
-	u64 curr;
-	unsigned long count = 0;
-
-	pi = pmfs_get_inode(sb, inode);
-
-	if (pi->log_tail == 0)
-		goto out;
-
-	curr = pi->log_head;
-	pmfs_dbg("Pi %lu: log head @ 0x%llx, tail @ 0x%llx\n", inode->i_ino,
-			curr >> PAGE_SHIFT, pi->log_tail >> PAGE_SHIFT);
-	do {
-		tail = pmfs_get_block(sb, curr +
-					entry_size * ENTRIES_PER_PAGE);
-		pmfs_dbg("log block @ 0x%llx\n", curr >> PAGE_SHIFT);
-		curr = tail->next_page;
-		count++;
-		if ((curr >> PAGE_SHIFT) == 0)
-			break;
-	} while ((curr >> PAGE_SHIFT) != (pi->log_tail >> PAGE_SHIFT));
-
-out:
-	pmfs_dbg("All %lu pages\n", count);
 }
 
 void pmfs_print_free_lists(struct super_block *sb)

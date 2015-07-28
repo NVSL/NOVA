@@ -115,7 +115,7 @@ extern unsigned int pmfs_dbgmask;
 #define	PMFS_COW_WRITE			0xBCD00012
 #define	PMFS_PRINT_LOG			0xBCD00013
 #define	PMFS_PRINT_LOG_BLOCKNODE	0xBCD00014
-#define	PMFS_PRINT_LOG_PAGE		0xBCD00015
+#define	PMFS_PRINT_LOG_PAGES		0xBCD00015
 #define	PMFS_MALLOC_TEST		0xBCD00016
 #define	PMFS_TEST_MULTITHREAD_RECOVERY	0xBCD00017
 #define	PMFS_PRINT_FREE_LISTS		0xBCD00018
@@ -1195,8 +1195,7 @@ extern const struct inode_operations pmfs_symlink_inode_operations;
 void pmfs_print_timing_stats(struct super_block *sb);
 void pmfs_clear_stats(void);
 void pmfs_print_inode_log(struct super_block *sb, struct inode *inode);
-void pmfs_print_inode_log_page(struct super_block *sb, struct inode *inode);
-void pmfs_print_inode_log_blocknode(struct super_block *sb, struct inode *inode);
+void pmfs_print_inode_log_pages(struct super_block *sb, struct inode *inode);
 void pmfs_print_free_lists(struct super_block *sb);
 void pmfs_detect_memory_leak(struct super_block *sb);
 

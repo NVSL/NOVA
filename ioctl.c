@@ -259,12 +259,8 @@ setversion_out:
 		pmfs_print_inode_log(sb, inode);
 		return 0;
 	}
-	case PMFS_PRINT_LOG_PAGE: {
-		pmfs_print_inode_log_page(sb, inode);
-		return 0;
-	}
-	case PMFS_PRINT_LOG_BLOCKNODE: {
-		pmfs_print_inode_log_blocknode(sb, inode);
+	case PMFS_PRINT_LOG_PAGES: {
+		pmfs_print_inode_log_pages(sb, inode);
 		return 0;
 	}
 	case PMFS_MALLOC_TEST: {
