@@ -1338,6 +1338,7 @@ static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
 		curr_node->block_high = i->block_high;
 		i->block_high = ino - 1;
 		pmfs_insert_blocknode_inodetree(sbi, curr_node);
+		sbi->num_blocknode_inode++;
 		goto block_found;
 	}
 
