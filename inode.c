@@ -1381,6 +1381,12 @@ static int pmfs_free_inode(struct inode *inode,
 
 	pmfs_free_inode_log(sb, pi);
 	pi->i_blocks = 0;
+
+	/* Clear the si header, but not free it - leave for future use */
+	sih->root = 0;
+	sih->height = 0;
+	sih->log_pages = 0;
+	sih->i_mode = 0;
 	sih->pi_addr = 0;
 
 	mutex_lock(&sbi->inode_table_mutex);
@@ -1509,8 +1515,6 @@ void pmfs_evict_inode(struct inode *inode)
 			break;
 		}
 
-		sih->root = 0;
-		sih->height = 0;
 		pmfs_dbg_verbose("%s: Freed %d\n", __func__, freed);
 		/* Then we can free the inode */
 		err = pmfs_free_inode(inode, sih);
