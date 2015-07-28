@@ -141,7 +141,7 @@ struct pmfs_super_block {
 	/* points to the location of struct pmfs_inode for the inode table */
 	__le64          s_inode_table_offset;
 
-	__le64       s_start_dynamic; 
+	__le64		s_start_dynamic;
 
 	/* all the dynamic fields should go here */
 	/* s_mtime and s_wtime should be together and their order should not be
@@ -150,7 +150,6 @@ struct pmfs_super_block {
 	__le32		s_wtime;            /* write time */
 	/* fields for fast mount support. Always keep them together */
 	__le64		s_num_free_blocks;
-	__le64		s_curr_ino;
 };
 
 #define PMFS_SB_STATIC_SIZE(ps) ((u64)&ps->s_start_dynamic - (u64)ps)

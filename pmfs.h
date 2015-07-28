@@ -531,7 +531,6 @@ struct scan_bitmap {
 	struct single_scan_bm scan_bm_4K;
 	struct single_scan_bm scan_bm_2M;
 	struct single_scan_bm scan_bm_1G;
-	unsigned long highest_inuse_ino;
 };
 
 struct free_list {
@@ -588,7 +587,6 @@ struct pmfs_sb_info {
 	struct mutex inode_table_mutex;
 	unsigned long	num_blocknode_inode;
 	unsigned long	s_inodes_used_count;
-	atomic64_t	s_curr_ino;
 	unsigned long	reserved_blocks;
 
 	struct mutex 	s_lock;	/* protects the SB's buffer-head */

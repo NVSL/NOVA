@@ -493,8 +493,11 @@ static void pmfs_init_inode_list_from_inode(struct super_block *sb)
 		blknode->block_low = entry->block_low;
 		blknode->block_high = entry->block_high;
 		pmfs_insert_blocknode_inodetree(sbi, blknode);
+		sbi->s_inodes_used_count +=
+			blknode->block_high - blknode->block_low + 1;
 
 		num_blocknode++;
+		sbi->num_blocknode_inode++;
 		curr_p += sizeof(struct pmfs_blocknode_lowhigh);
 	}
 
@@ -505,13 +508,9 @@ static void pmfs_init_inode_list_from_inode(struct super_block *sb)
 static bool pmfs_can_skip_full_scan(struct super_block *sb)
 {
 	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
-	struct pmfs_super_block *super = pmfs_get_super(sb);
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 
 	if (pi->log_head == 0 || pi->log_tail == 0)
 		return false;
-
-	atomic64_set(&sbi->s_curr_ino, super->s_curr_ino);
 
 	pmfs_init_blockmap_from_inode(sb);
 	pmfs_init_inode_list_from_inode(sb);
@@ -707,7 +706,6 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	pmfs_memunlock_range(sb, &super->s_wtime, PMFS_FAST_MOUNT_FIELD_SIZE);
 
 	super->s_wtime = cpu_to_le32(get_seconds());
-	super->s_curr_ino = atomic64_read(&sbi->s_curr_ino);
 
 	pmfs_memlock_range(sb, &super->s_wtime, PMFS_FAST_MOUNT_FIELD_SIZE);
 	pmfs_flush_buffer(super, PMFS_SB_SIZE, 1);
@@ -924,7 +922,6 @@ static struct scan_bitmap *alloc_bm(unsigned long initsize)
 	bm->scan_bm_4K.multi_set_tree = RB_ROOT;
 	bm->scan_bm_2M.multi_set_tree = RB_ROOT;
 	bm->scan_bm_1G.multi_set_tree = RB_ROOT;
-	bm->highest_inuse_ino = 0;
 
 	if (init_bmentry_cache()) {
 		free_bm(bm);
@@ -1261,8 +1258,6 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 			pmfs_dfs_insert_inodetree(sb, pmfs_ino);
 		}
 		sbi->s_inodes_used_count++;
-		if (pmfs_ino > bm->highest_inuse_ino)
-			bm->highest_inuse_ino = pmfs_ino;
 	}
 
 	pmfs_dbg_verbose("%s: inode %lu, addr 0x%llx, valid %d, "
@@ -1646,22 +1641,6 @@ static inline void pmfs_assign_bogus_header_info(struct super_block *sb)
 	pmfs_assign_info_header(sb, 0, NULL, 0);
 }
 
-static void pmfs_rebuild_superblock_info(struct super_block *sb,
-	struct scan_bitmap *bm)
-{
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	unsigned long curr_ino;
-
-	pmfs_build_blocknode_map(sb, bm);
-
-	if (bm->highest_inuse_ino >= PMFS_NORMAL_INODE_START)
-		curr_ino = bm->highest_inuse_ino;
-	else
-		curr_ino = PMFS_NORMAL_INODE_START;
-
-	atomic64_set(&sbi->s_curr_ino, curr_ino);
-}
-
 int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
@@ -1704,7 +1683,7 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	}
 
 	if (bm) {
-		pmfs_rebuild_superblock_info(sb, bm);
+		pmfs_build_blocknode_map(sb, bm);
 		free_bm(bm);
 	}
 

@@ -753,11 +753,10 @@ int pmfs_statfs(struct dentry *d, struct kstatfs *buf)
 	buf->f_blocks = sbi->block_end;
 	buf->f_bfree = buf->f_bavail = pmfs_count_free_blocks(sb);
 	buf->f_files = LONG_MAX;
-	buf->f_ffree = LONG_MAX - atomic64_read(&sbi->s_curr_ino);
+	buf->f_ffree = LONG_MAX - sbi->s_inodes_used_count;
 	buf->f_namelen = PMFS_NAME_LEN;
 	pmfs_dbg_verbose("pmfs_stats: total 4k free blocks 0x%llx\n",
 		buf->f_bfree);
-	pmfs_dbgv("curr inuse inode %lu\n", atomic64_read(&sbi->s_curr_ino));
 	return 0;
 }
 

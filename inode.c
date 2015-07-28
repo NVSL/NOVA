@@ -1118,8 +1118,6 @@ int pmfs_init_inode_table(struct super_block *sb)
 	 */
 	pi->i_blk_type = PMFS_BLOCK_TYPE_4K;
 
-	atomic64_set(&sbi->s_curr_ino, PMFS_NORMAL_INODE_START);
-
 	return 0;
 }
 
@@ -1301,6 +1299,7 @@ static int pmfs_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
 	}
 
 	*ino = new_ino;
+	sbi->s_inodes_used_count++;
 
 	pmfs_dbg_verbose("Alloc ino %lu\n", *ino);
 	return 0;
@@ -1359,6 +1358,7 @@ static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
 				 i->block_low, i->block_high);
 
 block_found:
+	sbi->s_inodes_used_count--;
 	free_steps += step;
 }
 
@@ -1380,9 +1380,6 @@ static int pmfs_free_inode(struct inode *inode,
 	timing_t free_time;
 
 	PMFS_START_TIMING(free_inode_t, free_time);
-
-	pmfs_dbgv("free_inode: free %lu, curr %ld\n",
-		   inode->i_ino, atomic64_read(&sbi->s_curr_ino));
 
 	pi = pmfs_get_inode(sb, inode);
 
@@ -1563,8 +1560,6 @@ u64 pmfs_new_pmfs_inode(struct super_block *sb,
 		mutex_unlock(&sbi->inode_table_mutex);
 		return 0;
 	}
-
-//	free_ino = atomic64_inc_return(&sbi->s_curr_ino);
 
 	sih = pmfs_alloc_header(sb, 0);
 
