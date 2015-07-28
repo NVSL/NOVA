@@ -668,8 +668,13 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 
 		entry = (struct pmfs_dir_logentry *)
 				pmfs_get_block(sb, curr->nvmm);
-		if (entry->ino) {
-			ino = le64_to_cpu(entry->ino);
+
+		if (__le64_to_cpu(entry->ino) != curr->ino)
+			pmfs_dbg("%s: ino does not match: %llu, %llu\n",
+				__func__, entry->ino, curr->ino);
+
+		if (curr->ino) {
+			ino = curr->ino;
 			child_sih = pmfs_find_info_header(sb, ino);
 			pmfs_dbg_verbose("ctx: ino %llu, name %*.s, "
 					"name_len %u, de_len %u\n",
