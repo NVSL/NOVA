@@ -868,20 +868,21 @@ static void pmfs_put_super(struct super_block *sb)
 	kfree(sbi);
 }
 
-void __pmfs_free_blocknode(struct pmfs_range_node *bnode)
+static inline void pmfs_free_range_node(struct pmfs_range_node *node)
 {
-	kmem_cache_free(pmfs_range_node_cachep, bnode);
+	kmem_cache_free(pmfs_range_node_cachep, node);
 }
 
-void pmfs_free_blocknode(struct super_block *sb, struct pmfs_range_node *bnode)
+inline void pmfs_free_blocknode(struct super_block *sb,
+	struct pmfs_range_node *node)
 {
-	__pmfs_free_blocknode(bnode);
+	pmfs_free_range_node(node);
 }
 
 inline void pmfs_free_inode_node(struct super_block *sb,
-	struct pmfs_range_node *bnode)
+	struct pmfs_range_node *node)
 {
-	__pmfs_free_blocknode(bnode);
+	pmfs_free_range_node(node);
 }
 
 void pmfs_free_dirnode(struct super_block *sb, struct pmfs_dir_node *node)
@@ -890,7 +891,8 @@ void pmfs_free_dirnode(struct super_block *sb, struct pmfs_dir_node *node)
 	atomic64_inc(&dirnode_free);
 }
 
-struct pmfs_range_node *pmfs_alloc_blocknode(struct super_block *sb)
+static inline
+struct pmfs_range_node *pmfs_alloc_range_node(struct super_block *sb)
 {
 	struct pmfs_range_node *p;
 	p = (struct pmfs_range_node *)
@@ -898,9 +900,14 @@ struct pmfs_range_node *pmfs_alloc_blocknode(struct super_block *sb)
 	return p;
 }
 
+inline struct pmfs_range_node *pmfs_alloc_blocknode(struct super_block *sb)
+{
+	return pmfs_alloc_range_node(sb);
+}
+
 inline struct pmfs_range_node *pmfs_alloc_inode_node(struct super_block *sb)
 {
-	return pmfs_alloc_blocknode(sb);
+	return pmfs_alloc_range_node(sb);
 }
 
 struct pmfs_dir_node *pmfs_alloc_dirnode(struct super_block *sb)
@@ -953,7 +960,7 @@ static void init_once(void *foo)
 }
 
 
-static int __init init_blocknode_cache(void)
+static int __init init_rangenode_cache(void)
 {
 	pmfs_range_node_cachep = kmem_cache_create("pmfs_range_node_cache",
 					sizeof(struct pmfs_range_node),
@@ -1034,7 +1041,7 @@ static void destroy_header_cache(void)
 	kmem_cache_destroy(pmfs_header_cachep);
 }
 
-static void destroy_blocknode_cache(void)
+static void destroy_rangenode_cache(void)
 {
 	kmem_cache_destroy(pmfs_range_node_cachep);
 }
@@ -1121,7 +1128,7 @@ static int __init init_pmfs_fs(void)
 	timing_t init_time;
 
 	PMFS_START_TIMING(init_t, init_time);
-	rc = init_blocknode_cache();
+	rc = init_rangenode_cache();
 	if (rc)
 		return rc;
 
@@ -1157,7 +1164,7 @@ out3:
 out2:
 	destroy_inodecache();
 out1:
-	destroy_blocknode_cache();
+	destroy_rangenode_cache();
 	return rc;
 }
 
@@ -1167,7 +1174,7 @@ static void __exit exit_pmfs_fs(void)
 	destroy_inodecache();
 	destroy_dirnode_cache();
 	destroy_mempair_cache();
-	destroy_blocknode_cache();
+	destroy_rangenode_cache();
 	destroy_header_cache();
 }
 

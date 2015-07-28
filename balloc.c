@@ -352,7 +352,6 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	unsigned long num_blocks = 0;
 	struct pmfs_range_node *prev = NULL;
 	struct pmfs_range_node *next = NULL;
-	struct pmfs_range_node *free_blocknode= NULL;
 	struct pmfs_range_node *curr_node;
 	struct free_list *free_list;
 	unsigned long step = 0;
@@ -394,8 +393,8 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 		/* fits the hole */
 		rb_erase(&next->node, tree);
 		free_list->num_blocknode--;
-		free_blocknode = next;
 		prev->range_high = next->range_high;
+		pmfs_free_blocknode(sb, next);
 		goto block_found;
 	}
 	if (prev && (block_low == prev->range_high + 1)) {
@@ -427,8 +426,6 @@ block_found:
 	free_list->freed_blocks += num_blocks;
 	free_list->num_free_blocks += num_blocks;
 	mutex_unlock(&free_list->s_lock);
-	if (free_blocknode)
-		__pmfs_free_blocknode(free_blocknode);
 	free_steps += step;
 }
 
@@ -541,7 +538,6 @@ static unsigned long pmfs_alloc_blocks_in_free_list(struct super_block *sb,
 {
 	struct rb_root *tree;
 	struct pmfs_range_node *curr, *next = NULL;
-	struct pmfs_range_node *free_blocknode = NULL;
 	struct rb_node *temp, *next_node;
 	unsigned long curr_blocks;
 	bool found = 0;
@@ -574,10 +570,10 @@ static unsigned long pmfs_alloc_blocks_in_free_list(struct super_block *sb,
 
 			rb_erase(&curr->node, tree);
 			free_list->num_blocknode--;
-			free_blocknode = curr;
-			found = 1;
 			num_blocks = curr_blocks;
 			*new_blocknr = curr->range_low;
+			pmfs_free_blocknode(sb, curr);
+			found = 1;
 			break;
 		}
 
@@ -590,9 +586,6 @@ static unsigned long pmfs_alloc_blocks_in_free_list(struct super_block *sb,
 
 	free_list->allocated_blocks += num_blocks;
 	free_list->num_free_blocks -= num_blocks;
-
-	if (free_blocknode)
-		__pmfs_free_blocknode(free_blocknode);
 
 	alloc_steps += step;
 

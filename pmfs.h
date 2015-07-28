@@ -1017,11 +1017,11 @@ extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
 /* balloc.c */
 int pmfs_alloc_block_free_lists(struct super_block *sb);
 void pmfs_delete_free_lists(struct super_block *sb);
-extern struct pmfs_range_node *pmfs_alloc_blocknode(struct super_block *sb);
-extern struct pmfs_range_node *pmfs_alloc_inode_node(struct super_block *sb);
-extern void pmfs_free_blocknode(struct super_block *sb,
+inline struct pmfs_range_node *pmfs_alloc_blocknode(struct super_block *sb);
+inline struct pmfs_range_node *pmfs_alloc_inode_node(struct super_block *sb);
+inline void pmfs_free_blocknode(struct super_block *sb,
 	struct pmfs_range_node *bnode);
-extern void pmfs_free_inode_node(struct super_block *sb,
+inline void pmfs_free_inode_node(struct super_block *sb,
 	struct pmfs_range_node *bnode);
 extern void pmfs_init_blockmap(struct super_block *sb, int recovery);
 extern void pmfs_free_meta_block(struct super_block *sb, unsigned long blocknr);
@@ -1176,7 +1176,6 @@ void pmfs_apply_link_change_entry(struct pmfs_inode *pi,
 	struct pmfs_link_change_entry *entry);
 
 /* super.c */
-extern void __pmfs_free_blocknode(struct pmfs_range_node *bnode);
 extern struct super_block *pmfs_read_super(struct super_block *sb, void *data,
 	int silent);
 extern int pmfs_statfs(struct dentry *d, struct kstatfs *buf);
