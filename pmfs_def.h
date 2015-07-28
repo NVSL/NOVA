@@ -161,13 +161,12 @@ struct pmfs_super_block {
 /* The root inode follows immediately after the redundant super block */
 #define PMFS_ROOT_INO		(1)
 #define PMFS_BLOCKNODE_INO	(2)
-#define PMFS_LITEJOURNAL_INO	(3)
+#define PMFS_INODELIST_INO	(3)
+#define PMFS_LITEJOURNAL_INO	(4)
 
 #define	PMFS_ROOT_INO_START	(PMFS_SB_SIZE * 2)
 
-/* INODE HINT START at 15 */
-#define PMFS_FREE_INODE_HINT_START      (15)
-
-#define	PMFS_NORMAL_INODE_START	PMFS_FREE_INODE_HINT_START
+/* Normal inode starts at 16 */
+#define PMFS_NORMAL_INODE_START      (16)
 
 #endif /* _LINUX_PMFS_DEF_H */

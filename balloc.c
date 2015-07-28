@@ -220,6 +220,7 @@ static int pmfs_find_blocknode(struct pmfs_sb_info *sbi, struct rb_root *tree,
 	struct pmfs_blocknode *curr = NULL;
 	struct rb_node *temp;
 	int compVal;
+	int ret = 0;
 
 	temp = tree->rb_node;
 
@@ -233,19 +234,21 @@ static int pmfs_find_blocknode(struct pmfs_sb_info *sbi, struct rb_root *tree,
 		} else if (compVal == 1) {
 			temp = temp->rb_right;
 		} else {
-			return 1;
+			ret = 1;
+			break;
 		}
 	}
 
 	*ret_node = curr;
-	return 0;
+	return ret;
 }
 
-inline int pmfs_find_blocknode_blocktree(struct pmfs_sb_info *sbi,
-	struct rb_root *tree, unsigned long new_block_low, unsigned long *step,
+inline int pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
+	unsigned long new_block_low, unsigned long *step,
 	struct pmfs_blocknode **ret_node)
 {
-	return pmfs_find_blocknode(sbi, tree, new_block_low, step, ret_node);
+	return pmfs_find_blocknode(sbi, &sbi->inode_inuse_tree,
+					new_block_low, step, ret_node);
 }
 
 static int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
@@ -288,7 +291,14 @@ inline int pmfs_insert_blocknode_blocktree(struct pmfs_sb_info *sbi,
 	return pmfs_insert_blocknode(sbi, tree, new_node);
 }
 
-static int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
+inline int pmfs_insert_blocknode_inodetree(struct pmfs_sb_info *sbi,
+	struct pmfs_blocknode *new_node)
+{
+	return pmfs_insert_blocknode(sbi, &sbi->inode_inuse_tree, new_node);
+}
+
+/* Used for both block free tree and inode inuse tree */
+int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
 	struct rb_root *tree, unsigned long new_block_low,
 	unsigned long new_block_high, struct pmfs_blocknode **prev,
 	struct pmfs_blocknode **next)
@@ -298,8 +308,7 @@ static int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
 	struct rb_node *temp;
 	int ret;
 
-	ret = pmfs_find_blocknode_blocktree(sbi, tree, new_block_low,
-						&step, &ret_node);
+	ret = pmfs_find_blocknode(sbi, tree, new_block_low, &step, &ret_node);
 	if (ret) {
 		pmfs_dbg("%s ERROR: %lu - %lu already in free list\n",
 			__func__, new_block_low, new_block_high);

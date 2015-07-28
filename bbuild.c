@@ -360,6 +360,54 @@ static int get_cpuid(struct pmfs_sb_info *sbi, unsigned long blocknr)
 	return cpuid;
 }
 
+static int pmfs_dfs_insert_inodetree(struct super_block *sb,
+	unsigned long pmfs_ino)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct pmfs_blocknode *prev = NULL, *next = NULL;
+	struct pmfs_blocknode *new_node;
+	struct rb_root *tree = &sbi->inode_inuse_tree;
+	int ret;
+
+	ret = pmfs_find_free_slot(sbi, tree, pmfs_ino, pmfs_ino,
+					&prev, &next);
+	if (ret) {
+		pmfs_dbg("%s: ino %lu already exists!: %d\n",
+					__func__, pmfs_ino, ret);
+		return ret;
+	}
+
+	if (prev && next && (pmfs_ino == prev->block_high + 1) &&
+			(pmfs_ino + 1 == next->block_low)) {
+		/* fits the hole */
+		rb_erase(&next->node, tree);
+		sbi->num_blocknode_inode--;
+		prev->block_high = next->block_high;
+		pmfs_free_inode_node(sb, next);
+		goto finish;
+	}
+	if (prev && (pmfs_ino == prev->block_high + 1)) {
+		/* Aligns left */
+		prev->block_high++;
+		goto finish;
+	}
+	if (next && (pmfs_ino + 1 == next->block_low)) {
+		/* Aligns right */
+		next->block_low--;
+		goto finish;
+	}
+
+	/* Aligns somewhere in the middle */
+	new_node = pmfs_alloc_inode_node(sb);
+	PMFS_ASSERT(new_node);
+	new_node->block_low = new_node->block_high = pmfs_ino;
+	pmfs_insert_blocknode_inodetree(sbi, new_node);
+	sbi->num_blocknode_inode++;
+
+finish:
+	return 0;
+}
+
 static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
@@ -412,6 +460,48 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 	pmfs_free_inode_log(sb, pi);
 }
 
+static void pmfs_init_inode_list_from_inode(struct super_block *sb)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, PMFS_INODELIST_INO);
+	struct pmfs_blocknode_lowhigh *entry;
+	struct pmfs_blocknode *blknode;
+	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
+	unsigned long num_blocknode = 0;
+	u64 curr_p;
+
+	sbi->num_blocknode_inode = 0;
+	curr_p = pi->log_head;
+	if (curr_p == 0)
+		pmfs_dbg("%s: pi head is 0!\n", __func__);
+
+	while (curr_p != pi->log_tail) {
+		if (is_last_entry(curr_p, size, 0)) {
+			curr_p = next_log_page(sb, curr_p);
+		}
+
+		if (curr_p == 0) {
+			pmfs_dbg("%s: curr_p is NULL!\n", __func__);
+			PMFS_ASSERT(0);
+		}
+
+		entry = (struct pmfs_blocknode_lowhigh *)pmfs_get_block(sb,
+							curr_p);
+		blknode = pmfs_alloc_inode_node(sb);
+		if (blknode == NULL)
+			PMFS_ASSERT(0);
+		blknode->block_low = entry->block_low;
+		blknode->block_high = entry->block_high;
+		pmfs_insert_blocknode_inodetree(sbi, blknode);
+
+		num_blocknode++;
+		curr_p += sizeof(struct pmfs_blocknode_lowhigh);
+	}
+
+	pmfs_dbg("%s: %lu inode nodes\n", __func__, num_blocknode);
+	pmfs_free_inode_log(sb, pi);
+}
+
 static bool pmfs_can_skip_full_scan(struct super_block *sb)
 {
 	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
@@ -424,6 +514,7 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 	atomic64_set(&sbi->s_curr_ino, super->s_curr_ino);
 
 	pmfs_init_blockmap_from_inode(sb);
+	pmfs_init_inode_list_from_inode(sb);
 
 	return true;
 }
@@ -506,18 +597,16 @@ out:
 	return curr_p;
 }
 
-static u64 pmfs_save_free_list_blocknodes(struct super_block *sb, int cpu,
-	u64 temp_tail)
+static u64 pmfs_save_blocknode_to_log(struct super_block *sb,
+	struct rb_root *tree, u64 temp_tail)
 {
-	struct free_list *free_list;
 	struct pmfs_blocknode *curr;
 	struct rb_node *temp;
 	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
 	u64 curr_entry = 0;
 
-	free_list = pmfs_get_free_list(sb, cpu);
 	/* Save in increasing order */
-	temp = rb_first(&free_list->block_free_tree);
+	temp = rb_first(tree);
 	while (temp) {
 		curr = container_of(temp, struct pmfs_blocknode, node);
 		curr_entry = pmfs_append_blocknode_entry(sb, curr, temp_tail);
@@ -527,6 +616,50 @@ static u64 pmfs_save_free_list_blocknodes(struct super_block *sb, int cpu,
 	}
 
 	return temp_tail;
+}
+
+static u64 pmfs_save_free_list_blocknodes(struct super_block *sb, int cpu,
+	u64 temp_tail)
+{
+	struct free_list *free_list;
+
+	free_list = pmfs_get_free_list(sb, cpu);
+	temp_tail = pmfs_save_blocknode_to_log(sb, &free_list->block_free_tree,
+								temp_tail);
+	return temp_tail;
+}
+
+void pmfs_save_inode_list_to_log(struct super_block *sb)
+{
+	unsigned long num_blocks;
+	struct pmfs_inode *pi =  pmfs_get_inode_by_ino(sb, PMFS_INODELIST_INO);
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	int step = 0;
+	u64 temp_tail;
+	u64 new_block;
+	int allocated;
+
+	num_blocks = sbi->num_blocknode_inode / BLOCKNODE_PER_PAGE;
+	if (sbi->num_blocknode_inode % BLOCKNODE_PER_PAGE)
+		num_blocks++;
+
+	allocated = pmfs_allocate_inode_log_pages(sb, pi, num_blocks,
+						&new_block);
+	if (allocated != num_blocks) {
+		pmfs_dbg("Error saving inode list: %d\n", allocated);
+		return;
+	}
+
+	pi->log_head = new_block;
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+
+	temp_tail = pmfs_save_blocknode_to_log(sb, &sbi->inode_inuse_tree,
+								new_block);
+	pmfs_update_tail(pi, temp_tail);
+
+	pmfs_dbg("%s: %lu inode nodes, step %d, pi head 0x%llx, tail 0x%llx\n",
+		__func__, sbi->num_blocknode_inode, step, pi->log_head,
+		pi->log_tail);
 }
 
 void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
@@ -1124,6 +1257,9 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 	pmfs_ino = pi->pmfs_ino;
 	if (bm) {
 		pi->i_blocks = 0;
+		if (pmfs_ino >= PMFS_NORMAL_INODE_START) {
+			pmfs_dfs_insert_inodetree(sb, pmfs_ino);
+		}
 		sbi->s_inodes_used_count++;
 		if (pmfs_ino > bm->highest_inuse_ino)
 			bm->highest_inuse_ino = pmfs_ino;
@@ -1184,6 +1320,10 @@ int pmfs_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	int ret;
 
 	sbi->s_inodes_used_count = 0;
+
+	/* Initialize inuse inode list */
+	if (pmfs_init_inode_inuse_list(sb) < 0)
+		return -EINVAL;
 
 	/* Handle special inodes */
 	pi = pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
@@ -1514,10 +1654,10 @@ static void pmfs_rebuild_superblock_info(struct super_block *sb,
 
 	pmfs_build_blocknode_map(sb, bm);
 
-	if (bm->highest_inuse_ino >= PMFS_FREE_INODE_HINT_START)
+	if (bm->highest_inuse_ino >= PMFS_NORMAL_INODE_START)
 		curr_ino = bm->highest_inuse_ino;
 	else
-		curr_ino = PMFS_FREE_INODE_HINT_START;
+		curr_ino = PMFS_NORMAL_INODE_START;
 
 	atomic64_set(&sbi->s_curr_ino, curr_ino);
 }

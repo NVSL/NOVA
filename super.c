@@ -421,6 +421,9 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	if (pmfs_init_inode_table(sb) < 0)
 		return ERR_PTR(-EINVAL);
 
+	if (pmfs_init_inode_inuse_list(sb) < 0)
+		return ERR_PTR(-EINVAL);
+
 	pmfs_memunlock_range(sb, super, PMFS_SB_SIZE*2);
 	pmfs_sync_super(super);
 	pmfs_memlock_range(sb, super, PMFS_SB_SIZE*2);
@@ -585,6 +588,8 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	mutex_init(&sbi->inode_table_mutex);
 	mutex_init(&sbi->s_lock);
 	spin_lock_init(&sbi->header_tree_lock);
+
+	sbi->inode_inuse_tree = RB_ROOT;
 
 	if (pmfs_new_meta_block(sb, &sbi->zeroed_page, 1, 0))
 		goto out;
@@ -850,6 +855,7 @@ static void pmfs_put_super(struct super_block *sb)
 //	pmfs_print_free_lists(sb);
 	if (sbi->virt_addr) {
 		pmfs_free_header_tree(sb);
+		pmfs_save_inode_list_to_log(sb);
 		/* Save everything before blocknode mapping! */
 		pmfs_save_blocknode_mappings_to_log(sb);
 		pmfs_iounmap(sbi->virt_addr, size, pmfs_is_wprotected(sb));
@@ -876,6 +882,12 @@ void pmfs_free_blocknode(struct super_block *sb, struct pmfs_blocknode *bnode)
 	__pmfs_free_blocknode(bnode);
 }
 
+inline void pmfs_free_inode_node(struct super_block *sb,
+	struct pmfs_blocknode *bnode)
+{
+	__pmfs_free_blocknode(bnode);
+}
+
 void pmfs_free_dirnode(struct super_block *sb, struct pmfs_dir_node *node)
 {
 	kmem_cache_free(pmfs_dirnode_cachep, node);
@@ -888,6 +900,11 @@ struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb)
 	p = (struct pmfs_blocknode *)
 		kmem_cache_alloc(pmfs_blocknode_cachep, GFP_NOFS | GFP_ATOMIC);
 	return p;
+}
+
+inline struct pmfs_blocknode *pmfs_alloc_inode_node(struct super_block *sb)
+{
+	return pmfs_alloc_blocknode(sb);
 }
 
 struct pmfs_dir_node *pmfs_alloc_dirnode(struct super_block *sb)

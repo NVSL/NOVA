@@ -586,6 +586,7 @@ struct pmfs_sb_info {
 	atomic_t	next_generation;
 	/* inode tracking */
 	struct mutex inode_table_mutex;
+	unsigned long	num_blocknode_inode;
 	unsigned long	s_inodes_used_count;
 	atomic64_t	s_curr_ino;
 	unsigned long	reserved_blocks;
@@ -600,6 +601,10 @@ struct pmfs_sb_info {
 	unsigned int height;
 	u8 btype;
 	spinlock_t header_tree_lock;
+
+	/* Track inuse inodes */
+	struct rb_root	inode_inuse_tree;
+	struct pmfs_blocknode *first_inode_blocknode;
 
 	/* ZEROED page for cache page initialized */
 	unsigned long zeroed_page;
@@ -1016,7 +1021,10 @@ extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
 int pmfs_alloc_block_free_lists(struct super_block *sb);
 void pmfs_delete_free_lists(struct super_block *sb);
 extern struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb);
+extern struct pmfs_blocknode *pmfs_alloc_inode_node(struct super_block *sb);
 extern void pmfs_free_blocknode(struct super_block *sb,
+	struct pmfs_blocknode *bnode);
+extern void pmfs_free_inode_node(struct super_block *sb,
 	struct pmfs_blocknode *bnode);
 extern void pmfs_init_blockmap(struct super_block *sb, int recovery);
 extern void pmfs_free_meta_block(struct super_block *sb, unsigned long blocknr);
@@ -1037,8 +1045,17 @@ extern int pmfs_new_cache_block(struct super_block *sb, struct mem_addr *pair,
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
 inline int pmfs_rbtree_compare_blocknode(struct pmfs_blocknode *curr,
 	unsigned long new_block_low);
+inline int pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
+	unsigned long new_block_low, unsigned long *step,
+	struct pmfs_blocknode **ret_node);
 inline int pmfs_insert_blocknode_blocktree(struct pmfs_sb_info *sbi,
 	struct rb_root *tree, struct pmfs_blocknode *new_node);
+inline int pmfs_insert_blocknode_inodetree(struct pmfs_sb_info *sbi,
+	struct pmfs_blocknode *new_node);
+int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
+	struct rb_root *tree, unsigned long new_block_low,
+	unsigned long new_block_high, struct pmfs_blocknode **prev,
+	struct pmfs_blocknode **next);
 void pmfs_free_cache_block(struct mem_addr *pair);
 
 /* bbuild.c */
@@ -1049,6 +1066,7 @@ inline void clear_bm(unsigned long bit, struct scan_bitmap *bm,
 int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 	struct scan_bitmap *bm, int cpuid, int multithread);
 void pmfs_save_blocknode_mappings_to_log(struct super_block *sb);
+void pmfs_save_inode_list_to_log(struct super_block *sb);
 unsigned int pmfs_free_header_tree(struct super_block *sb);
 struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
 	u16 i_mode);
@@ -1099,6 +1117,7 @@ int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
 /* inode.c */
 extern const struct address_space_operations pmfs_aops_dax;
 extern int pmfs_init_inode_table(struct super_block *sb);
+int pmfs_init_inode_inuse_list(struct super_block *sb);
 extern u64 pmfs_find_nvmm_block(struct inode *inode, 
 		unsigned long file_blocknr);
 int pmfs_set_blocksize_hint(struct super_block *sb, struct inode *inode,
