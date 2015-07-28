@@ -1172,8 +1172,8 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 		inode->i_op = &pmfs_dir_inode_operations;
 		inode->i_fop = &pmfs_dir_operations;
 		if (rebuild && inode->i_ino == PMFS_ROOT_INO) {
-			sih = pmfs_alloc_header(sb, inode->i_mode);
-			pmfs_assign_info_header(sb, ino, sih, 1);
+			pmfs_assign_info_header(sb, ino, &sih,
+						inode->i_mode, 1);
 			pmfs_dbg_verbose("%s: rebuild root dir\n", __func__);
 			pmfs_rebuild_dir_inode_tree(sb, pi, pi_addr,
 					sih, NULL);
@@ -1551,9 +1551,7 @@ u64 pmfs_new_pmfs_inode(struct super_block *sb,
 		return 0;
 	}
 
-	sih = pmfs_alloc_header(sb, 0);
-
-	pmfs_assign_info_header(sb, free_ino, sih, 0);
+	pmfs_assign_info_header(sb, free_ino, &sih, 0, 0);
 	mutex_unlock(&sbi->inode_table_mutex);
 
 	ino = free_ino;

@@ -1105,7 +1105,7 @@ unsigned int pmfs_free_header_tree(struct super_block *sb)
 
 static int recursive_assign_info_header(struct super_block *sb,
 	unsigned long blocknr, unsigned long ino,
-	struct pmfs_inode_info_header *sih,
+	struct pmfs_inode_info_header **sih, u16 i_mode,
 	__le64 block, u32 height)
 {
 	int errval;
@@ -1128,10 +1128,15 @@ static int recursive_assign_info_header(struct super_block *sb,
 			if (old_sih->root || old_sih->height)
 				pmfs_dbg("%s: node %lu %lu exists! 0x%llx, "
 					"0x%lx\n", __func__, index, ino,
-					node[index], (unsigned long)sih);
-			pmfs_free_header(sb, old_sih);
+					node[index], (unsigned long)old_sih);
+			old_sih->i_mode = i_mode;
+			*sih = old_sih;
+		} else {
+			struct pmfs_inode_info_header *new_sih;
+			new_sih = pmfs_alloc_header(sb, i_mode);
+			node[index] = (unsigned long)new_sih;
+			*sih = new_sih;
 		}
-		node[index] = (unsigned long)sih;
 	} else {
 		if (node[index] == 0) {
 			/* allocate the meta block */
@@ -1145,7 +1150,7 @@ static int recursive_assign_info_header(struct super_block *sb,
 
 		blocknr = blocknr & ((1 << node_bits) - 1);
 		errval = recursive_assign_info_header(sb, blocknr, ino, sih,
-			DRAM_ADDR(node[index]), height - 1);
+				i_mode,	DRAM_ADDR(node[index]), height - 1);
 		if (errval < 0)
 			goto fail;
 	}
@@ -1155,7 +1160,7 @@ fail:
 }
 
 int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
-	struct pmfs_inode_info_header *sih, int multithread)
+	struct pmfs_inode_info_header **sih, u16 i_mode, int multithread)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	unsigned long max_blocks;
@@ -1194,6 +1199,7 @@ int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 
 	if (!sbi->root) {
 		if (height == 0) {
+			/* Bogus header to build up the tree */
 			pmfs_dbg_verbose("Set root @%p\n", sih);
 			sbi->root = (unsigned long)sih;
 			sbi->height = height;
@@ -1205,7 +1211,8 @@ int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 				goto out;
 			}
 			errval = recursive_assign_info_header(sb, ino, ino,
-					sih, DRAM_ADDR(sbi->root), sbi->height);
+					sih, i_mode, DRAM_ADDR(sbi->root),
+					sbi->height);
 			if (errval < 0)
 				goto out;
 		}
@@ -1225,12 +1232,12 @@ int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 			}
 		}
 		errval = recursive_assign_info_header(sb, ino, ino, sih,
-						DRAM_ADDR(sbi->root), height);
+					i_mode,	DRAM_ADDR(sbi->root), height);
 		if (errval < 0)
 			goto out;
 	}
-	if (sih)
-		sih->ino = ino;
+	if (*sih)
+		(*sih)->ino = ino;
 	errval = 0;
 out:
 	if (multithread)
@@ -1274,18 +1281,18 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 				"pmfs ino %lu, head 0x%llx, tail 0x%llx\n",
 				cpuid, pi, pmfs_ino, pi->log_head,
 				pi->log_tail);
-		sih = pmfs_alloc_header(sb, __le16_to_cpu(pi->i_mode));
+		pmfs_assign_info_header(sb, pmfs_ino, &sih,
+				__le16_to_cpu(pi->i_mode), multithread);
 		pmfs_rebuild_file_inode_tree(sb, pi, pi_addr, sih, bm);
-		pmfs_assign_info_header(sb, pmfs_ino, sih, multithread);
 		break;
 	case S_IFDIR:
 		pmfs_dbg_verbose("This is thread %d, processing dir %p, "
 				"pmfs ino %lu, head 0x%llx, tail 0x%llx\n",
 				cpuid, pi, pmfs_ino, pi->log_head,
 				pi->log_tail);
-		sih = pmfs_alloc_header(sb, __le16_to_cpu(pi->i_mode));
+		pmfs_assign_info_header(sb, pmfs_ino, &sih,
+				__le16_to_cpu(pi->i_mode), multithread);
 		pmfs_rebuild_dir_inode_tree(sb, pi, pi_addr, sih, bm);
-		pmfs_assign_info_header(sb, pmfs_ino, sih, multithread);
 		break;
 	case S_IFLNK:
 		pmfs_dbg_verbose("This is thread %d, processing symlink %p, "
@@ -1293,13 +1300,13 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 				cpuid, pi, pmfs_ino, pi->log_head,
 				pi->log_tail);
 		/* No need to rebuild tree for symlink files */
-		sih = pmfs_alloc_header(sb, __le16_to_cpu(pi->i_mode));
+		pmfs_assign_info_header(sb, pmfs_ino, &sih,
+				__le16_to_cpu(pi->i_mode), multithread);
 		sih->pi_addr = pi_addr;
 		if (bm && pi->log_head) {
 			BUG_ON(pi->log_head & (PAGE_SIZE - 1));
 			set_bm(pi->log_head >> PAGE_SHIFT, bm, BM_4K);
 		}
-		pmfs_assign_info_header(sb, pmfs_ino, sih, multithread);
 		break;
 	default:
 		break;
@@ -1641,7 +1648,7 @@ int pmfs_multithread_recovery(struct super_block *sb)
 
 static inline void pmfs_assign_bogus_header_info(struct super_block *sb)
 {
-	pmfs_assign_info_header(sb, 0, NULL, 0);
+	pmfs_assign_info_header(sb, 0, NULL, 0, 0);
 }
 
 int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
