@@ -202,19 +202,19 @@ static int pmfs_alloc_dram_page(struct super_block *sb,
 	return 0;
 }
 
-inline int pmfs_rbtree_compare_blocknode(struct pmfs_range_node *curr,
-	unsigned long new_range_low)
+static inline int pmfs_rbtree_compare_blocknode(struct pmfs_range_node *curr,
+	unsigned long range_low)
 {
-	if (new_range_low < curr->range_low)
+	if (range_low < curr->range_low)
 		return -1;
-	if (new_range_low > curr->range_high)
+	if (range_low > curr->range_high)
 		return 1;
 
 	return 0;
 }
 
 static int pmfs_find_blocknode(struct pmfs_sb_info *sbi, struct rb_root *tree,
-	unsigned long new_range_low, unsigned long *step,
+	unsigned long range_low, unsigned long *step,
 	struct pmfs_range_node **ret_node)
 {
 	struct pmfs_range_node *curr = NULL;
@@ -226,7 +226,7 @@ static int pmfs_find_blocknode(struct pmfs_sb_info *sbi, struct rb_root *tree,
 
 	while (temp) {
 		curr = container_of(temp, struct pmfs_range_node, node);
-		compVal = pmfs_rbtree_compare_blocknode(curr, new_range_low);
+		compVal = pmfs_rbtree_compare_blocknode(curr, range_low);
 		(*step)++;
 
 		if (compVal == -1) {
@@ -244,11 +244,11 @@ static int pmfs_find_blocknode(struct pmfs_sb_info *sbi, struct rb_root *tree,
 }
 
 inline int pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
-	unsigned long new_range_low, unsigned long *step,
+	unsigned long ino, unsigned long *step,
 	struct pmfs_range_node **ret_node)
 {
 	return pmfs_find_blocknode(sbi, &sbi->inode_inuse_tree,
-					new_range_low, step, ret_node);
+					ino, step, ret_node);
 }
 
 static int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
@@ -299,8 +299,8 @@ inline int pmfs_insert_blocknode_inodetree(struct pmfs_sb_info *sbi,
 
 /* Used for both block free tree and inode inuse tree */
 int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
-	struct rb_root *tree, unsigned long new_range_low,
-	unsigned long new_range_high, struct pmfs_range_node **prev,
+	struct rb_root *tree, unsigned long range_low,
+	unsigned long range_high, struct pmfs_range_node **prev,
 	struct pmfs_range_node **next)
 {
 	struct pmfs_range_node *ret_node = NULL;
@@ -308,23 +308,23 @@ int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
 	struct rb_node *temp;
 	int ret;
 
-	ret = pmfs_find_blocknode(sbi, tree, new_range_low, &step, &ret_node);
+	ret = pmfs_find_blocknode(sbi, tree, range_low, &step, &ret_node);
 	if (ret) {
 		pmfs_dbg("%s ERROR: %lu - %lu already in free list\n",
-			__func__, new_range_low, new_range_high);
+			__func__, range_low, range_high);
 		return -EINVAL;
 	}
 
 	if (!ret_node) {
 		*prev = *next = NULL;
-	} else if (ret_node->range_high < new_range_low) {
+	} else if (ret_node->range_high < range_low) {
 		*prev = ret_node;
 		temp = rb_next(&ret_node->node);
 		if (temp)
 			*next = container_of(temp, struct pmfs_range_node, node);
 		else
 			*next = NULL;
-	} else if (ret_node->range_low > new_range_high) {
+	} else if (ret_node->range_low > range_high) {
 		*next = ret_node;
 		temp = rb_prev(&ret_node->node);
 		if (temp)
@@ -333,8 +333,8 @@ int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
 			*prev = NULL;
 	} else {
 		pmfs_dbg("%s ERROR: %lu - %lu overlaps with existing node "
-			"%lu - %lu\n", __func__, new_range_low,
-			new_range_high, ret_node->range_low,
+			"%lu - %lu\n", __func__, range_low,
+			range_high, ret_node->range_low,
 			ret_node->range_high);
 		return -EINVAL;
 	}
@@ -347,8 +347,8 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct rb_root *tree;
-	unsigned long new_range_low;
-	unsigned long new_range_high;
+	unsigned long block_low;
+	unsigned long block_high;
 	unsigned long num_blocks = 0;
 	struct pmfs_range_node *prev = NULL;
 	struct pmfs_range_node *next = NULL;
@@ -375,13 +375,13 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	tree = &(free_list->block_free_tree);
 
 	num_blocks = pmfs_get_numblocks(btype) * num;
-	new_range_low = blocknr;
-	new_range_high = blocknr + num_blocks - 1;
+	block_low = blocknr;
+	block_high = blocknr + num_blocks - 1;
 
-	pmfs_dbgv("Free: %lu - %lu\n", new_range_low, new_range_high);
+	pmfs_dbgv("Free: %lu - %lu\n", block_low, block_high);
 
-	ret = pmfs_find_free_slot(sbi, tree, new_range_low,
-				new_range_high,	&prev, &next);
+	ret = pmfs_find_free_slot(sbi, tree, block_low,
+					block_high, &prev, &next);
 
 	if (ret) {
 		pmfs_dbg("%s: find free slot fail: %d\n", __func__, ret);
@@ -389,8 +389,8 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 		return;
 	}
 
-	if (prev && next && (new_range_low == prev->range_high + 1) &&
-		(new_range_high + 1 == next->range_low)) {
+	if (prev && next && (block_low == prev->range_high + 1) &&
+			(block_high + 1 == next->range_low)) {
 		/* fits the hole */
 		rb_erase(&next->node, tree);
 		free_list->num_blocknode--;
@@ -398,12 +398,12 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 		prev->range_high = next->range_high;
 		goto block_found;
 	}
-	if (prev && (new_range_low == prev->range_high + 1)) {
+	if (prev && (block_low == prev->range_high + 1)) {
 		/* Aligns left */
 		prev->range_high += num_blocks;
 		goto block_found;
 	}
-	if (next && (new_range_high + 1 == next->range_low)) {
+	if (next && (block_high + 1 == next->range_low)) {
 		/* Aligns right */
 		next->range_low -= num_blocks;
 		goto block_found;
@@ -416,8 +416,8 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 		/* returning without freeing the block*/
 		goto block_found;
 	}
-	curr_node->range_low = new_range_low;
-	curr_node->range_high = new_range_high;
+	curr_node->range_low = block_low;
+	curr_node->range_high = block_high;
 	pmfs_insert_blocknode_blocktree(sbi, tree, curr_node);
 	if (!prev)
 		free_list->first_node = curr_node;
@@ -537,7 +537,7 @@ out:
 
 static unsigned long pmfs_alloc_blocks_in_free_list(struct super_block *sb,
 	struct free_list *free_list, unsigned short btype,
-	unsigned long num_blocks, unsigned long *new_range_low)
+	unsigned long num_blocks, unsigned long *new_blocknr)
 {
 	struct rb_root *tree;
 	struct pmfs_range_node *curr, *next = NULL;
@@ -577,12 +577,12 @@ static unsigned long pmfs_alloc_blocks_in_free_list(struct super_block *sb,
 			free_blocknode = curr;
 			found = 1;
 			num_blocks = curr_blocks;
-			*new_range_low = curr->range_low;
+			*new_blocknr = curr->range_low;
 			break;
 		}
 
 		/* Allocate partial blocknode */
-		*new_range_low = curr->range_low;
+		*new_blocknr = curr->range_low;
 		curr->range_low += num_blocks;
 		found = 1;
 		break;
@@ -630,7 +630,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	void *bp;
 	unsigned long num_blocks = 0;
 	unsigned long ret_blocks = 0;
-	unsigned long new_range_low = 0;
+	unsigned long new_blocknr = 0;
 	struct rb_node *temp;
 	struct pmfs_range_node *first;
 	int cpuid;
@@ -669,11 +669,11 @@ try_again:
 	}
 
 	ret_blocks = pmfs_alloc_blocks_in_free_list(sb, free_list, btype,
-						num_blocks, &new_range_low);
+						num_blocks, &new_blocknr);
 
 	mutex_unlock(&free_list->s_lock);
 
-	if (ret_blocks <= 0 || new_range_low == 0)
+	if (ret_blocks <= 0 || new_blocknr == 0)
 		return -ENOSPC;
 
 	if (log_page)
@@ -684,7 +684,7 @@ try_again:
 	if (zero) {
 		size_t size;
 		bp = pmfs_get_block(sb, pmfs_get_block_off(sb,
-						new_range_low, btype));
+						new_blocknr, btype));
 		pmfs_memunlock_block(sb, bp); //TBDTBD: Need to fix this
 		if (btype == PMFS_BLOCK_TYPE_4K)
 			size = 0x1 << 12;
@@ -695,7 +695,7 @@ try_again:
 		memset_nt(bp, 0, PAGE_SIZE * ret_blocks);
 		pmfs_memlock_block(sb, bp);
 	}
-	*blocknr = new_range_low;
+	*blocknr = new_blocknr;
 
 	pmfs_dbg_verbose("Alloc %lu NVMM blocks 0x%lx\n", ret_blocks, *blocknr);
 	return ret_blocks / pmfs_get_numblocks(btype);
