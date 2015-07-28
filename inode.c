@@ -67,6 +67,7 @@ static int pmfs_init_inode_inuse_list(struct super_block *sb)
 	blknode->block_high = PMFS_NORMAL_INODE_START - 1;
 	pmfs_insert_blocknode_inodetree(sbi, blknode);
 	sbi->num_blocknode_inode = 1;
+	sbi->s_inodes_used_count = PMFS_NORMAL_INODE_START;
 	sbi->first_inode_blocknode = blknode;
 
 	return 0;
