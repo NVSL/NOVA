@@ -91,7 +91,7 @@ void pmfs_init_blockmap(struct super_block *sb, int recovery)
 				PMFS_ASSERT(0);
 			blknode->range_low = free_list->block_start;
 			blknode->range_high = free_list->block_end;
-			pmfs_insert_blocknode_blocktree(sbi, tree, blknode);
+			pmfs_insert_blocktree(sbi, tree, blknode);
 			free_list->first_node = blknode;
 			free_list->num_blocknode = 1;
 		}
@@ -202,7 +202,7 @@ static int pmfs_alloc_dram_page(struct super_block *sb,
 	return 0;
 }
 
-static inline int pmfs_rbtree_compare_blocknode(struct pmfs_range_node *curr,
+static inline int pmfs_rbtree_compare_rangenode(struct pmfs_range_node *curr,
 	unsigned long range_low)
 {
 	if (range_low < curr->range_low)
@@ -226,7 +226,7 @@ static int pmfs_find_blocknode(struct pmfs_sb_info *sbi, struct rb_root *tree,
 
 	while (temp) {
 		curr = container_of(temp, struct pmfs_range_node, node);
-		compVal = pmfs_rbtree_compare_blocknode(curr, range_low);
+		compVal = pmfs_rbtree_compare_rangenode(curr, range_low);
 		(*step)++;
 
 		if (compVal == -1) {
@@ -243,7 +243,7 @@ static int pmfs_find_blocknode(struct pmfs_sb_info *sbi, struct rb_root *tree,
 	return ret;
 }
 
-inline int pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
+inline int pmfs_search_inodetree(struct pmfs_sb_info *sbi,
 	unsigned long ino, unsigned long *step,
 	struct pmfs_range_node **ret_node)
 {
@@ -251,7 +251,7 @@ inline int pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
 					ino, step, ret_node);
 }
 
-static int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
+static int pmfs_insert_range_node(struct pmfs_sb_info *sbi,
 	struct rb_root *tree, struct pmfs_range_node *new_node)
 {
 	struct pmfs_range_node *curr;
@@ -263,7 +263,7 @@ static int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
 
 	while (*temp) {
 		curr = container_of(*temp, struct pmfs_range_node, node);
-		compVal = pmfs_rbtree_compare_blocknode(curr,
+		compVal = pmfs_rbtree_compare_rangenode(curr,
 					new_node->range_low);
 		parent = *temp;
 
@@ -285,16 +285,16 @@ static int pmfs_insert_blocknode(struct pmfs_sb_info *sbi,
 	return 0;
 }
 
-inline int pmfs_insert_blocknode_blocktree(struct pmfs_sb_info *sbi,
+inline int pmfs_insert_blocktree(struct pmfs_sb_info *sbi,
 	struct rb_root *tree, struct pmfs_range_node *new_node)
 {
-	return pmfs_insert_blocknode(sbi, tree, new_node);
+	return pmfs_insert_range_node(sbi, tree, new_node);
 }
 
-inline int pmfs_insert_blocknode_inodetree(struct pmfs_sb_info *sbi,
+inline int pmfs_insert_inodetree(struct pmfs_sb_info *sbi,
 	struct pmfs_range_node *new_node)
 {
-	return pmfs_insert_blocknode(sbi, &sbi->inode_inuse_tree, new_node);
+	return pmfs_insert_range_node(sbi, &sbi->inode_inuse_tree, new_node);
 }
 
 /* Used for both block free tree and inode inuse tree */
@@ -417,7 +417,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	}
 	curr_node->range_low = block_low;
 	curr_node->range_high = block_high;
-	pmfs_insert_blocknode_blocktree(sbi, tree, curr_node);
+	pmfs_insert_blocktree(sbi, tree, curr_node);
 	if (!prev)
 		free_list->first_node = curr_node;
 	free_list->num_blocknode++;
