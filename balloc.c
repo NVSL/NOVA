@@ -635,11 +635,10 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 
 	cpuid = smp_processor_id();
 
-try_again:
+retry:
 	free_list = pmfs_get_free_list(sb, cpuid);
 	mutex_lock(&free_list->s_lock);
 
-	free_list->alloc_count++;
 	if (free_list->num_free_blocks < num_blocks || !free_list->first_node) {
 		pmfs_dbgv("%s: cpu %d, free_blocks %lu, required %lu, "
 			"blocknode %lu\n", __func__, cpuid,
@@ -657,10 +656,11 @@ try_again:
 				return -ENOMEM;
 			cpuid = pmfs_get_candidate_free_list(sb);
 			retried++;
-			goto try_again;
+			goto retry;
 		}
 	}
 
+	free_list->alloc_count++;
 	ret_blocks = pmfs_alloc_blocks_in_free_list(sb, free_list, btype,
 						num_blocks, &new_blocknr);
 
