@@ -55,6 +55,45 @@ void pmfs_print_inode_entry(struct pmfs_file_write_entry *entry)
 		entry->block, entry->size);
 }
 
+static int pmfs_init_inode_inuse_list(struct super_block *sb)
+{
+	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct pmfs_blocknode *blknode;
+
+	blknode = pmfs_alloc_inode_node(sb);
+	if (blknode == NULL)
+		return -ENOMEM;
+	blknode->block_low = 0;
+	blknode->block_high = PMFS_NORMAL_INODE_START - 1;
+	pmfs_insert_blocknode_inodetree(sbi, blknode);
+	sbi->num_blocknode_inode = 1;
+	sbi->first_inode_blocknode = blknode;
+
+	return 0;
+}
+
+/* Initialize the inode table. The pmfs_inode struct corresponding to the
+ * inode table has already been zero'd out */
+int pmfs_init_inode_table(struct super_block *sb)
+{
+	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
+
+	pmfs_memunlock_inode(sb, pi);
+	pi->i_mode = 0;
+	pi->i_uid = 0;
+	pi->i_gid = 0;
+	pi->i_links_count = cpu_to_le16(1);
+	pi->i_flags = 0;
+
+	/*
+	 * Now inodes are resided in dir logs, and inode_table is
+	 * only used to save inodes on umount
+	 */
+	pi->i_blk_type = PMFS_BLOCK_TYPE_4K;
+
+	return pmfs_init_inode_inuse_list(sb);
+}
+
 /*
  * find the offset to the block represented by the given inode's file
  * relative block number.
@@ -1085,57 +1124,6 @@ inline int pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 	PMFS_END_TIMING(assign_t, assign_time);
 
 	return errval;
-}
-
-/* Initialize the inode table. The pmfs_inode struct corresponding to the
- * inode table has already been zero'd out */
-int pmfs_init_inode_table(struct super_block *sb)
-{
-	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	unsigned long init_inode_table_size;
-
-	if (sbi->num_inodes == 0) {
-		/* initial inode table size was not specified. */
-		if (sbi->initsize >= PMFS_LARGE_INODE_TABLE_THREASHOLD)
-			init_inode_table_size = PMFS_LARGE_INODE_TABLE_SIZE;
-		else
-			init_inode_table_size = PMFS_DEF_BLOCK_SIZE_4K;
-	} else {
-		init_inode_table_size = sbi->num_inodes << PMFS_INODE_BITS;
-	}
-
-	pmfs_memunlock_inode(sb, pi);
-	pi->i_mode = 0;
-	pi->i_uid = 0;
-	pi->i_gid = 0;
-	pi->i_links_count = cpu_to_le16(1);
-	pi->i_flags = 0;
-
-	/*
-	 * Now inodes are resided in dir logs, and inode_table is
-	 * only used to save inodes on umount
-	 */
-	pi->i_blk_type = PMFS_BLOCK_TYPE_4K;
-
-	return 0;
-}
-
-int pmfs_init_inode_inuse_list(struct super_block *sb)
-{
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_blocknode *blknode;
-
-	blknode = pmfs_alloc_inode_node(sb);
-	if (blknode == NULL)
-		return -ENOMEM;
-	blknode->block_low = 0;
-	blknode->block_high = PMFS_NORMAL_INODE_START - 1;
-	pmfs_insert_blocknode_inodetree(sbi, blknode);
-	sbi->num_blocknode_inode = 1;
-	sbi->first_inode_blocknode = blknode;
-
-	return 0;
 }
 
 static int pmfs_read_inode(struct super_block *sb, struct inode *inode,

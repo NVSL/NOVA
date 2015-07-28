@@ -1115,7 +1115,6 @@ int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
 /* inode.c */
 extern const struct address_space_operations pmfs_aops_dax;
 extern int pmfs_init_inode_table(struct super_block *sb);
-int pmfs_init_inode_inuse_list(struct super_block *sb);
 extern u64 pmfs_find_nvmm_block(struct inode *inode, 
 		unsigned long file_blocknr);
 int pmfs_set_blocksize_hint(struct super_block *sb, struct inode *inode,

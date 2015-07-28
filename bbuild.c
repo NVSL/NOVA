@@ -493,11 +493,14 @@ static void pmfs_init_inode_list_from_inode(struct super_block *sb)
 		blknode->block_low = entry->block_low;
 		blknode->block_high = entry->block_high;
 		pmfs_insert_blocknode_inodetree(sbi, blknode);
+
 		sbi->s_inodes_used_count +=
 			blknode->block_high - blknode->block_low + 1;
-
 		num_blocknode++;
 		sbi->num_blocknode_inode++;
+		if (!sbi->first_inode_blocknode)
+			sbi->first_inode_blocknode = blknode;
+
 		curr_p += sizeof(struct pmfs_blocknode_lowhigh);
 	}
 
@@ -1317,7 +1320,7 @@ int pmfs_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	sbi->s_inodes_used_count = 0;
 
 	/* Initialize inuse inode list */
-	if (pmfs_init_inode_inuse_list(sb) < 0)
+	if (pmfs_init_inode_table(sb) < 0)
 		return -EINVAL;
 
 	/* Handle special inodes */
