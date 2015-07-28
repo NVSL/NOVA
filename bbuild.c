@@ -364,8 +364,8 @@ static int pmfs_dfs_insert_inodetree(struct super_block *sb,
 	unsigned long pmfs_ino)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_blocknode *prev = NULL, *next = NULL;
-	struct pmfs_blocknode *new_node;
+	struct pmfs_range_node *prev = NULL, *next = NULL;
+	struct pmfs_range_node *new_node;
 	struct rb_root *tree = &sbi->inode_inuse_tree;
 	int ret;
 
@@ -377,30 +377,30 @@ static int pmfs_dfs_insert_inodetree(struct super_block *sb,
 		return ret;
 	}
 
-	if (prev && next && (pmfs_ino == prev->block_high + 1) &&
-			(pmfs_ino + 1 == next->block_low)) {
+	if (prev && next && (pmfs_ino == prev->range_high + 1) &&
+			(pmfs_ino + 1 == next->range_low)) {
 		/* fits the hole */
 		rb_erase(&next->node, tree);
 		sbi->num_blocknode_inode--;
-		prev->block_high = next->block_high;
+		prev->range_high = next->range_high;
 		pmfs_free_inode_node(sb, next);
 		goto finish;
 	}
-	if (prev && (pmfs_ino == prev->block_high + 1)) {
+	if (prev && (pmfs_ino == prev->range_high + 1)) {
 		/* Aligns left */
-		prev->block_high++;
+		prev->range_high++;
 		goto finish;
 	}
-	if (next && (pmfs_ino + 1 == next->block_low)) {
+	if (next && (pmfs_ino + 1 == next->range_low)) {
 		/* Aligns right */
-		next->block_low--;
+		next->range_low--;
 		goto finish;
 	}
 
 	/* Aligns somewhere in the middle */
 	new_node = pmfs_alloc_inode_node(sb);
 	PMFS_ASSERT(new_node);
-	new_node->block_low = new_node->block_high = pmfs_ino;
+	new_node->range_low = new_node->range_high = pmfs_ino;
 	pmfs_insert_blocknode_inodetree(sbi, new_node);
 	sbi->num_blocknode_inode++;
 
@@ -413,9 +413,9 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
 	struct free_list *free_list;
-	struct pmfs_blocknode_lowhigh *entry;
-	struct pmfs_blocknode *blknode;
-	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
+	struct pmfs_range_node_lowhigh *entry;
+	struct pmfs_range_node *blknode;
+	size_t size = sizeof(struct pmfs_range_node_lowhigh);
 	u64 curr_p;
 	u64 cpuid;
 
@@ -436,14 +436,14 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 			break;
 		}
 
-		entry = (struct pmfs_blocknode_lowhigh *)pmfs_get_block(sb,
+		entry = (struct pmfs_range_node_lowhigh *)pmfs_get_block(sb,
 							curr_p);
 		blknode = pmfs_alloc_blocknode(sb);
 		if (blknode == NULL)
 			PMFS_ASSERT(0);
-		blknode->block_low = le64_to_cpu(entry->block_low);
-		blknode->block_high = le64_to_cpu(entry->block_high);
-		cpuid = get_cpuid(sbi, blknode->block_low);
+		blknode->range_low = le64_to_cpu(entry->range_low);
+		blknode->range_high = le64_to_cpu(entry->range_high);
+		cpuid = get_cpuid(sbi, blknode->range_low);
 
 		/* FIXME: Assume NR_CPUS not change */
 		free_list = pmfs_get_free_list(sb, cpuid);
@@ -453,8 +453,8 @@ static void pmfs_init_blockmap_from_inode(struct super_block *sb)
 		if (free_list->num_blocknode == 1)
 			free_list->first_node = blknode;
 		free_list->num_free_blocks +=
-			blknode->block_high - blknode->block_low + 1;
-		curr_p += sizeof(struct pmfs_blocknode_lowhigh);
+			blknode->range_high - blknode->range_low + 1;
+		curr_p += sizeof(struct pmfs_range_node_lowhigh);
 	}
 
 	pmfs_free_inode_log(sb, pi);
@@ -464,9 +464,9 @@ static void pmfs_init_inode_list_from_inode(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_inode *pi = pmfs_get_inode_by_ino(sb, PMFS_INODELIST_INO);
-	struct pmfs_blocknode_lowhigh *entry;
-	struct pmfs_blocknode *blknode;
-	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
+	struct pmfs_range_node_lowhigh *entry;
+	struct pmfs_range_node *blknode;
+	size_t size = sizeof(struct pmfs_range_node_lowhigh);
 	unsigned long num_blocknode = 0;
 	u64 curr_p;
 
@@ -485,23 +485,23 @@ static void pmfs_init_inode_list_from_inode(struct super_block *sb)
 			PMFS_ASSERT(0);
 		}
 
-		entry = (struct pmfs_blocknode_lowhigh *)pmfs_get_block(sb,
+		entry = (struct pmfs_range_node_lowhigh *)pmfs_get_block(sb,
 							curr_p);
 		blknode = pmfs_alloc_inode_node(sb);
 		if (blknode == NULL)
 			PMFS_ASSERT(0);
-		blknode->block_low = entry->block_low;
-		blknode->block_high = entry->block_high;
+		blknode->range_low = entry->range_low;
+		blknode->range_high = entry->range_high;
 		pmfs_insert_blocknode_inodetree(sbi, blknode);
 
 		sbi->s_inodes_used_count +=
-			blknode->block_high - blknode->block_low + 1;
+			blknode->range_high - blknode->range_low + 1;
 		num_blocknode++;
 		sbi->num_blocknode_inode++;
 		if (!sbi->first_inode_blocknode)
 			sbi->first_inode_blocknode = blknode;
 
-		curr_p += sizeof(struct pmfs_blocknode_lowhigh);
+		curr_p += sizeof(struct pmfs_range_node_lowhigh);
 	}
 
 	pmfs_dbg("%s: %lu inode nodes\n", __func__, num_blocknode);
@@ -522,11 +522,11 @@ static bool pmfs_can_skip_full_scan(struct super_block *sb)
 }
 
 static u64 pmfs_append_blocknode_entry(struct super_block *sb,
-	struct pmfs_blocknode *curr, u64 tail)
+	struct pmfs_range_node *curr, u64 tail)
 {
 	u64 curr_p;
-	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
-	struct pmfs_blocknode_lowhigh *entry;
+	size_t size = sizeof(struct pmfs_range_node_lowhigh);
+	struct pmfs_range_node_lowhigh *entry;
 	timing_t append_time;
 
 	PMFS_START_TIMING(append_entry_t, append_time);
@@ -542,13 +542,13 @@ static u64 pmfs_append_blocknode_entry(struct super_block *sb,
 	if (is_last_entry(curr_p, size, 0))
 		curr_p = next_log_page(sb, curr_p);
 
-	entry = (struct pmfs_blocknode_lowhigh *)pmfs_get_block(sb, curr_p);
-	entry->block_low = cpu_to_le64(curr->block_low);
-	entry->block_high = cpu_to_le64(curr->block_high);
+	entry = (struct pmfs_range_node_lowhigh *)pmfs_get_block(sb, curr_p);
+	entry->range_low = cpu_to_le64(curr->range_low);
+	entry->range_high = cpu_to_le64(curr->range_high);
 	pmfs_dbg_verbose("append entry block low %lu, high %lu\n",
-			curr->block_low, curr->block_high);
+			curr->range_low, curr->range_high);
 
-	pmfs_flush_buffer(entry, sizeof(struct pmfs_blocknode_lowhigh), 0);
+	pmfs_flush_buffer(entry, sizeof(struct pmfs_range_node_lowhigh), 0);
 out:
 	PMFS_END_TIMING(append_entry_t, append_time);
 	return curr_p;
@@ -602,15 +602,15 @@ out:
 static u64 pmfs_save_blocknode_to_log(struct super_block *sb,
 	struct rb_root *tree, u64 temp_tail)
 {
-	struct pmfs_blocknode *curr;
+	struct pmfs_range_node *curr;
 	struct rb_node *temp;
-	size_t size = sizeof(struct pmfs_blocknode_lowhigh);
+	size_t size = sizeof(struct pmfs_range_node_lowhigh);
 	u64 curr_entry = 0;
 
 	/* Save in increasing order */
 	temp = rb_first(tree);
 	while (temp) {
-		curr = container_of(temp, struct pmfs_blocknode, node);
+		curr = container_of(temp, struct pmfs_range_node, node);
 		curr_entry = pmfs_append_blocknode_entry(sb, curr, temp_tail);
 		temp_tail = curr_entry + size;
 		temp = rb_next(temp);
@@ -641,8 +641,8 @@ void pmfs_save_inode_list_to_log(struct super_block *sb)
 	u64 new_block;
 	int allocated;
 
-	num_blocks = sbi->num_blocknode_inode / BLOCKNODE_PER_PAGE;
-	if (sbi->num_blocknode_inode % BLOCKNODE_PER_PAGE)
+	num_blocks = sbi->num_blocknode_inode / RANGENODE_PER_PAGE;
+	if (sbi->num_blocknode_inode % RANGENODE_PER_PAGE)
 		num_blocks++;
 
 	allocated = pmfs_allocate_inode_log_pages(sb, pi, num_blocks,
@@ -687,8 +687,8 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 	free_list = pmfs_get_free_list(sb, SHARED_CPU);
 	num_blocknode += free_list->num_blocknode;
 
-	num_pages = num_blocknode / BLOCKNODE_PER_PAGE;
-	if (num_blocknode % BLOCKNODE_PER_PAGE)
+	num_pages = num_blocknode / RANGENODE_PER_PAGE;
+	if (num_blocknode % RANGENODE_PER_PAGE)
 		num_pages++;
 
 	allocated = pmfs_allocate_inode_log_pages(sb, pi, num_pages,
@@ -736,7 +736,7 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct free_list *free_list;
 	struct rb_root *tree;
-	struct pmfs_blocknode *blknode = NULL;
+	struct pmfs_range_node *blknode = NULL;
 	unsigned long num_blocks = 0;
 
 	num_blocks = high - low + 1;
@@ -748,8 +748,8 @@ static int pmfs_alloc_insert_blocknode_map(struct super_block *sb,
 	blknode = pmfs_alloc_blocknode(sb);
 	if (blknode == NULL)
 		return -ENOMEM;
-	blknode->block_low = low;
-	blknode->block_high = high;
+	blknode->range_low = low;
+	blknode->range_high = high;
 	pmfs_insert_blocknode_blocktree(sbi, tree, blknode);
 	if (!free_list->first_node)
 		free_list->first_node = blknode;

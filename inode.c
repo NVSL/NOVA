@@ -58,13 +58,13 @@ void pmfs_print_inode_entry(struct pmfs_file_write_entry *entry)
 static int pmfs_init_inode_inuse_list(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_blocknode *blknode;
+	struct pmfs_range_node *blknode;
 
 	blknode = pmfs_alloc_inode_node(sb);
 	if (blknode == NULL)
 		return -ENOMEM;
-	blknode->block_low = 0;
-	blknode->block_high = PMFS_NORMAL_INODE_START - 1;
+	blknode->range_low = 0;
+	blknode->range_high = PMFS_NORMAL_INODE_START - 1;
 	pmfs_insert_blocknode_inodetree(sbi, blknode);
 	sbi->num_blocknode_inode = 1;
 	sbi->s_inodes_used_count = PMFS_NORMAL_INODE_START;
@@ -852,7 +852,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 	struct pmfs_file_write_entry *entry;
 	struct mem_addr *leaf;
 //	unsigned int flush_bytes;
-//	struct pmfs_blocknode *hint = NULL;
+//	struct pmfs_range_node *hint = NULL;
 
 	node = (__le64 *)block;
 
@@ -1251,9 +1251,9 @@ static void pmfs_update_inode(struct inode *inode, struct pmfs_inode *pi)
 static int pmfs_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_blocknode *i, *next_i;
+	struct pmfs_range_node *i, *next_i;
 	struct rb_node *temp, *next;
-	unsigned long next_block_low;
+	unsigned long next_range_low;
 	unsigned long new_ino;
 	unsigned long MAX_INODE = 1UL << 31;
 
@@ -1264,26 +1264,26 @@ static int pmfs_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
 
 	if (!next) {
 		next_i = NULL;
-		next_block_low = MAX_INODE;
+		next_range_low = MAX_INODE;
 	} else {
-		next_i = container_of(next, struct pmfs_blocknode, node);
-		next_block_low = next_i->block_low;
+		next_i = container_of(next, struct pmfs_range_node, node);
+		next_range_low = next_i->range_low;
 	}
 
-	new_ino = i->block_high + 1;
+	new_ino = i->range_high + 1;
 
-	if (next_i && new_ino == (next_block_low - 1)) {
+	if (next_i && new_ino == (next_range_low - 1)) {
 		/* Fill the gap completely */
-		i->block_high = next_i->block_high;
+		i->range_high = next_i->range_high;
 		rb_erase(&next_i->node, &sbi->inode_inuse_tree);
 		pmfs_free_inode_node(sb, next_i);
 		sbi->num_blocknode_inode--;
-	} else if (new_ino < (next_block_low - 1)) {
+	} else if (new_ino < (next_range_low - 1)) {
 		/* Aligns to left */
-		i->block_high = new_ino;
+		i->range_high = new_ino;
 	} else {
 		pmfs_dbg("%s: ERROR: new ino %lu, next low %lu\n", __func__,
-			new_ino, next_block_low);
+			new_ino, next_range_low);
 		return -ENOSPC;
 	}
 
@@ -1297,8 +1297,8 @@ static int pmfs_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
 static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_blocknode *i = NULL;
-	struct pmfs_blocknode *curr_node;
+	struct pmfs_range_node *i = NULL;
+	struct pmfs_range_node *curr_node;
 	unsigned long step = 0;
 	int found = 0;
 
@@ -1310,24 +1310,24 @@ static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
 		return;
 	}
 
-	if ((ino == i->block_low) && (ino == i->block_high)) {
+	if ((ino == i->range_low) && (ino == i->range_high)) {
 		/* fits entire node */
 		rb_erase(&i->node, &sbi->inode_inuse_tree);
 		pmfs_free_inode_node(sb, i);
 		sbi->num_blocknode_inode--;
 		goto block_found;
 	}
-	if ((ino == i->block_low) && (ino < i->block_high)) {
+	if ((ino == i->range_low) && (ino < i->range_high)) {
 		/* Aligns left */
-		i->block_low = ino + 1;
+		i->range_low = ino + 1;
 		goto block_found;
 	}
-	if ((ino > i->block_low) && (ino == i->block_high)) {
+	if ((ino > i->range_low) && (ino == i->range_high)) {
 		/* Aligns right */
-		i->block_high = ino - 1;
+		i->range_high = ino - 1;
 		goto block_found;
 	}
-	if ((ino > i->block_low) && (ino < i->block_high)) {
+	if ((ino > i->range_low) && (ino < i->range_high)) {
 		/* Aligns somewhere in the middle */
 		curr_node = pmfs_alloc_inode_node(sb);
 		PMFS_ASSERT(curr_node);
@@ -1335,9 +1335,9 @@ static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
 			/* returning without freeing the block */
 			goto block_found;
 		}
-		curr_node->block_low = ino + 1;
-		curr_node->block_high = i->block_high;
-		i->block_high = ino - 1;
+		curr_node->range_low = ino + 1;
+		curr_node->range_high = i->range_high;
+		i->range_high = ino - 1;
 		pmfs_insert_blocknode_inodetree(sbi, curr_node);
 		sbi->num_blocknode_inode++;
 		goto block_found;
@@ -1345,7 +1345,7 @@ static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
 
 	pmfs_error_mng(sb, "Unable to free inode %lu\n", ino);
 	pmfs_error_mng(sb, "Found inuse block %lu - %lu\n",
-				 i->block_low, i->block_high);
+				 i->range_low, i->range_high);
 
 block_found:
 	sbi->s_inodes_used_count--;

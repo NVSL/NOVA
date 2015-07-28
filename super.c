@@ -49,7 +49,7 @@ static struct super_operations pmfs_sops;
 static const struct export_operations pmfs_export_ops;
 static struct kmem_cache *pmfs_inode_cachep;
 static struct kmem_cache *pmfs_dirnode_cachep;
-static struct kmem_cache *pmfs_blocknode_cachep;
+static struct kmem_cache *pmfs_range_node_cachep;
 
 /* FIXME: should the following variable be one per PMFS instance? */
 unsigned int pmfs_dbgmask = 0;
@@ -868,18 +868,18 @@ static void pmfs_put_super(struct super_block *sb)
 	kfree(sbi);
 }
 
-void __pmfs_free_blocknode(struct pmfs_blocknode *bnode)
+void __pmfs_free_blocknode(struct pmfs_range_node *bnode)
 {
-	kmem_cache_free(pmfs_blocknode_cachep, bnode);
+	kmem_cache_free(pmfs_range_node_cachep, bnode);
 }
 
-void pmfs_free_blocknode(struct super_block *sb, struct pmfs_blocknode *bnode)
+void pmfs_free_blocknode(struct super_block *sb, struct pmfs_range_node *bnode)
 {
 	__pmfs_free_blocknode(bnode);
 }
 
 inline void pmfs_free_inode_node(struct super_block *sb,
-	struct pmfs_blocknode *bnode)
+	struct pmfs_range_node *bnode)
 {
 	__pmfs_free_blocknode(bnode);
 }
@@ -890,15 +890,15 @@ void pmfs_free_dirnode(struct super_block *sb, struct pmfs_dir_node *node)
 	atomic64_inc(&dirnode_free);
 }
 
-struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb)
+struct pmfs_range_node *pmfs_alloc_blocknode(struct super_block *sb)
 {
-	struct pmfs_blocknode *p;
-	p = (struct pmfs_blocknode *)
-		kmem_cache_alloc(pmfs_blocknode_cachep, GFP_NOFS | GFP_ATOMIC);
+	struct pmfs_range_node *p;
+	p = (struct pmfs_range_node *)
+		kmem_cache_alloc(pmfs_range_node_cachep, GFP_NOFS | GFP_ATOMIC);
 	return p;
 }
 
-inline struct pmfs_blocknode *pmfs_alloc_inode_node(struct super_block *sb)
+inline struct pmfs_range_node *pmfs_alloc_inode_node(struct super_block *sb)
 {
 	return pmfs_alloc_blocknode(sb);
 }
@@ -955,11 +955,11 @@ static void init_once(void *foo)
 
 static int __init init_blocknode_cache(void)
 {
-	pmfs_blocknode_cachep = kmem_cache_create("pmfs_blocknode_cache",
-					sizeof(struct pmfs_blocknode),
+	pmfs_range_node_cachep = kmem_cache_create("pmfs_range_node_cache",
+					sizeof(struct pmfs_range_node),
 					0, (SLAB_RECLAIM_ACCOUNT |
                                         SLAB_MEM_SPREAD), NULL);
-	if (pmfs_blocknode_cachep == NULL)
+	if (pmfs_range_node_cachep == NULL)
 		return -ENOMEM;
 	return 0;
 }
@@ -1036,7 +1036,7 @@ static void destroy_header_cache(void)
 
 static void destroy_blocknode_cache(void)
 {
-	kmem_cache_destroy(pmfs_blocknode_cachep);
+	kmem_cache_destroy(pmfs_range_node_cachep);
 }
 
 /*

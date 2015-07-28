@@ -465,22 +465,21 @@ static inline int pmfs_calc_checksum(u8 *data, int n)
 		return 1;
 }
 
-struct pmfs_blocknode_lowhigh {
-	__le64 block_low;
-	__le64 block_high;
+struct pmfs_range_node_lowhigh {
+	__le64 range_low;
+	__le64 range_high;
 };
 
 struct pmfs_alive_inode_entry {
 	__le64 pi_addr;
 };
 
-#define	BLOCKNODE_PER_PAGE	254
+#define	RANGENODE_PER_PAGE	254
 
-struct pmfs_blocknode {
-	struct list_head link;
+struct pmfs_range_node {
 	struct rb_node node;
-	unsigned long block_low;
-	unsigned long block_high;
+	unsigned long range_low;
+	unsigned long range_high;
 };
 
 extern struct kmem_cache *pmfs_header_cachep;
@@ -536,7 +535,7 @@ struct scan_bitmap {
 struct free_list {
 	struct mutex s_lock;
 	struct rb_root	block_free_tree;
-	struct pmfs_blocknode *first_node;
+	struct pmfs_range_node *first_node;
 	unsigned long	block_start;
 	unsigned long	block_end;
 	unsigned long	num_free_blocks;
@@ -602,7 +601,7 @@ struct pmfs_sb_info {
 
 	/* Track inuse inodes */
 	struct rb_root	inode_inuse_tree;
-	struct pmfs_blocknode *first_inode_blocknode;
+	struct pmfs_range_node *first_inode_blocknode;
 
 	/* ZEROED page for cache page initialized */
 	unsigned long zeroed_page;
@@ -1018,12 +1017,12 @@ extern void pmfs_error_mng(struct super_block *sb, const char *fmt, ...);
 /* balloc.c */
 int pmfs_alloc_block_free_lists(struct super_block *sb);
 void pmfs_delete_free_lists(struct super_block *sb);
-extern struct pmfs_blocknode *pmfs_alloc_blocknode(struct super_block *sb);
-extern struct pmfs_blocknode *pmfs_alloc_inode_node(struct super_block *sb);
+extern struct pmfs_range_node *pmfs_alloc_blocknode(struct super_block *sb);
+extern struct pmfs_range_node *pmfs_alloc_inode_node(struct super_block *sb);
 extern void pmfs_free_blocknode(struct super_block *sb,
-	struct pmfs_blocknode *bnode);
+	struct pmfs_range_node *bnode);
 extern void pmfs_free_inode_node(struct super_block *sb,
-	struct pmfs_blocknode *bnode);
+	struct pmfs_range_node *bnode);
 extern void pmfs_init_blockmap(struct super_block *sb, int recovery);
 extern void pmfs_free_meta_block(struct super_block *sb, unsigned long blocknr);
 extern void pmfs_free_data_blocks(struct super_block *sb,
@@ -1041,19 +1040,19 @@ extern int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
 extern int pmfs_new_cache_block(struct super_block *sb, struct mem_addr *pair,
 	int zero, int nosleep);
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
-inline int pmfs_rbtree_compare_blocknode(struct pmfs_blocknode *curr,
+inline int pmfs_rbtree_compare_blocknode(struct pmfs_range_node *curr,
 	unsigned long new_block_low);
 inline int pmfs_find_blocknode_inodetree(struct pmfs_sb_info *sbi,
 	unsigned long new_block_low, unsigned long *step,
-	struct pmfs_blocknode **ret_node);
+	struct pmfs_range_node **ret_node);
 inline int pmfs_insert_blocknode_blocktree(struct pmfs_sb_info *sbi,
-	struct rb_root *tree, struct pmfs_blocknode *new_node);
+	struct rb_root *tree, struct pmfs_range_node *new_node);
 inline int pmfs_insert_blocknode_inodetree(struct pmfs_sb_info *sbi,
-	struct pmfs_blocknode *new_node);
+	struct pmfs_range_node *new_node);
 int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
 	struct rb_root *tree, unsigned long new_block_low,
-	unsigned long new_block_high, struct pmfs_blocknode **prev,
-	struct pmfs_blocknode **next);
+	unsigned long new_block_high, struct pmfs_range_node **prev,
+	struct pmfs_range_node **next);
 void pmfs_free_cache_block(struct mem_addr *pair);
 
 /* bbuild.c */
@@ -1179,7 +1178,7 @@ void pmfs_apply_link_change_entry(struct pmfs_inode *pi,
 	struct pmfs_link_change_entry *entry);
 
 /* super.c */
-extern void __pmfs_free_blocknode(struct pmfs_blocknode *bnode);
+extern void __pmfs_free_blocknode(struct pmfs_range_node *bnode);
 extern struct super_block *pmfs_read_super(struct super_block *sb, void *data,
 	int silent);
 extern int pmfs_statfs(struct dentry *d, struct kstatfs *buf);
