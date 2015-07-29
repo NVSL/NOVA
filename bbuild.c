@@ -1236,7 +1236,7 @@ int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 		if (errval < 0)
 			goto out;
 	}
-	if (*sih)
+	if (sih && *sih)
 		(*sih)->ino = ino;
 	errval = 0;
 out:
