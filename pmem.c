@@ -205,16 +205,14 @@ static void copy_to_pmem(struct pmem_device *pmem, const void *src,
 
 	copy = min_t(size_t, n, PAGE_SIZE - offset);
 	dst = pmem_lookup_pg_addr(pmem, sector);
-	memcpy(dst + offset, src, copy);
-	pmem_flush_buffer(dst + offset, copy, 0);
+	__copy_from_user_nocache(dst + offset, src, copy);
 
 	if (copy < n) {
 		src += copy;
 		sector += copy >> SECTOR_SHIFT;
 		copy = n - copy;
 		dst = pmem_lookup_pg_addr(pmem, sector);
-		memcpy(dst, src, copy);
-		pmem_flush_buffer(dst, copy, 0);
+		__copy_from_user_nocache(dst, src, copy);
 	}
 }
 
