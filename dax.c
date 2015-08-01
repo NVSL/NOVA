@@ -36,6 +36,11 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	index = pos >> PAGE_CACHE_SHIFT;
 	offset = pos & ~PAGE_CACHE_MASK;
 
+	if (!access_ok(VERIFY_WRITE, buf, len)) {
+		error = -EFAULT;
+		goto out;
+	}
+
 	isize = i_size_read(inode);
 	if (!isize)
 		goto out;
