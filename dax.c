@@ -17,14 +17,10 @@
 #include "dax.h"
 
 static ssize_t
-do_dax_mapping_read(struct address_space *mapping,
-		    struct file_ra_state *_ra,
-		    struct file *filp,
-		    char __user *buf,
-		    size_t len,
-		    loff_t *ppos)
+do_dax_mapping_read(struct file *filp, char __user *buf,
+	size_t len, loff_t *ppos)
 {
-	struct inode *inode = mapping->host;
+	struct inode *inode = filp->f_mapping->host;
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
 	struct pmfs_inode_info *si = PMFS_I(inode);
@@ -59,7 +55,6 @@ do_dax_mapping_read(struct address_space *mapping,
 		unsigned long nr, left;
 		unsigned long addr = 0;
 		void *dax_mem = NULL;
-//		unsigned long dax_pfn;
 		int zero = 0;
 		int dram_copy = 0;
 
@@ -75,6 +70,7 @@ do_dax_mapping_read(struct address_space *mapping,
 
 		pair = pmfs_get_mem_pair(sb, pi, si, index);
 		if (unlikely(pair == NULL)) {
+			pmfs_dbgv("Required extent not found\n");
 			nr = PAGE_SIZE;
 			zero = 1;
 			goto memcpy;
@@ -123,6 +119,10 @@ do_dax_mapping_read(struct address_space *mapping,
 			nr = PAGE_SIZE;
 		}
 
+		if (pair->nvmm == 0) {
+			pmfs_dbg("%s: entry nvmm is NULL\n", __func__);
+			return -EINVAL;
+		}
 		dax_mem = pmfs_get_block(sb, (pair->nvmm << PAGE_SHIFT));
 
 memcpy:
@@ -148,7 +148,7 @@ memcpy:
 			PMFS_END_TIMING(memcpy_r_nvmm_t, memcpy_time);
 		}
 
-		if (pair->page)
+		if (pair && pair->page)
 			kunmap_atomic(dax_mem);
 
 		if (left) {
@@ -174,16 +174,6 @@ out:
 	return (copied ? copied : error);
 }
 
-ssize_t
-dax_file_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
-{
-	if (!access_ok(VERIFY_WRITE, buf, len))
-		return -EFAULT;
-
-	return do_dax_mapping_read(filp->f_mapping, &filp->f_ra, filp,
-			    buf, len, ppos);
-}
-
 /*
  * Wrappers. We need to use the rcu read lock to avoid
  * concurrent truncate operation. No problem for write because we held
@@ -197,7 +187,7 @@ ssize_t pmfs_dax_file_read(struct file *filp, char __user *buf,
 
 	PMFS_START_TIMING(dax_read_t, dax_read_time);
 //	rcu_read_lock();
-	res = dax_file_read(filp, buf, len, ppos);
+	res = do_dax_mapping_read(filp, buf, len, ppos);
 //	rcu_read_unlock();
 	PMFS_END_TIMING(dax_read_t, dax_read_time);
 	return res;
