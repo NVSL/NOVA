@@ -4,7 +4,7 @@
 
 obj-m += pmfs.o pmem.o
 
-pmfs-y := bbuild.o balloc.o dax.o dir.o file.o inode.o namei.o super.o symlink.o ioctl.o pmfs_stats.o journal.o wprotect.o
+pmfs-y := balloc.o bbuild.o dax.o dir.o file.o inode.o ioctl.o journal.o namei.o stats.o super.o symlink.o wprotect.o
 
 all:
 	make -C /media/root/External-Linux/linux-kernel M=`pwd`
