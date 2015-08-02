@@ -896,7 +896,7 @@ struct pmfs_range_node *pmfs_alloc_range_node(struct super_block *sb)
 {
 	struct pmfs_range_node *p;
 	p = (struct pmfs_range_node *)
-		kmem_cache_alloc(pmfs_range_node_cachep, GFP_NOFS | GFP_ATOMIC);
+		kmem_cache_alloc(pmfs_range_node_cachep, GFP_NOFS);
 	return p;
 }
 
