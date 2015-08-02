@@ -75,7 +75,8 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 
 		pair = pmfs_get_mem_pair(sb, pi, si, index);
 		if (unlikely(pair == NULL)) {
-			pmfs_dbgv("Required extent not found\n");
+			pmfs_dbg("Required extent not found: pgoff %lu, "
+				"inode size %lld\n", index, isize);
 			nr = PAGE_SIZE;
 			zero = 1;
 			goto memcpy;
