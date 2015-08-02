@@ -510,17 +510,11 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		temp_tail = curr_entry + sizeof(struct pmfs_file_write_entry);
 	}
 
-	*ppos = pos;
 	pmfs_memunlock_inode(sb, pi);
 	data_bits = blk_type_to_shift[pi->i_blk_type];
 	le64_add_cpu(&pi->i_blocks,
 			(total_blocks << (data_bits - sb->s_blocksize_bits)));
 	pmfs_memlock_inode(sb, pi);
-
-	if (pos > inode->i_size) {
-		i_size_write(inode, pos);
-		sih->i_size = pos;
-	}
 
 	pmfs_update_tail(pi, temp_tail);
 
@@ -534,6 +528,12 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	ret = written;
 	write_breaks += step;
 //	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
+
+	*ppos = pos;
+	if (pos > inode->i_size) {
+		i_size_write(inode, pos);
+		sih->i_size = pos;
+	}
 
 out:
 	if (need_mutex)
