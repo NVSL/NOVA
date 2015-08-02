@@ -574,7 +574,7 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 
 	/* Init with default values */
 	sbi->shared_free_list.block_free_tree = RB_ROOT;
-	mutex_init(&sbi->shared_free_list.s_lock);
+	spin_lock_init(&sbi->shared_free_list.s_lock);
 	sbi->mode = (S_IRUGO | S_IXUGO | S_IWUSR);
 	sbi->uid = current_fsuid();
 	sbi->gid = current_fsgid();

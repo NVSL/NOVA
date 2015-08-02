@@ -41,7 +41,7 @@ int pmfs_alloc_block_free_lists(struct super_block *sb)
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = pmfs_get_free_list(sb, i);
 		free_list->block_free_tree = RB_ROOT;
-		mutex_init(&free_list->s_lock);
+		spin_lock_init(&free_list->s_lock);
 	}
 
 	return 0;
@@ -376,7 +376,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 	}
 
 	free_list = pmfs_get_free_list(sb, cpuid);
-	mutex_lock(&free_list->s_lock);
+	spin_lock(&free_list->s_lock);
 	free_list->free_count++;
 
 	tree = &(free_list->block_free_tree);
@@ -392,7 +392,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 
 	if (ret) {
 		pmfs_dbg("%s: find free slot fail: %d\n", __func__, ret);
-		mutex_unlock(&free_list->s_lock);
+		spin_unlock(&free_list->s_lock);
 		pmfs_free_blocknode(sb, curr_node);
 		return;
 	}
@@ -429,7 +429,7 @@ static void pmfs_free_blocks(struct super_block *sb, unsigned long blocknr,
 block_found:
 	free_list->freed_blocks += num_blocks;
 	free_list->num_free_blocks += num_blocks;
-	mutex_unlock(&free_list->s_lock);
+	spin_unlock(&free_list->s_lock);
 	if (new_node_used == 0)
 		pmfs_free_blocknode(sb, curr_node);
 	free_steps += step;
@@ -643,7 +643,7 @@ static int pmfs_new_blocks(struct super_block *sb, unsigned long *blocknr,
 
 retry:
 	free_list = pmfs_get_free_list(sb, cpuid);
-	mutex_lock(&free_list->s_lock);
+	spin_lock(&free_list->s_lock);
 
 	if (free_list->num_free_blocks < num_blocks || !free_list->first_node) {
 		pmfs_dbgv("%s: cpu %d, free_blocks %lu, required %lu, "
@@ -657,7 +657,7 @@ retry:
 			first = container_of(temp, struct pmfs_range_node, node);
 			free_list->first_node = first;
 		} else {
-			mutex_unlock(&free_list->s_lock);
+			spin_unlock(&free_list->s_lock);
 			if (retried >= 3)
 				return -ENOMEM;
 			cpuid = pmfs_get_candidate_free_list(sb);
@@ -670,7 +670,7 @@ retry:
 	ret_blocks = pmfs_alloc_blocks_in_free_list(sb, free_list, btype,
 						num_blocks, &new_blocknr);
 
-	mutex_unlock(&free_list->s_lock);
+	spin_unlock(&free_list->s_lock);
 
 	if (ret_blocks <= 0 || new_blocknr == 0)
 		return -ENOSPC;

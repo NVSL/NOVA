@@ -414,7 +414,7 @@ struct scan_bitmap {
 };
 
 struct free_list {
-	struct mutex s_lock;
+	spinlock_t s_lock;
 	struct rb_root	block_free_tree;
 	struct pmfs_range_node *first_node;
 	unsigned long	block_start;
