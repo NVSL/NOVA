@@ -358,9 +358,9 @@ struct pmfs_alive_inode_entry {
 #define	RANGENODE_PER_PAGE	254
 
 struct pmfs_range_node {
-	struct rb_node node;
 	unsigned long range_low;
 	unsigned long range_high;
+	struct rb_node node;
 };
 
 extern struct kmem_cache *pmfs_header_cachep;
