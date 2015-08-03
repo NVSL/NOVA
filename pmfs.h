@@ -380,7 +380,6 @@ struct pmfs_inode_info {
 	struct pmfs_inode_info_header *header;
 	__u32   i_dir_start_lookup;
 	struct inode	vfs_inode;
-	struct list_head link;		/* Activate inode list */
 	u32	low_dirty;		/* Dirty low range */
 	u32	high_dirty;		/* Dirty high range */
 };

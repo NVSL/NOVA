@@ -955,7 +955,6 @@ static void init_once(void *foo)
 
 	vi->header = NULL;
 	vi->i_dir_start_lookup = 0;
-	INIT_LIST_HEAD(&vi->link);
 	inode_init_once(&vi->vfs_inode);
 }
 
