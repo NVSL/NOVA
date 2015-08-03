@@ -477,7 +477,6 @@ struct pmfs_sb_info {
 	unsigned long root;
 	unsigned int height;
 	u8 btype;
-	spinlock_t header_tree_lock;
 
 	/* Track inuse inodes */
 	struct rb_root	inode_inuse_tree;
@@ -947,7 +946,7 @@ unsigned int pmfs_free_header_tree(struct super_block *sb);
 struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
 	u16 i_mode);
 int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
-	struct pmfs_inode_info_header **sih, u16 i_mode, int multithread);
+	struct pmfs_inode_info_header **sih, u16 i_mode, int need_lock);
 int pmfs_inode_log_recovery(struct super_block *sb, int multithread);
 
 /*

@@ -584,7 +584,6 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 
 	mutex_init(&sbi->inode_table_mutex);
 	mutex_init(&sbi->s_lock);
-	spin_lock_init(&sbi->header_tree_lock);
 
 	sbi->inode_inuse_tree = RB_ROOT;
 

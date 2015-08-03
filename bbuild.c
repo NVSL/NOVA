@@ -1161,7 +1161,7 @@ fail:
 }
 
 int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
-	struct pmfs_inode_info_header **sih, u16 i_mode, int multithread)
+	struct pmfs_inode_info_header **sih, u16 i_mode, int need_lock)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	unsigned long max_blocks;
@@ -1169,10 +1169,9 @@ int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 	unsigned int blk_shift, meta_bits = META_BLK_SHIFT;
 	unsigned long total_blocks;
 	int errval;
-	unsigned long flags;
 
-	if (multithread)
-		spin_lock_irqsave(&sbi->header_tree_lock, flags);
+	if (need_lock)
+		mutex_lock(&sbi->inode_table_mutex);
 
 	pmfs_dbg_verbose("assign_header root 0x%lx height %d ino %lu, %p\n",
 			sbi->root, sbi->height, ino, sih);
@@ -1241,8 +1240,8 @@ int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 		(*sih)->ino = ino;
 	errval = 0;
 out:
-	if (multithread)
-		spin_unlock_irqrestore(&sbi->header_tree_lock, flags);
+	if (need_lock)
+		mutex_unlock(&sbi->inode_table_mutex);
 
 	return errval;
 }
@@ -1254,6 +1253,7 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 	struct pmfs_inode_info_header *sih;
 	struct pmfs_inode *pi;
 	unsigned long pmfs_ino;
+	int need_lock = multithread;
 
 	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
 	if (!pi)
@@ -1283,7 +1283,7 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 				cpuid, pi, pmfs_ino, pi->log_head,
 				pi->log_tail);
 		pmfs_assign_info_header(sb, pmfs_ino, &sih,
-				__le16_to_cpu(pi->i_mode), multithread);
+				__le16_to_cpu(pi->i_mode), need_lock);
 		pmfs_rebuild_file_inode_tree(sb, pi, pi_addr, sih, bm);
 		break;
 	case S_IFDIR:
@@ -1292,7 +1292,7 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 				cpuid, pi, pmfs_ino, pi->log_head,
 				pi->log_tail);
 		pmfs_assign_info_header(sb, pmfs_ino, &sih,
-				__le16_to_cpu(pi->i_mode), multithread);
+				__le16_to_cpu(pi->i_mode), need_lock);
 		pmfs_rebuild_dir_inode_tree(sb, pi, pi_addr, sih, bm);
 		break;
 	case S_IFLNK:
@@ -1302,7 +1302,7 @@ int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
 				pi->log_tail);
 		/* No need to rebuild tree for symlink files */
 		pmfs_assign_info_header(sb, pmfs_ino, &sih,
-				__le16_to_cpu(pi->i_mode), multithread);
+				__le16_to_cpu(pi->i_mode), need_lock);
 		sih->pi_addr = pi_addr;
 		if (bm && pi->log_head) {
 			BUG_ON(pi->log_head & (PAGE_SIZE - 1));
