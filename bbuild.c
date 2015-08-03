@@ -614,6 +614,7 @@ static u64 pmfs_save_range_nodes_to_log(struct super_block *sb,
 		curr_entry = pmfs_append_range_node_entry(sb, curr, temp_tail);
 		temp_tail = curr_entry + size;
 		temp = rb_next(temp);
+		rb_erase(&curr->node, tree);
 		pmfs_free_range_node(curr);
 	}
 
