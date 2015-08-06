@@ -349,17 +349,18 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
 		pmfs_dbgv("start %llu, flush bytes %lu\n",
 				start, nr_flush_bytes);
-		if (nr_flush_bytes)
+		if (nr_flush_bytes) {
 			pmfs_copy_to_nvmm(sb, inode, pi, start,
 				nr_flush_bytes, &begin_temp, &end_temp);
-
-		if (begin_tail == 0)
-			begin_tail = begin_temp;
+			if (begin_tail == 0)
+				begin_tail = begin_temp;
+		}
 
 		start += nr_flush_bytes;
 	} while (start < end);
 
-	pmfs_update_dirty_range(si, sync_start, sync_end);
+	if (pmfs_has_page_cache(sb))
+		pmfs_update_dirty_range(si, sync_start, sync_end);
 
 	end_tail = end_temp;
 	if (begin_tail && end_tail && end_tail != pi->log_tail) {
