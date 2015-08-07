@@ -17,10 +17,6 @@
 #include <linux/pagemap.h>
 #include "pmfs.h"
 
-/*
- *	Parent is locked. We do not take lock for RB Tree operations.
- */
-
 #define DT2IF(dt) (((dt) << 12) & S_IFMT)
 #define IF2DT(sif) (((sif) & S_IFMT) >> 12)
 
