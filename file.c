@@ -261,7 +261,7 @@ static void pmfs_update_dirty_range(struct pmfs_inode_info *si,
 	high = (si->high_dirty + 1) << PAGE_SHIFT;
 
 	if (start <= low && end >= high) {
-		si->low_dirty = MAX_BLOCK;
+		si->low_dirty = ULONG_MAX;
 		si->high_dirty = 0;
 	} else if (start <= low && end > low) {
 		si->low_dirty = end >> PAGE_SHIFT;

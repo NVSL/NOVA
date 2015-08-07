@@ -380,8 +380,8 @@ struct pmfs_inode_info {
 	struct pmfs_inode_info_header *header;
 	__u32   i_dir_start_lookup;
 	struct inode	vfs_inode;
-	u32	low_dirty;		/* Dirty low range */
-	u32	high_dirty;		/* Dirty high range */
+	u64	low_dirty;		/* Dirty low range */
+	u64	high_dirty;		/* Dirty high range */
 };
 
 enum bm_type {
@@ -634,8 +634,6 @@ static inline void memset_nt(void *dest, uint32_t dword, size_t length)
 #define	OUTDATE(p)	((p) & (OUTDATE_BIT))
 #define	UNINIT(p)	((p) & (UNINIT_BIT))
 #define	DRAM_ADDR(p)	((p) & (PAGE_MASK))
-
-#define	MAX_BLOCK	((1UL << 32) - 1)
 
 extern struct kmem_cache *pmfs_mempair_cachep;
 
