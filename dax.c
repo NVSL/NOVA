@@ -1064,6 +1064,13 @@ static int pmfs_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 						kmem, pfn);
 	}
 
+	if (vm_flags & VM_WRITE) {
+		if (pgoff < si->low_mmap)
+			si->low_mmap = pgoff;
+		if (pgoff > si->high_mmap)
+			si->high_mmap = pgoff;
+	}
+
 	return ret;
 }
 

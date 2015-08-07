@@ -929,6 +929,8 @@ static struct inode *pmfs_alloc_inode(struct super_block *sb)
 	vi->header = NULL;
 	vi->low_dirty = ULONG_MAX;
 	vi->high_dirty = 0;
+	vi->low_mmap = ULONG_MAX;
+	vi->high_mmap = 0;
 	vi->vfs_inode.i_version = 1;
 
 	return &vi->vfs_inode;

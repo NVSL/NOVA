@@ -382,6 +382,8 @@ struct pmfs_inode_info {
 	struct inode	vfs_inode;
 	u64	low_dirty;		/* Dirty low range */
 	u64	high_dirty;		/* Dirty high range */
+	u64	low_mmap;		/* Mmap low range */
+	u64	high_mmap;		/* Mmap high range */
 };
 
 enum bm_type {
