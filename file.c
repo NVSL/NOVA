@@ -270,6 +270,22 @@ static void pmfs_update_dirty_range(struct pmfs_inode_info *si,
 	}
 }
 
+static void pmfs_get_sync_range(struct pmfs_inode_info *si, int mmaped,
+	loff_t *start, loff_t *end)
+{
+	unsigned long start_blk, end_blk;
+
+	start_blk = *start >> PAGE_SHIFT;
+	end_blk = *end >> PAGE_SHIFT;
+
+	if (mmaped == 0 && start_blk < si->low_dirty) {
+		*start = si->low_dirty << PAGE_SHIFT;
+	}
+	if (mmaped == 0 && end_blk > si->high_dirty) {
+		*end = (si->high_dirty + 1) << PAGE_SHIFT;
+	}
+}
+
 /* This function is called by both msync() and fsync().
  * TODO: Check if we can avoid calling pmfs_flush_buffer() for fsync. We use
  * movnti to write data to files, so we may want to avoid doing unnecessary
@@ -323,16 +339,10 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		return 0;
 	}
 
+	pmfs_get_sync_range(si, mmaped, &start, &end);
 	start_blk = start >> PAGE_SHIFT;
-	if (mmaped == 0 && start_blk < si->low_dirty) {
-		start = si->low_dirty << PAGE_SHIFT;
-		start_blk = si->low_dirty;
-	}
 	end_blk = end >> PAGE_SHIFT;
-	if (mmaped == 0 && end_blk > si->high_dirty) {
-		end = (si->high_dirty + 1) << PAGE_SHIFT;
-		end_blk = si->high_dirty;
-	}
+
 	pmfs_dbgv("%s: mmaped %d, start %llu, end %llu, size %llu, "
 			" start_blk %lu, end_blk %lu\n",
 			__func__, mmaped, start, end, isize, start_blk,
