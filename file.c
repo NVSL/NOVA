@@ -274,16 +274,22 @@ static void pmfs_get_sync_range(struct pmfs_inode_info *si, int mmaped,
 	loff_t *start, loff_t *end)
 {
 	unsigned long start_blk, end_blk;
+	unsigned long low_blk, high_blk;
 
 	start_blk = *start >> PAGE_SHIFT;
 	end_blk = *end >> PAGE_SHIFT;
 
-	if (mmaped == 0 && start_blk < si->low_dirty) {
-		*start = si->low_dirty << PAGE_SHIFT;
-	}
-	if (mmaped == 0 && end_blk > si->high_dirty) {
-		*end = (si->high_dirty + 1) << PAGE_SHIFT;
-	}
+	low_blk = si->low_dirty;
+	high_blk = si->high_dirty;
+	if (mmaped && si->low_mmap < low_blk)
+		low_blk = si->low_mmap;
+	if (mmaped && si->high_mmap > high_blk)
+		high_blk = si->high_mmap;
+
+	if (start_blk < low_blk)
+		*start = low_blk << PAGE_SHIFT;
+	if (end_blk > high_blk)
+		*end = (high_blk + 1) << PAGE_SHIFT;
 }
 
 /* This function is called by both msync() and fsync().
