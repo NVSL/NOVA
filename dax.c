@@ -421,7 +421,11 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 	total_blocks = num_blocks;
 	/* offset in the actual block size block */
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,1,0)
 	ret = file_remove_suid(filp);
+#else
+	ret = file_remove_privs(filp);
+#endif
 	if (ret) {
 		goto out;
 	}
@@ -640,7 +644,11 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	total_blocks = num_blocks;
 	/* offset in the actual block size block */
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,1,0)
 	ret = file_remove_suid(filp);
+#else
+	ret = file_remove_privs(filp);
+#endif
 	if (ret) {
 		goto out;
 	}
