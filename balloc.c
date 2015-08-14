@@ -214,7 +214,7 @@ static inline int pmfs_rbtree_compare_rangenode(struct pmfs_range_node *curr,
 }
 
 static int pmfs_find_range_node(struct pmfs_sb_info *sbi,
-	struct rb_root *tree, unsigned long range_low, unsigned long *step,
+	struct rb_root *tree, unsigned long range_low,
 	struct pmfs_range_node **ret_node)
 {
 	struct pmfs_range_node *curr = NULL;
@@ -227,7 +227,6 @@ static int pmfs_find_range_node(struct pmfs_sb_info *sbi,
 	while (temp) {
 		curr = container_of(temp, struct pmfs_range_node, node);
 		compVal = pmfs_rbtree_compare_rangenode(curr, range_low);
-		(*step)++;
 
 		if (compVal == -1) {
 			temp = temp->rb_left;
@@ -244,11 +243,10 @@ static int pmfs_find_range_node(struct pmfs_sb_info *sbi,
 }
 
 inline int pmfs_search_inodetree(struct pmfs_sb_info *sbi,
-	unsigned long ino, unsigned long *step,
-	struct pmfs_range_node **ret_node)
+	unsigned long ino, struct pmfs_range_node **ret_node)
 {
 	return pmfs_find_range_node(sbi, &sbi->inode_inuse_tree,
-					ino, step, ret_node);
+					ino, ret_node);
 }
 
 static int pmfs_insert_range_node(struct pmfs_sb_info *sbi,
@@ -304,11 +302,10 @@ int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
 	struct pmfs_range_node **next)
 {
 	struct pmfs_range_node *ret_node = NULL;
-	unsigned long step = 0;
 	struct rb_node *temp;
 	int ret;
 
-	ret = pmfs_find_range_node(sbi, tree, range_low, &step, &ret_node);
+	ret = pmfs_find_range_node(sbi, tree, range_low, &ret_node);
 	if (ret) {
 		pmfs_dbg("%s ERROR: %lu - %lu already in free list\n",
 			__func__, range_low, range_high);

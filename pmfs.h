@@ -937,8 +937,7 @@ extern int pmfs_new_cache_block(struct super_block *sb, struct mem_addr *pair,
 	int zero, int nosleep);
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
 inline int pmfs_search_inodetree(struct pmfs_sb_info *sbi,
-	unsigned long ino, unsigned long *step,
-	struct pmfs_range_node **ret_node);
+	unsigned long ino, struct pmfs_range_node **ret_node);
 inline int pmfs_insert_blocktree(struct pmfs_sb_info *sbi,
 	struct rb_root *tree, struct pmfs_range_node *new_node);
 inline int pmfs_insert_inodetree(struct pmfs_sb_info *sbi,

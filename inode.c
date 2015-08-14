@@ -1299,12 +1299,11 @@ static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
 	struct pmfs_range_node *i = NULL;
 	struct pmfs_range_node *curr_node;
-	unsigned long step = 0;
 	int found = 0;
 
 	pmfs_dbg_verbose("Free inuse ino: %lu\n", ino);
 
-	found = pmfs_search_inodetree(sbi, ino, &step, &i);
+	found = pmfs_search_inodetree(sbi, ino, &i);
 	if (!found) {
 		pmfs_dbg("%s ERROR: ino %lu not found\n", __func__, ino);
 		return;
@@ -1349,7 +1348,6 @@ static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
 
 block_found:
 	sbi->s_inodes_used_count--;
-	free_steps += step;
 }
 
 /*
