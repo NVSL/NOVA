@@ -595,9 +595,15 @@ static inline void pmfs_memcpy_atomic (void *dst, const void *src, u8 size)
 			break;
 		}
 		default:
-			pmfs_dbg("error: memcpy_atomic called with %d bytes\n", size);
+			pmfs_dbg("error: memcpy_atomic called with %d bytes\n",
+					size);
 			//BUG();
 	}
+}
+
+static inline int memcpy_to_pmem(void *dst, const void *src, unsigned int size)
+{
+	return __copy_from_user_inatomic_nocache(dst, src, size);
 }
 
 /* assumes the length to be 4-byte aligned */

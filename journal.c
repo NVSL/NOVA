@@ -99,14 +99,14 @@ u64 pmfs_create_lite_transaction(struct super_block *sb,
 							temp);
 
 	pmfs_print_lite_transaction(dram_entry1);
-	__copy_from_user_inatomic_nocache(entry, dram_entry1, size);
+	memcpy_to_pmem(entry, dram_entry1, size);
 
 	if (entries == 2) {
 		temp = next_lite_journal(temp);
 		entry = (struct pmfs_lite_journal_entry *)pmfs_get_block(sb,
 							temp);
 		pmfs_print_lite_transaction(dram_entry2);
-		__copy_from_user_inatomic_nocache(entry, dram_entry2, size);
+		memcpy_to_pmem(entry, dram_entry2, size);
 	}
 
 	new_tail = next_lite_journal(temp);

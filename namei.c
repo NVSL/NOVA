@@ -637,8 +637,7 @@ static int pmfs_rename(struct inode *old_dir,
 		tail = 0;
 		new_old_pi = (struct pmfs_inode *)pmfs_get_block(sb,
 						pi_newaddr);
-		__copy_from_user_inatomic_nocache(new_old_pi,
-						old_pi, PMFS_INODE_SIZE);
+		memcpy_to_pmem(new_old_pi, old_pi, PMFS_INODE_SIZE);
 		/* new_old_pi is part of the log so in-place update is fine */
 		pmfs_update_tail(new_old_pi, old_pi_tail);
 	} else {
