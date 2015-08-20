@@ -113,7 +113,6 @@ extern atomic64_t header_alloc;
 extern atomic64_t header_free;
 
 extern int measure_timing;
-extern int contiguous_allocation;
 extern int support_clwb;
 
 typedef struct timespec timing_t;
