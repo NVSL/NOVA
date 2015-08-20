@@ -291,8 +291,10 @@ static inline void PERSISTENT_MARK(void)
 static inline void PERSISTENT_BARRIER(void)
 {
 	asm volatile ("sfence\n" : : );
-	if (support_pcommit)
+	if (support_pcommit) {
 		_mm_pcommit();
+		asm volatile ("sfence\n" : : );
+	}
 }
 
 static inline void pmfs_flush_buffer(void *buf, uint32_t len, bool fence)
