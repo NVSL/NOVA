@@ -507,6 +507,11 @@ static inline bool arch_has_pcommit(void)
 	return static_cpu_has(X86_FEATURE_PCOMMIT);
 }
 
+static inline bool arch_has_clwb(void)
+{
+	return static_cpu_has(X86_FEATURE_CLWB);
+}
+
 static inline struct pmfs_sb_info *PMFS_SB(struct super_block *sb)
 {
 	return sb->s_fs_info;
