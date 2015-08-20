@@ -557,6 +557,10 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	BUILD_BUG_ON(sizeof(struct pmfs_inode) > PMFS_INODE_SIZE);
 	BUILD_BUG_ON(sizeof(struct pmfs_inode_log_page) != PAGE_SIZE);
 	pmfs_info("Inode size %lu\n", sizeof(struct pmfs_inode));
+	if (arch_has_pcommit())
+		pmfs_info("Arch has PCOMMIT support\n");
+	else
+		pmfs_info("Arch does not have PCOMMIT support\n");
 
 	sbi = kzalloc(sizeof(struct pmfs_sb_info), GFP_KERNEL);
 	if (!sbi)
