@@ -26,6 +26,8 @@
 #include <linux/moduleparam.h>
 #include <linux/slab.h>
 
+#include "pmfs_def.h"
+
 #define SECTOR_SHIFT		9
 #define PAGE_SECTORS_SHIFT	(PAGE_SHIFT - SECTOR_SHIFT)
 #define PAGE_SECTORS		(1 << PAGE_SECTORS_SHIFT)
@@ -35,8 +37,7 @@ module_param(measure_timing, int, S_IRUGO);
 MODULE_PARM_DESC(measure_timing, "Measure timing");
 
 int support_clwb = 0;
-module_param(support_clwb, int, S_IRUGO);
-MODULE_PARM_DESC(support_clwb, "CLWB support");
+int support_pcommit = 0;
 
 /* ======================= Timing ========================= */
 enum timing_category {
@@ -101,51 +102,6 @@ void pmem_print_timing_stats(void)
 	}
 }
 
-#define	CACHELINE_SIZE	64
-
-#define _mm_clflush(addr)\
-	asm volatile("clflush %0" : "+m" (*(volatile char *)(addr)))
-#define _mm_clflushopt(addr)\
-	asm volatile(".byte 0x66; clflush %0" : "+m" (*(volatile char *)(addr)))
-#define _mm_clwb(addr)\
-	asm volatile(".byte 0x66; xsaveopt %0" : "+m" (*(volatile char *)(addr)))
-#define _mm_pcommit()\
-	asm volatile(".byte 0x66, 0x0f, 0xae, 0xf8")
-
-/* Provides ordering from all previous clflush too */
-static inline void PERSISTENT_MARK(void)
-{
-	/* TODO: Fix me. */
-}
-
-static inline void PERSISTENT_BARRIER(void)
-{
-	asm volatile ("sfence\n" : : );
-	if (support_clwb)
-		_mm_pcommit();
-}
-
-static inline void pmem_flush_buffer(void *buf, uint32_t len, bool fence)
-{
-	uint32_t i;
-	len = len + ((unsigned long)(buf) & (CACHELINE_SIZE - 1));
-	if (support_clwb) {
-		for (i = 0; i < len; i += CACHELINE_SIZE)
-			_mm_clwb(buf + i);
-	} else {
-		for (i = 0; i < len; i += CACHELINE_SIZE)
-			_mm_clflush(buf + i);
-	}
-
-	/* Do a fence only if asked. We often don't need to do a fence
-	 * immediately after clflush because even if we get context switched
-	 * between clflush and subsequent fence, the context switch operation
-	 * provides implicit fence. */
-	if (fence)
-		PERSISTENT_BARRIER();
-}
-
-/* symlink.c */
 struct pmem_device {
 	struct request_queue	*pmem_queue;
 	struct gendisk		*pmem_disk;
@@ -203,6 +159,7 @@ static void copy_to_pmem(struct pmem_device *pmem, const void *src,
 
 	BUG_ON(n > PAGE_SIZE);
 
+	PERSISTENT_BARRIER();
 	copy = min_t(size_t, n, PAGE_SIZE - offset);
 	dst = pmem_lookup_pg_addr(pmem, sector);
 	__copy_from_user_nocache(dst + offset, src, copy);
@@ -214,6 +171,7 @@ static void copy_to_pmem(struct pmem_device *pmem, const void *src,
 		dst = pmem_lookup_pg_addr(pmem, sector);
 		__copy_from_user_nocache(dst, src, copy);
 	}
+	PERSISTENT_BARRIER();
 }
 
 /*
@@ -496,6 +454,20 @@ static int __init pmem_init(void)
 
 	list_for_each_entry(pmem, &pmem_devices, pmem_list)
 		add_disk(pmem->pmem_disk);
+
+	if (arch_has_pcommit()) {
+		printk("pmem: arch has PCOMMIT support\n");
+		support_pcommit = 1;
+	} else {
+		printk("pmem: arch does not have PCOMMIT support\n");
+	}
+
+	if (arch_has_clwb()) {
+		printk("pmem: arch has CLWB support\n");
+		support_clwb = 1;
+	} else {
+		printk("pmem: arch does not have CLWB support\n");
+	}
 
 	pr_info("pmem: module loaded\n");
 	return 0;
