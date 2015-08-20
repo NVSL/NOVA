@@ -127,6 +127,10 @@ extern unsigned int pmfs_dbgmask;
 #define	INVALID_CPU			(-1)
 #define	SHARED_CPU			(65536)
 
+extern int measure_timing;
+extern int support_clwb;
+extern int support_pcommit;
+
 extern unsigned int blk_type_to_shift[PMFS_BLOCK_TYPE_MAX];
 extern unsigned int blk_type_to_size[PMFS_BLOCK_TYPE_MAX];
 
@@ -269,7 +273,6 @@ struct mem_addr {
 };
 
 
-
 #define _mm_clflush(addr)\
 	asm volatile("clflush %0" : "+m" (*(volatile char *)(addr)))
 #define _mm_clflushopt(addr)\
@@ -288,7 +291,7 @@ static inline void PERSISTENT_MARK(void)
 static inline void PERSISTENT_BARRIER(void)
 {
 	asm volatile ("sfence\n" : : );
-	if (support_clwb)
+	if (support_pcommit)
 		_mm_pcommit();
 }
 

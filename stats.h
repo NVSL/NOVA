@@ -112,9 +112,6 @@ extern atomic64_t dirnode_free;
 extern atomic64_t header_alloc;
 extern atomic64_t header_free;
 
-extern int measure_timing;
-extern int support_clwb;
-
 typedef struct timespec timing_t;
 
 #define PMFS_START_TIMING(name, start) \

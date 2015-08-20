@@ -36,11 +36,10 @@
 
 int measure_timing = 0;
 int support_clwb = 0;
+int support_pcommit = 0;
 
 module_param(measure_timing, int, S_IRUGO);
 MODULE_PARM_DESC(measure_timing, "Timing measurement");
-module_param(support_clwb, int, S_IRUGO);
-MODULE_PARM_DESC(support_clwb, "clwb");
 
 static struct super_operations pmfs_sops;
 static const struct export_operations pmfs_export_ops;
@@ -555,15 +554,19 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	BUILD_BUG_ON(sizeof(struct pmfs_inode_log_page) != PAGE_SIZE);
 	pmfs_info("Inode size %lu\n", sizeof(struct pmfs_inode));
 
-	if (arch_has_pcommit())
+	if (arch_has_pcommit()) {
 		pmfs_info("Arch has PCOMMIT support\n");
-	else
+		support_pcommit = 1;
+	} else {
 		pmfs_info("Arch does not have PCOMMIT support\n");
+	}
 
-	if (arch_has_clwb())
+	if (arch_has_clwb()) {
 		pmfs_info("Arch has CLWB support\n");
-	else
+		support_clwb = 1;
+	} else {
 		pmfs_info("Arch does not have CLWB support\n");
+	}
 
 	sbi = kzalloc(sizeof(struct pmfs_sb_info), GFP_KERNEL);
 	if (!sbi)
