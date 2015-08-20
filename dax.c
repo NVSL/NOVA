@@ -325,7 +325,8 @@ static inline size_t pmfs_memcpy_to_nvmm(char *kmem, loff_t offset,
 		copied = bytes - __copy_from_user(kmem + offset, buf, bytes);
 		pmfs_flush_buffer(kmem + offset, copied, 0);
 	} else {
-		copied = bytes - memcpy_to_pmem(kmem + offset, buf, bytes);
+		copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
+						buf, bytes);
 	}
 
 	return copied;
@@ -783,7 +784,7 @@ static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 
 		if (pmfs_has_page_cache(sb)) {
 			dram_addr = pmfs_get_dram_addr(pair);
-			copied = bytes - memcpy_to_pmem(kmem + offset,
+			copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
 				(void *)DRAM_ADDR(dram_addr) + offset, bytes);
 
 			if (pair->page)
@@ -793,7 +794,7 @@ static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 		} else {
 			nvmm_block = pair->nvmm_mmap << PAGE_SHIFT;
 			nvmm_addr = pmfs_get_block(sb, nvmm_block);
-			copied = bytes - memcpy_to_pmem(kmem + offset,
+			copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
 				nvmm_addr + offset, bytes);
 		}
 

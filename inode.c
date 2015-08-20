@@ -2420,7 +2420,8 @@ u64 pmfs_append_file_write_entry(struct super_block *sb, struct pmfs_inode *pi,
 		return curr_p;
 
 	entry = (struct pmfs_file_write_entry *)pmfs_get_block(sb, curr_p);
-	memcpy_to_pmem(entry, data, sizeof(struct pmfs_file_write_entry));
+	memcpy_to_pmem_nocache(entry, data,
+			sizeof(struct pmfs_file_write_entry));
 	pmfs_dbg_verbose("file %lu entry @ 0x%llx: pgoff %u, num %u, "
 			"block %llu, size %llu\n", inode->i_ino,
 			curr_p, entry->pgoff, entry->num_pages,

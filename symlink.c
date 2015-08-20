@@ -31,7 +31,7 @@ int pmfs_block_symlink(struct super_block *sb, struct pmfs_inode *pi,
 	blockp = (char *)pmfs_get_block(sb, block);
 
 	pmfs_memunlock_block(sb, blockp);
-	memcpy_to_pmem(blockp, symname, len);
+	memcpy_to_pmem_nocache(blockp, symname, len);
 	blockp[len] = '\0';
 	pmfs_memlock_block(sb, blockp);
 

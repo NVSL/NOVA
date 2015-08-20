@@ -618,7 +618,8 @@ static inline void pmfs_memcpy_atomic (void *dst, const void *src, u8 size)
 	}
 }
 
-static inline int memcpy_to_pmem(void *dst, const void *src, unsigned int size)
+static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
+	unsigned int size)
 {
 	return __copy_from_user_inatomic_nocache(dst, src, size);
 }

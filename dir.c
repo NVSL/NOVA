@@ -265,7 +265,8 @@ static u64 pmfs_append_dir_inode_entry(struct super_block *sb,
 	entry->entry_type = DIR_LOG;
 	entry->ino = cpu_to_le64(ino);
 	entry->name_len = dentry->d_name.len;
-	memcpy_to_pmem(entry->name, dentry->d_name.name, dentry->d_name.len);
+	memcpy_to_pmem_nocache(entry->name, dentry->d_name.name,
+				dentry->d_name.len);
 	entry->file_type = 0;
 	entry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
 	entry->size = cpu_to_le64(dir->i_size);
