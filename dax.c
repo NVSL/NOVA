@@ -201,17 +201,6 @@ ssize_t pmfs_dax_file_read(struct file *filp, char __user *buf,
 	return res;
 }
 
-static inline void pmfs_flush_edge_cachelines(loff_t pos, ssize_t len,
-	void *start_addr)
-{
-	if (unlikely(pos & 0x7))
-		pmfs_flush_buffer(start_addr, 1, false);
-	if (unlikely(((pos + len) & 0x7) && ((pos & (CACHELINE_SIZE - 1)) !=
-			((pos + len) & (CACHELINE_SIZE - 1)))))
-		pmfs_flush_buffer(start_addr + len, 1, false);
-}
-
-
 static inline int pmfs_copy_partial_block(struct super_block *sb,
 	struct mem_addr *pair, unsigned long index,
 	size_t offset, void* kmem, bool is_end_blk)

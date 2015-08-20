@@ -291,7 +291,7 @@ int pmfs_append_link_change_entry(struct super_block *sb,
 	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
 	entry->flags = cpu_to_le32(inode->i_flags);
 	entry->generation = cpu_to_le32(inode->i_generation);
-	pmfs_flush_buffer(entry, size, 1);
+	pmfs_flush_buffer(entry, size, 0);
 	*new_tail = curr_p + size;
 
 	PMFS_END_TIMING(append_entry_t, append_time);

@@ -332,7 +332,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	}
 	pi->log_tail = pi->log_head = new_block;
 	pi->i_blocks = 1;
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
 
 	de_entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, new_block);
 	de_entry->entry_type = DIR_LOG;
@@ -343,7 +343,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 1;
 	strncpy(de_entry->name, ".", 1);
-	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(1), false);
+	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(1), 0);
 
 	curr_p = new_block + PMFS_DIR_LOG_REC_LEN(1);
 
@@ -357,7 +357,7 @@ int pmfs_append_dir_init_entries(struct super_block *sb,
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 2;
 	strncpy(de_entry->name, "..", 2);
-	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(2), true);
+	pmfs_flush_buffer(de_entry, PMFS_DIR_LOG_REC_LEN(2), 0);
 
 	curr_p += PMFS_DIR_LOG_REC_LEN(2);
 	pmfs_update_tail(pi, curr_p);
@@ -602,7 +602,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb,
 
 	sih->i_size = le64_to_cpu(pi->i_size);
 	sih->i_mode = le64_to_cpu(pi->i_mode);
-	pmfs_flush_buffer(pi, sizeof(struct pmfs_inode), 1);
+	pmfs_flush_buffer(pi, sizeof(struct pmfs_inode), 0);
 
 	/* Keep traversing until log ends */
 	curr_p &= PAGE_MASK;

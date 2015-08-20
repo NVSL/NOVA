@@ -1733,7 +1733,8 @@ void pmfs_dirty_inode(struct inode *inode, int flags)
 	pmfs_memunlock_inode(sb, pi);
 	pi->i_atime = cpu_to_le32(inode->i_atime.tv_sec);
 	pmfs_memlock_inode(sb, pi);
-	pmfs_flush_buffer(&pi->i_atime, sizeof(pi->i_atime), true);
+	/* Relax atime persistency */
+	pmfs_flush_buffer(&pi->i_atime, sizeof(pi->i_atime), 0);
 
 	/* FIXME: Is this check needed? */
 	if (pmfs_is_inode_dirty(inode, pi))
@@ -2617,7 +2618,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 
 	sih->i_size = le64_to_cpu(pi->i_size);
 	sih->i_mode = le16_to_cpu(pi->i_mode);
-	pmfs_flush_buffer(pi, sizeof(struct pmfs_inode), 1);
+	pmfs_flush_buffer(pi, sizeof(struct pmfs_inode), 0);
 
 	/* Keep traversing until log ends */
 	curr_p &= PAGE_MASK;

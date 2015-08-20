@@ -654,7 +654,7 @@ void pmfs_save_inode_list_to_log(struct super_block *sb)
 	}
 
 	pi->log_head = new_block;
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
 
 	temp_tail = pmfs_save_range_nodes_to_log(sb, &sbi->inode_inuse_tree,
 								new_block);
@@ -716,7 +716,7 @@ void pmfs_save_blocknode_mappings_to_log(struct super_block *sb)
 
 	/* Finally update log head and tail */
 	pi->log_head = new_block;
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
 
 	temp_tail = new_block;
 	for (i = 0; i < sbi->cpus; i++) {
@@ -1334,16 +1334,17 @@ int pmfs_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	/* Handle special inodes */
 	pi = pmfs_get_inode_by_ino(sb, PMFS_BLOCKNODE_INO);
 	pi->log_head = pi->log_tail = 0;
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
 
 	pi = pmfs_get_inode_table(sb);
 	pi->log_head = pi->log_tail = 0;
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
 
 	pi = pmfs_get_inode_by_ino(sb, PMFS_LITEJOURNAL_INO);
 	if (pi->log_head)
 		set_bm(pi->log_head >> PAGE_SHIFT, bm, BM_4K);
 
+	PERSISTENT_BARRIER();
 	/* Start from the root iode */
 	ret = pmfs_recover_inode(sb, root_addr, bm, smp_processor_id(), 0);
 

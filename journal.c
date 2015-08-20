@@ -160,7 +160,6 @@ static int pmfs_recover_lite_journal(struct super_block *sb,
 		pmfs_undo_lite_journal_entry(sb, entry);
 	}
 
-	PERSISTENT_BARRIER();
 	pmfs_update_tail(pi, pi->log_head);
 	return 0;
 }

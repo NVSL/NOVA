@@ -319,7 +319,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		mmaped = 1;
 
 	if (!pmfs_has_page_cache(sb) && mmaped == 0)
-		goto persist;
+		goto out;
 
 	mutex_lock(&inode->i_mutex);
 
@@ -327,7 +327,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	pi = pmfs_get_inode(sb, inode);
 	if (mmaped == 0 && si->low_dirty > si->high_dirty) {
 		mutex_unlock(&inode->i_mutex);
-		goto persist;
+		goto out;
 	}
 
 	end += 1; /* end is inclusive. We like our indices normal please! */
@@ -390,9 +390,7 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
 	mutex_unlock(&inode->i_mutex);
 
-persist:
-	PERSISTENT_MARK();
-	PERSISTENT_BARRIER();
+out:
 	PMFS_END_TIMING(fsync_t, fsync_time);
 
 	return ret;
@@ -417,11 +415,6 @@ static int pmfs_flush(struct file *file, fl_owner_t id)
 		if (end > isize)
 			end = isize;
 		pmfs_fsync(file, start, end, 1);
-	}
-
-	if (file->f_mode & FMODE_WRITE) {
-		PERSISTENT_MARK();
-		PERSISTENT_BARRIER();
 	}
 
 	return ret;
