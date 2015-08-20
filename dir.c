@@ -27,7 +27,8 @@
 /* ========================= RB Tree operations ============================= */
 
 static int pmfs_rbtree_compare_find_by_name(struct super_block *sb,
-	struct pmfs_dir_node *curr, const char *name, int namelen)
+	struct pmfs_dir_node *curr, unsigned int hash, const char *name,
+	int namelen)
 {
 	struct pmfs_dir_logentry *entry;
 	int min_len;
@@ -35,20 +36,24 @@ static int pmfs_rbtree_compare_find_by_name(struct super_block *sb,
 	if (!curr || curr->nvmm == 0)
 		BUG();
 
+	/* Use hash code */
+	if (hash < curr->hash)
+		return -1;
+	if (hash > curr->hash)
+		return 1;
+
+	/* Double check the name */
 	entry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, curr->nvmm);
+	if (namelen != entry->name_len)
+		pmfs_dbg("%s: name len does not match: %d %d\n",
+				__func__, namelen, entry->name_len);
+
 	min_len = namelen < entry->name_len ? namelen : entry->name_len;
+	if (strncmp(name, entry->name, min_len) != 0)
+		pmfs_dbg("%s: name does not match: %s %s\n",
+				__func__, name, entry->name);
 
-	pmfs_dbg_verbose("%s: %s %s, entry @0x%lx\n", __func__,
-				name, entry->name, curr->nvmm);
-	if (strncmp(name, entry->name, min_len) < 0)
-		return -1;
-	if (strncmp(name, entry->name, min_len) > 0)
-		return 1;
-
-	if (namelen < entry->name_len)
-		return -1;
-	if (namelen > entry->name_len)
-		return 1;
+	/* FIXME: Ignore hash collision */
 	return 0;
 }
 
@@ -60,12 +65,14 @@ struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
 	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
+	unsigned int hash;
 	int compVal;
 
+	hash = BKDRHash(name, name_len);
 	temp = sih->dir_tree.rb_node;
 	while (temp) {
 		curr = container_of(temp, struct pmfs_dir_node, node);
-		compVal = pmfs_rbtree_compare_find_by_name(sb, curr,
+		compVal = pmfs_rbtree_compare_find_by_name(sb, curr, hash,
 							name, name_len);
 
 		if (compVal == -1) {
@@ -95,8 +102,10 @@ static int pmfs_insert_dir_node_by_name(struct super_block *sb,
 {
 	struct pmfs_dir_node *curr, *new;
 	struct rb_node **temp, *parent;
+	unsigned int hash;
 	int compVal;
 
+	hash = BKDRHash(name, namelen);
 	pmfs_dbg_verbose("%s: insert %s @ 0x%llx\n", __func__, name, dir_entry);
 
 	temp = &(sih->dir_tree.rb_node);
@@ -104,7 +113,7 @@ static int pmfs_insert_dir_node_by_name(struct super_block *sb,
 
 	while (*temp) {
 		curr = container_of(*temp, struct pmfs_dir_node, node);
-		compVal = pmfs_rbtree_compare_find_by_name(sb, curr,
+		compVal = pmfs_rbtree_compare_find_by_name(sb, curr, hash,
 							name, namelen);
 		parent = *temp;
 
@@ -125,6 +134,7 @@ static int pmfs_insert_dir_node_by_name(struct super_block *sb,
 
 	new->nvmm = dir_entry;
 	new->ino = ino;
+	new->hash = hash;
 	rb_link_node(&new->node, parent, temp);
 	rb_insert_color(&new->node, &sih->dir_tree);
 //	pmfs_print_dir_tree(sb, inode);
@@ -150,13 +160,15 @@ void pmfs_remove_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 {
 	struct pmfs_dir_node *curr;
 	struct rb_node *temp;
+	unsigned int hash;
 	int compVal;
 
+	hash = BKDRHash(name, namelen);
 	temp = sih->dir_tree.rb_node;
 	while (temp) {
 		curr = container_of(temp, struct pmfs_dir_node, node);
-		compVal = pmfs_rbtree_compare_find_by_name(sb, curr, name,
-								namelen);
+		compVal = pmfs_rbtree_compare_find_by_name(sb, curr, hash,
+							name, namelen);
 
 		if (compVal == -1) {
 			temp = temp->rb_left;
@@ -633,9 +645,9 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 
 	PMFS_START_TIMING(readdir_t, readdir_time);
 	pidir = pmfs_get_inode(sb, inode);
-	pmfs_dbg_verbose("%s: ino %llu, size %llu, pos %llu\n",
-				__func__, (u64)inode->i_ino,
-				pidir->i_size, ctx->pos);
+	pmfs_dbgv("%s: ino %llu, size %llu, pos %llu\n",
+			__func__, (u64)inode->i_ino,
+			pidir->i_size, ctx->pos);
 
 	if (!sih) {
 		pmfs_dbg("%s: inode %lu sih does not exist!\n",
@@ -651,10 +663,10 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 	} else if (ctx->pos) {
 		entry = (struct pmfs_dir_logentry *)
 				pmfs_get_block(sb, ctx->pos);
-		pmfs_dbg_verbose("ctx: ino %llu, name %*.s, "
-				"name_len %u, de_len %u\n",
-				(u64)entry->ino, entry->name_len, entry->name,
-				entry->name_len, entry->de_len);
+		pmfs_dbgv("ctx: ino %llu, name %*.s, "
+			"name_len %u, de_len %u\n",
+			(u64)entry->ino, entry->name_len, entry->name,
+			entry->name_len, entry->de_len);
 		curr = pmfs_find_dir_node_by_name(sb, NULL, inode,
 					entry->name, entry->name_len);
 		temp = &curr->node;
@@ -676,19 +688,19 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 		if (curr->ino) {
 			ino = curr->ino;
 			child_sih = pmfs_find_info_header(sb, ino);
-			pmfs_dbg_verbose("ctx: ino %llu, name %*.s, "
-					"name_len %u, de_len %u\n",
-					(u64)ino, entry->name_len, entry->name,
-					entry->name_len, entry->de_len);
+			pmfs_dbgv("ctx: ino %llu, name %*.s, "
+				"name_len %u, de_len %u\n",
+				(u64)ino, entry->name_len, entry->name,
+				entry->name_len, entry->de_len);
 			if (!child_sih) {
-				pmfs_dbg("%s: child inode %lu sih does not exist!\n",
-					__func__, ino);
+				pmfs_dbg("%s: child inode %lu sih "
+					"does not exist!\n", __func__, ino);
 				ctx->pos = READDIR_END;
 				return 0;
 			}
 			if (!dir_emit(ctx, entry->name, entry->name_len,
 				ino, IF2DT(le16_to_cpu(child_sih->i_mode)))) {
-				pmfs_dbg_verbose("Here: pos %llu\n", ctx->pos);
+				pmfs_dbgv("Here: pos %llu\n", ctx->pos);
 				ctx->pos = curr->nvmm;
 				return 0;
 			}

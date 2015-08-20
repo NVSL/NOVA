@@ -237,6 +237,7 @@ struct pmfs_dir_node {
 	struct rb_node node;
 	unsigned long nvmm;
 	u64 ino;
+	unsigned int hash;
 };
 
 enum alloc_type {
@@ -548,6 +549,20 @@ struct free_list *pmfs_get_free_list(struct super_block *sb, int cpu)
 		return &sbi->free_lists[cpu];
 	else
 		return &sbi->shared_free_list;
+}
+
+// BKDR String Hash Function
+static inline unsigned int BKDRHash(const char *str, int length)
+{
+	unsigned int seed = 131; // 31 131 1313 13131 131313 etc..
+	unsigned int hash = 0;
+	int i;
+
+	for (i = 0; i < length; i++) {
+		hash = hash * seed + (*str++);
+	}
+
+	return (hash & 0x7FFFFFFF);
 }
 
 /* uses CPU instructions to atomically write up to 8 bytes */
