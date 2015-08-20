@@ -19,10 +19,6 @@
 #define __PMFS_JOURNAL_H__
 #include <linux/slab.h>
 
-#define CACHELINE_SIZE  (64)
-#define CACHELINE_MASK  (~(CACHELINE_SIZE - 1))
-#define CACHELINE_ALIGN(addr) (((addr)+CACHELINE_SIZE-1) & CACHELINE_MASK)
-
 /* Lite journal */
 struct pmfs_lite_journal_entry {
 	/* The highest byte of addr is type */

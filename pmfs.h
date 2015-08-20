@@ -128,8 +128,6 @@ extern unsigned int pmfs_dbgmask;
 #define	SHARED_CPU			(65536)
 
 extern int measure_timing;
-extern int support_clwb;
-extern int support_pcommit;
 
 extern unsigned int blk_type_to_shift[PMFS_BLOCK_TYPE_MAX];
 extern unsigned int blk_type_to_size[PMFS_BLOCK_TYPE_MAX];
@@ -272,49 +270,6 @@ struct mem_addr {
 	struct page *page;
 };
 
-
-#define _mm_clflush(addr)\
-	asm volatile("clflush %0" : "+m" (*(volatile char *)(addr)))
-#define _mm_clflushopt(addr)\
-	asm volatile(".byte 0x66; clflush %0" : "+m" (*(volatile char *)(addr)))
-#define _mm_clwb(addr)\
-	asm volatile(".byte 0x66; xsaveopt %0" : "+m" (*(volatile char *)(addr)))
-#define _mm_pcommit()\
-	asm volatile(".byte 0x66, 0x0f, 0xae, 0xf8")
-
-/* Provides ordering from all previous clflush too */
-static inline void PERSISTENT_MARK(void)
-{
-	/* TODO: Fix me. */
-}
-
-static inline void PERSISTENT_BARRIER(void)
-{
-	asm volatile ("sfence\n" : : );
-	if (support_pcommit) {
-		_mm_pcommit();
-		asm volatile ("sfence\n" : : );
-	}
-}
-
-static inline void pmfs_flush_buffer(void *buf, uint32_t len, bool fence)
-{
-	uint32_t i;
-	len = len + ((unsigned long)(buf) & (CACHELINE_SIZE - 1));
-	if (support_clwb) {
-		for (i = 0; i < len; i += CACHELINE_SIZE)
-			_mm_clwb(buf + i);
-	} else {
-		for (i = 0; i < len; i += CACHELINE_SIZE)
-			_mm_clflush(buf + i);
-	}
-	/* Do a fence only if asked. We often don't need to do a fence
-	 * immediately after clflush because even if we get context switched
-	 * between clflush and subsequent fence, the context switch operation
-	 * provides implicit fence. */
-	if (fence)
-		PERSISTENT_BARRIER();
-}
 
 static inline void pmfs_update_tail(struct pmfs_inode *pi, u64 new_tail)
 {
@@ -502,20 +457,6 @@ struct pmfs_sb_info {
 	unsigned long per_list_blocks;
 	struct free_list shared_free_list;
 };
-
-#define X86_FEATURE_PCOMMIT	( 9*32+22) /* PCOMMIT instruction */
-#define X86_FEATURE_CLFLUSHOPT	( 9*32+23) /* CLFLUSHOPT instruction */
-#define X86_FEATURE_CLWB	( 9*32+24) /* CLWB instruction */
-
-static inline bool arch_has_pcommit(void)
-{
-	return static_cpu_has(X86_FEATURE_PCOMMIT);
-}
-
-static inline bool arch_has_clwb(void)
-{
-	return static_cpu_has(X86_FEATURE_CLWB);
-}
 
 static inline struct pmfs_sb_info *PMFS_SB(struct super_block *sb)
 {
