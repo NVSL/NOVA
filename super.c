@@ -552,21 +552,30 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	BUILD_BUG_ON(sizeof(struct pmfs_super_block) > PMFS_SB_SIZE);
 	BUILD_BUG_ON(sizeof(struct pmfs_inode) > PMFS_INODE_SIZE);
 	BUILD_BUG_ON(sizeof(struct pmfs_inode_log_page) != PAGE_SIZE);
-	pmfs_info("Inode size %lu\n", sizeof(struct pmfs_inode));
 
 	if (arch_has_pcommit()) {
-		pmfs_info("Arch has PCOMMIT support\n");
+		pmfs_info("arch has PCOMMIT support\n");
 		support_pcommit = 1;
 	} else {
-		pmfs_info("Arch does not have PCOMMIT support\n");
+		pmfs_info("arch does not have PCOMMIT support\n");
 	}
 
 	if (arch_has_clwb()) {
-		pmfs_info("Arch has CLWB support\n");
+		pmfs_info("arch has CLWB support\n");
 		support_clwb = 1;
 	} else {
-		pmfs_info("Arch does not have CLWB support\n");
+		pmfs_info("arch does not have CLWB support\n");
 	}
+
+	pmfs_dbg("Data structure size: inode %lu, log_page %lu, "
+		"file_write_entry %lu, dir_entry(max) %lu, "
+		"setattr_entry %lu, link_change_entry %lu\n",
+		sizeof(struct pmfs_inode),
+		sizeof(struct pmfs_inode_log_page),
+		sizeof(struct pmfs_file_write_entry),
+		sizeof(struct pmfs_dir_logentry),
+		sizeof(struct pmfs_setattr_logentry),
+		sizeof(struct pmfs_link_change_entry));
 
 	sbi = kzalloc(sizeof(struct pmfs_sb_info), GFP_KERNEL);
 	if (!sbi)
@@ -716,13 +725,6 @@ setup_sb:
 
 	clear_opt(sbi->s_mount_opt, MOUNTING);
 	retval = 0;
-	pmfs_dbg("Size: %lu %lu %lu %lu %lu %lu\n",
-		sizeof(struct pmfs_inode),
-		sizeof(struct pmfs_file_write_entry),
-		sizeof(struct pmfs_inode_log_page),
-		sizeof(struct pmfs_dir_logentry),
-		sizeof(struct pmfs_setattr_logentry),
-		sizeof(struct pmfs_link_change_entry));
 
 	PMFS_END_TIMING(mount_t, mount_time);
 	return retval;
