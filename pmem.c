@@ -159,7 +159,6 @@ static void copy_to_pmem(struct pmem_device *pmem, const void *src,
 
 	BUG_ON(n > PAGE_SIZE);
 
-	PERSISTENT_BARRIER();
 	copy = min_t(size_t, n, PAGE_SIZE - offset);
 	dst = pmem_lookup_pg_addr(pmem, sector);
 	__copy_from_user_nocache(dst + offset, src, copy);
@@ -171,7 +170,6 @@ static void copy_to_pmem(struct pmem_device *pmem, const void *src,
 		dst = pmem_lookup_pg_addr(pmem, sector);
 		__copy_from_user_nocache(dst, src, copy);
 	}
-	PERSISTENT_BARRIER();
 }
 
 /*
