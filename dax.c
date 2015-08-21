@@ -305,22 +305,6 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	PMFS_END_TIMING(partial_block_t, partial_time);
 }
 
-static inline size_t pmfs_memcpy_to_nvmm(char *kmem, loff_t offset,
-	const char *buf, size_t bytes)
-{
-	size_t copied = 0;
-
-	if (support_clwb) {
-		copied = bytes - __copy_from_user(kmem + offset, buf, bytes);
-		pmfs_flush_buffer(kmem + offset, copied, 0);
-	} else {
-		copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
-						buf, bytes);
-	}
-
-	return copied;
-}
-
 int pmfs_reassign_file_btree(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
 	u64 begin_tail)
@@ -458,7 +442,8 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 		/* Now copy from user buf */
 //		pmfs_dbg("Write: %p\n", kmem);
 		PMFS_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
-		copied = pmfs_memcpy_to_nvmm((char *)kmem, offset, buf, bytes);
+		copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
+						buf, bytes);
 		PMFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
 		entry_data.pgoff = cpu_to_le32(start_blk);
