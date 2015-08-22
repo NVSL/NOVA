@@ -350,7 +350,9 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 	struct pmfs_inode *root_i;
 	struct pmfs_super_block *super;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	timing_t init_time;
 
+	PMFS_START_TIMING(new_init_t, init_time);
 	pmfs_info("creating an empty pmfs of size %lu\n", size);
 	sbi->virt_addr = pmfs_ioremap(sb, sbi->phys_addr, size);
 	sbi->block_start = (unsigned long)0;
@@ -449,6 +451,7 @@ static struct pmfs_inode *pmfs_init(struct super_block *sb,
 
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
+	PMFS_END_TIMING(new_init_t, init_time);
 	return root_i;
 }
 

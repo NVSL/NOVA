@@ -21,6 +21,7 @@ enum timing_category {
 	init_t,
 	mount_t,
 	ioremap_t,
+	new_init_t,
 	recovery_t,
 
 	/* Namei operations */
