@@ -1190,8 +1190,8 @@ static void __exit exit_pmfs_fs(void)
 	destroy_header_cache();
 }
 
-MODULE_AUTHOR("Intel Corporation <linux-pmfs@intel.com>");
-MODULE_DESCRIPTION("Persistent Memory File System");
+MODULE_AUTHOR("Andiry Xu <jix024@cs.ucsd.edu>");
+MODULE_DESCRIPTION("CoolFS: A Persistent Memory File System");
 MODULE_LICENSE("GPL");
 
 module_init(init_pmfs_fs)
