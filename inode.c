@@ -2245,7 +2245,6 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 
 	curr = pi->log_head;
 
-	/* FIXME: This should be atomic */
 	pi->log_head = possible_head;
 	pmfs_dbg_verbose("%s: %d new head 0x%llx\n", __func__,
 					found_head, possible_head);
@@ -2281,9 +2280,9 @@ u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
 					"available\n");
 			return 0;
 		}
-		/* FIXME: Make this atomic */
-		pi->log_head = new_block;
 		pi->log_tail = new_block;
+		pmfs_flush_buffer(&pi->log_tail, CACHELINE_SIZE, 0);
+		pi->log_head = new_block;
 		sih->log_pages = 1;
 		pi->i_blocks++;
 		pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
@@ -2307,7 +2306,7 @@ u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
 			pmfs_inode_log_garbage_collection(sb, pi, sih, curr_p,
 						new_block, allocated);
 		} else {
-			/* FIXME: Disable GC for dir inode by now */
+			/* TODO: Disable GC for dir inode by now */
 			page_tail = PAGE_TAIL(curr_p);
 			((struct pmfs_inode_page_tail *)
 				pmfs_get_block(sb, page_tail))->next_page
@@ -2350,7 +2349,6 @@ u64 pmfs_get_append_head(struct super_block *sb, struct pmfs_inode *pi,
 
 /*
  * Append a pmfs_file_write_entry to the current pmfs_inode_log_page.
- * FIXME: Must hold inode->i_mutex. Convert it to lock-free.
  * blocknr and start_blk are pgoff.
  * We cannot update pi->log_tail here because a transaction may contain
  * multiple entries.
@@ -2430,9 +2428,9 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 	if (start_blocknr)
 		pmfs_free_log_blocks(sb, start_blocknr,	num_free, btype);
 
-	/* FIXME: make this atomic */
-	pi->log_head = pi->log_tail = 0;
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+	pi->log_head = 0;
+	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
+	pmfs_update_tail(pi, 0);
 	PMFS_END_TIMING(free_inode_log_t, free_time);
 }
 
