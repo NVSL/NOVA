@@ -952,7 +952,7 @@ struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
 	p->root = 0;
 	p->height = 0;
 	p->log_pages = 0;
-	p->dir_tree = RB_ROOT;
+	INIT_RADIX_TREE(&p->dir_tree, GFP_ATOMIC);
 	p->i_mode = i_mode;
 
 	atomic64_inc(&header_alloc);

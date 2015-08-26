@@ -26,6 +26,7 @@
 #include <linux/rcupdate.h>
 #include <linux/types.h>
 #include <linux/rbtree.h>
+#include <linux/radix-tree.h>
 #include <linux/version.h>
 #include <linux/kthread.h>
 #include <linux/uio.h>
@@ -123,9 +124,10 @@ extern unsigned int pmfs_dbgmask;
 #define	PMFS_PRINT_FREE_LISTS		0xBCD00018
 
 
-#define	READDIR_END			0x1
+#define	READDIR_END			(LONG_MAX)
 #define	INVALID_CPU			(-1)
 #define	SHARED_CPU			(65536)
+#define FREE_BATCH			(16)
 
 extern int measure_timing;
 
@@ -334,7 +336,7 @@ struct pmfs_inode_info_header {
 	u64	i_size;
 	u64	ino;
 	u64	pi_addr;
-	struct rb_root	dir_tree;	/* Dir name entry tree root */
+	struct radix_tree_root dir_tree;	/* Dir name entry tree root */
 };
 
 struct pmfs_inode_info {
@@ -956,7 +958,7 @@ void pmfs_print_dir_tree(struct super_block *sb,
 	struct pmfs_inode_info_header *sih, unsigned long ino);
 void pmfs_delete_dir_tree(struct super_block *sb,
 	struct pmfs_inode_info_header *sih);
-struct pmfs_dir_node *pmfs_find_dir_node_by_name(struct super_block *sb,
+struct pmfs_dir_logentry *pmfs_find_dir_node_by_name(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, const char *name,
 	unsigned long name_len);
 int pmfs_rebuild_dir_inode_tree(struct super_block *sb,

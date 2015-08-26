@@ -21,15 +21,13 @@ static ino_t pmfs_inode_by_name(struct inode *dir, struct qstr *entry,
 				 struct pmfs_dir_logentry **res_entry)
 {
 	struct super_block *sb = dir->i_sb;
-	struct pmfs_dir_node *node;
 	struct pmfs_dir_logentry *direntry;
 
-	node = pmfs_find_dir_node_by_name(sb, NULL, dir,
+	direntry = pmfs_find_dir_node_by_name(sb, NULL, dir,
 					entry->name, entry->len);
-	if (node == NULL)
+	if (direntry == NULL)
 		return 0;
 
-	direntry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, node->nvmm);
 	*res_entry = direntry;
 	return direntry->ino;
 }
@@ -478,23 +476,22 @@ static int pmfs_empty_dir(struct inode *inode)
 	struct super_block *sb;
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
-	struct pmfs_dir_node *curr;
 	struct pmfs_dir_logentry *entry;
-	struct rb_node *temp;
+	unsigned long pos = 0;
+	struct pmfs_dir_logentry *entries[4];
+	int nr_entries;
+	int i;
 
 	sb = inode->i_sb;
-	temp = rb_first(&sih->dir_tree);
-	while (temp) {
-		curr = container_of(temp, struct pmfs_dir_node, node);
+	nr_entries = radix_tree_gang_lookup(&sih->dir_tree,
+					(void **)entries, pos, 4);
+	if (nr_entries > 2)
+		return 0;
 
-		if (!curr || curr->nvmm == 0)
-			BUG();
-
-		entry = (struct pmfs_dir_logentry *)
-				pmfs_get_block(sb, curr->nvmm);
+	for (i = 0; i < nr_entries; i++) {
+		entry = entries[i];
 		if (!is_dir_init_entry(sb, entry))
 			return 0;
-		temp = rb_next(temp);
 	}
 
 	return 1;
