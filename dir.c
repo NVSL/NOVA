@@ -20,7 +20,7 @@
 #define DT2IF(dt) (((dt) << 12) & S_IFMT)
 #define IF2DT(sif) (((sif) & S_IFMT) >> 12)
 
-struct pmfs_dir_logentry *pmfs_find_dir_node_by_name(struct super_block *sb,
+struct pmfs_dir_logentry *pmfs_find_dir_logentry(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, const char *name,
 	unsigned long name_len)
 {
@@ -35,16 +35,17 @@ struct pmfs_dir_logentry *pmfs_find_dir_node_by_name(struct super_block *sb,
 	return direntry;
 }
 
-static int pmfs_insert_dir_node_by_name(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
-	const char *name, int namelen, struct pmfs_dir_logentry *direntry)
+static int pmfs_insert_dir_radix_tree(struct super_block *sb,
+	struct pmfs_inode_info_header *sih, const char *name,
+	int namelen, struct pmfs_dir_logentry *direntry)
 {
 	unsigned int hash;
 	int ret;
 
 	hash = BKDRHash(name, namelen);
-	pmfs_dbg_verbose("%s: insert %s @ %p\n", __func__, name, direntry);
+	pmfs_dbgv("%s: insert %s @ %p\n", __func__, name, direntry);
 
+	/* FIXME: hash collision ignored here */
 	ret = radix_tree_insert(&sih->dir_tree, hash, direntry);
 	if (ret)
 		pmfs_dbg("%s ERROR %d: %s\n", __func__, ret, name);
@@ -52,22 +53,7 @@ static int pmfs_insert_dir_node_by_name(struct super_block *sb,
 	return ret;
 }
 
-static inline int pmfs_insert_dir_node(struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode, u64 ino,
-	struct dentry *dentry, u64 curr_p)
-{
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
-	const char *name = dentry->d_name.name;
-	int namelen = dentry->d_name.len;
-	struct pmfs_dir_logentry *direntry;
-
-	direntry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, curr_p);
-	return pmfs_insert_dir_node_by_name(sb, pi, sih, name,
-						namelen, direntry);
-}
-
-void pmfs_remove_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
+void pmfs_remove_dir_radix_tree(struct super_block *sb,
 	struct pmfs_inode_info_header *sih, const char *name, int namelen)
 {
 	unsigned int hash;
@@ -75,43 +61,6 @@ void pmfs_remove_dir_node_by_name(struct super_block *sb, struct pmfs_inode *pi,
 	hash = BKDRHash(name, namelen);
 	radix_tree_delete(&sih->dir_tree, hash);
 }
-
-static inline void pmfs_remove_dir_node(struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode, struct dentry *dentry)
-{
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
-	const char *name = dentry->d_name.name;
-	int namelen = dentry->d_name.len;
-
-	return pmfs_remove_dir_node_by_name(sb, pi, sih, name, namelen);
-}
-
-#if 0
-void pmfs_print_dir_tree(struct super_block *sb,
-	struct pmfs_inode_info_header *sih, unsigned long ino)
-{
-	struct pmfs_dir_node *curr;
-	struct pmfs_dir_logentry *entry;
-	struct rb_node *temp;
-
-	pmfs_dbg("%s: dir ino %lu\n", __func__, ino);
-	temp = rb_first(&sih->dir_tree);
-	while (temp) {
-		curr = container_of(temp, struct pmfs_dir_node, node);
-
-		if (!curr || curr->nvmm == 0)
-			BUG();
-
-		entry = (struct pmfs_dir_logentry *)
-				pmfs_get_block(sb, curr->nvmm);
-		pmfs_dbg("%.*s\n", entry->name_len, entry->name);
-		temp = rb_next(temp);
-	}
-
-	return;
-}
-#endif
 
 void pmfs_delete_dir_tree(struct super_block *sb,
 	struct pmfs_inode_info_header *sih)
@@ -133,6 +82,7 @@ void pmfs_delete_dir_tree(struct super_block *sb,
 			void *ret;
 
 			direntry = entries[i];
+			BUG_ON(!direntry);
 			pos = BKDRHash(direntry->name, direntry->name_len);
 			ret = radix_tree_delete(&sih->dir_tree, pos);
 			BUG_ON(!ret || ret != direntry);
@@ -283,10 +233,14 @@ int pmfs_add_entry(struct dentry *dentry, u64 *pi_addr, u64 ino, int inc_link,
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
+	struct pmfs_inode_info *si = PMFS_I(dir);
+	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_inode *pidir;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
+	struct pmfs_dir_logentry *direntry;
 	unsigned short loglen;
+	int ret;
 	u64 curr_entry, curr_tail;
 	timing_t add_entry_time;
 
@@ -310,10 +264,12 @@ int pmfs_add_entry(struct dentry *dentry, u64 *pi_addr, u64 ino, int inc_link,
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, pi_addr, ino,
 				dentry,	loglen, tail, inc_link, new_inode,
 				&curr_tail);
-	pmfs_insert_dir_node(sb, pidir, dir, ino, dentry, curr_entry);
+
+	direntry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, curr_entry);
+	ret = pmfs_insert_dir_radix_tree(sb, sih, name, namelen, direntry);
 	*new_tail = curr_tail;
 	PMFS_END_TIMING(add_entry_t, add_entry_time);
-	return 0;
+	return ret;
 }
 
 /* removes a directory entry pointing to the inode. assumes the inode has
@@ -324,6 +280,8 @@ int pmfs_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
+	struct pmfs_inode_info *si = PMFS_I(dir);
+	struct pmfs_inode_info_header *sih = si->header;
 	struct pmfs_inode *pidir;
 	struct qstr *entry = &dentry->d_name;
 	unsigned short loglen;
@@ -342,34 +300,30 @@ int pmfs_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
 	loglen = PMFS_DIR_LOG_REC_LEN(entry->len);
 	curr_entry = pmfs_append_dir_inode_entry(sb, pidir, dir, NULL, 0,
 				dentry, loglen, tail, dec_link, 0, &curr_tail);
-	pmfs_remove_dir_node(sb, pidir, dir, dentry);
+	pmfs_remove_dir_radix_tree(sb, sih, entry->name, entry->len);
 	*new_tail = curr_tail;
 
 	PMFS_END_TIMING(remove_entry_t, remove_entry_time);
 	return 0;
 }
 
-inline int pmfs_replay_add_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct pmfs_inode_info_header *sih, struct pmfs_dir_logentry *entry,
-	u64 curr_p)
+inline int pmfs_replay_add_entry(struct super_block *sb,
+	struct pmfs_inode_info_header *sih, struct pmfs_dir_logentry *entry)
 {
-	struct pmfs_dir_logentry *direntry;
-
 	if (!entry->name_len)
 		return -EINVAL;
 
-	direntry = (struct pmfs_dir_logentry *)pmfs_get_block(sb, curr_p);
 	pmfs_dbg_verbose("%s: add %s\n", __func__, entry->name);
-	return pmfs_insert_dir_node_by_name(sb, pi, sih,
-			entry->name, entry->name_len, direntry);
+	return pmfs_insert_dir_radix_tree(sb, sih,
+			entry->name, entry->name_len, entry);
 }
 
 inline int pmfs_replay_remove_entry(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
+	struct pmfs_inode_info_header *sih,
 	struct pmfs_dir_logentry *entry)
 {
 	pmfs_dbg_verbose("%s: remove %s\n", __func__, entry->name);
-	pmfs_remove_dir_node_by_name(sb, pi, sih, entry->name,
+	pmfs_remove_dir_radix_tree(sb, sih, entry->name,
 					entry->name_len);
 	return 0;
 }
@@ -468,11 +422,10 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb,
 
 		if (entry->ino > 0) {
 			/* A valid entry to add */
-			ret = pmfs_replay_add_entry(sb, pi, sih,
-							entry, curr_p);
+			ret = pmfs_replay_add_entry(sb, sih, entry);
 		} else {
 			/* Delete the entry */
-			ret = pmfs_replay_remove_entry(sb, pi, sih, entry);
+			ret = pmfs_replay_remove_entry(sb, sih, entry);
 		}
 
 		if (ret) {

@@ -958,7 +958,7 @@ void pmfs_print_dir_tree(struct super_block *sb,
 	struct pmfs_inode_info_header *sih, unsigned long ino);
 void pmfs_delete_dir_tree(struct super_block *sb,
 	struct pmfs_inode_info_header *sih);
-struct pmfs_dir_logentry *pmfs_find_dir_node_by_name(struct super_block *sb,
+struct pmfs_dir_logentry *pmfs_find_dir_logentry(struct super_block *sb,
 	struct pmfs_inode *pi, struct inode *inode, const char *name,
 	unsigned long name_len);
 int pmfs_rebuild_dir_inode_tree(struct super_block *sb,

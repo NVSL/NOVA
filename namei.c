@@ -23,7 +23,7 @@ static ino_t pmfs_inode_by_name(struct inode *dir, struct qstr *entry,
 	struct super_block *sb = dir->i_sb;
 	struct pmfs_dir_logentry *direntry;
 
-	direntry = pmfs_find_dir_node_by_name(sb, NULL, dir,
+	direntry = pmfs_find_dir_logentry(sb, NULL, dir,
 					entry->name, entry->len);
 	if (direntry == NULL)
 		return 0;
