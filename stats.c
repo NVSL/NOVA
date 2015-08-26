@@ -146,7 +146,7 @@ void pmfs_print_timing_stats(struct super_block *sb)
 
 	printk("======== PMFS kernel timing stats ========\n");
 	for (i = 0; i < TIMING_NUM; i++) {
-		if (measure_timing) {
+		if (measure_timing || Timingstats[i]) {
 			printk("%s: count %llu, timing %llu, average %llu\n",
 				Timingstring[i],
 				Countstats[i],

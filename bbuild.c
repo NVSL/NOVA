@@ -1661,9 +1661,13 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	struct scan_bitmap *bm = NULL;
 	bool value = false;
 	int ret;
-	timing_t recovery_time;
+	timing_t start, end;
 
-	PMFS_START_TIMING(recovery_t, recovery_time);
+	/* Always check recovery time */
+	if (measure_timing == 0)
+		getrawmonotonic(&start);
+
+	PMFS_START_TIMING(recovery_t, start);
 	sbi->block_start = (unsigned long)0;
 	sbi->block_end = ((unsigned long)(initsize) >> PAGE_SHIFT);
 
@@ -1699,6 +1703,13 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 		free_bm(bm);
 	}
 
-	PMFS_END_TIMING(recovery_t, recovery_time);
+	PMFS_END_TIMING(recovery_t, start);
+	if (measure_timing == 0) {
+		getrawmonotonic(&end);
+		Timingstats[recovery_t] +=
+			(end.tv_sec - start.tv_sec) * 1000000000 +
+			(end.tv_nsec - start.tv_nsec);
+	}
+
 	return ret;
 }
