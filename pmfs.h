@@ -239,7 +239,6 @@ struct pmfs_link_change_entry {
 struct pmfs_dir_node {
 	struct rb_node node;
 	unsigned long nvmm;
-	u64 ino;
 	unsigned int hash;
 };
 

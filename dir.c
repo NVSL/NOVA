@@ -129,7 +129,6 @@ static int pmfs_insert_dir_node_by_name(struct super_block *sb,
 		return -ENOMEM;
 
 	new->nvmm = dir_entry;
-	new->ino = ino;
 	new->hash = hash;
 	rb_link_node(&new->node, parent, temp);
 	rb_insert_color(&new->node, &sih->dir_tree);
@@ -677,12 +676,8 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 		entry = (struct pmfs_dir_logentry *)
 				pmfs_get_block(sb, curr->nvmm);
 
-		if (__le64_to_cpu(entry->ino) != curr->ino)
-			pmfs_dbg("%s: ino does not match: %llu, %llu\n",
-				__func__, entry->ino, curr->ino);
-
-		if (curr->ino) {
-			ino = curr->ino;
+		ino = __le64_to_cpu(entry->ino);
+		if (ino) {
 			child_sih = pmfs_find_info_header(sb, ino);
 			pmfs_dbgv("ctx: ino %llu, name %*.s, "
 				"name_len %u, de_len %u\n",
