@@ -44,7 +44,6 @@ MODULE_PARM_DESC(measure_timing, "Timing measurement");
 static struct super_operations pmfs_sops;
 static const struct export_operations pmfs_export_ops;
 static struct kmem_cache *pmfs_inode_cachep;
-static struct kmem_cache *pmfs_dirnode_cachep;
 static struct kmem_cache *pmfs_range_node_cachep;
 
 /* FIXME: should the following variable be one per PMFS instance? */
@@ -899,12 +898,6 @@ inline void pmfs_free_inode_node(struct super_block *sb,
 	pmfs_free_range_node(node);
 }
 
-void pmfs_free_dirnode(struct super_block *sb, struct pmfs_dir_node *node)
-{
-	kmem_cache_free(pmfs_dirnode_cachep, node);
-	atomic64_inc(&dirnode_free);
-}
-
 static inline
 struct pmfs_range_node *pmfs_alloc_range_node(struct super_block *sb)
 {
@@ -922,15 +915,6 @@ inline struct pmfs_range_node *pmfs_alloc_blocknode(struct super_block *sb)
 inline struct pmfs_range_node *pmfs_alloc_inode_node(struct super_block *sb)
 {
 	return pmfs_alloc_range_node(sb);
-}
-
-struct pmfs_dir_node *pmfs_alloc_dirnode(struct super_block *sb)
-{
-	struct pmfs_dir_node *p;
-	p = (struct pmfs_dir_node *)
-		kmem_cache_alloc(pmfs_dirnode_cachep, GFP_NOFS);
-	atomic64_inc(&dirnode_alloc);
-	return p;
 }
 
 static struct inode *pmfs_alloc_inode(struct super_block *sb)
@@ -998,17 +982,6 @@ static int __init init_inodecache(void)
 	return 0;
 }
 
-static int __init init_dirnode_cache(void)
-{
-	pmfs_dirnode_cachep = kmem_cache_create("pmfs_dirnode_cache",
-					       sizeof(struct pmfs_dir_node),
-					       0, (SLAB_RECLAIM_ACCOUNT |
-						   SLAB_MEM_SPREAD), NULL);
-	if (pmfs_dirnode_cachep == NULL)
-		return -ENOMEM;
-	return 0;
-}
-
 static int __init init_mempair_cache(void)
 {
 	pmfs_mempair_cachep = kmem_cache_create("pmfs_mempair_cache",
@@ -1039,11 +1012,6 @@ static void destroy_inodecache(void)
 	 */
 	rcu_barrier();
 	kmem_cache_destroy(pmfs_inode_cachep);
-}
-
-static void destroy_dirnode_cache(void)
-{
-	kmem_cache_destroy(pmfs_dirnode_cachep);
 }
 
 static void destroy_mempair_cache(void)
@@ -1151,31 +1119,25 @@ static int __init init_pmfs_fs(void)
 	if (rc)
 		goto out1;
 
-	rc = init_dirnode_cache();
+	rc = init_mempair_cache();
 	if (rc)
 		goto out2;
 
-	rc = init_mempair_cache();
+	rc = init_header_cache();
 	if (rc)
 		goto out3;
 
-	rc = init_header_cache();
-	if (rc)
-		goto out4;
-
 	rc = register_filesystem(&pmfs_fs_type);
 	if (rc)
-		goto out5;
+		goto out4;
 
 	PMFS_END_TIMING(init_t, init_time);
 	return 0;
 
-out5:
-	destroy_header_cache();
 out4:
-	destroy_mempair_cache();
+	destroy_header_cache();
 out3:
-	destroy_dirnode_cache();
+	destroy_mempair_cache();
 out2:
 	destroy_inodecache();
 out1:
@@ -1187,7 +1149,6 @@ static void __exit exit_pmfs_fs(void)
 {
 	unregister_filesystem(&pmfs_fs_type);
 	destroy_inodecache();
-	destroy_dirnode_cache();
 	destroy_mempair_cache();
 	destroy_rangenode_cache();
 	destroy_header_cache();

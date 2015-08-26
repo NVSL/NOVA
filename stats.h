@@ -108,8 +108,6 @@ extern atomic64_t cache_alloc;
 extern atomic64_t cache_free;
 extern atomic64_t mempair_alloc;
 extern atomic64_t mempair_free;
-extern atomic64_t dirnode_alloc;
-extern atomic64_t dirnode_free;
 extern atomic64_t header_alloc;
 extern atomic64_t header_free;
 

@@ -238,12 +238,6 @@ struct pmfs_link_change_entry {
 	__le64	paddings[2];
 } __attribute((__packed__));
 
-struct pmfs_dir_node {
-	struct rb_node node;
-	unsigned long nvmm;
-	unsigned int hash;
-};
-
 enum alloc_type {
 	KMALLOC = 1,
 	VMALLOC,
@@ -1043,8 +1037,6 @@ extern struct super_block *pmfs_read_super(struct super_block *sb, void *data,
 	int silent);
 extern int pmfs_statfs(struct dentry *d, struct kstatfs *buf);
 extern int pmfs_remount(struct super_block *sb, int *flags, char *data);
-struct pmfs_dir_node *pmfs_alloc_dirnode(struct super_block *sb);
-void pmfs_free_dirnode(struct super_block *sb, struct pmfs_dir_node *node);
 int pmfs_check_integrity(struct super_block *sb,
 	struct pmfs_super_block *super);
 void *pmfs_ioremap(struct super_block *sb, phys_addr_t phys_addr,
