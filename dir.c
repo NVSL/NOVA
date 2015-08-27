@@ -70,17 +70,15 @@ void pmfs_delete_dir_tree(struct super_block *sb,
 	struct pmfs_dir_logentry *entries[FREE_BATCH];
 	timing_t delete_time;
 	int nr_entries;
+	int i;
+	void *ret;
 
 	PMFS_START_TIMING(delete_dir_tree_t, delete_time);
 
 	do {
-		int i;
-
 		nr_entries = radix_tree_gang_lookup(&sih->dir_tree,
 					(void **)entries, pos, FREE_BATCH);
 		for (i = 0; i < nr_entries; i++) {
-			void *ret;
-
 			direntry = entries[i];
 			BUG_ON(!direntry);
 			pos = BKDRHash(direntry->name, direntry->name_len);
@@ -503,6 +501,7 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 	int nr_entries;
 	long pos = 0;
 	ino_t ino;
+	int i;
 	timing_t readdir_time;
 
 	PMFS_START_TIMING(readdir_t, readdir_time);
@@ -523,8 +522,6 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 		goto out;
 
 	do {
-		int i;
-
 		nr_entries = radix_tree_gang_lookup(&sih->dir_tree,
 					(void **)entries, pos, FREE_BATCH);
 		for (i = 0; i < nr_entries; i++) {

@@ -594,6 +594,7 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 	atomic_set(&sbi->next_generation, random);
 
 	/* Init with default values */
+	INIT_RADIX_TREE(&sbi->header_tree, GFP_ATOMIC);
 	sbi->shared_free_list.block_free_tree = RB_ROOT;
 	spin_lock_init(&sbi->shared_free_list.s_lock);
 	sbi->mode = (S_IRUGO | S_IXUGO | S_IWUSR);

@@ -966,36 +966,6 @@ static void pmfs_free_header(struct super_block *sb,
 	atomic64_inc(&header_free);
 }
 
-static int pmfs_increase_header_tree_height(struct super_block *sb,
-	u32 new_height)
-{
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	u32 height = sbi->height;
-	__le64 *root, prev_root = sbi->root;
-	unsigned long page_addr;
-	int errval = 0;
-
-	pmfs_dbg_verbose("increasing tree height %x:%x, prev root 0x%llx\n",
-						height, new_height, prev_root);
-	while (height < new_height) {
-		/* allocate the meta block */
-		errval = pmfs_new_meta_block(sb, &page_addr, 1, 1);
-		if (errval) {
-			pmfs_err(sb, "failed to increase btree height\n");
-			break;
-		}
-		root = (__le64 *)DRAM_ADDR(page_addr);
-		root[0] = prev_root;
-		prev_root = page_addr;
-		height++;
-	}
-	sbi->root = prev_root;
-	sbi->height = height;
-	pmfs_dbg_verbose("increased tree height, new root 0x%llx\n",
-							prev_root);
-	return errval;
-}
-
 static int pmfs_inode_alive(struct super_block *sb,
 	struct pmfs_inode_info_header *sih, struct pmfs_inode **return_pi)
 {
@@ -1012,238 +982,88 @@ static int pmfs_inode_alive(struct super_block *sb,
 	return 0;
 }
 
-static int recursive_truncate_header_tree(struct super_block *sb,
-	struct pmfs_inode *inode_table,
-	struct pmfs_inode_info_header *inode_table_sih,
-	__le64 block, u32 height, unsigned long first_blocknr)
-{
-	struct pmfs_inode_info_header *sih;
-	struct pmfs_inode *pi = NULL;
-	unsigned long first_blk, page_addr;
-	unsigned int node_bits, first_index, last_index, i;
-	__le64 *node;
-	unsigned int freed = 0;
-
-	node = (__le64 *)block;
-
-	node_bits = (height - 1) * META_BLK_SHIFT;
-
-	first_index = first_blocknr >> node_bits;
-	last_index = (1 << META_BLK_SHIFT) - 1;
-
-	if (height == 1) {
-		for (i = first_index; i <= last_index; i++) {
-			if (unlikely(!node[i]))
-				continue;
-			sih = (struct pmfs_inode_info_header *)node[i];
-			if (pmfs_inode_alive(sb, sih, &pi))
-				pmfs_append_alive_inode_entry(sb, inode_table,
-						pi, sih, inode_table_sih);
-			pmfs_free_dram_resource(sb, sih);
-			pmfs_free_header(sb, sih);
-			node[i] = 0;
-			freed++;
-		}
-	} else {
-		for (i = first_index; i <= last_index; i++) {
-			if (unlikely(!node[i]))
-				continue;
-			first_blk = (i == first_index) ? (first_blocknr &
-				((1 << node_bits) - 1)) : 0;
-
-			freed += recursive_truncate_header_tree(sb,
-					inode_table, inode_table_sih,
-					DRAM_ADDR(node[i]), height - 1,
-					first_blk);
-			/* Freeing the meta-data block */
-			page_addr = node[i];
-			pmfs_free_meta_block(sb, page_addr);
-		}
-	}
-	return freed;
-}
-
 unsigned int pmfs_free_header_tree(struct super_block *sb)
 {
 	struct pmfs_inode *inode_table = pmfs_get_inode_table(sb);
-	struct pmfs_inode_info_header *sih, *inode_table_sih;
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct pmfs_inode_info_header *sih, *inode_table_sih;
+	struct pmfs_inode_info_header *sih_array[FREE_BATCH];
+	unsigned long ino = 0;
+	int nr_sih;
 	struct pmfs_inode *pi = NULL;
-	unsigned long root = sbi->root;
-	unsigned long first_blocknr;
-	unsigned int freed;
-
-	if (!root)
-		return 0;
+	unsigned int freed = 0;
+	int i;
+	void *ret;
 
 	inode_table_sih = pmfs_alloc_header(sb, 0);
 
-	if (sbi->height == 0) {
-		sih = (struct pmfs_inode_info_header *)root;
-		if (pmfs_inode_alive(sb, sih, &pi))
-			pmfs_append_alive_inode_entry(sb, inode_table, pi,
-					sih, inode_table_sih);
-		pmfs_free_dram_resource(sb, sih);
-		pmfs_free_header(sb, (void *)root);
-		freed = 1;
-	} else {
-		first_blocknr = 0;
-
-		freed = recursive_truncate_header_tree(sb, inode_table,
-				inode_table_sih, DRAM_ADDR(root), sbi->height,
-				first_blocknr);
-		first_blocknr = root;
-		pmfs_free_meta_block(sb, first_blocknr);
-	}
+	do {
+		nr_sih = radix_tree_gang_lookup(&sbi->header_tree,
+				(void **)sih_array, ino, FREE_BATCH);
+		for (i = 0; i < nr_sih; i++) {
+			sih = sih_array[i];
+			BUG_ON(!sih);
+			ino = sih->ino;
+			ret = radix_tree_delete(&sbi->header_tree, ino);
+			BUG_ON(!ret || ret != sih);
+			if (pmfs_inode_alive(sb, sih, &pi))
+				pmfs_append_alive_inode_entry(sb,
+						inode_table, pi, sih,
+						inode_table_sih);
+			pmfs_free_dram_resource(sb, sih);
+			pmfs_free_header(sb, sih);
+			freed++;
+		}
+		ino++;
+	} while (nr_sih == FREE_BATCH);
 
 	pmfs_free_header(sb, inode_table_sih);
 	pmfs_flush_buffer(&inode_table->log_head, CACHELINE_SIZE, 1);
-	sbi->root = sbi->height = 0;
 	pmfs_dbg("%s: freed %u, alive inode %lu\n",
 				__func__, freed, alive_inode);
 	return freed;
-}
-
-static int recursive_assign_info_header(struct super_block *sb,
-	unsigned long blocknr, unsigned long ino,
-	struct pmfs_inode_info_header **sih, u16 i_mode,
-	__le64 block, u32 height)
-{
-	int errval;
-	unsigned int meta_bits = META_BLK_SHIFT, node_bits;
-	__le64 *node;
-	unsigned long index;
-	unsigned long new_page;
-
-	node = (__le64 *)block;
-	node_bits = (height - 1) * meta_bits;
-	index = blocknr >> node_bits;
-
-	pmfs_dbg_verbose("%s: node 0x%llx, height %u, index %lu\n",
-				__func__, block, height, index);
-
-	if (height == 1) {
-		if (node[index]) {
-			struct pmfs_inode_info_header *old_sih;
-			old_sih = (struct pmfs_inode_info_header *)node[index];
-			if (old_sih->root || old_sih->height)
-				pmfs_dbg("%s: node %lu %lu exists! 0x%llx, "
-					"0x%lx\n", __func__, index, ino,
-					node[index], (unsigned long)old_sih);
-			old_sih->i_mode = i_mode;
-			*sih = old_sih;
-		} else {
-			struct pmfs_inode_info_header *new_sih;
-			new_sih = pmfs_alloc_header(sb, i_mode);
-			node[index] = (unsigned long)new_sih;
-			*sih = new_sih;
-		}
-	} else {
-		if (node[index] == 0) {
-			/* allocate the meta block */
-			errval = pmfs_new_meta_block(sb, &new_page, 1, 1);
-			if (errval) {
-				pmfs_dbg("alloc meta blk failed\n");
-				goto fail;
-			}
-			node[index] = new_page;
-		}
-
-		blocknr = blocknr & ((1 << node_bits) - 1);
-		errval = recursive_assign_info_header(sb, blocknr, ino, sih,
-				i_mode,	DRAM_ADDR(node[index]), height - 1);
-		if (errval < 0)
-			goto fail;
-	}
-	errval = 0;
-fail:
-	return errval;
 }
 
 int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 	struct pmfs_inode_info_header **sih, u16 i_mode, int need_lock)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	unsigned long max_blocks;
-	unsigned int height;
-	unsigned int blk_shift, meta_bits = META_BLK_SHIFT;
-	unsigned long total_blocks;
-	int errval;
+	struct pmfs_inode_info_header *old_sih, *new_sih;
+	int ret = 0;
+
+	pmfs_dbgv("assign_header ino %lu\n", ino);
 
 	if (need_lock)
 		mutex_lock(&sbi->inode_table_mutex);
 
-	pmfs_dbg_verbose("assign_header root 0x%lx height %d ino %lu, %p\n",
-			sbi->root, sbi->height, ino, sih);
-
-	height = sbi->height;
-
-	blk_shift = height * meta_bits;
-
-	max_blocks = 0x1UL << blk_shift;
-
-	if (ino > max_blocks - 1) {
-		/* B-tree height increases as a result of this allocation */
-		total_blocks = ino >> blk_shift;
-		while (total_blocks > 0) {
-			total_blocks = total_blocks >> meta_bits;
-			height++;
-		}
-		if (height > 3) {
-			pmfs_dbg("[%s:%d] Max file size. Cant grow the file\n",
-				__func__, __LINE__);
-			errval = -ENOSPC;
-			goto out;
-		}
-	}
-
-	if (!sbi->root) {
-		if (height == 0) {
-			/* Bogus header to build up the tree */
-			pmfs_dbg_verbose("Set root @%p\n", sih);
-			sbi->root = (unsigned long)sih;
-			sbi->height = height;
-		} else {
-			errval = pmfs_increase_header_tree_height(sb, height);
-			if (errval) {
-				pmfs_dbg("[%s:%d] failed: inc btree"
-					" height\n", __func__, __LINE__);
-				goto out;
-			}
-			errval = recursive_assign_info_header(sb, ino, ino,
-					sih, i_mode, DRAM_ADDR(sbi->root),
-					sbi->height);
-			if (errval < 0)
-				goto out;
-		}
+	old_sih = radix_tree_lookup(&sbi->header_tree, ino);
+	if (old_sih) {
+		if (old_sih->root || old_sih->height)
+			pmfs_dbg("%s: node %lu exists! 0x%lx\n",
+				__func__, ino, (unsigned long)old_sih);
+		old_sih->i_mode = i_mode;
+		*sih = old_sih;
 	} else {
-		if (height == 0) {
-			pmfs_dbg("root @0x%lx but height is 0\n", sbi->root);
-			errval = 0;
+		new_sih = pmfs_alloc_header(sb, i_mode);
+		if (!new_sih) {
+			ret = -ENOMEM;
 			goto out;
 		}
-
-		if (height > sbi->height) {
-			errval = pmfs_increase_header_tree_height(sb, height);
-			if (errval) {
-				pmfs_dbg_verbose("Err: inc height %x:%x tot %lx"
-					"\n", sbi->height, height, total_blocks);
-				goto out;
-			}
-		}
-		errval = recursive_assign_info_header(sb, ino, ino, sih,
-					i_mode,	DRAM_ADDR(sbi->root), height);
-		if (errval < 0)
+		ret = radix_tree_insert(&sbi->header_tree, ino, new_sih);
+		if (ret) {
+			pmfs_dbg("%s: ERROR %d\n", __func__, ret);
 			goto out;
+		}
+		*sih = new_sih;
 	}
+
 	if (sih && *sih)
 		(*sih)->ino = ino;
-	errval = 0;
 out:
 	if (need_lock)
 		mutex_unlock(&sbi->inode_table_mutex);
 
-	return errval;
+	return ret;
 }
 
 int pmfs_recover_inode(struct super_block *sb, u64 pi_addr,
@@ -1648,11 +1468,6 @@ int pmfs_multithread_recovery(struct super_block *sb)
 
 /*********************** Recovery entrance *************************/
 
-static inline void pmfs_assign_bogus_header_info(struct super_block *sb)
-{
-	pmfs_assign_info_header(sb, 0, NULL, 0, 0);
-}
-
 int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 {
 	struct pmfs_sb_info *sbi = PMFS_SB(sb);
@@ -1685,9 +1500,7 @@ int pmfs_inode_log_recovery(struct super_block *sb, int multithread)
 	}
 
 	pmfs_dbgv("%s\n", __func__);
-	sbi->btype = PMFS_BLOCK_TYPE_4K;
 
-	pmfs_assign_bogus_header_info(sb);
 	if (bm) {
 		sbi->s_inodes_used_count = 0;
 		ret = pmfs_dfs_recovery(sb, bm);
