@@ -110,6 +110,10 @@ void pmfs_print_alloc_stats(struct super_block *sb)
 	printk("Freed %lu data pages\n", free_data_pages);
 	printk("Allocated %lu log pages\n", alloc_log_pages);
 	printk("Freed %lu log pages\n", free_log_pages);
+	printk("Allocated %ld mem pairs\n",
+			atomic64_read(&mempair_alloc));
+	printk("Allocated %ld info headers\n",
+			atomic64_read(&header_alloc));
 }
 
 void pmfs_print_IO_stats(struct super_block *sb)
