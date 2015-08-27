@@ -483,7 +483,7 @@ static int pmfs_empty_dir(struct inode *inode)
 	int i;
 
 	sb = inode->i_sb;
-	nr_entries = radix_tree_gang_lookup(&sih->dir_tree,
+	nr_entries = radix_tree_gang_lookup(&sih->tree,
 					(void **)entries, pos, 4);
 	if (nr_entries > 2)
 		return 0;

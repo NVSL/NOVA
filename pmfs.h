@@ -330,7 +330,7 @@ struct pmfs_inode_info_header {
 	u64	i_size;
 	u64	ino;
 	u64	pi_addr;
-	struct radix_tree_root dir_tree;	/* Dir name entry tree root */
+	struct radix_tree_root tree;	/* Dir name entry tree root */
 };
 
 struct pmfs_inode_info {

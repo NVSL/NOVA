@@ -30,7 +30,7 @@ struct pmfs_dir_logentry *pmfs_find_dir_logentry(struct super_block *sb,
 	unsigned int hash;
 
 	hash = BKDRHash(name, name_len);
-	direntry = radix_tree_lookup(&sih->dir_tree, hash);
+	direntry = radix_tree_lookup(&sih->tree, hash);
 
 	return direntry;
 }
@@ -46,7 +46,7 @@ static int pmfs_insert_dir_radix_tree(struct super_block *sb,
 	pmfs_dbgv("%s: insert %s @ %p\n", __func__, name, direntry);
 
 	/* FIXME: hash collision ignored here */
-	ret = radix_tree_insert(&sih->dir_tree, hash, direntry);
+	ret = radix_tree_insert(&sih->tree, hash, direntry);
 	if (ret)
 		pmfs_dbg("%s ERROR %d: %s\n", __func__, ret, name);
 
@@ -59,7 +59,7 @@ void pmfs_remove_dir_radix_tree(struct super_block *sb,
 	unsigned int hash;
 
 	hash = BKDRHash(name, namelen);
-	radix_tree_delete(&sih->dir_tree, hash);
+	radix_tree_delete(&sih->tree, hash);
 }
 
 void pmfs_delete_dir_tree(struct super_block *sb,
@@ -76,13 +76,13 @@ void pmfs_delete_dir_tree(struct super_block *sb,
 	PMFS_START_TIMING(delete_dir_tree_t, delete_time);
 
 	do {
-		nr_entries = radix_tree_gang_lookup(&sih->dir_tree,
+		nr_entries = radix_tree_gang_lookup(&sih->tree,
 					(void **)entries, pos, FREE_BATCH);
 		for (i = 0; i < nr_entries; i++) {
 			direntry = entries[i];
 			BUG_ON(!direntry);
 			pos = BKDRHash(direntry->name, direntry->name_len);
-			ret = radix_tree_delete(&sih->dir_tree, pos);
+			ret = radix_tree_delete(&sih->tree, pos);
 			BUG_ON(!ret || ret != direntry);
 		}
 		pos++;
@@ -356,7 +356,7 @@ int pmfs_rebuild_dir_inode_tree(struct super_block *sb,
 
 	pmfs_dbg_verbose("Rebuild dir %llu tree\n", ino);
 
-	INIT_RADIX_TREE(&sih->dir_tree, GFP_ATOMIC);
+	INIT_RADIX_TREE(&sih->tree, GFP_ATOMIC);
 	sih->pi_addr = pi_addr;
 
 	curr_p = pi->log_head;
@@ -522,7 +522,7 @@ static int pmfs_readdir(struct file *file, struct dir_context *ctx)
 		goto out;
 
 	do {
-		nr_entries = radix_tree_gang_lookup(&sih->dir_tree,
+		nr_entries = radix_tree_gang_lookup(&sih->tree,
 					(void **)entries, pos, FREE_BATCH);
 		for (i = 0; i < nr_entries; i++) {
 			entry = entries[i];
