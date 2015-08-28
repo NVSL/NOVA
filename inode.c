@@ -1190,7 +1190,7 @@ int pmfs_assign_nvmm_entry(struct super_block *sb,
 		if (old_pair) {
 			if (old_pair->pgoff != curr_pgoff) {
 				pmfs_dbg("%s: pgoff does not match! "
-					"%lu, %lu\n", __func__, 
+					"%lu, %lu\n", __func__,
 					old_pair->pgoff, curr_pgoff);
 				return -EINVAL;
 			}
@@ -1227,6 +1227,65 @@ int pmfs_assign_nvmm_entry(struct super_block *sb,
 			nvmm = get_nvmm(sb, pair, curr_pgoff);
 			set_bm(nvmm, bm, BM_4K);
 			pi->i_blocks++;
+		}
+	}
+
+out:
+	PMFS_END_TIMING(assign_t, assign_time);
+
+	return ret;
+}
+
+int pmfs_assign_cache_range(struct super_block *sb,
+	struct pmfs_inode *pi,
+	struct pmfs_inode_info_header *sih,
+	struct pmfs_file_write_entry *entry)
+{
+	struct mem_addr *old_pair, *pair;
+	unsigned int start_pgoff = entry->pgoff;
+	unsigned int num = entry->num_pages;
+	unsigned long curr_pgoff;
+	int i;
+	int ret;
+	timing_t assign_time;
+
+	PMFS_START_TIMING(assign_t, assign_time);
+	for (i = 0; i < num; i++) {
+		curr_pgoff = start_pgoff + i;
+
+		old_pair = radix_tree_lookup(&sih->tree, curr_pgoff);
+		if (old_pair) {
+			if (old_pair->pgoff != curr_pgoff) {
+				pmfs_dbg("%s: pgoff does not match! "
+					"%lu, %lu\n", __func__,
+					old_pair->pgoff, curr_pgoff);
+				return -EINVAL;
+			}
+			if (!old_pair->page && old_pair->cache == 0) {
+				ret = pmfs_new_cache_block(sb, old_pair, 0, 0);
+				if (ret)
+					goto out;
+				old_pair->cache |= UNINIT_BIT;
+				if (old_pair->nvmm_entry)
+					/* Outdate with NVMM */
+					old_pair->cache |= OUTDATE_BIT;
+			}
+		} else {
+			pair = pmfs_alloc_mempair(sb);
+			if (!pair) {
+				pmfs_dbg("%s: alloc failed\n", __func__);
+				return -EINVAL;
+			}
+			ret = pmfs_new_cache_block(sb, pair, 0, 0);
+			if (ret)
+				goto out;
+			pair->cache |= UNINIT_BIT;
+			pair->pgoff = curr_pgoff;
+			ret = radix_tree_insert(&sih->tree, curr_pgoff, pair);
+			if (ret) {
+				pmfs_dbg("%s: ERROR %d\n", __func__, ret);
+				goto out;
+			}
 		}
 	}
 
