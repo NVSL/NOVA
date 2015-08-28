@@ -194,9 +194,6 @@ static inline int pmfs_check_page_dirty(struct super_block *sb,
 //		u64 nvmm_block;
 //		unsigned long nvmm_addr;
 
-		if (pair->nvmm_mmap == 0)
-			return 0;
-
 //		nvmm_block = pair->nvmm_mmap << PAGE_SHIFT;
 //		nvmm_addr = (unsigned long)pmfs_get_block(sb, nvmm_block);
 //		ret = pmfs_is_page_dirty(&init_mm, nvmm_addr, TEST_NVMM, 1);

@@ -749,8 +749,7 @@ static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 			bytes = count;
 
 		pair = pmfs_get_mem_pair(sb, pi, si, start_blk);
-		if (pair == NULL || (pair->dram == 0 && pair->page == NULL &&
-				pair->nvmm_mmap == 0)) {
+		if (pair == NULL || (pair->dram == 0 && pair->page == NULL)) {
 			pmfs_err(sb, "%s mmap page not found!\n", __func__);
 			ret = -EINVAL;
 			goto out;
@@ -766,7 +765,7 @@ static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 
 			pair->dram &= ~DIRTY_BIT;
 		} else {
-			nvmm_block = pair->nvmm_mmap << PAGE_SHIFT;
+			nvmm_block = DRAM_ADDR(pair->dram);
 			nvmm_addr = pmfs_get_block(sb, nvmm_block);
 			copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
 				nvmm_addr + offset, bytes);
@@ -982,8 +981,8 @@ static int pmfs_get_nvmm_pfn(struct super_block *sb, struct pmfs_inode *pi,
 	void *nvmm;
 	int ret;
 
-	if (pair->nvmm_mmap) {
-		mmap_block = pair->nvmm_mmap << PAGE_SHIFT;
+	if (pair->dram) {
+		mmap_block = DRAM_ADDR(pair->dram);
 		mmap_addr = pmfs_get_block(sb, mmap_block);
 	} else {
 		ret = pmfs_new_data_blocks(sb, pi, &blocknr, 1,
@@ -995,9 +994,9 @@ static int pmfs_get_nvmm_pfn(struct super_block *sb, struct pmfs_inode *pi,
 			return ret;
 		}
 
-		pair->nvmm_mmap = blocknr;
+		pair->dram = blocknr << PAGE_SHIFT;
 		mmap_block = blocknr << PAGE_SHIFT;
-		mmap_addr = pmfs_get_block(sb, mmap_block);
+		mmap_addr = pmfs_get_block(sb, pair->dram);
 
 		/* Copy from NVMM to dram */
 		bp = __pmfs_find_nvmm_block(sb, si, pair, pgoff);

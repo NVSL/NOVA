@@ -276,9 +276,8 @@ extern struct kmem_cache *pmfs_mempair_cachep;
 struct mem_addr {
 	unsigned long nvmm_entry;	// NVMM inode entry
 	unsigned long nvmm;		// NVMM blocknr
-	unsigned long dram;		// DRAM virtual address.
+	unsigned long dram;		// DRAM address or NVMM block.
 					// Lowest 12 bits contain flag bits.
-	unsigned long nvmm_mmap;	// NVMM mmap blocknr
 	struct page *page;
 };
 
@@ -886,7 +885,7 @@ int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
 	struct rb_root *tree, unsigned long range_low,
 	unsigned long range_high, struct pmfs_range_node **prev,
 	struct pmfs_range_node **next);
-void pmfs_free_cache_block(struct mem_addr *pair);
+void pmfs_free_cache_block(struct super_block *sb, struct mem_addr *pair);
 
 /* bbuild.c */
 inline void set_bm(unsigned long bit, struct scan_bitmap *bm,

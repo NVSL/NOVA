@@ -35,7 +35,7 @@ static inline struct mem_addr *pmfs_alloc_mempair(struct super_block *sb)
 	p = (struct mem_addr *)
 		kmem_cache_alloc(pmfs_mempair_cachep, GFP_NOFS);
 	p->page = NULL;
-	p->nvmm_entry = p->nvmm = p->dram = p->nvmm_mmap = 0;
+	p->nvmm_entry = p->nvmm = p->dram = 0;
 	atomic64_inc(&mempair_alloc);
 	return p;
 }
@@ -348,7 +348,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 			pgoff = start_pgoff + i;
 
 			if (pair->page || pair->dram) {
-				pmfs_free_cache_block(pair);
+				pmfs_free_cache_block(sb, pair);
 			}
 			if (pair->nvmm_entry) {
 				entry = pmfs_get_block(sb, pair->nvmm_entry);
@@ -370,12 +370,6 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 				}
 				pair->nvmm_entry = 0;
 				pair->nvmm = 0;
-			}
-
-			if (pair->nvmm_mmap) {
-				pmfs_free_data_blocks(sb, pair->nvmm_mmap, 1,
-							btype);
-				pair->nvmm_mmap = 0;
 			}
 
 			pmfs_free_mempair(sb, pair);
@@ -463,14 +457,8 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 			/* Freeing the page cache block */
 			pair = (struct mem_addr *)node[i];
 			if (pair->page || pair->dram) {
-				pmfs_free_cache_block(pair);
+				pmfs_free_cache_block(sb, pair);
 				freed++;
-			}
-			/* Also free the nvmm mmap page */
-			if (pair->nvmm_mmap) {
-				pmfs_free_data_blocks(sb, pair->nvmm_mmap, 1,
-							btype);
-				pair->nvmm_mmap = 0;
 			}
 			pmfs_free_mempair(sb, pair);
 		}
@@ -537,13 +525,8 @@ void pmfs_free_mem_addr(struct super_block *sb, __le64 addr, u32 btype)
 		pair->nvmm = 0;
 	}
 
-	if (pair->nvmm_mmap) {
-		pmfs_free_data_blocks(sb, pair->nvmm_mmap, 1, btype);
-		pair->nvmm_mmap = 0;
-	}
-
 	if (pair->page || pair->dram) {
-		pmfs_free_cache_block(pair);
+		pmfs_free_cache_block(sb, pair);
 	}
 
 	pmfs_free_mempair(sb, pair);
@@ -599,13 +582,8 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 	if (height == 0) {
 		struct mem_addr *pair = (struct mem_addr *)root;
 		if (pair->page || pair->dram) {
-			pmfs_free_cache_block(pair);
+			pmfs_free_cache_block(sb, pair);
 			freed = 1;
-		}
-		if (pair->nvmm_mmap) {
-			pmfs_free_data_blocks(sb, pair->nvmm_mmap, 1,
-							btype);
-			pair->nvmm_mmap = 0;
 		}
 		pmfs_free_mempair(sb, pair);
 		sih->root = 0;
@@ -870,7 +848,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 				}
 				leaf = (struct mem_addr *)node[i];
 				leaf->nvmm_entry = leaf->nvmm = 0;
-				leaf->dram = leaf->nvmm_mmap = 0;
+				leaf->dram = 0;
 			}
 			pmfs_dbg_verbose("node[%d] @ 0x%llx\n", i, node[i]);
 			leaf = (struct mem_addr *)node[i];
@@ -1000,7 +978,7 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			}
 
 			root->nvmm = root->nvmm_entry = 0;
-			root->dram = root->nvmm_mmap = 0;
+			root->dram = 0;
 			root->page = NULL;
 			if (alloc_dram) {
 				errval = pmfs_new_cache_block(sb, root, 0, 0);
