@@ -276,8 +276,11 @@ extern struct kmem_cache *pmfs_mempair_cachep;
 struct mem_addr {
 	unsigned long nvmm_entry;	// NVMM inode entry
 	unsigned long nvmm;		// NVMM blocknr
-	unsigned long dram;		// DRAM address or NVMM block.
-					// Lowest 12 bits contain flag bits.
+
+	// DRAM page cache/mmap address or NVMM mmap block.
+	// Lowest 12 bits contain flag bits.
+	unsigned long cache;
+
 	struct page *page;
 };
 
@@ -658,7 +661,7 @@ static inline unsigned long pmfs_get_dram_addr(struct mem_addr *pair)
 	if (pair->page)
 		addr = (unsigned long)kmap_atomic(pair->page);
 	else
-		addr = pair->dram;
+		addr = pair->cache;
 
 	return addr;
 }

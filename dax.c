@@ -89,11 +89,11 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 				dax_mem = (void *)DRAM_ADDR(addr);
 				pmfs_dbgv("%s: memory @ 0x%lx\n", __func__,
 						(unsigned long)dax_mem);
-				if (unlikely(OUTDATE(pair->dram))) {
+				if (unlikely(OUTDATE(pair->cache))) {
 					pmfs_dbg("%s: inode %lu DRAM page %lu "
 						"is out-of-date\n", __func__,
 						inode->i_ino, index);
-				} else if (unlikely(UNINIT(pair->dram))) {
+				} else if (unlikely(UNINIT(pair->cache))) {
 					pmfs_dbg("%s: inode %lu DRAM page %lu "
 						"is unitialized\n", __func__,
 						inode->i_ino, index);
@@ -210,8 +210,8 @@ static inline int pmfs_copy_partial_block(struct super_block *sb,
 	/* Copy from dram page cache, otherwise from nvmm */
 	if (pair->page) {
 		ptr = kmap_atomic(pair->page);
-	} else if (pair->dram) {
-		ptr = (void *)DRAM_ADDR(pair->dram);
+	} else if (pair->cache) {
+		ptr = (void *)DRAM_ADDR(pair->cache);
 	} else {
 		ptr = pmfs_get_block(sb, (pair->nvmm << PAGE_SHIFT));
 	}
@@ -535,15 +535,15 @@ static void pmfs_preprocess_dram_block(struct super_block *sb,
 	void *nvmm;
 
 	/* If only NVMM page presents, copy the partial block */
-	if ((OUTDATE(pair->dram)) && (offset || tail)) {
+	if ((OUTDATE(pair->cache)) && (offset || tail)) {
 		bp = __pmfs_find_nvmm_block(sb, si, pair, start_blk);
 		nvmm = pmfs_get_block(sb, bp);
 		memcpy(kmem, nvmm, PAGE_SIZE);
-		pair->dram &= ~UNINIT_BIT;
+		pair->cache &= ~UNINIT_BIT;
 	}
 
 	/* If DRAM is uninitialized, memset the partial block to 0 */
-	if ((UNINIT(pair->dram)) && (offset || tail)) {
+	if ((UNINIT(pair->cache)) && (offset || tail)) {
 		if (offset)
 			memcpy(kmem, (void *)DRAM_ADDR(sbi->zeroed_page),
 					offset);
@@ -558,12 +558,12 @@ static void pmfs_postprocess_dram_block(struct super_block *sb,
 	struct pmfs_inode_info *si, struct mem_addr *pair,
 	unsigned long start_blk)
 {
-	if (OUTDATE(pair->dram))
-		pair->dram &= ~OUTDATE_BIT;
-	if (UNINIT(pair->dram))
-		pair->dram &= ~UNINIT_BIT;
+	if (OUTDATE(pair->cache))
+		pair->cache &= ~OUTDATE_BIT;
+	if (UNINIT(pair->cache))
+		pair->cache &= ~UNINIT_BIT;
 
-	pair->dram |= DIRTY_BIT;
+	pair->cache |= DIRTY_BIT;
 	if (start_blk < si->low_dirty)
 		si->low_dirty = start_blk;
 	if (start_blk > si->high_dirty)
@@ -749,7 +749,7 @@ static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 			bytes = count;
 
 		pair = pmfs_get_mem_pair(sb, pi, si, start_blk);
-		if (pair == NULL || (pair->dram == 0 && pair->page == NULL)) {
+		if (pair == NULL || (pair->cache == 0 && pair->page == NULL)) {
 			pmfs_err(sb, "%s mmap page not found!\n", __func__);
 			ret = -EINVAL;
 			goto out;
@@ -763,9 +763,9 @@ static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 			if (pair->page)
 				kunmap_atomic((void *)dram_addr);
 
-			pair->dram &= ~DIRTY_BIT;
+			pair->cache &= ~DIRTY_BIT;
 		} else {
-			nvmm_block = DRAM_ADDR(pair->dram);
+			nvmm_block = DRAM_ADDR(pair->cache);
 			nvmm_addr = pmfs_get_block(sb, nvmm_block);
 			copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
 				nvmm_addr + offset, bytes);
@@ -942,7 +942,7 @@ static int pmfs_get_dram_pfn(struct super_block *sb,
 	int err;
 
 	addr = pmfs_get_dram_addr(pair);
-	if (addr == 0 || (pair->dram & OUTDATE_BIT)) {
+	if (addr == 0 || (pair->cache & OUTDATE_BIT)) {
 		if (addr == 0) {
 			err = pmfs_new_cache_block(sb, pair, 0, 0);
 			if (err)
@@ -953,12 +953,12 @@ static int pmfs_get_dram_pfn(struct super_block *sb,
 		bp = __pmfs_find_nvmm_block(sb, si, pair, pgoff);
 		nvmm = pmfs_get_block(sb, bp);
 		memcpy((void *)DRAM_ADDR(addr), nvmm, PAGE_SIZE);
-		pair->dram &= ~OUTDATE_BIT;
-		pair->dram &= ~UNINIT_BIT;
+		pair->cache &= ~OUTDATE_BIT;
+		pair->cache &= ~UNINIT_BIT;
 	}
 
 	if (vm_flags & VM_WRITE)
-		pair->dram |= MMAP_WRITE_BIT;
+		pair->cache |= MMAP_WRITE_BIT;
 
 	*kmem = (void *)DRAM_ADDR(addr);
 	if (pair->page) {
@@ -981,8 +981,8 @@ static int pmfs_get_nvmm_pfn(struct super_block *sb, struct pmfs_inode *pi,
 	void *nvmm;
 	int ret;
 
-	if (pair->dram) {
-		mmap_block = DRAM_ADDR(pair->dram);
+	if (pair->cache) {
+		mmap_block = DRAM_ADDR(pair->cache);
 		mmap_addr = pmfs_get_block(sb, mmap_block);
 	} else {
 		ret = pmfs_new_data_blocks(sb, pi, &blocknr, 1,
@@ -994,9 +994,9 @@ static int pmfs_get_nvmm_pfn(struct super_block *sb, struct pmfs_inode *pi,
 			return ret;
 		}
 
-		pair->dram = blocknr << PAGE_SHIFT;
+		pair->cache = blocknr << PAGE_SHIFT;
 		mmap_block = blocknr << PAGE_SHIFT;
-		mmap_addr = pmfs_get_block(sb, pair->dram);
+		mmap_addr = pmfs_get_block(sb, pair->cache);
 
 		/* Copy from NVMM to dram */
 		bp = __pmfs_find_nvmm_block(sb, si, pair, pgoff);
@@ -1005,7 +1005,7 @@ static int pmfs_get_nvmm_pfn(struct super_block *sb, struct pmfs_inode *pi,
 	}
 
 	if (vm_flags & VM_WRITE)
-		pair->dram |= MMAP_WRITE_BIT;
+		pair->cache |= MMAP_WRITE_BIT;
 
 	*kmem = mmap_addr;
 	*pfn = pmfs_get_pfn(sb, mmap_block);

@@ -189,7 +189,7 @@ static inline int pmfs_check_page_dirty(struct super_block *sb,
 	int ret;
 
 	if (pmfs_has_page_cache(sb)) {
-		ret = IS_DIRTY(pair->dram) || IS_MAP_WRITE(pair->dram);
+		ret = IS_DIRTY(pair->cache) || IS_MAP_WRITE(pair->cache);
 	} else {
 //		u64 nvmm_block;
 //		unsigned long nvmm_addr;
@@ -197,7 +197,7 @@ static inline int pmfs_check_page_dirty(struct super_block *sb,
 //		nvmm_block = pair->nvmm_mmap << PAGE_SHIFT;
 //		nvmm_addr = (unsigned long)pmfs_get_block(sb, nvmm_block);
 //		ret = pmfs_is_page_dirty(&init_mm, nvmm_addr, TEST_NVMM, 1);
-		ret = IS_MAP_WRITE(pair->dram);
+		ret = IS_MAP_WRITE(pair->cache);
 	}
 
 	return ret;

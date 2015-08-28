@@ -35,7 +35,7 @@ static inline struct mem_addr *pmfs_alloc_mempair(struct super_block *sb)
 	p = (struct mem_addr *)
 		kmem_cache_alloc(pmfs_mempair_cachep, GFP_NOFS);
 	p->page = NULL;
-	p->nvmm_entry = p->nvmm = p->dram = 0;
+	p->nvmm_entry = p->nvmm = p->cache = 0;
 	atomic64_inc(&mempair_alloc);
 	return p;
 }
@@ -347,7 +347,7 @@ static int recursive_truncate_file_blocks(struct super_block *sb, __le64 block,
 			pair = (struct mem_addr *)node[i];
 			pgoff = start_pgoff + i;
 
-			if (pair->page || pair->dram) {
+			if (pair->page || pair->cache) {
 				pmfs_free_cache_block(sb, pair);
 			}
 			if (pair->nvmm_entry) {
@@ -456,7 +456,7 @@ static int recursive_truncate_meta_blocks(struct super_block *sb, __le64 block,
 				continue;
 			/* Freeing the page cache block */
 			pair = (struct mem_addr *)node[i];
-			if (pair->page || pair->dram) {
+			if (pair->page || pair->cache) {
 				pmfs_free_cache_block(sb, pair);
 				freed++;
 			}
@@ -525,7 +525,7 @@ void pmfs_free_mem_addr(struct super_block *sb, __le64 addr, u32 btype)
 		pair->nvmm = 0;
 	}
 
-	if (pair->page || pair->dram) {
+	if (pair->page || pair->cache) {
 		pmfs_free_cache_block(sb, pair);
 	}
 
@@ -581,7 +581,7 @@ unsigned int pmfs_free_file_meta_blocks(struct super_block *sb,
 
 	if (height == 0) {
 		struct mem_addr *pair = (struct mem_addr *)root;
-		if (pair->page || pair->dram) {
+		if (pair->page || pair->cache) {
 			pmfs_free_cache_block(sb, pair);
 			freed = 1;
 		}
@@ -848,7 +848,7 @@ static int recursive_assign_blocks(struct super_block *sb,
 				}
 				leaf = (struct mem_addr *)node[i];
 				leaf->nvmm_entry = leaf->nvmm = 0;
-				leaf->dram = 0;
+				leaf->cache = 0;
 			}
 			pmfs_dbg_verbose("node[%d] @ 0x%llx\n", i, node[i]);
 			leaf = (struct mem_addr *)node[i];
@@ -869,22 +869,22 @@ static int recursive_assign_blocks(struct super_block *sb,
 					pi->i_blocks--;
 			}
 			if (alloc_dram) {
-				if (!leaf->page && leaf->dram == 0) {
+				if (!leaf->page && leaf->cache == 0) {
 					errval = pmfs_new_cache_block(sb, leaf,
 									0, 0);
 					if (errval)
 						goto fail;
-					leaf->dram |= UNINIT_BIT;
+					leaf->cache |= UNINIT_BIT;
 					if (leaf->nvmm_entry)
 						/* Outdate with NVMM */
-						leaf->dram |= OUTDATE_BIT;
+						leaf->cache |= OUTDATE_BIT;
 				}
 			} else {
 				if (nvmm) {
 					leaf->nvmm_entry = address;
 					assign_nvmm(pi, data, leaf, bm, pgoff);
 				} else {
-					leaf->dram = address;
+					leaf->cache = address;
 				}
 			}
 			pmfs_dbg_verbose("Assign block %d to %llu\n", i, 
@@ -978,19 +978,19 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			}
 
 			root->nvmm = root->nvmm_entry = 0;
-			root->dram = 0;
+			root->cache = 0;
 			root->page = NULL;
 			if (alloc_dram) {
 				errval = pmfs_new_cache_block(sb, root, 0, 0);
 				if (errval)
 					goto fail;
-				root->dram |= UNINIT_BIT;
+				root->cache |= UNINIT_BIT;
 			} else {
 				if (nvmm) {
 					root->nvmm_entry = address;
 					assign_nvmm(pi, data, root, bm, 0);
 				} else {
-					root->dram = address;
+					root->cache = address;
 				}
 			}
 
@@ -1035,22 +1035,22 @@ static int __pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 			}
 
 			if (alloc_dram) {
-				if (!root->page && root->dram == 0) {
+				if (!root->page && root->cache == 0) {
 					errval = pmfs_new_cache_block(sb, root,
 									0, 0);
 					if (errval)
 						goto fail;
-					root->dram |= UNINIT_BIT;
+					root->cache |= UNINIT_BIT;
 					if (root->nvmm_entry)
 						/* Outdate with NVMM */
-						root->dram |= OUTDATE_BIT;
+						root->cache |= OUTDATE_BIT;
 				}
 			} else {
 				if (nvmm) {
 					root->nvmm_entry = address;
 					assign_nvmm(pi, data, root, bm, 0);
 				} else {
-					root->dram = address;
+					root->cache = address;
 				}
 			}
 			sih->height = height;

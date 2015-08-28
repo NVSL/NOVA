@@ -451,14 +451,14 @@ void pmfs_free_cache_block(struct super_block *sb, struct mem_addr *pair)
 	if (pair->page) {
 		__free_page(pair->page);
 	} else {
-		if (IS_DRAM_ADDR(pair->dram))
-			pmfs_free_dram_page(pair->dram);
+		if (IS_DRAM_ADDR(pair->cache))
+			pmfs_free_dram_page(pair->cache);
 		else
-			pmfs_free_data_blocks(sb, pair->dram >> PAGE_SHIFT,
+			pmfs_free_data_blocks(sb, pair->cache >> PAGE_SHIFT,
 						1, PMFS_BLOCK_TYPE_4K);
 	}
 	pair->page = NULL;
-	pair->dram = 0;
+	pair->cache = 0;
 	PMFS_END_TIMING(free_cache_t, free_time);
 	atomic64_inc(&cache_free);
 }
@@ -533,7 +533,7 @@ int pmfs_new_cache_block(struct super_block *sb,
 	}
 
 	pair->page = page;
-	pair->dram = page_addr;
+	pair->cache = page_addr;
 	atomic64_inc(&cache_alloc);
 out:
 	PMFS_END_TIMING(new_cache_page_t, alloc_time);
