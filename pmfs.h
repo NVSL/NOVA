@@ -275,7 +275,7 @@ extern struct kmem_cache *pmfs_mempair_cachep;
 
 struct mem_addr {
 	unsigned long nvmm_entry;	// NVMM inode entry
-	unsigned long nvmm;		// NVMM blocknr
+	unsigned long pgoff;
 
 	// DRAM page cache/mmap address or NVMM mmap block.
 	// Lowest 12 bits contain flag bits.
@@ -666,20 +666,42 @@ static inline unsigned long pmfs_get_dram_addr(struct mem_addr *pair)
 	return addr;
 }
 
+static inline unsigned long get_nvmm(struct super_block *sb,
+	struct mem_addr *pair, unsigned long pgoff)
+{
+	struct pmfs_file_write_entry *data;
+
+	data = (struct pmfs_file_write_entry *)pmfs_get_block(sb,
+						pair->nvmm_entry);
+
+	if (data->pgoff > pgoff || data->pgoff +
+			data->num_pages <= pgoff) {
+		pmfs_dbg("Entry ERROR: pgoff %lu, entry pgoff %u, "
+			"num %u\n", pgoff, data->pgoff, data->num_pages);
+		BUG();
+	}
+
+	return (data->block >> PAGE_SHIFT) + pgoff - data->pgoff;
+}
+
 static inline u64 __pmfs_find_nvmm_block(struct super_block *sb,
 	struct pmfs_inode_info *si, struct mem_addr *mem_pair,
 	unsigned long blocknr)
 {
 	struct mem_addr *pair = NULL;
+	unsigned long nvmm;
 
-	if (mem_pair)
-		return mem_pair->nvmm << PAGE_SHIFT;
+	if (mem_pair) {
+		nvmm = get_nvmm(sb, mem_pair, blocknr);
+		return nvmm << PAGE_SHIFT;
+	}
 
 	pair = __pmfs_get_mem_pair(sb, si, blocknr);
 	if (!pair)
 		return 0;
 
-	return pair->nvmm << PAGE_SHIFT;
+	nvmm = get_nvmm(sb, pair, blocknr);
+	return nvmm << PAGE_SHIFT;
 }
 
 static inline unsigned int pmfs_inode_blk_shift (struct pmfs_inode *pi)

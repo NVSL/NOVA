@@ -59,6 +59,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	do {
 		unsigned long nr, left;
 		unsigned long addr = 0;
+		unsigned long nvmm;
 		void *dax_mem = NULL;
 		int zero = 0;
 		int dram_copy = 0;
@@ -125,11 +126,8 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 			nr = PAGE_SIZE;
 		}
 
-		if (pair->nvmm == 0) {
-			pmfs_dbg("%s: entry nvmm is NULL\n", __func__);
-			return -EINVAL;
-		}
-		dax_mem = pmfs_get_block(sb, (pair->nvmm << PAGE_SHIFT));
+		nvmm = get_nvmm(sb, pair, index);
+		dax_mem = pmfs_get_block(sb, (nvmm << PAGE_SHIFT));
 
 memcpy:
 		nr = nr - offset;
@@ -206,6 +204,7 @@ static inline int pmfs_copy_partial_block(struct super_block *sb,
 	size_t offset, void* kmem, bool is_end_blk)
 {
 	void *ptr;
+	unsigned long nvmm;
 
 	/* Copy from dram page cache, otherwise from nvmm */
 	if (pair->page) {
@@ -213,7 +212,8 @@ static inline int pmfs_copy_partial_block(struct super_block *sb,
 	} else if (pair->cache) {
 		ptr = (void *)DRAM_ADDR(pair->cache);
 	} else {
-		ptr = pmfs_get_block(sb, (pair->nvmm << PAGE_SHIFT));
+		nvmm = get_nvmm(sb, pair, index);
+		ptr = pmfs_get_block(sb, (nvmm << PAGE_SHIFT));
 	}
 	if (ptr != NULL) {
 		if (is_end_blk)
