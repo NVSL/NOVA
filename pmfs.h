@@ -990,8 +990,6 @@ extern struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type,
 	struct inode *dir, u64 pi_addr,
 	struct pmfs_inode_info_header *sih, u64 ino, umode_t mode,
 	size_t size, dev_t rdev, const struct qstr *qstr);
-struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
-	struct pmfs_inode_info *si, unsigned long file_blocknr);
 int pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih,
 	struct pmfs_file_write_entry *data,

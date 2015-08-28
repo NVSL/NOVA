@@ -1169,6 +1169,41 @@ static void pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 	return;
 }
 
+/* search the radix tree to find hole or data
+ * in the specified range
+ * Input:
+ * first_blocknr: first block in the specified range
+ * last_blocknr: last_blocknr in the specified range
+ * @data_found: indicates whether data blocks were found
+ * @hole_found: indicates whether a hole was found
+ * hole: whether we are looking for a hole or data
+ */
+static int pmfs_lookup_hole_in_region(struct super_block *sb,
+	struct pmfs_inode_info_header *sih,
+	unsigned long first_blocknr, unsigned long last_blocknr,
+	int *data_found, int *hole_found, int hole)
+{
+	struct mem_addr *pair;
+	unsigned long blocks = 0;
+	int i;
+
+	for (i = first_blocknr; i <= last_blocknr; i++) {
+		pair = radix_tree_lookup(&sih->tree, i);
+		if (pair) {
+			*data_found = 1;
+			if (!hole)
+				goto done;
+		} else {
+			*hole_found = 1;
+		}
+
+		if (!*hole_found || !hole)
+			blocks++;
+	}
+done:
+	return blocks;
+}
+
 int pmfs_assign_nvmm_entry(struct super_block *sb,
 	struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih,
