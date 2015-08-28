@@ -618,39 +618,6 @@ update_root_and_height:
 	sih->height = new_height;
 }
 
-static unsigned long pmfs_inode_count_iblocks_recursive(struct super_block *sb,
-		__le64 block, u32 height)
-{
-	__le64 *node;
-	unsigned int i;
-	unsigned long iblocks = 0;
-
-	if (height == 0)
-		return 1;
-	node = pmfs_get_block(sb, le64_to_cpu(block));
-	for (i = 0; i < (1 << META_BLK_SHIFT); i++) {
-		if (node[i] == 0)
-			continue;
-		iblocks += pmfs_inode_count_iblocks_recursive(sb, node[i],
-								height - 1);
-	}
-	return iblocks;
-}
-
-static inline
-unsigned long pmfs_inode_file_count_iblocks (struct super_block *sb,
-	struct pmfs_inode *pi, struct inode *inode)
-{
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
-	unsigned long iblocks = 0;
-
-	iblocks = pmfs_inode_count_iblocks_recursive(sb, sih->root,
-							sih->height);
-	iblocks += sih->log_pages;
-	return (iblocks << (pmfs_inode_blk_shift(pi) - sb->s_blocksize_bits));
-}
-
 /* Support for sparse files: even though pi->i_size may indicate a certain
  * last_blocknr, it may not be true for sparse files. Specifically, last_blocknr
  * can not be more than the maximum allowed by the inode's tree height.
@@ -719,13 +686,8 @@ static void __pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 			root = 0;
 		}
 	}
-	/* if we are called during mount, a power/system failure had happened.
-	 * Don't trust inode->i_blocks; recalculate it by rescanning the inode
-	 */
-	if (pmfs_is_mounting(sb))
-		inode->i_blocks = pmfs_inode_file_count_iblocks(sb, pi, inode);
-	else
-		inode->i_blocks -= (freed * (1 << (data_bits -
+
+	inode->i_blocks -= (freed * (1 << (data_bits -
 				sb->s_blocksize_bits)));
 
 	pmfs_memunlock_inode(sb, pi);
