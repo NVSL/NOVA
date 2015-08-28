@@ -183,6 +183,7 @@ static inline int pmfs_set_page_clean(struct mm_struct *mm,
 	return 0;
 }
 
+#if 0
 static inline int pmfs_check_page_dirty(struct super_block *sb,
 	struct mem_addr *pair)
 {
@@ -202,13 +203,15 @@ static inline int pmfs_check_page_dirty(struct super_block *sb,
 
 	return ret;
 }
+#endif
 
 static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info *si, loff_t *start,
 	loff_t end)
 {
-	struct mem_addr *pair = NULL;
-	unsigned long flush_bytes = 0, bytes;
+	unsigned long flush_bytes = 0;
+#if 0
+	unsigned long bytes;
 	pgoff_t pgoff;
 	loff_t offset;
 	loff_t dirty_start;
@@ -241,6 +244,8 @@ static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 		*start = end;
 	else
 		*start = dirty_start;
+#endif
+	*start = end;
 
 	return flush_bytes;
 }
@@ -483,7 +488,8 @@ const struct file_operations pmfs_dax_file_operations = {
 //	.aio_write		= dax_file_aio_write,
 	.read_iter		= generic_file_read_iter,
 	.write_iter		= generic_file_write_iter,
-	.mmap			= pmfs_dax_file_mmap,
+//	.mmap			= pmfs_dax_file_mmap,
+	.mmap			= generic_file_mmap,
 	.open			= pmfs_open,
 	.fsync			= pmfs_fsync,
 	.flush			= pmfs_flush,

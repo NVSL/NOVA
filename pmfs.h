@@ -623,37 +623,21 @@ pmfs_find_info_header(struct super_block *sb, unsigned long ino)
 	return sih;
 }
 
-static inline struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
-		struct pmfs_inode_info *si, unsigned long blocknr)
+static inline struct pmfs_file_write_entry *
+pmfs_get_write_entry(struct super_block *sb,
+	struct pmfs_inode_info *si, unsigned long blocknr)
 {
 	struct pmfs_inode_info_header *sih = si->header;
-	struct mem_addr *pair;
+	struct pmfs_file_write_entry *entry;
 	
-	pair = radix_tree_lookup(&sih->tree, blocknr);
+	entry = radix_tree_lookup(&sih->tree, blocknr);
 
-	return pair;
-}
-
-static inline unsigned long pmfs_get_dram_addr(struct mem_addr *pair)
-{
-	unsigned long addr;
-
-	if (pair->page)
-		addr = (unsigned long)kmap_atomic(pair->page);
-	else
-		addr = pair->cache;
-
-	return addr;
+	return entry;
 }
 
 static inline unsigned long get_nvmm(struct super_block *sb,
-	struct mem_addr *pair, unsigned long pgoff)
+	struct pmfs_file_write_entry *data, unsigned long pgoff)
 {
-	struct pmfs_file_write_entry *data;
-
-	data = (struct pmfs_file_write_entry *)pmfs_get_block(sb,
-						pair->nvmm_entry);
-
 	if (data->pgoff > pgoff || data->pgoff +
 			data->num_pages <= pgoff) {
 		pmfs_dbg("Entry ERROR: pgoff %lu, entry pgoff %u, "
@@ -665,22 +649,18 @@ static inline unsigned long get_nvmm(struct super_block *sb,
 }
 
 static inline u64 __pmfs_find_nvmm_block(struct super_block *sb,
-	struct pmfs_inode_info *si, struct mem_addr *mem_pair,
+	struct pmfs_inode_info *si, struct pmfs_file_write_entry *entry,
 	unsigned long blocknr)
 {
-	struct mem_addr *pair = NULL;
 	unsigned long nvmm;
 
-	if (mem_pair) {
-		nvmm = get_nvmm(sb, mem_pair, blocknr);
-		return nvmm << PAGE_SHIFT;
+	if (!entry) {
+		entry = pmfs_get_write_entry(sb, si, blocknr);
+		if (!entry)
+			return 0;
 	}
 
-	pair = pmfs_get_mem_pair(sb, si, blocknr);
-	if (!pair)
-		return 0;
-
-	nvmm = get_nvmm(sb, pair, blocknr);
+	nvmm = get_nvmm(sb, entry, blocknr);
 	return nvmm << PAGE_SHIFT;
 }
 

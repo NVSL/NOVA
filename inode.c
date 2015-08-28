@@ -134,16 +134,14 @@ void pmfs_free_cache_and_pair(struct super_block *sb,
 }
 
 static inline void pmfs_free_contiguous_blocks(struct super_block *sb,
-	struct mem_addr *pair, unsigned long *start_blocknr,
-	unsigned long *num_free, unsigned int btype)
+	struct pmfs_file_write_entry *entry, unsigned long pgoff,
+	unsigned long *start_blocknr, unsigned long *num_free,
+	unsigned int btype)
 {
-	struct pmfs_file_write_entry *entry;
 	unsigned long nvmm;
 
-	entry = (struct pmfs_file_write_entry *)
-				pmfs_get_block(sb, pair->nvmm_entry);
 	entry->invalid_pages++;
-	nvmm = get_nvmm(sb, pair, pair->pgoff);
+	nvmm = get_nvmm(sb, entry, pgoff);
 
 	if (*start_blocknr == 0) {
 		*start_blocknr = nvmm;
@@ -165,8 +163,8 @@ int pmfs_delete_file_tree(struct super_block *sb,
 	struct pmfs_inode_info_header *sih, unsigned long start_blocknr,
 	bool delete_nvmm)
 {
+	struct pmfs_file_write_entry *entry;
 	struct pmfs_inode *pi;
-	struct mem_addr *pair;
 	unsigned long free_blocknr = 0, num_free = 0;
 	unsigned long last_blocknr;
 	unsigned long pgoff = start_blocknr;
@@ -188,14 +186,13 @@ int pmfs_delete_file_tree(struct super_block *sb,
 	PMFS_START_TIMING(delete_file_tree_t, delete_time);
 
 	for (pgoff = start_blocknr; pgoff <= last_blocknr; pgoff++) {
-		pair = radix_tree_lookup(&sih->tree, pgoff);
-		if (pair) {
+		entry = radix_tree_lookup(&sih->tree, pgoff);
+		if (entry) {
 			ret = radix_tree_delete(&sih->tree, pgoff);
-			BUG_ON(!ret || ret != pair);
+			BUG_ON(!ret || ret != entry);
 			if (delete_nvmm)
-				pmfs_free_contiguous_blocks(sb, pair,
+				pmfs_free_contiguous_blocks(sb, entry, pgoff,
 					&free_blocknr, &num_free, btype);
-			pmfs_free_cache_and_pair(sb, pair);
 			freed++;
 		}
 	}
@@ -261,13 +258,13 @@ static int pmfs_lookup_hole_in_range(struct super_block *sb,
 	unsigned long first_blocknr, unsigned long last_blocknr,
 	int *data_found, int *hole_found, int hole)
 {
-	struct mem_addr *pair;
+	struct pmfs_file_write_entry *entry;
 	unsigned long blocks = 0;
 	int i;
 
 	for (i = first_blocknr; i <= last_blocknr; i++) {
-		pair = radix_tree_lookup(&sih->tree, i);
-		if (pair) {
+		entry = radix_tree_lookup(&sih->tree, i);
+		if (entry) {
 			*data_found = 1;
 			if (!hole)
 				goto done;
@@ -289,7 +286,7 @@ int pmfs_assign_nvmm_entry(struct super_block *sb,
 	u64 address, struct scan_bitmap *bm, bool free)
 {
 	struct pmfs_file_write_entry *old_entry;
-	struct mem_addr *old_pair, *pair;
+	void **pentry;
 	unsigned long old_nvmm, nvmm;
 	unsigned int start_pgoff = entry->pgoff;
 	unsigned int num = entry->num_pages;
@@ -302,16 +299,10 @@ int pmfs_assign_nvmm_entry(struct super_block *sb,
 	for (i = 0; i < num; i++) {
 		curr_pgoff = start_pgoff + i;
 
-		old_pair = radix_tree_lookup(&sih->tree, curr_pgoff);
-		if (old_pair) {
-			if (old_pair->pgoff != curr_pgoff) {
-				pmfs_dbg("%s: pgoff does not match! "
-					"%lu, %lu\n", __func__,
-					old_pair->pgoff, curr_pgoff);
-				return -EINVAL;
-			}
-			old_entry = pmfs_get_block(sb, old_pair->nvmm_entry);
-			old_nvmm = get_nvmm(sb, old_pair, curr_pgoff);
+		pentry = radix_tree_lookup_slot(&sih->tree, curr_pgoff);
+		if (pentry) {
+			old_entry = radix_tree_deref_slot(pentry);
+			old_nvmm = get_nvmm(sb, old_entry, curr_pgoff);
 			if (bm)
 				clear_bm(old_nvmm, bm, BM_4K);
 			if (free) {
@@ -321,18 +312,9 @@ int pmfs_assign_nvmm_entry(struct super_block *sb,
 			}
 			if (bm || free)
 				pi->i_blocks--;
-			old_pair->nvmm_entry = address;
-			pair = old_pair;
+			radix_tree_replace_slot(pentry, entry);
 		} else {
-			pair = pmfs_alloc_mempair(sb);
-			if (!pair) {
-				pmfs_dbg("%s: alloc failed\n",
-					__func__);
-				return -EINVAL;
-			}
-			pair->nvmm_entry = address;
-			pair->pgoff = curr_pgoff;
-			ret = radix_tree_insert(&sih->tree, curr_pgoff, pair);
+			ret = radix_tree_insert(&sih->tree, curr_pgoff, entry);
 			if (ret) {
 				pmfs_dbg("%s: ERROR %d\n", __func__, ret);
 				goto out;
@@ -340,7 +322,7 @@ int pmfs_assign_nvmm_entry(struct super_block *sb,
 		}
 
 		if (bm) {
-			nvmm = get_nvmm(sb, pair, curr_pgoff);
+			nvmm = get_nvmm(sb, entry, curr_pgoff);
 			set_bm(nvmm, bm, BM_4K);
 			pi->i_blocks++;
 		}

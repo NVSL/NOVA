@@ -24,7 +24,6 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_file_write_entry *entry;
-	struct mem_addr *pair;
 	pgoff_t index, end_index;
 	unsigned long offset;
 	loff_t isize, pos;
@@ -73,8 +72,8 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 			}
 		}
 
-		pair = pmfs_get_mem_pair(sb, si, index);
-		if (unlikely(pair == NULL)) {
+		entry = pmfs_get_write_entry(sb, si, index);
+		if (unlikely(entry == NULL)) {
 			pmfs_dbg("Required extent not found: pgoff %lu, "
 				"inode size %lld\n", index, isize);
 			nr = PAGE_SIZE;
@@ -82,6 +81,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 			goto memcpy;
 		}
 
+#if 0
 		if (pmfs_has_page_cache(sb)) {
 			addr = pmfs_get_dram_addr(pair);
 			if (addr) {
@@ -103,14 +103,9 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 				}
 			}
 		}
+#endif
 
 		/* Find contiguous blocks */
-		entry = (struct pmfs_file_write_entry *)
-				pmfs_get_block(sb, pair->nvmm_entry);
-		if (entry == NULL) {
-			pmfs_dbg("%s: entry is NULL\n", __func__);
-			return -EINVAL;
-		}
 		if (index < entry->pgoff ||
 			index - entry->pgoff >= entry->num_pages) {
 			pmfs_err(sb, "%s ERROR: %lu, entry pgoff %u, num %u, "
@@ -125,7 +120,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 			nr = PAGE_SIZE;
 		}
 
-		nvmm = get_nvmm(sb, pair, index);
+		nvmm = get_nvmm(sb, entry, index);
 		dax_mem = pmfs_get_block(sb, (nvmm << PAGE_SHIFT));
 
 memcpy:
@@ -152,8 +147,8 @@ memcpy:
 		}
 
 		if (pmfs_has_page_cache(sb)) {
-			if (pair && pair->page)
-				kunmap_atomic(dax_mem);
+//			if (pair && pair->page)
+//				kunmap_atomic(dax_mem);
 		}
 
 		if (left) {
@@ -199,13 +194,14 @@ ssize_t pmfs_dax_file_read(struct file *filp, char __user *buf,
 }
 
 static inline int pmfs_copy_partial_block(struct super_block *sb,
-	struct mem_addr *pair, unsigned long index,
+	struct pmfs_file_write_entry *entry, unsigned long index,
 	size_t offset, void* kmem, bool is_end_blk)
 {
 	void *ptr;
 	unsigned long nvmm;
 
 	/* Copy from dram page cache, otherwise from nvmm */
+#if 0
 	if (pair->page) {
 		ptr = kmap_atomic(pair->page);
 	} else if (pair->cache) {
@@ -214,6 +210,9 @@ static inline int pmfs_copy_partial_block(struct super_block *sb,
 		nvmm = get_nvmm(sb, pair, index);
 		ptr = pmfs_get_block(sb, (nvmm << PAGE_SHIFT));
 	}
+#endif
+	nvmm = get_nvmm(sb, entry, index);
+	ptr = pmfs_get_block(sb, (nvmm << PAGE_SHIFT));
 	if (ptr != NULL) {
 		if (is_end_blk)
 			memcpy(kmem + offset, ptr + offset,
@@ -222,8 +221,8 @@ static inline int pmfs_copy_partial_block(struct super_block *sb,
 			memcpy(kmem, ptr, offset);
 	}
 
-	if (pair->page)
-		kunmap_atomic(ptr);
+//	if (pair->page)
+//		kunmap_atomic(ptr);
 
 	return 0;
 }
@@ -241,7 +240,7 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	size_t offset, eblk_offset;
 	unsigned long start_blk, end_blk, num_blocks;
 	unsigned long file_end_blk;
-	struct mem_addr *pair;
+	struct pmfs_file_write_entry *entry;
 	timing_t partial_time;
 
 	PMFS_START_TIMING(partial_block_t, partial_time);
@@ -264,13 +263,13 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	pmfs_dbg_verbose("%s: start offset %lu start blk %lu %p\n", __func__,
 				offset, start_blk, kmem);
 	if (offset != 0) {
-		pair = pmfs_get_mem_pair(sb, si, start_blk);
-		if (pair == NULL) {
+		entry = pmfs_get_write_entry(sb, si, start_blk);
+		if (entry == NULL) {
 			/* Fill zero */
 		    	memset(kmem, 0, offset);
 		} else {
 			/* Copy from original block */
-			pmfs_copy_partial_block(sb, pair, start_blk,
+			pmfs_copy_partial_block(sb, entry, start_blk,
 					offset, kmem, false);
 		}
 		pmfs_flush_buffer(kmem, offset, 0);
@@ -287,14 +286,14 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	pmfs_dbg_verbose("%s: end offset %lu, end blk %lu %p\n", __func__,
 				eblk_offset, end_blk, kmem);
 	if (eblk_offset != 0) {
-		pair = pmfs_get_mem_pair(sb, si, start_blk);
-		if (pair == NULL) {
+		entry = pmfs_get_write_entry(sb, si, end_blk);
+		if (entry == NULL) {
 			/* Fill zero */
 		    	memset(kmem + eblk_offset, 0,
 					sb->s_blocksize - eblk_offset);
 		} else {
 			/* Copy from original block */
-			pmfs_copy_partial_block(sb, pair, start_blk,
+			pmfs_copy_partial_block(sb, entry, end_blk,
 					eblk_offset, kmem, true);
 		}
 		pmfs_flush_buffer(kmem + eblk_offset,
@@ -524,6 +523,7 @@ out:
 	return ret;
 }
 
+#if 0
 /* Handle partial and unitialized dram page */
 static void pmfs_preprocess_dram_block(struct super_block *sb,
 	struct pmfs_inode_info *si, struct mem_addr *pair, void *kmem,
@@ -916,9 +916,14 @@ out:
 	return ret;
 }
 
+#endif
+
 ssize_t pmfs_dax_file_write(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos)
 {
+	return pmfs_cow_file_write(filp, buf, len, ppos, true);
+
+#if 0
 	if (!pmfs_has_page_cache(filp->f_mapping->host->i_sb)) {
 		return pmfs_cow_file_write(filp, buf, len, ppos, true);
 	} else {
@@ -928,8 +933,10 @@ ssize_t pmfs_dax_file_write(struct file *filp, const char __user *buf,
 			return pmfs_page_cache_file_write(filp, buf, len,
 								ppos);
 	}
+#endif
 }
 
+#if 0
 static int pmfs_get_dram_pfn(struct super_block *sb,
 	struct pmfs_inode_info *si, struct mem_addr *pair, pgoff_t pgoff,
 	vm_flags_t vm_flags, void **kmem, unsigned long *pfn)
@@ -1342,3 +1349,4 @@ int pmfs_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 
 	return 0;
 }
+#endif
