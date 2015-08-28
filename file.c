@@ -29,7 +29,7 @@ static inline int pmfs_can_set_blocksize_hint(struct inode *inode,
 
 	/* Currently, we don't deallocate data blocks till the file is deleted.
 	 * So no changing blocksize hints once allocation is done. */
-	if (sih->root)
+	if (sih->i_size > 0)
 		return 0;
 	return 1;
 }

@@ -332,8 +332,8 @@ int pmfs_reassign_file_btree(struct super_block *sb,
 			continue;
 		}
 
-		pmfs_assign_blocks(sb, pi, sih, entry_data, NULL,
-					curr_p, true, true, false);
+		pmfs_assign_nvmm_entry(sb, pi, sih, entry_data,
+					curr_p, NULL, true);
 		curr_p += entry_size;
 	}
 
@@ -635,8 +635,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 	start_blk = pos >> sb->s_blocksize_bits;
 	entry_data.pgoff = start_blk;
 	entry_data.num_pages = num_blocks;
-	pmfs_assign_blocks(sb, pi, sih, &entry_data, NULL, 0,
-					false, false, true);
+	pmfs_assign_cache_range(sb, pi, sih, &entry_data);
 
 	while (num_blocks > 0) {
 		offset = pos & (pmfs_inode_blk_size(pi) - 1);

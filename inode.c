@@ -103,11 +103,9 @@ u64 pmfs_find_nvmm_block(struct inode *inode, unsigned long file_blocknr)
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
 	u32 blk_shift;
 	unsigned long blk_offset, blocknr = file_blocknr;
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
-	unsigned int meta_bits = META_BLK_SHIFT;
 	u64 bp;
 
 	/* convert the 4K blocks into the actual blocks the inode is using */
@@ -115,21 +113,14 @@ u64 pmfs_find_nvmm_block(struct inode *inode, unsigned long file_blocknr)
 	blk_offset = file_blocknr & ((1 << blk_shift) - 1);
 	blocknr = file_blocknr >> blk_shift;
 
-	if (blocknr >= (1UL << (sih->height * meta_bits)))
-		return 0;
-
-	pmfs_dbg_verbose("%s: inode %lu, si %p, root 0x%llx, height %u\n",
-		__func__, inode->i_ino, si, sih->root, sih->height);
 	bp = __pmfs_find_nvmm_block(sb, si, NULL, blocknr);
-	pmfs_dbg1("find_nvmm_block %lx, %x %llx blk_p %p blk_shift %x"
-		" blk_offset %lx\n", file_blocknr, sih->height, bp,
-		pmfs_get_block(sb, bp), blk_shift, blk_offset);
 
 	if (bp == 0)
 		return 0;
 	return bp + (blk_offset << sb->s_blocksize_bits);
 }
 
+#if 0
 /*
  * find the mem addr pair represented by the given inode's file
  * relative block number.
@@ -191,81 +182,9 @@ static int recursive_find_region(struct super_block *sb, __le64 block,
 done:
 	return blocks;
 }
+#endif
 
-/*
- * find the file offset for SEEK_DATA/SEEK_HOLE
- */
-unsigned long pmfs_find_region(struct inode *inode, loff_t *offset, int hole)
-{
-	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
-	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
-	unsigned long first_blocknr, last_blocknr;
-	unsigned long blocks = 0, offset_in_block;
-	int data_found = 0, hole_found = 0;
-
-	if (*offset >= inode->i_size)
-		return -ENXIO;
-
-	if (!inode->i_blocks || !sih->root) {
-		if (hole)
-			return inode->i_size;
-		else
-			return -ENXIO;
-	}
-
-	offset_in_block = *offset & ((1UL << data_bits) - 1);
-
-	if (sih->height == 0) {
-		data_found = 1;
-		goto out;
-	}
-
-	first_blocknr = *offset >> data_bits;
-	last_blocknr = inode->i_size >> data_bits;
-
-	pmfs_dbg_verbose("find_region offset %llx, first_blocknr %lx,"
-		" last_blocknr %lx hole %d\n",
-		  *offset, first_blocknr, last_blocknr, hole);
-
-	blocks = recursive_find_region(inode->i_sb, sih->root, sih->height,
-		first_blocknr, last_blocknr, &data_found, &hole_found, hole);
-
-out:
-	/* Searching data but only hole found till the end */
-	if (!hole && !data_found && hole_found)
-		return -ENXIO;
-
-	if (data_found && !hole_found) {
-		/* Searching data but we are already into them */
-		if (hole)
-			/* Searching hole but only data found, go to the end */
-			*offset = inode->i_size;
-		return 0;
-	}
-
-	/* Searching for hole, hole found and starting inside an hole */
-	if (hole && hole_found && !blocks) {
-		/* we found data after it */
-		if (!data_found)
-			/* last hole */
-			*offset = inode->i_size;
-		return 0;
-	}
-
-	if (offset_in_block) {
-		blocks--;
-		*offset += (blocks << data_bits) +
-			   ((1 << data_bits) - offset_in_block);
-	} else {
-		*offset += blocks << data_bits;
-	}
-
-	return 0;
-}
-
+#if 0
 /* examine the meta-data block node up to the end_idx for any non-null
  * pointers. if found return false, else return true.
  * required to determine if a meta-data block contains no pointers and hence
@@ -1044,6 +963,7 @@ inline int pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
 
 	return errval;
 }
+#endif
 
 void pmfs_free_cache_and_pair(struct super_block *sb,
 	struct mem_addr *pair)
@@ -1178,7 +1098,7 @@ static void pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
  * @hole_found: indicates whether a hole was found
  * hole: whether we are looking for a hole or data
  */
-static int pmfs_lookup_hole_in_region(struct super_block *sb,
+static int pmfs_lookup_hole_in_range(struct super_block *sb,
 	struct pmfs_inode_info_header *sih,
 	unsigned long first_blocknr, unsigned long last_blocknr,
 	int *data_found, int *hole_found, int hole)
@@ -1587,8 +1507,6 @@ static int pmfs_free_inode(struct inode *inode,
 	pi->i_blocks = 0;
 
 	/* Clear the si header, but not free it - leave for future use */
-	sih->root = 0;
-	sih->height = 0;
 	sih->log_pages = 0;
 	sih->i_mode = 0;
 	sih->pi_addr = 0;
@@ -1657,9 +1575,6 @@ void pmfs_evict_inode(struct inode *inode)
 	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode_info_header *sih = si->header;
-	__le64 root;
-	unsigned long last_blocknr;
-	unsigned int height, btype;
 	timing_t evict_time;
 	int err = 0;
 	int freed = 0;
@@ -1678,37 +1593,14 @@ void pmfs_evict_inode(struct inode *inode)
 		if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
 			goto out;
 
-		root = sih->root;
-		height = sih->height;
-		btype = pi->i_blk_type;
-		pmfs_dbg_verbose("%s: root 0x%llx, height %u\n",
-					__func__, root, height);
-
-		if (pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL)) {
-			last_blocknr = (1UL << (sih->height * META_BLK_SHIFT))
-			    - 1;
-		} else {
-			if (likely(sih->i_size))
-				last_blocknr = (sih->i_size - 1) >>
-					pmfs_inode_blk_shift(pi);
-			else
-				last_blocknr = 0;
-			last_blocknr = pmfs_sparse_last_blocknr(sih->height,
-				last_blocknr);
-		}
-
 		/* We need the log to free the blocks from the b-tree */
 		switch (inode->i_mode & S_IFMT) {
 		case S_IFREG:
-			pmfs_dbg_verbose("%s: file ino %lu, root 0x%llx, "
-					"height %u\n", __func__, inode->i_ino,
-					root, height);
-			freed = pmfs_free_file_inode_subtree(sb, root,
-					height, btype, last_blocknr);
+			pmfs_dbgv("%s: file ino %lu\n", __func__, inode->i_ino);
+			freed = pmfs_delete_file_tree(sb, sih, 0, true);
 			break;
 		case S_IFDIR:
-			pmfs_dbg_verbose("%s: dir ino %lu\n",
-					__func__, inode->i_ino);
+			pmfs_dbgv("%s: dir ino %lu\n", __func__, inode->i_ino);
 			pmfs_delete_dir_tree(sb, sih);
 			break;
 		case S_IFLNK:
@@ -1922,7 +1814,7 @@ static void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 	 * before truncating it. Also we need to munmap the truncated range
 	 * from application address space, if mmapped. */
 	/* synchronize_rcu(); */
-	__pmfs_truncate_file_blocks(inode, newsize, oldsize);
+	pmfs_truncate_file_blocks(inode, newsize, oldsize);
 }
 
 int pmfs_getattr(struct vfsmount *mnt, struct dentry *dentry,
@@ -2611,24 +2503,12 @@ int pmfs_free_dram_resource(struct super_block *sb,
 	struct pmfs_inode_info_header *sih)
 {
 	int freed = 0;
-	unsigned long last_blocknr;
 
 	if (!(S_ISREG(sih->i_mode)) && !(S_ISDIR(sih->i_mode)))
 		return 0;
 
-	if (likely(sih->i_size))
-		last_blocknr = (sih->i_size - 1) >> PAGE_SHIFT;
-	else
-		last_blocknr = 0;
-
-	last_blocknr = pmfs_sparse_last_blocknr(sih->height,
-		last_blocknr);
-	pmfs_dbg_verbose("%s: height %u, root 0x%llx, "
-				"last block %lu\n", __func__,
-				sih->height, sih->root, last_blocknr);
 	if (S_ISREG(sih->i_mode)) {
-		freed = pmfs_free_file_meta_blocks(sb, sih,
-						last_blocknr);
+		freed = pmfs_delete_file_tree(sb, sih, 0, false);
 	} else {
 		pmfs_delete_dir_tree(sb, sih);
 		freed = 1;
@@ -2667,8 +2547,6 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 	 * We will regenerate the tree during blocks assignment.
 	 * Set height to 0.
 	 */
-	sih->root = 0;
-	sih->height = 0;
 	sih->pi_addr = pi_addr;
 
 	curr_p = pi->log_head;
@@ -2730,8 +2608,8 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 			 * The overlaped blocks are already freed.
 			 * Don't double free them, just re-assign the pointers.
 			 */
-			pmfs_assign_blocks(sb, pi, sih, entry, bm, curr_p, true,
-					false, false);
+			pmfs_assign_nvmm_entry(sb, pi, sih, entry,
+						curr_p, bm, false);
 		}
 
 		pmfs_rebuild_file_time_and_size(sb, pi, entry);
@@ -2760,6 +2638,74 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 		pi->i_blocks += sih->log_pages;
 
 //	pmfs_print_inode_log_page(sb, inode);
+	return 0;
+}
+
+/*
+ * find the file offset for SEEK_DATA/SEEK_HOLE
+ */
+unsigned long pmfs_find_region(struct inode *inode, loff_t *offset, int hole)
+{
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = si->header;
+	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
+	unsigned long first_blocknr, last_blocknr;
+	unsigned long blocks = 0, offset_in_block;
+	int data_found = 0, hole_found = 0;
+
+	if (*offset >= inode->i_size)
+		return -ENXIO;
+
+	if (!inode->i_blocks || !sih->i_size) {
+		if (hole)
+			return inode->i_size;
+		else
+			return -ENXIO;
+	}
+
+	offset_in_block = *offset & ((1UL << data_bits) - 1);
+
+	first_blocknr = *offset >> data_bits;
+	last_blocknr = inode->i_size >> data_bits;
+
+	pmfs_dbg_verbose("find_region offset %llx, first_blocknr %lx,"
+		" last_blocknr %lx hole %d\n",
+		  *offset, first_blocknr, last_blocknr, hole);
+
+	blocks = pmfs_lookup_hole_in_range(inode->i_sb, sih,
+		first_blocknr, last_blocknr, &data_found, &hole_found, hole);
+
+	/* Searching data but only hole found till the end */
+	if (!hole && !data_found && hole_found)
+		return -ENXIO;
+
+	if (data_found && !hole_found) {
+		/* Searching data but we are already into them */
+		if (hole)
+			/* Searching hole but only data found, go to the end */
+			*offset = inode->i_size;
+		return 0;
+	}
+
+	/* Searching for hole, hole found and starting inside an hole */
+	if (hole && hole_found && !blocks) {
+		/* we found data after it */
+		if (!data_found)
+			/* last hole */
+			*offset = inode->i_size;
+		return 0;
+	}
+
+	if (offset_in_block) {
+		blocks--;
+		*offset += (blocks << data_bits) +
+			   ((1 << data_bits) - offset_in_block);
+	} else {
+		*offset += blocks << data_bits;
+	}
+
 	return 0;
 }
 

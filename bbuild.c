@@ -949,8 +949,6 @@ struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
 	if (!p)
 		PMFS_ASSERT(0);
 
-	p->root = 0;
-	p->height = 0;
 	p->log_pages = 0;
 	INIT_RADIX_TREE(&p->tree, GFP_ATOMIC);
 	p->i_mode = i_mode;
@@ -1038,9 +1036,6 @@ int pmfs_assign_info_header(struct super_block *sb, unsigned long ino,
 
 	old_sih = radix_tree_lookup(&sbi->header_tree, ino);
 	if (old_sih) {
-		if (old_sih->root || old_sih->height)
-			pmfs_dbg("%s: node %lu exists! 0x%lx\n",
-				__func__, ino, (unsigned long)old_sih);
 		old_sih->i_mode = i_mode;
 		*sih = old_sih;
 	} else {

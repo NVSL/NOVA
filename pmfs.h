@@ -341,14 +341,12 @@ struct pmfs_range_node {
 extern struct kmem_cache *pmfs_header_cachep;
 
 struct pmfs_inode_info_header {
-	u64	root;			/* File Btree root */
-	u8	height;			/* File Btree height */
+	struct radix_tree_root tree;	/* Dir name entry tree root */
 	u16	i_mode;			/* Dir or file? */
 	u32	log_pages;		/* Num of log pages */
 	u64	i_size;
 	u64	ino;
 	u64	pi_addr;
-	struct radix_tree_root tree;	/* Dir name entry tree root */
 };
 
 struct pmfs_inode_info {
@@ -990,16 +988,15 @@ extern struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type,
 	struct inode *dir, u64 pi_addr,
 	struct pmfs_inode_info_header *sih, u64 ino, umode_t mode,
 	size_t size, dev_t rdev, const struct qstr *qstr);
-int pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
-	struct pmfs_inode_info_header *sih,
-	struct pmfs_file_write_entry *data,
-	struct scan_bitmap *bm,	u64 address, bool nvmm, bool free,
-	bool alloc_dram);
 int pmfs_assign_nvmm_entry(struct super_block *sb,
 	struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih,
 	struct pmfs_file_write_entry *entry,
 	u64 address, struct scan_bitmap *bm, bool free);
+int pmfs_assign_cache_range(struct super_block *sb,
+	struct pmfs_inode *pi,
+	struct pmfs_inode_info_header *sih,
+	struct pmfs_file_write_entry *entry);
 int pmfs_free_dram_resource(struct super_block *sb,
 	struct pmfs_inode_info_header *sih);
 
