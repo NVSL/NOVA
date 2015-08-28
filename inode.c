@@ -1129,6 +1129,46 @@ int pmfs_delete_file_tree(struct super_block *sb,
 	return freed;
 }
 
+/*
+ * Free data blocks from inode in the range start <=> end
+ */
+static void pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
+				    loff_t end)
+{
+	struct super_block *sb = inode->i_sb;
+	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
+	struct pmfs_inode_info *si = PMFS_I(inode);
+	struct pmfs_inode_info_header *sih = si->header;
+	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
+	unsigned long first_blocknr, last_blocknr;
+	int freed = 0;
+
+	inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
+
+	pmfs_dbg_verbose("truncate: pi %p iblocks %llx %llx %llx %llx\n", pi,
+			 pi->i_blocks, start, end, pi->i_size);
+
+	first_blocknr = (start + (1UL << data_bits) - 1) >> data_bits;
+
+	if (end == 0)
+		return;
+	last_blocknr = (end - 1) >> data_bits;
+
+	if (first_blocknr > last_blocknr)
+		return;
+
+	freed = pmfs_delete_file_tree(sb, sih, first_blocknr, 1);
+
+	inode->i_blocks -= (freed * (1 << (data_bits -
+				sb->s_blocksize_bits)));
+
+	pi->i_blocks = cpu_to_le64(inode->i_blocks);
+	/* Check for the flag EOFBLOCKS is still valid after the set size */
+	check_eof_blocks(sb, pi, inode->i_size);
+
+	return;
+}
+
 int pmfs_assign_nvmm_entry(struct super_block *sb,
 	struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih,
