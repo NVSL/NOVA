@@ -222,7 +222,7 @@ static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 		if (bytes > (end - temp))
 			bytes = end - temp;
 
-		pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
+		pair = pmfs_get_mem_pair(sb, si, pgoff);
 		if (pair) {
 			if (pmfs_check_page_dirty(sb, pair)) {
 				if (flush_bytes == 0)

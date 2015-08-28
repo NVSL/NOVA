@@ -22,7 +22,6 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 {
 	struct inode *inode = filp->f_mapping->host;
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_file_write_entry *entry;
 	struct mem_addr *pair;
@@ -74,7 +73,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 			}
 		}
 
-		pair = pmfs_get_mem_pair(sb, pi, si, index);
+		pair = pmfs_get_mem_pair(sb, si, index);
 		if (unlikely(pair == NULL)) {
 			pmfs_dbg("Required extent not found: pgoff %lu, "
 				"inode size %lld\n", index, isize);
@@ -265,7 +264,7 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	pmfs_dbg_verbose("%s: start offset %lu start blk %lu %p\n", __func__,
 				offset, start_blk, kmem);
 	if (offset != 0) {
-		pair = pmfs_get_mem_pair(sb, pi, si, start_blk);
+		pair = pmfs_get_mem_pair(sb, si, start_blk);
 		if (pair == NULL) {
 			/* Fill zero */
 		    	memset(kmem, 0, offset);
@@ -288,7 +287,7 @@ static void pmfs_handle_head_tail_blocks(struct super_block *sb,
 	pmfs_dbg_verbose("%s: end offset %lu, end blk %lu %p\n", __func__,
 				eblk_offset, end_blk, kmem);
 	if (eblk_offset != 0) {
-		pair = pmfs_get_mem_pair(sb, pi, si, start_blk);
+		pair = pmfs_get_mem_pair(sb, si, start_blk);
 		if (pair == NULL) {
 			/* Fill zero */
 		    	memset(kmem + eblk_offset, 0,
@@ -646,7 +645,7 @@ ssize_t pmfs_page_cache_file_write(struct file *filp,
 
 		/* don't zero-out the allocated blocks */
 		PMFS_START_TIMING(find_cache_t, find_cache_time);
-		pair = pmfs_get_mem_pair(sb, pi, si, start_blk);
+		pair = pmfs_get_mem_pair(sb, si, start_blk);
 		PMFS_END_TIMING(find_cache_t, find_cache_time);
 
 		if (pair == NULL) {
@@ -748,7 +747,7 @@ static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 		if (bytes > count)
 			bytes = count;
 
-		pair = pmfs_get_mem_pair(sb, pi, si, start_blk);
+		pair = pmfs_get_mem_pair(sb, si, start_blk);
 		if (pair == NULL || (pair->cache == 0 && pair->page == NULL)) {
 			pmfs_err(sb, "%s mmap page not found!\n", __func__);
 			ret = -EINVAL;
@@ -1025,7 +1024,7 @@ static int pmfs_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 
 	pi = pmfs_get_inode(sb, inode);
 
-	pair = pmfs_get_mem_pair(sb, pi, si, pgoff);
+	pair = pmfs_get_mem_pair(sb, si, pgoff);
 	if (pair == NULL) {
 		/* This should not happen. NVMM must exist! */
 		pmfs_dbg("%s: pair does not exist\n", __func__);

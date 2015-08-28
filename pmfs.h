@@ -625,33 +625,15 @@ pmfs_find_info_header(struct super_block *sb, unsigned long ino)
 	return sih;
 }
 
-static inline struct mem_addr *__pmfs_get_mem_pair(struct super_block *sb,
+static inline struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
 		struct pmfs_inode_info *si, unsigned long blocknr)
 {
 	struct pmfs_inode_info_header *sih = si->header;
-	__le64 *level_ptr;
-	u64 bp = 0;
-	u32 height, bit_shift;
-	unsigned int idx;
+	struct mem_addr *pair;
+	
+	pair = radix_tree_lookup(&sih->tree, blocknr);
 
-	height = sih->height;
-	bp = sih->root;
-	if (bp == 0)
-		return NULL;
-
-	pmfs_dbg_verbose("%s: height %u, root 0x%llx\n", __func__, height, bp);
-	while (height > 0) {
-		level_ptr = (__le64 *)DRAM_ADDR(bp);
-		bit_shift = (height - 1) * META_BLK_SHIFT;
-		idx = blocknr >> bit_shift;
-		bp = le64_to_cpu(level_ptr[idx]);
-		if (bp == 0)
-			return NULL;
-		blocknr = blocknr & ((1 << bit_shift) - 1);
-		height--;
-	}
-
-	return (struct mem_addr *)bp;
+	return pair;
 }
 
 static inline unsigned long pmfs_get_dram_addr(struct mem_addr *pair)
@@ -696,7 +678,7 @@ static inline u64 __pmfs_find_nvmm_block(struct super_block *sb,
 		return nvmm << PAGE_SHIFT;
 	}
 
-	pair = __pmfs_get_mem_pair(sb, si, blocknr);
+	pair = pmfs_get_mem_pair(sb, si, blocknr);
 	if (!pair)
 		return 0;
 
@@ -1009,12 +991,17 @@ extern struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type,
 	struct pmfs_inode_info_header *sih, u64 ino, umode_t mode,
 	size_t size, dev_t rdev, const struct qstr *qstr);
 struct mem_addr *pmfs_get_mem_pair(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_inode_info *si,
-	unsigned long file_blocknr);
-extern int pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
-	struct pmfs_inode_info_header *sih, struct pmfs_file_write_entry *data,
+	struct pmfs_inode_info *si, unsigned long file_blocknr);
+int pmfs_assign_blocks(struct super_block *sb, struct pmfs_inode *pi,
+	struct pmfs_inode_info_header *sih,
+	struct pmfs_file_write_entry *data,
 	struct scan_bitmap *bm,	u64 address, bool nvmm, bool free,
 	bool alloc_dram);
+int pmfs_assign_nvmm_entry(struct super_block *sb,
+	struct pmfs_inode *pi,
+	struct pmfs_inode_info_header *sih,
+	struct pmfs_file_write_entry *entry,
+	u64 address, struct scan_bitmap *bm, bool free);
 int pmfs_free_dram_resource(struct super_block *sb,
 	struct pmfs_inode_info_header *sih);
 
