@@ -255,16 +255,32 @@ enum alloc_type {
 #define	TEST_PAGEZALLOC	7
 #define	TEST_NVMM	8
 
+#define	DRAM_BIT	0x1UL	// DRAM
+#define	KMALLOC_BIT	0x2UL	// Alloc with kmalloc
+#define	VMALLOC_BIT	0x4UL	// Alloc with vmalloc
+#define	GETPAGE_BIT	0x8UL	// Alloc with get_free_page
+#define	DIRTY_BIT	0x10UL	// Dirty
+#define	MMAP_WRITE_BIT	0x20UL	// mmaped for write
+#define	OUTDATE_BIT	0x40UL	// Outdate with NVMM page
+#define	UNINIT_BIT	0x80UL	// Unitialized page
+
+#define	IS_DRAM_ADDR(p)	((p) & (DRAM_BIT))
+#define	IS_DIRTY(p)	((p) & (DIRTY_BIT))
+#define	IS_MAP_WRITE(p)	((p) & (MMAP_WRITE_BIT))
+#define	OUTDATE(p)	((p) & (OUTDATE_BIT))
+#define	UNINIT(p)	((p) & (UNINIT_BIT))
+#define	DRAM_ADDR(p)	((p) & (PAGE_MASK))
+
+extern struct kmem_cache *pmfs_mempair_cachep;
+
 struct mem_addr {
 	unsigned long nvmm_entry;	// NVMM inode entry
 	unsigned long nvmm;		// NVMM blocknr
 	unsigned long dram;		// DRAM virtual address.
 					// Lowest 12 bits contain flag bits.
 	unsigned long nvmm_mmap;	// NVMM mmap blocknr
-	int nvmm_mmap_write;		// NVMM mmap for write?
 	struct page *page;
 };
-
 
 static inline void pmfs_update_tail(struct pmfs_inode *pi, u64 new_tail)
 {
@@ -596,24 +612,6 @@ static inline void memset_nt(void *dest, uint32_t dword, size_t length)
 		"12:\n"
 		: "=D"(dummy1), "=d" (dummy2) : "D" (dest), "a" (qword), "d" (length) : "memory", "rcx");
 }
-
-#define	DRAM_BIT	0x1UL	// DRAM
-#define	KMALLOC_BIT	0x2UL	// Alloc with kmalloc
-#define	VMALLOC_BIT	0x4UL	// Alloc with vmalloc
-#define	GETPAGE_BIT	0x8UL	// Alloc with get_free_page
-#define	DIRTY_BIT	0x10UL	// Dirty
-#define	MMAP_WRITE_BIT	0x20UL	// mmaped for write
-#define	OUTDATE_BIT	0x40UL	// Outdate with NVMM page
-#define	UNINIT_BIT	0x80UL	// Unitialized page
-
-#define	IS_DRAM_ADDR(p)	((p) & (DRAM_BIT))
-#define	IS_DIRTY(p)	((p) & (DIRTY_BIT))
-#define	IS_MAPPED(p)	((p) & (MMAP_WRITE_BIT))
-#define	OUTDATE(p)	((p) & (OUTDATE_BIT))
-#define	UNINIT(p)	((p) & (UNINIT_BIT))
-#define	DRAM_ADDR(p)	((p) & (PAGE_MASK))
-
-extern struct kmem_cache *pmfs_mempair_cachep;
 
 static inline struct pmfs_inode_info_header *
 pmfs_find_info_header(struct super_block *sb, unsigned long ino)

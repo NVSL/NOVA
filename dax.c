@@ -1006,7 +1006,7 @@ static int pmfs_get_nvmm_pfn(struct super_block *sb, struct pmfs_inode *pi,
 	}
 
 	if (vm_flags & VM_WRITE)
-		pair->nvmm_mmap_write = 1;
+		pair->dram |= MMAP_WRITE_BIT;
 
 	*kmem = mmap_addr;
 	*pfn = pmfs_get_pfn(sb, mmap_block);
