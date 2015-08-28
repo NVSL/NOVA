@@ -162,43 +162,46 @@ static inline void pmfs_free_contiguous_blocks(struct super_block *sb,
 }
 
 int pmfs_delete_file_tree(struct super_block *sb,
-	struct pmfs_inode_info_header *sih, unsigned long pgoff,
+	struct pmfs_inode_info_header *sih, unsigned long start_blocknr,
 	bool delete_nvmm)
 {
 	struct pmfs_inode *pi;
 	struct mem_addr *pair;
-	unsigned long start_blocknr = 0, num_free = 0;
+	unsigned long free_blocknr = 0, num_free = 0;
+	unsigned long last_blocknr;
+	unsigned long pgoff = start_blocknr;
 	unsigned int btype;
-	struct mem_addr *pairs[FREE_BATCH];
+	unsigned int data_bits;
 	timing_t delete_time;
-	int nr_entries;
-	int i, freed = 0;
+	int freed = 0;
 	void *ret;
 
 	pi = (struct pmfs_inode *)pmfs_get_block(sb, sih->pi_addr);
 	btype = pi->i_blk_type;
+	data_bits = blk_type_to_shift[btype];
+
+	if (sih->i_size == 0)
+		last_blocknr = 0;
+	else
+		last_blocknr = (sih->i_size - 1) >> data_bits;
+
 	PMFS_START_TIMING(delete_file_tree_t, delete_time);
 
-	do {
-		nr_entries = radix_tree_gang_lookup(&sih->tree,
-					(void **)pairs, pgoff, FREE_BATCH);
-		for (i = 0; i < nr_entries; i++) {
-			pair = pairs[i];
-			BUG_ON(!pair);
-			pgoff = pair->pgoff;
+	for (pgoff = start_blocknr; pgoff <= last_blocknr; pgoff++) {
+		pair = radix_tree_lookup(&sih->tree, pgoff);
+		if (pair) {
 			ret = radix_tree_delete(&sih->tree, pgoff);
 			BUG_ON(!ret || ret != pair);
 			if (delete_nvmm)
 				pmfs_free_contiguous_blocks(sb, pair,
-					&start_blocknr, &num_free, btype);
+					&free_blocknr, &num_free, btype);
 			pmfs_free_cache_and_pair(sb, pair);
 			freed++;
 		}
-		pgoff++;
-	} while (nr_entries == FREE_BATCH);
+	}
 
-	if (start_blocknr)
-		pmfs_free_data_blocks(sb, start_blocknr, num_free, btype);
+	if (free_blocknr)
+		pmfs_free_data_blocks(sb, free_blocknr, num_free, btype);
 
 	PMFS_END_TIMING(delete_file_tree_t, delete_time);
 	return freed;
