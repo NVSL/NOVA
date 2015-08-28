@@ -1829,38 +1829,6 @@ void pmfs_dirty_inode(struct inode *inode, int flags)
 	pmfs_flush_buffer(&pi->i_atime, sizeof(pi->i_atime), 0);
 }
 
-/*
- * Called to zeros out a single block. It's used in the "resize"
- * to avoid to keep data in case the file grow up again.
- */
-/* Make sure to zero out just a single 4K page in case of 2M or 1G blocks */
-static void pmfs_block_truncate_page(struct inode *inode, loff_t newsize)
-{
-	struct super_block *sb = inode->i_sb;
-	unsigned long offset = newsize & (sb->s_blocksize - 1);
-	unsigned long blocknr, length;
-	u64 blockoff;
-	char *bp;
-
-	/* Block boundary or extending ? */
-	if (!offset || newsize > inode->i_size)
-		return;
-
-	length = sb->s_blocksize - offset;
-	blocknr = newsize >> sb->s_blocksize_bits;
-
-	blockoff = pmfs_find_nvmm_block(inode, blocknr);
-
-	/* Hole ? */
-	if (!blockoff)
-		return;
-
-	bp = pmfs_get_block(sb, blockoff);
-	pmfs_memunlock_block(sb, bp);
-	memset(bp + offset, 0, length);
-	pmfs_memlock_block(sb, bp);
-}
-
 static void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 {
 	/* We only support truncate regular file */
@@ -1872,10 +1840,9 @@ static void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 	pmfs_dbgv("%s: inode %lu, old size %llu, new size %llu\n",
 		__func__, inode->i_ino, oldsize, newsize);
 
-	if (newsize != oldsize) {
-		pmfs_block_truncate_page(inode, newsize);
+	if (newsize != oldsize)
 		i_size_write(inode, newsize);
-	}
+
 	/* FIXME: we should make sure that there is nobody reading the inode
 	 * before truncating it. Also we need to munmap the truncated range
 	 * from application address space, if mmapped. */
