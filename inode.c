@@ -1124,18 +1124,18 @@ static inline void pmfs_free_contiguous_blocks(struct super_block *sb,
 	}
 }
 
-void pmfs_delete_file_tree(struct super_block *sb,
-	struct pmfs_inode_info_header *sih, bool delete_nvmm)
+int pmfs_delete_file_tree(struct super_block *sb,
+	struct pmfs_inode_info_header *sih, unsigned long pgoff,
+	bool delete_nvmm)
 {
 	struct pmfs_inode *pi;
 	struct mem_addr *pair;
 	unsigned long start_blocknr = 0, num_free = 0;
 	unsigned int btype;
-	unsigned long pgoff = 0;
 	struct mem_addr *pairs[FREE_BATCH];
 	timing_t delete_time;
 	int nr_entries;
-	int i;
+	int i, freed = 0;
 	void *ret;
 
 	pi = (struct pmfs_inode *)pmfs_get_block(sb, sih->pi_addr);
@@ -1155,6 +1155,7 @@ void pmfs_delete_file_tree(struct super_block *sb,
 				pmfs_free_contiguous_blocks(sb, pair,
 					&start_blocknr, &num_free, btype);
 			pmfs_free_cache_and_pair(sb, pair);
+			freed++;
 		}
 		pgoff++;
 	} while (nr_entries == FREE_BATCH);
@@ -1163,7 +1164,7 @@ void pmfs_delete_file_tree(struct super_block *sb,
 		pmfs_free_data_blocks(sb, start_blocknr, num_free, btype);
 
 	PMFS_END_TIMING(delete_file_tree_t, delete_time);
-	return;
+	return freed;
 }
 
 int pmfs_assign_nvmm_entry(struct super_block *sb,
