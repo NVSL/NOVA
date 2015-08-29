@@ -79,8 +79,6 @@ unsigned long free_log_pages;
 atomic64_t fsync_pages = ATOMIC_INIT(0);
 atomic64_t cache_alloc = ATOMIC_INIT(0);
 atomic64_t cache_free = ATOMIC_INIT(0);
-atomic64_t mempair_alloc = ATOMIC_INIT(0);
-atomic64_t mempair_free = ATOMIC_INIT(0);
 atomic64_t header_alloc = ATOMIC_INIT(0);
 atomic64_t header_free = ATOMIC_INIT(0);
 
@@ -106,8 +104,8 @@ void pmfs_print_alloc_stats(struct super_block *sb)
 	printk("Freed %lu data pages\n", free_data_pages);
 	printk("Allocated %lu log pages\n", alloc_log_pages);
 	printk("Freed %lu log pages\n", free_log_pages);
-	printk("Allocated %ld mem pairs\n",
-			atomic64_read(&mempair_alloc));
+	printk("Allocated %ld cache pages\n",
+			atomic64_read(&cache_alloc));
 	printk("Allocated %ld info headers\n",
 			atomic64_read(&header_alloc));
 }
@@ -291,11 +289,6 @@ void pmfs_detect_memory_leak(struct super_block *sb)
 			"allocated %ld, freed %ld\n", __func__,
 			atomic64_read(&cache_alloc),
 			atomic64_read(&cache_free));
-	if (atomic64_read(&mempair_alloc) != atomic64_read(&mempair_free))
-		pmfs_dbg("%s: mempair memory leak! "
-			"allocated %ld, freed %ld\n", __func__,
-			atomic64_read(&mempair_alloc),
-			atomic64_read(&mempair_free));
 	if (atomic64_read(&header_alloc) != atomic64_read(&header_free))
 		pmfs_dbg("%s: inode header memory leak! "
 			"allocated %ld, freed %ld\n", __func__,

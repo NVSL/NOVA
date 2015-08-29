@@ -270,17 +270,6 @@ enum alloc_type {
 #define	UNINIT(p)	((p) & (UNINIT_BIT))
 #define	DRAM_ADDR(p)	((p) & (PAGE_MASK))
 
-extern struct kmem_cache *pmfs_mempair_cachep;
-
-struct mem_addr {
-	unsigned long nvmm_entry;	// NVMM inode entry
-	unsigned long pgoff;
-
-	// DRAM page cache/mmap address or NVMM mmap block.
-	// Lowest 12 bits contain flag bits.
-	unsigned long cache;
-};
-
 static inline void pmfs_update_tail(struct pmfs_inode *pi, u64 new_tail)
 {
 	PERSISTENT_BARRIER();

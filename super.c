@@ -983,17 +983,6 @@ static int __init init_inodecache(void)
 	return 0;
 }
 
-static int __init init_mempair_cache(void)
-{
-	pmfs_mempair_cachep = kmem_cache_create("pmfs_mempair_cache",
-					       sizeof(struct mem_addr),
-					       0, (SLAB_RECLAIM_ACCOUNT |
-						   SLAB_MEM_SPREAD), NULL);
-	if (pmfs_mempair_cachep == NULL)
-		return -ENOMEM;
-	return 0;
-}
-
 static int __init init_header_cache(void)
 {
 	pmfs_header_cachep = kmem_cache_create("pmfs_header_cache",
@@ -1013,11 +1002,6 @@ static void destroy_inodecache(void)
 	 */
 	rcu_barrier();
 	kmem_cache_destroy(pmfs_inode_cachep);
-}
-
-static void destroy_mempair_cache(void)
-{
-	kmem_cache_destroy(pmfs_mempair_cachep);
 }
 
 static void destroy_header_cache(void)
@@ -1120,25 +1104,19 @@ static int __init init_pmfs_fs(void)
 	if (rc)
 		goto out1;
 
-	rc = init_mempair_cache();
+	rc = init_header_cache();
 	if (rc)
 		goto out2;
 
-	rc = init_header_cache();
-	if (rc)
-		goto out3;
-
 	rc = register_filesystem(&pmfs_fs_type);
 	if (rc)
-		goto out4;
+		goto out3;
 
 	PMFS_END_TIMING(init_t, init_time);
 	return 0;
 
-out4:
-	destroy_header_cache();
 out3:
-	destroy_mempair_cache();
+	destroy_header_cache();
 out2:
 	destroy_inodecache();
 out1:
@@ -1150,7 +1128,6 @@ static void __exit exit_pmfs_fs(void)
 {
 	unregister_filesystem(&pmfs_fs_type);
 	destroy_inodecache();
-	destroy_mempair_cache();
 	destroy_rangenode_cache();
 	destroy_header_cache();
 }

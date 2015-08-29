@@ -27,25 +27,6 @@
 unsigned int blk_type_to_shift[PMFS_BLOCK_TYPE_MAX] = {12, 21, 30};
 uint32_t blk_type_to_size[PMFS_BLOCK_TYPE_MAX] = {0x1000, 0x200000, 0x40000000};
 
-struct kmem_cache *pmfs_mempair_cachep;
-
-static inline struct mem_addr *pmfs_alloc_mempair(struct super_block *sb)
-{
-	struct mem_addr *p;
-	p = (struct mem_addr *)
-		kmem_cache_alloc(pmfs_mempair_cachep, GFP_NOFS);
-	p->nvmm_entry = p->pgoff = p->cache = 0;
-	atomic64_inc(&mempair_alloc);
-	return p;
-}
-
-static inline void pmfs_free_mempair(struct super_block *sb,
-	struct mem_addr *pair)
-{
-	kmem_cache_free(pmfs_mempair_cachep, pair);
-	atomic64_inc(&mempair_free);
-}
-
 void pmfs_print_inode_entry(struct pmfs_file_write_entry *entry)
 {
 	pmfs_dbg("entry @%p: pgoff %u, num_pages %u, block 0x%llx, "

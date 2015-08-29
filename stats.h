@@ -102,8 +102,6 @@ extern unsigned long free_log_pages;
 extern atomic64_t fsync_pages;
 extern atomic64_t cache_alloc;
 extern atomic64_t cache_free;
-extern atomic64_t mempair_alloc;
-extern atomic64_t mempair_free;
 extern atomic64_t header_alloc;
 extern atomic64_t header_free;
 
