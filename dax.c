@@ -56,7 +56,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	end_index = (isize - 1) >> PAGE_CACHE_SHIFT;
 	do {
 		unsigned long nr, left;
-		unsigned long addr = 0;
+//		unsigned long addr = 0;
 		unsigned long nvmm;
 		void *dax_mem = NULL;
 		int zero = 0;
@@ -722,15 +722,17 @@ out:
 	page_cache_write_bytes += written;
 	return ret;
 }
+#endif
 
 static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 	struct inode *inode, struct pmfs_inode *pi, loff_t pos,
 	size_t count, void *kmem)
 {
 	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct mem_addr *pair;
+	struct pmfs_inode_info_header *sih = si->header;
 	unsigned long start_blk;
-	unsigned long dram_addr;
+	unsigned long cache_addr;
+	void *mmap_addr;
 	u64 nvmm_block;
 	void *nvmm_addr;
 	loff_t offset;
@@ -746,24 +748,21 @@ static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 		if (bytes > count)
 			bytes = count;
 
-		pair = pmfs_get_mem_pair(sb, si, start_blk);
-		if (pair == NULL || (pair->cache == 0 && pair->page == NULL)) {
-			pmfs_err(sb, "%s mmap page not found!\n", __func__);
+		cache_addr = pmfs_get_cache_addr(sb, si, start_blk);
+		if (cache_addr == 0) {
+			pmfs_dbg("%s: ino %lu %lu mmap page %lu not found!\n",
+					__func__, inode->i_ino, sih->ino, start_blk);
+			pmfs_dbg("mmap pages %lu\n", sih->mmap_pages);
 			ret = -EINVAL;
 			goto out;
 		}
 
 		if (pmfs_has_page_cache(sb)) {
-			dram_addr = pmfs_get_dram_addr(pair);
+			mmap_addr = (void *)DRAM_ADDR(cache_addr);
 			copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
-				(void *)DRAM_ADDR(dram_addr) + offset, bytes);
-
-			if (pair->page)
-				kunmap_atomic((void *)dram_addr);
-
-			pair->cache &= ~DIRTY_BIT;
+				mmap_addr + offset, bytes);
 		} else {
-			nvmm_block = DRAM_ADDR(pair->cache);
+			nvmm_block = DRAM_ADDR(cache_addr);
 			nvmm_addr = pmfs_get_block(sb, nvmm_block);
 			copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
 				nvmm_addr + offset, bytes);
@@ -916,14 +915,16 @@ out:
 	return ret;
 }
 
-#endif
-
 ssize_t pmfs_dax_file_write(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos)
 {
 	return pmfs_cow_file_write(filp, buf, len, ppos, true);
+}
 
 #if 0
+ssize_t pmfs_dax_file_write(struct file *filp, const char __user *buf,
+	size_t len, loff_t *ppos)
+{
 	if (!pmfs_has_page_cache(filp->f_mapping->host->i_sb)) {
 		return pmfs_cow_file_write(filp, buf, len, ppos, true);
 	} else {
@@ -933,10 +934,8 @@ ssize_t pmfs_dax_file_write(struct file *filp, const char __user *buf,
 			return pmfs_page_cache_file_write(filp, buf, len,
 								ppos);
 	}
-#endif
 }
 
-#if 0
 static int pmfs_get_dram_pfn(struct super_block *sb,
 	struct pmfs_inode_info *si, struct mem_addr *pair, pgoff_t pgoff,
 	vm_flags_t vm_flags, void **kmem, unsigned long *pfn)
@@ -975,19 +974,24 @@ static int pmfs_get_dram_pfn(struct super_block *sb,
 
 	return 0;
 }
+#endif
 
 static int pmfs_get_nvmm_pfn(struct super_block *sb, struct pmfs_inode *pi,
-	struct pmfs_inode_info *si, struct mem_addr *pair, pgoff_t pgoff,
+	struct pmfs_inode_info *si, u64 nvmm, pgoff_t pgoff,
 	vm_flags_t vm_flags, void **kmem, unsigned long *pfn)
 {
-	u64 bp, mmap_block;
+	struct pmfs_inode_info_header *sih = si->header;
+	u64 mmap_block;
+	unsigned long cache_addr = 0;
 	unsigned long blocknr = 0;
 	void *mmap_addr;
-	void *nvmm;
+	void *nvmm_addr;
 	int ret;
 
-	if (pair->cache) {
-		mmap_block = DRAM_ADDR(pair->cache);
+	cache_addr = pmfs_get_cache_addr(sb, si, pgoff);
+
+	if (cache_addr) {
+		mmap_block = DRAM_ADDR(cache_addr);
 		mmap_addr = pmfs_get_block(sb, mmap_block);
 	} else {
 		ret = pmfs_new_data_blocks(sb, pi, &blocknr, 1,
@@ -999,18 +1003,24 @@ static int pmfs_get_nvmm_pfn(struct super_block *sb, struct pmfs_inode *pi,
 			return ret;
 		}
 
-		pair->cache = blocknr << PAGE_SHIFT;
 		mmap_block = blocknr << PAGE_SHIFT;
-		mmap_addr = pmfs_get_block(sb, pair->cache);
+		mmap_addr = pmfs_get_block(sb, mmap_block);
 
+		if (vm_flags & VM_WRITE)
+			mmap_block |= MMAP_WRITE_BIT;
+
+		ret = radix_tree_insert(&sih->cache_tree, pgoff,
+					(void *)mmap_block);
+		if (ret) {
+			pmfs_dbg("%s: ERROR %d\n", __func__, ret);
+			return ret;
+		}
+
+		sih->mmap_pages++;
 		/* Copy from NVMM to dram */
-		bp = __pmfs_find_nvmm_block(sb, si, pair, pgoff);
-		nvmm = pmfs_get_block(sb, bp);
-		memcpy(mmap_addr, nvmm,	PAGE_SIZE);
+		nvmm_addr = pmfs_get_block(sb, nvmm);
+		memcpy(mmap_addr, nvmm_addr, PAGE_SIZE);
 	}
-
-	if (vm_flags & VM_WRITE)
-		pair->cache |= MMAP_WRITE_BIT;
 
 	*kmem = mmap_addr;
 	*pfn = pmfs_get_pfn(sb, mmap_block);
@@ -1024,16 +1034,16 @@ static int pmfs_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 	struct super_block *sb = inode->i_sb;
 	struct pmfs_inode_info *si = PMFS_I(inode);
 	struct pmfs_inode *pi;
-	struct mem_addr *pair = NULL;
+	u64 nvmm;
 	vm_flags_t vm_flags = vma->vm_flags;
 	int ret;
 
 	pi = pmfs_get_inode(sb, inode);
 
-	pair = pmfs_get_mem_pair(sb, si, pgoff);
-	if (pair == NULL) {
+	nvmm = __pmfs_find_nvmm_block(sb, si, NULL, pgoff);
+	if (nvmm == 0) {
 		/* This should not happen. NVMM must exist! */
-		pmfs_dbg("%s: pair does not exist\n", __func__);
+		pmfs_dbg("%s: nvmm page does not exist\n", __func__);
 		return -EINVAL;
 	}
 
@@ -1041,6 +1051,7 @@ static int pmfs_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 	 * If pagecache is enabled, use dram mmap,
 	 * otherwise use nvmm mmap.
 	 */
+#if 0
 	if (pmfs_has_page_cache(sb)) {
 		ret = pmfs_get_dram_pfn(sb, si, pair, pgoff, vm_flags,
 						kmem, pfn);
@@ -1048,6 +1059,10 @@ static int pmfs_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 		ret = pmfs_get_nvmm_pfn(sb, pi, si, pair, pgoff, vm_flags,
 						kmem, pfn);
 	}
+#endif
+
+	ret = pmfs_get_nvmm_pfn(sb, pi, si, nvmm, pgoff, vm_flags,
+						kmem, pfn);
 
 	if (vm_flags & VM_WRITE) {
 		if (pgoff < si->low_mmap)
@@ -1349,4 +1364,3 @@ int pmfs_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 
 	return 0;
 }
-#endif

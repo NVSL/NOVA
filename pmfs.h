@@ -342,21 +342,23 @@ extern struct kmem_cache *pmfs_header_cachep;
 
 struct pmfs_inode_info_header {
 	struct radix_tree_root tree;	/* Dir name entry tree root */
-	u16	i_mode;			/* Dir or file? */
-	u32	log_pages;		/* Num of log pages */
-	u64	i_size;
-	u64	ino;
-	u64	pi_addr;
+	struct radix_tree_root cache_tree;	/* Mmap cache tree root */
+	unsigned short i_mode;		/* Dir or file? */
+	unsigned long log_pages;		/* Num of log pages */
+	unsigned long mmap_pages;	/* Num of mmap pages */
+	unsigned long i_size;
+	unsigned long ino;
+	unsigned long pi_addr;
 };
 
 struct pmfs_inode_info {
 	struct pmfs_inode_info_header *header;
 	__u32   i_dir_start_lookup;
-	struct inode	vfs_inode;
-	u64	low_dirty;		/* Dirty low range */
-	u64	high_dirty;		/* Dirty high range */
-	u64	low_mmap;		/* Mmap low range */
-	u64	high_mmap;		/* Mmap high range */
+	struct inode vfs_inode;
+	unsigned long low_dirty;	/* Dirty low range */
+	unsigned long high_dirty;	/* Dirty high range */
+	unsigned long low_mmap;		/* Mmap low range */
+	unsigned long high_mmap;	/* Mmap high range */
 };
 
 enum bm_type {
@@ -662,6 +664,17 @@ static inline u64 __pmfs_find_nvmm_block(struct super_block *sb,
 
 	nvmm = get_nvmm(sb, entry, blocknr);
 	return nvmm << PAGE_SHIFT;
+}
+
+static inline unsigned long pmfs_get_cache_addr(struct super_block *sb,
+	struct pmfs_inode_info *si, unsigned long blocknr)
+{
+	struct pmfs_inode_info_header *sih = si->header;
+	unsigned long addr;
+
+	addr = (unsigned long)radix_tree_lookup(&sih->cache_tree, blocknr);
+
+	return addr;
 }
 
 static inline unsigned int pmfs_inode_blk_shift (struct pmfs_inode *pi)

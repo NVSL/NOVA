@@ -583,10 +583,10 @@ static u64 pmfs_append_alive_inode_entry(struct super_block *sb,
 
 	entry = (struct pmfs_alive_inode_entry *)pmfs_get_block(sb, curr_p);
 	if (sih->ino != pi->pmfs_ino)
-		pmfs_dbg("%s: inode number not match! sih %llu, pi %llu\n",
+		pmfs_dbg("%s: inode number not match! sih %lu, pi %llu\n",
 			__func__, sih->ino, pi->pmfs_ino);
 	entry->pi_addr = sih->pi_addr;
-	pmfs_dbg_verbose("append entry alive inode %llu, pmfs inode 0x%llx "
+	pmfs_dbg_verbose("append entry alive inode %lu, pmfs inode 0x%lx "
 			"@ 0x%llx\n",
 			sih->ino, sih->pi_addr, curr_p);
 
@@ -950,9 +950,11 @@ struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
 		PMFS_ASSERT(0);
 
 	p->log_pages = 0;
+	p->mmap_pages = 0;
 	p->i_size = 0;
 	p->pi_addr = 0;
 	INIT_RADIX_TREE(&p->tree, GFP_ATOMIC);
+	INIT_RADIX_TREE(&p->cache_tree, GFP_ATOMIC);
 	p->i_mode = i_mode;
 
 	atomic64_inc(&header_alloc);

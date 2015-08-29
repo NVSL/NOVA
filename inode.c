@@ -159,6 +159,28 @@ static inline void pmfs_free_contiguous_blocks(struct super_block *sb,
 	}
 }
 
+int pmfs_delete_cache_tree(struct super_block *sb,
+	struct pmfs_inode_info_header *sih, unsigned long start_blocknr,
+	unsigned long last_blocknr, unsigned int btype)
+{
+	unsigned long blocknr;
+	unsigned long addr;
+	unsigned long i;
+	void *ret;
+
+	for (i = start_blocknr; i <= last_blocknr; i++) {
+		addr = (unsigned long)radix_tree_lookup(&sih->cache_tree, i);
+		if (addr) {
+			ret = radix_tree_delete(&sih->cache_tree, i);
+			blocknr = addr >> PAGE_SHIFT;
+			pmfs_free_data_blocks(sb, blocknr, 1, btype);
+			sih->mmap_pages--;
+		}
+	}
+
+	return 0;
+}
+
 int pmfs_delete_file_tree(struct super_block *sb,
 	struct pmfs_inode_info_header *sih, unsigned long start_blocknr,
 	bool delete_nvmm)
@@ -184,6 +206,9 @@ int pmfs_delete_file_tree(struct super_block *sb,
 		goto out;
 
 	last_blocknr = (sih->i_size - 1) >> data_bits;
+	if (sih->mmap_pages)
+		pmfs_delete_cache_tree(sb, sih, start_blocknr,
+						last_blocknr, btype);
 
 	for (pgoff = start_blocknr; pgoff <= last_blocknr; pgoff++) {
 		entry = radix_tree_lookup(&sih->tree, pgoff);

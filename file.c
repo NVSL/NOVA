@@ -183,14 +183,13 @@ static inline int pmfs_set_page_clean(struct mm_struct *mm,
 	return 0;
 }
 
-#if 0
 static inline int pmfs_check_page_dirty(struct super_block *sb,
-	struct mem_addr *pair)
+	unsigned long addr)
 {
 	int ret;
 
 	if (pmfs_has_page_cache(sb)) {
-		ret = IS_DIRTY(pair->cache) || IS_MAP_WRITE(pair->cache);
+		ret = IS_DIRTY(addr) || IS_MAP_WRITE(addr);
 	} else {
 //		u64 nvmm_block;
 //		unsigned long nvmm_addr;
@@ -198,20 +197,19 @@ static inline int pmfs_check_page_dirty(struct super_block *sb,
 //		nvmm_block = pair->nvmm_mmap << PAGE_SHIFT;
 //		nvmm_addr = (unsigned long)pmfs_get_block(sb, nvmm_block);
 //		ret = pmfs_is_page_dirty(&init_mm, nvmm_addr, TEST_NVMM, 1);
-		ret = IS_MAP_WRITE(pair->cache);
+		ret = IS_MAP_WRITE(addr);
 	}
 
 	return ret;
 }
-#endif
 
 static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 	struct pmfs_inode *pi, struct pmfs_inode_info *si, loff_t *start,
 	loff_t end)
 {
 	unsigned long flush_bytes = 0;
-#if 0
 	unsigned long bytes;
+	unsigned long cache_addr = 0;
 	pgoff_t pgoff;
 	loff_t offset;
 	loff_t dirty_start;
@@ -225,17 +223,15 @@ static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 		if (bytes > (end - temp))
 			bytes = end - temp;
 
-		pair = pmfs_get_mem_pair(sb, si, pgoff);
-		if (pair) {
-			if (pmfs_check_page_dirty(sb, pair)) {
-				if (flush_bytes == 0)
-					dirty_start = temp;
-				flush_bytes += bytes;
-				atomic64_inc(&fsync_pages);
-			} else {
-				if (flush_bytes)
-					break;
-			}
+		cache_addr = pmfs_get_cache_addr(sb, si, pgoff);
+		if (cache_addr && pmfs_check_page_dirty(sb, cache_addr)) {
+			if (flush_bytes == 0)
+				dirty_start = temp;
+			flush_bytes += bytes;
+			atomic64_inc(&fsync_pages);
+		} else {
+			if (flush_bytes)
+				break;
 		}
 		temp += bytes;
 	}
@@ -244,8 +240,6 @@ static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 		*start = end;
 	else
 		*start = dirty_start;
-#endif
-	*start = end;
 
 	return flush_bytes;
 }
@@ -483,13 +477,9 @@ const struct file_operations pmfs_dax_file_operations = {
 	.llseek			= pmfs_llseek,
 	.read			= pmfs_dax_file_read,
 	.write			= pmfs_dax_file_write,
-//	.write			= pmfs_cow_file_write,
-//	.aio_read		= dax_file_aio_read,
-//	.aio_write		= dax_file_aio_write,
 	.read_iter		= generic_file_read_iter,
 	.write_iter		= generic_file_write_iter,
-//	.mmap			= pmfs_dax_file_mmap,
-	.mmap			= generic_file_mmap,
+	.mmap			= pmfs_dax_file_mmap,
 	.open			= pmfs_open,
 	.fsync			= pmfs_fsync,
 	.flush			= pmfs_flush,
