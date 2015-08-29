@@ -247,8 +247,8 @@ void pmfs_print_inode_log_pages(struct super_block *sb, struct inode *inode)
 	if (pi->log_tail >> PAGE_SHIFT == curr >> PAGE_SHIFT)
 		used = count;
 	pmfs_dbg("Pi %lu: log used %d pages, has %d pages, "
-			"si reports %d pages\n", inode->i_ino, used, count,
-			sih->log_pages);
+		"si reports %lu pages\n", inode->i_ino, used, count,
+		sih->log_pages);
 }
 
 void pmfs_print_free_lists(struct super_block *sb)

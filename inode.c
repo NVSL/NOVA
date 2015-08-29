@@ -34,7 +34,6 @@ static inline struct mem_addr *pmfs_alloc_mempair(struct super_block *sb)
 	struct mem_addr *p;
 	p = (struct mem_addr *)
 		kmem_cache_alloc(pmfs_mempair_cachep, GFP_NOFS);
-	p->page = NULL;
 	p->nvmm_entry = p->pgoff = p->cache = 0;
 	atomic64_inc(&mempair_alloc);
 	return p;
@@ -126,7 +125,7 @@ void pmfs_free_cache_and_pair(struct super_block *sb,
 	if (!pair)
 		return;
 
-	if (pair->page || pair->cache) {
+	if (pair->cache) {
 		pmfs_free_cache_block(sb, pair);
 	}
 
@@ -384,7 +383,7 @@ int pmfs_assign_cache_range(struct super_block *sb,
 					old_pair->pgoff, curr_pgoff);
 				return -EINVAL;
 			}
-			if (!old_pair->page && old_pair->cache == 0) {
+			if (old_pair->cache == 0) {
 				ret = pmfs_new_cache_block(sb, old_pair, 0, 0);
 				if (ret)
 					goto out;

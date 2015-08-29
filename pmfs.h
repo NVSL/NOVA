@@ -242,7 +242,6 @@ enum alloc_type {
 	KMALLOC = 1,
 	VMALLOC,
 	GETPAGE,
-	ALLOCPAGE,
 };
 
 /* MALLOC TEST */
@@ -280,8 +279,6 @@ struct mem_addr {
 	// DRAM page cache/mmap address or NVMM mmap block.
 	// Lowest 12 bits contain flag bits.
 	unsigned long cache;
-
-	struct page *page;
 };
 
 static inline void pmfs_update_tail(struct pmfs_inode *pi, u64 new_tail)

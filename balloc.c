@@ -117,7 +117,7 @@ static inline void pmfs_free_dram_page(unsigned long page_addr)
 }
 
 static int pmfs_alloc_dram_page(struct super_block *sb,
-	enum alloc_type type, unsigned long *page_addr, struct page **page,
+	enum alloc_type type, unsigned long *page_addr,
 	int zero, int nosleep)
 {
 	unsigned long addr = 0;
@@ -183,14 +183,6 @@ static int pmfs_alloc_dram_page(struct super_block *sb,
 				addr = 0;
 			}
 			break;
-		case ALLOCPAGE:
-			if (zero)
-				flags |= __GFP_ZERO;
-			*page = alloc_page(flags);
-			*page_addr |= DRAM_BIT;
-			if (*page == NULL)
-				return -ENOMEM;
-			return 0;
 		default:
 			break;
 	}
@@ -448,16 +440,11 @@ void pmfs_free_cache_block(struct super_block *sb, struct mem_addr *pair)
 	timing_t free_time;
 
 	PMFS_START_TIMING(free_cache_t, free_time);
-	if (pair->page) {
-		__free_page(pair->page);
-	} else {
-		if (IS_DRAM_ADDR(pair->cache))
-			pmfs_free_dram_page(pair->cache);
-		else
-			pmfs_free_data_blocks(sb, pair->cache >> PAGE_SHIFT,
+	if (IS_DRAM_ADDR(pair->cache))
+		pmfs_free_dram_page(pair->cache);
+	else
+		pmfs_free_data_blocks(sb, pair->cache >> PAGE_SHIFT,
 						1, PMFS_BLOCK_TYPE_4K);
-	}
-	pair->page = NULL;
 	pair->cache = 0;
 	PMFS_END_TIMING(free_cache_t, free_time);
 	atomic64_inc(&cache_free);
@@ -502,7 +489,7 @@ int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
 	timing_t alloc_time;
 
 	PMFS_START_TIMING(new_meta_block_t, alloc_time);
-	ret = pmfs_alloc_dram_page(sb, KMALLOC, blocknr, NULL, zero, nosleep);
+	ret = pmfs_alloc_dram_page(sb, KMALLOC, blocknr, zero, nosleep);
 	if (ret) {
 		PMFS_END_TIMING(new_meta_block_t, alloc_time);
 		return ret;
@@ -518,13 +505,12 @@ int pmfs_new_cache_block(struct super_block *sb,
 	struct mem_addr *pair, int zero, int nosleep)
 {
 	unsigned long page_addr = 0;
-	struct page *page = NULL;
 	int err = 0;
 	timing_t alloc_time;
 
 	PMFS_START_TIMING(new_cache_page_t, alloc_time);
-	/* Using vmalloc/allocpage because we need the page to do mmap */
-	err = pmfs_alloc_dram_page(sb, ALLOCPAGE, &page_addr, &page,
+	/* Using vmalloc because we may need the page to do mmap */
+	err = pmfs_alloc_dram_page(sb, VMALLOC, &page_addr,
 							zero, nosleep);
 	if (err) {
 		PMFS_END_TIMING(new_cache_page_t, alloc_time);
@@ -532,7 +518,6 @@ int pmfs_new_cache_block(struct super_block *sb,
 		goto out;
 	}
 
-	pair->page = page;
 	pair->cache = page_addr;
 	atomic64_inc(&cache_alloc);
 out:
