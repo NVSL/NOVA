@@ -104,6 +104,8 @@ extern atomic64_t cache_alloc;
 extern atomic64_t cache_free;
 extern atomic64_t header_alloc;
 extern atomic64_t header_free;
+extern atomic64_t range_alloc;
+extern atomic64_t range_free;
 
 typedef struct timespec timing_t;
 

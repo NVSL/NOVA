@@ -885,6 +885,7 @@ static void pmfs_put_super(struct super_block *sb)
 inline void pmfs_free_range_node(struct pmfs_range_node *node)
 {
 	kmem_cache_free(pmfs_range_node_cachep, node);
+	atomic64_inc(&range_free);
 }
 
 inline void pmfs_free_blocknode(struct super_block *sb,
@@ -905,6 +906,7 @@ struct pmfs_range_node *pmfs_alloc_range_node(struct super_block *sb)
 	struct pmfs_range_node *p;
 	p = (struct pmfs_range_node *)
 		kmem_cache_alloc(pmfs_range_node_cachep, GFP_NOFS);
+	atomic64_inc(&range_alloc);
 	return p;
 }
 

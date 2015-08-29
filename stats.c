@@ -81,6 +81,8 @@ atomic64_t cache_alloc = ATOMIC_INIT(0);
 atomic64_t cache_free = ATOMIC_INIT(0);
 atomic64_t header_alloc = ATOMIC_INIT(0);
 atomic64_t header_free = ATOMIC_INIT(0);
+atomic64_t range_alloc = ATOMIC_INIT(0);
+atomic64_t range_free = ATOMIC_INIT(0);
 
 void pmfs_print_alloc_stats(struct super_block *sb)
 {
@@ -108,6 +110,8 @@ void pmfs_print_alloc_stats(struct super_block *sb)
 			atomic64_read(&cache_alloc));
 	printk("Allocated %ld info headers\n",
 			atomic64_read(&header_alloc));
+	printk("Allocated %ld range nodes\n",
+			atomic64_read(&range_alloc));
 }
 
 void pmfs_print_IO_stats(struct super_block *sb)
@@ -294,4 +298,9 @@ void pmfs_detect_memory_leak(struct super_block *sb)
 			"allocated %ld, freed %ld\n", __func__,
 			atomic64_read(&header_alloc),
 			atomic64_read(&header_free));
+	if (atomic64_read(&range_alloc) != atomic64_read(&range_free))
+		pmfs_dbg("%s: range node memory leak! "
+			"allocated %ld, freed %ld\n", __func__,
+			atomic64_read(&range_alloc),
+			atomic64_read(&range_free));
 }
