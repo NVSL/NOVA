@@ -93,45 +93,6 @@ int pmfs_init_inode_table(struct super_block *sb)
 	return pmfs_init_inode_inuse_list(sb);
 }
 
-/*
- * find the offset to the block represented by the given inode's file
- * relative block number.
- */
-u64 pmfs_find_nvmm_block(struct inode *inode, unsigned long file_blocknr)
-{
-	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	u32 blk_shift;
-	unsigned long blk_offset, blocknr = file_blocknr;
-	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
-	u64 bp;
-
-	/* convert the 4K blocks into the actual blocks the inode is using */
-	blk_shift = data_bits - sb->s_blocksize_bits;
-	blk_offset = file_blocknr & ((1 << blk_shift) - 1);
-	blocknr = file_blocknr >> blk_shift;
-
-	bp = __pmfs_find_nvmm_block(sb, si, NULL, blocknr);
-
-	if (bp == 0)
-		return 0;
-	return bp + (blk_offset << sb->s_blocksize_bits);
-}
-
-void pmfs_free_cache_and_pair(struct super_block *sb,
-	struct mem_addr *pair)
-{
-	if (!pair)
-		return;
-
-	if (pair->cache) {
-		pmfs_free_cache_block(sb, pair->cache);
-	}
-
-	pmfs_free_mempair(sb, pair);
-}
-
 static inline void pmfs_free_contiguous_blocks(struct super_block *sb,
 	struct pmfs_file_write_entry *entry, unsigned long pgoff,
 	unsigned long *start_blocknr, unsigned long *num_free,
@@ -158,7 +119,7 @@ static inline void pmfs_free_contiguous_blocks(struct super_block *sb,
 	}
 }
 
-int pmfs_delete_cache_tree(struct super_block *sb,
+static int pmfs_delete_cache_tree(struct super_block *sb,
 	struct pmfs_inode_info_header *sih, unsigned long start_blocknr,
 	unsigned long last_blocknr, unsigned int btype)
 {
@@ -178,7 +139,7 @@ int pmfs_delete_cache_tree(struct super_block *sb,
 	return 0;
 }
 
-int pmfs_delete_file_tree(struct super_block *sb,
+static int pmfs_delete_file_tree(struct super_block *sb,
 	struct pmfs_inode_info_header *sih, unsigned long start_blocknr,
 	bool delete_nvmm)
 {
@@ -423,14 +384,6 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode_info_header *sih;
 	int ret = -EIO;
 	unsigned long ino;
-
-#if 0
-	if (pmfs_calc_checksum((u8 *)pi, PMFS_INODE_SIZE)) {
-		pmfs_err(inode->i_sb, "checksum error in inode %lx\n",
-			  (u64)inode->i_ino);
-		goto bad_inode;
-	}
-#endif
 
 	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
 	inode->i_mode = le16_to_cpu(pi->i_mode);

@@ -647,7 +647,7 @@ static inline unsigned long get_nvmm(struct super_block *sb,
 	return (data->block >> PAGE_SHIFT) + pgoff - data->pgoff;
 }
 
-static inline u64 __pmfs_find_nvmm_block(struct super_block *sb,
+static inline u64 pmfs_find_nvmm_block(struct super_block *sb,
 	struct pmfs_inode_info *si, struct pmfs_file_write_entry *entry,
 	unsigned long blocknr)
 {
@@ -941,8 +941,6 @@ int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
 /* inode.c */
 extern const struct address_space_operations pmfs_aops_dax;
 extern int pmfs_init_inode_table(struct super_block *sb);
-extern u64 pmfs_find_nvmm_block(struct inode *inode, 
-		unsigned long file_blocknr);
 int pmfs_set_blocksize_hint(struct super_block *sb, struct inode *inode,
 	struct pmfs_inode *pi, loff_t new_size);
 extern struct inode *pmfs_iget(struct super_block *sb, unsigned long ino);

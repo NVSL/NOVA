@@ -1040,7 +1040,7 @@ static int pmfs_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 
 	pi = pmfs_get_inode(sb, inode);
 
-	nvmm = __pmfs_find_nvmm_block(sb, si, NULL, pgoff);
+	nvmm = pmfs_find_nvmm_block(sb, si, NULL, pgoff);
 	if (nvmm == 0) {
 		/* This should not happen. NVMM must exist! */
 		pmfs_dbg("%s: nvmm page does not exist\n", __func__);
