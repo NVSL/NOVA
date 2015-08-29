@@ -178,12 +178,12 @@ int pmfs_delete_file_tree(struct super_block *sb,
 	btype = pi->i_blk_type;
 	data_bits = blk_type_to_shift[btype];
 
-	if (sih->i_size == 0)
-		last_blocknr = 0;
-	else
-		last_blocknr = (sih->i_size - 1) >> data_bits;
-
 	PMFS_START_TIMING(delete_file_tree_t, delete_time);
+
+	if (sih->i_size == 0)
+		goto out;
+
+	last_blocknr = (sih->i_size - 1) >> data_bits;
 
 	for (pgoff = start_blocknr; pgoff <= last_blocknr; pgoff++) {
 		entry = radix_tree_lookup(&sih->tree, pgoff);
@@ -199,7 +199,7 @@ int pmfs_delete_file_tree(struct super_block *sb,
 
 	if (free_blocknr)
 		pmfs_free_data_blocks(sb, free_blocknr, num_free, btype);
-
+out:
 	PMFS_END_TIMING(delete_file_tree_t, delete_time);
 	return freed;
 }

@@ -950,6 +950,8 @@ struct pmfs_inode_info_header *pmfs_alloc_header(struct super_block *sb,
 		PMFS_ASSERT(0);
 
 	p->log_pages = 0;
+	p->i_size = 0;
+	p->pi_addr = 0;
 	INIT_RADIX_TREE(&p->tree, GFP_ATOMIC);
 	p->i_mode = i_mode;
 
