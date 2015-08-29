@@ -322,7 +322,8 @@ int pmfs_assign_cache_range(struct super_block *sb,
 	struct pmfs_inode_info_header *sih,
 	struct pmfs_file_write_entry *entry)
 {
-	struct mem_addr *old_pair, *pair;
+	void *old_addr;
+	unsigned long addr;
 	unsigned int start_pgoff = entry->pgoff;
 	unsigned int num = entry->num_pages;
 	unsigned long curr_pgoff;
@@ -334,35 +335,15 @@ int pmfs_assign_cache_range(struct super_block *sb,
 	for (i = 0; i < num; i++) {
 		curr_pgoff = start_pgoff + i;
 
-		old_pair = radix_tree_lookup(&sih->tree, curr_pgoff);
-		if (old_pair) {
-			if (old_pair->pgoff != curr_pgoff) {
-				pmfs_dbg("%s: pgoff does not match! "
-					"%lu, %lu\n", __func__,
-					old_pair->pgoff, curr_pgoff);
-				return -EINVAL;
-			}
-			if (old_pair->cache == 0) {
-				ret = pmfs_new_cache_block(sb, old_pair, 0, 0);
-				if (ret)
-					goto out;
-				old_pair->cache |= UNINIT_BIT;
-				if (old_pair->nvmm_entry)
-					/* Outdate with NVMM */
-					old_pair->cache |= OUTDATE_BIT;
-			}
-		} else {
-			pair = pmfs_alloc_mempair(sb);
-			if (!pair) {
-				pmfs_dbg("%s: alloc failed\n", __func__);
-				return -EINVAL;
-			}
-			ret = pmfs_new_cache_block(sb, pair, 0, 0);
+		old_addr = radix_tree_lookup(&sih->cache_tree,
+							curr_pgoff);
+		if (!old_addr) {
+			ret = pmfs_new_cache_block(sb, &addr, 0, 0);
 			if (ret)
 				goto out;
-			pair->cache |= UNINIT_BIT;
-			pair->pgoff = curr_pgoff;
-			ret = radix_tree_insert(&sih->tree, curr_pgoff, pair);
+//			addr |= UNINIT_BIT;
+			ret = radix_tree_insert(&sih->cache_tree,
+						curr_pgoff, (void *)addr);
 			if (ret) {
 				pmfs_dbg("%s: ERROR %d\n", __func__, ret);
 				goto out;

@@ -609,7 +609,7 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 
 	sbi->inode_inuse_tree = RB_ROOT;
 
-	if (pmfs_alloc_dram_page(sb, KMALLOC, &sbi->zeroed_page, 1, 0))
+	if (pmfs_new_cache_block(sb, &sbi->zeroed_page, 1, 0))
 		goto out;
 
 	if (pmfs_parse_options(data, sbi, 0))

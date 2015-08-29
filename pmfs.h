@@ -864,10 +864,7 @@ extern int pmfs_new_data_blocks(struct super_block *sb, struct pmfs_inode *pi,
 extern int pmfs_new_log_blocks(struct super_block *sb, unsigned long pmfs_ino,
 	unsigned long *blocknr, unsigned int num, unsigned short btype,
 	int zero);
-int pmfs_alloc_dram_page(struct super_block *sb,
-	enum alloc_type type, unsigned long *page_addr,
-	int zero, int nosleep);
-extern int pmfs_new_cache_block(struct super_block *sb, struct mem_addr *pair,
+int pmfs_new_cache_block(struct super_block *sb, unsigned long *addr,
 	int zero, int nosleep);
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
 inline int pmfs_search_inodetree(struct pmfs_sb_info *sbi,
