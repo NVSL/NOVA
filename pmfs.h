@@ -880,7 +880,7 @@ int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
 	struct rb_root *tree, unsigned long range_low,
 	unsigned long range_high, struct pmfs_range_node **prev,
 	struct pmfs_range_node **next);
-void pmfs_free_cache_block(struct super_block *sb, struct mem_addr *pair);
+void pmfs_free_cache_block(struct super_block *sb, unsigned long addr);
 
 /* bbuild.c */
 inline void set_bm(unsigned long bit, struct scan_bitmap *bm,

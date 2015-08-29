@@ -126,7 +126,7 @@ void pmfs_free_cache_and_pair(struct super_block *sb,
 		return;
 
 	if (pair->cache) {
-		pmfs_free_cache_block(sb, pair);
+		pmfs_free_cache_block(sb, pair->cache);
 	}
 
 	pmfs_free_mempair(sb, pair);
@@ -162,7 +162,6 @@ int pmfs_delete_cache_tree(struct super_block *sb,
 	struct pmfs_inode_info_header *sih, unsigned long start_blocknr,
 	unsigned long last_blocknr, unsigned int btype)
 {
-	unsigned long blocknr;
 	unsigned long addr;
 	unsigned long i;
 	void *ret;
@@ -171,8 +170,7 @@ int pmfs_delete_cache_tree(struct super_block *sb,
 		addr = (unsigned long)radix_tree_lookup(&sih->cache_tree, i);
 		if (addr) {
 			ret = radix_tree_delete(&sih->cache_tree, i);
-			blocknr = addr >> PAGE_SHIFT;
-			pmfs_free_data_blocks(sb, blocknr, 1, btype);
+			pmfs_free_cache_block(sb, addr);
 			sih->mmap_pages--;
 		}
 	}

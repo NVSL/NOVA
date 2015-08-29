@@ -435,17 +435,16 @@ void pmfs_free_meta_block(struct super_block *sb, unsigned long page_addr)
 	atomic64_inc(&meta_free);
 }
 
-void pmfs_free_cache_block(struct super_block *sb, struct mem_addr *pair)
+void pmfs_free_cache_block(struct super_block *sb, unsigned long addr)
 {
 	timing_t free_time;
 
 	PMFS_START_TIMING(free_cache_t, free_time);
-	if (IS_DRAM_ADDR(pair->cache))
-		pmfs_free_dram_page(pair->cache);
+	if (IS_DRAM_ADDR(addr))
+		pmfs_free_dram_page(addr);
 	else
-		pmfs_free_data_blocks(sb, pair->cache >> PAGE_SHIFT,
-						1, PMFS_BLOCK_TYPE_4K);
-	pair->cache = 0;
+		pmfs_free_data_blocks(sb, addr >> PAGE_SHIFT,
+					1, PMFS_BLOCK_TYPE_4K);
 	PMFS_END_TIMING(free_cache_t, free_time);
 	atomic64_inc(&cache_free);
 }
