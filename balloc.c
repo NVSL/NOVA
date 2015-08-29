@@ -116,7 +116,7 @@ static inline void pmfs_free_dram_page(unsigned long page_addr)
 		free_page(DRAM_ADDR(page_addr));
 }
 
-static int pmfs_alloc_dram_page(struct super_block *sb,
+int pmfs_alloc_dram_page(struct super_block *sb,
 	enum alloc_type type, unsigned long *page_addr,
 	int zero, int nosleep)
 {
@@ -424,17 +424,6 @@ block_found:
 	free_steps += step;
 }
 
-void pmfs_free_meta_block(struct super_block *sb, unsigned long page_addr)
-{
-	timing_t free_time;
-
-	PMFS_START_TIMING(free_meta_t, free_time);
-	pmfs_dbg_verbose("Free meta block 0x%lx\n", page_addr);
-	pmfs_free_dram_page(page_addr);
-	PMFS_END_TIMING(free_meta_t, free_time);
-	atomic64_inc(&meta_free);
-}
-
 void pmfs_free_cache_block(struct super_block *sb, unsigned long addr)
 {
 	timing_t free_time;
@@ -479,25 +468,6 @@ void pmfs_free_log_blocks(struct super_block *sb, unsigned long blocknr,
 	pmfs_free_blocks(sb, blocknr, num, btype);
 	free_log_pages += num;
 	PMFS_END_TIMING(free_log_t, free_time);
-}
-
-int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
-	int zero, int nosleep)
-{
-	int ret;
-	timing_t alloc_time;
-
-	PMFS_START_TIMING(new_meta_block_t, alloc_time);
-	ret = pmfs_alloc_dram_page(sb, KMALLOC, blocknr, zero, nosleep);
-	if (ret) {
-		PMFS_END_TIMING(new_meta_block_t, alloc_time);
-		return ret;
-	}
-
-	pmfs_dbg_verbose("%s: 0x%lx\n", __func__, *blocknr);
-	PMFS_END_TIMING(new_meta_block_t, alloc_time);
-	atomic64_inc(&meta_alloc);
-	return 0;
 }
 
 int pmfs_new_cache_block(struct super_block *sb,

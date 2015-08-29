@@ -854,7 +854,6 @@ inline void pmfs_free_blocknode(struct super_block *sb,
 inline void pmfs_free_inode_node(struct super_block *sb,
 	struct pmfs_range_node *bnode);
 extern void pmfs_init_blockmap(struct super_block *sb, int recovery);
-extern void pmfs_free_meta_block(struct super_block *sb, unsigned long blocknr);
 extern void pmfs_free_data_blocks(struct super_block *sb,
 	unsigned long blocknr, int num, unsigned short btype);
 extern void pmfs_free_log_blocks(struct super_block *sb,
@@ -865,7 +864,8 @@ extern int pmfs_new_data_blocks(struct super_block *sb, struct pmfs_inode *pi,
 extern int pmfs_new_log_blocks(struct super_block *sb, unsigned long pmfs_ino,
 	unsigned long *blocknr, unsigned int num, unsigned short btype,
 	int zero);
-extern int pmfs_new_meta_block(struct super_block *sb, unsigned long *blocknr,
+int pmfs_alloc_dram_page(struct super_block *sb,
+	enum alloc_type type, unsigned long *page_addr,
 	int zero, int nosleep);
 extern int pmfs_new_cache_block(struct super_block *sb, struct mem_addr *pair,
 	int zero, int nosleep);
