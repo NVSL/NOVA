@@ -504,11 +504,11 @@ static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 		}
 
 		if (pmfs_has_page_cache(sb)) {
-			mmap_addr = (void *)DRAM_ADDR(cache_addr);
+			mmap_addr = (void *)MMAP_ADDR(cache_addr);
 			copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
 				mmap_addr + offset, bytes);
 		} else {
-			nvmm_block = DRAM_ADDR(cache_addr);
+			nvmm_block = MMAP_ADDR(cache_addr);
 			nvmm_addr = pmfs_get_block(sb, nvmm_block);
 			copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
 				nvmm_addr + offset, bytes);
@@ -682,7 +682,7 @@ static int pmfs_get_nvmm_pfn(struct super_block *sb, struct pmfs_inode *pi,
 	cache_addr = pmfs_get_cache_addr(sb, si, pgoff);
 
 	if (cache_addr) {
-		mmap_block = DRAM_ADDR(cache_addr);
+		mmap_block = MMAP_ADDR(cache_addr);
 		mmap_addr = pmfs_get_block(sb, mmap_block);
 	} else {
 		ret = pmfs_new_data_blocks(sb, pi, &blocknr, 1,

@@ -121,10 +121,6 @@ int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
 		return 0;
 	}
 
-	if (category == TEST_PAGEALLOC || category == TEST_PAGEZALLOC) {
-		return PageDirty((struct page *)address);
-	}
-
 	spin_lock(&mm->page_table_lock);
 
 	pgd = pgd_offset(mm, address);
@@ -188,17 +184,13 @@ static inline int pmfs_check_page_dirty(struct super_block *sb,
 {
 	int ret;
 
-	if (pmfs_has_page_cache(sb)) {
-		ret = IS_DIRTY(addr) || IS_MAP_WRITE(addr);
-	} else {
-//		u64 nvmm_block;
-//		unsigned long nvmm_addr;
+//	u64 nvmm_block;
+//	unsigned long nvmm_addr;
 
-//		nvmm_block = pair->nvmm_mmap << PAGE_SHIFT;
-//		nvmm_addr = (unsigned long)pmfs_get_block(sb, nvmm_block);
-//		ret = pmfs_is_page_dirty(&init_mm, nvmm_addr, TEST_NVMM, 1);
-		ret = IS_MAP_WRITE(addr);
-	}
+//	nvmm_block = pair->nvmm_mmap << PAGE_SHIFT;
+//	nvmm_addr = (unsigned long)pmfs_get_block(sb, nvmm_block);
+//	ret = pmfs_is_page_dirty(&init_mm, nvmm_addr, TEST_NVMM, 1);
+	ret = IS_MAP_WRITE(addr);
 
 	return ret;
 }

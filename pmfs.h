@@ -112,15 +112,11 @@ extern unsigned int pmfs_dbgmask;
 #define PMFS_FL_USER_VISIBLE (FS_FL_USER_VISIBLE | PMFS_EOFBLOCKS_FL)
 
 /* IOCTLs */
-#define	FS_PMFS_FSYNC			0xBCD0000E
 #define	PMFS_PRINT_TIMING		0xBCD00010
 #define	PMFS_CLEAR_STATS		0xBCD00011
-#define	PMFS_COW_WRITE			0xBCD00012
 #define	PMFS_PRINT_LOG			0xBCD00013
 #define	PMFS_PRINT_LOG_BLOCKNODE	0xBCD00014
 #define	PMFS_PRINT_LOG_PAGES		0xBCD00015
-#define	PMFS_MALLOC_TEST		0xBCD00016
-#define	PMFS_TEST_MULTITHREAD_RECOVERY	0xBCD00017
 #define	PMFS_PRINT_FREE_LISTS		0xBCD00018
 
 
@@ -244,31 +240,9 @@ enum alloc_type {
 	GETPAGE,
 };
 
-/* MALLOC TEST */
-#define	TEST_ZERO	1
-#define	TEST_NORMAL	2
-#define	TEST_VMALLOC	3
-#define	TEST_KMALLOC	4
-#define	TEST_KZALLOC	5
-#define	TEST_PAGEALLOC	6
-#define	TEST_PAGEZALLOC	7
-#define	TEST_NVMM	8
-
-#define	DRAM_BIT	0x1UL	// DRAM
-#define	KMALLOC_BIT	0x2UL	// Alloc with kmalloc
-#define	VMALLOC_BIT	0x4UL	// Alloc with vmalloc
-#define	GETPAGE_BIT	0x8UL	// Alloc with get_free_page
-#define	DIRTY_BIT	0x10UL	// Dirty
 #define	MMAP_WRITE_BIT	0x20UL	// mmaped for write
-#define	OUTDATE_BIT	0x40UL	// Outdate with NVMM page
-#define	UNINIT_BIT	0x80UL	// Unitialized page
-
-#define	IS_DRAM_ADDR(p)	((p) & (DRAM_BIT))
-#define	IS_DIRTY(p)	((p) & (DIRTY_BIT))
 #define	IS_MAP_WRITE(p)	((p) & (MMAP_WRITE_BIT))
-#define	OUTDATE(p)	((p) & (OUTDATE_BIT))
-#define	UNINIT(p)	((p) & (UNINIT_BIT))
-#define	DRAM_ADDR(p)	((p) & (PAGE_MASK))
+#define	MMAP_ADDR(p)	((p) & (PAGE_MASK))
 
 static inline void pmfs_update_tail(struct pmfs_inode *pi, u64 new_tail)
 {

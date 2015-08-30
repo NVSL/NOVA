@@ -18,129 +18,6 @@
 #include <linux/mount.h>
 #include "pmfs.h"
 
-struct sync_range
-{
-	off_t	offset;
-	size_t	length;
-};
-
-struct write_request
-{
-	char*	buf;
-	loff_t	offset;
-	size_t	len;
-};
-
-struct malloc_request
-{
-	int	category;
-	int	size;
-};
-
-void pmfs_malloc_test(struct super_block *sb, int category, int size)
-{
-	timing_t malloc_time;
-	int i;
-	struct page *page;
-	int pfn;
-	int check = 1;
-	unsigned long *addr = kmalloc(size * sizeof(unsigned long),
-					GFP_KERNEL);
-	unsigned long flags = GFP_KERNEL;
-	void *page_addr;
-
-	PMFS_START_TIMING(malloc_test_t, malloc_time);
-	for (i = 0; i < size; i++) {
-		switch(category) {
-		case TEST_ZERO:
-			addr[i] = get_zeroed_page(flags);
-			page = virt_to_page((void *)addr[i]);
-			pfn = page_to_pfn(page);
-			pmfs_dbgv("get_zero_page: page %p pfn %d\n", page, pfn);
-			break;
-		case TEST_NORMAL:
-			addr[i] = __get_free_page(flags);
-			page = virt_to_page((void *)addr[i]);
-			pfn = page_to_pfn(page);
-			pmfs_dbgv("get_free_page: page %p pfn %d\n", page, pfn);
-			break;
-		case TEST_VMALLOC:
-			addr[i] = (unsigned long)vmalloc(PAGE_SIZE);
-			page = vmalloc_to_page((void *)addr[i]);
-			pfn = page_to_pfn(page);
-			pmfs_dbgv("vmalloc: page %p pfn %d\n", page, pfn);
-			break;
-		case TEST_KMALLOC:
-			addr[i] = (unsigned long)kmalloc(PAGE_SIZE, flags);
-			page = virt_to_page((void *)addr[i]);
-			pfn = page_to_pfn(page);
-			pmfs_dbgv("kmalloc: page %p pfn %d\n", page, pfn);
-			break;
-		case TEST_KZALLOC:
-			addr[i] = (unsigned long)kzalloc(PAGE_SIZE, flags);
-			page = virt_to_page((void *)addr[i]);
-			pfn = page_to_pfn(page);
-			pmfs_dbgv("kzalloc: page %p pfn %d\n", page, pfn);
-			break;
-		case TEST_PAGEALLOC:
-			addr[i] = (unsigned long)alloc_page(flags);
-			page_addr = kmap_atomic((struct page *)addr[i]);
-//			*(unsigned long *)page_addr = 1;
-//			pmfs_dbgv("alloc page: 0x%lx\n",
-//					(unsigned long)page_addr);
-			kunmap_atomic(page_addr);
-			check = 0;
-			break;
-		case TEST_PAGEZALLOC:
-			flags |= __GFP_ZERO;
-			addr[i] = (unsigned long)alloc_page(flags);
-			page_addr = kmap_atomic((struct page *)addr[i]);
-//			*(unsigned long *)page_addr = 1;
-//			pmfs_dbgv("alloc page: 0x%lx\n",
-//					(unsigned long)page_addr);
-			kunmap_atomic(page_addr);
-			check = 0;
-			break;
-		default:
-			break;
-		}
-		if (addr[i] == 0 || (check && addr[i] != DRAM_ADDR(addr[i])))
-			pmfs_dbg("Error: page %d addr 0x%lx\n", i, addr[i]);
-	}
-	PMFS_END_TIMING(malloc_test_t, malloc_time);
-
-	for (i = 0; i < size; i++) {
-		int dirty;
-
-		dirty = pmfs_is_page_dirty(current->active_mm,
-				(unsigned long)addr[i],	category, 0);
-		if (dirty)
-			pmfs_dbg("page 0x%lx is dirty\n",
-					(unsigned long)addr[i]);
-
-		switch(category) {
-		case TEST_ZERO:
-		case TEST_NORMAL:
-			free_page(addr[i]);
-			break;
-		case TEST_VMALLOC:
-			vfree((void *)addr[i]);
-			break;
-		case TEST_KMALLOC:
-		case TEST_KZALLOC:
-			kfree((void *)addr[i]);
-			break;
-		case TEST_PAGEALLOC:
-		case TEST_PAGEZALLOC:
-			__free_page((struct page *)addr[i]);
-			break;
-		default:
-			break;
-		}
-	}
-	kfree(addr);
-}
-
 long pmfs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	struct address_space *mapping = filp->f_mapping;
@@ -235,12 +112,6 @@ setversion_out:
 		mnt_drop_write_file(filp);
 		return ret;
 	}
-	case FS_PMFS_FSYNC: {
-		struct sync_range packet;
-		copy_from_user(&packet, (void *)arg, sizeof(struct sync_range));
-		pmfs_fsync(filp, packet.offset, packet.offset + packet.length, 1);
-		return 0;
-	}
 	case PMFS_PRINT_TIMING: {
 		pmfs_print_timing_stats(sb);
 		return 0;
@@ -249,34 +120,12 @@ setversion_out:
 		pmfs_clear_stats();
 		return 0;
 	}
-	case PMFS_COW_WRITE: {
-		struct write_request request;
-		copy_from_user(&request, (void *)arg,
-					sizeof(struct write_request));
-		pmfs_cow_file_write(filp, request.buf, request.len,
-					&request.offset, true);
-		return 0;
-	}
 	case PMFS_PRINT_LOG: {
 		pmfs_print_inode_log(sb, inode);
 		return 0;
 	}
 	case PMFS_PRINT_LOG_PAGES: {
 		pmfs_print_inode_log_pages(sb, inode);
-		return 0;
-	}
-	case PMFS_MALLOC_TEST: {
-		struct malloc_request request;
-		copy_from_user(&request, (void *)arg,
-					sizeof(struct malloc_request));
-		pmfs_malloc_test(sb, request.category, request.size);
-		return 0;
-	}
-	case PMFS_TEST_MULTITHREAD_RECOVERY: {
-		int multithread;
-		copy_from_user(&multithread, (void *)arg,
-					sizeof(int));
-		pmfs_inode_log_recovery(sb, multithread);
 		return 0;
 	}
 	case PMFS_PRINT_FREE_LISTS: {
