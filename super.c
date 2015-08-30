@@ -609,7 +609,8 @@ static int pmfs_fill_super(struct super_block *sb, void *data, int silent)
 
 	sbi->inode_inuse_tree = RB_ROOT;
 
-	if (pmfs_new_cache_block(sb, &sbi->zeroed_page, 1, 0))
+	sbi->zeroed_page = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	if (!sbi->zeroed_page)
 		goto out;
 
 	if (pmfs_parse_options(data, sbi, 0))
@@ -738,8 +739,8 @@ out:
 	}
 
 	if (sbi->zeroed_page) {
-		pmfs_free_cache_block(sb, sbi->zeroed_page);
-		sbi->zeroed_page = 0;
+		kfree(sbi->zeroed_page);
+		sbi->zeroed_page = NULL;
 	}
 
 	if (sbi->free_lists) {
@@ -875,7 +876,7 @@ static void pmfs_put_super(struct super_block *sb)
 
 	pmfs_delete_free_lists(sb);
 
-	pmfs_free_cache_block(sb, sbi->zeroed_page);
+	kfree(sbi->zeroed_page);
 	pmfs_detect_memory_leak(sb);
 	sb->s_fs_info = NULL;
 	pmfs_dbgmask = 0;

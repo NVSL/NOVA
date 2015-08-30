@@ -444,7 +444,7 @@ struct pmfs_sb_info {
 	struct pmfs_range_node *first_inode_range;
 
 	/* ZEROED page for cache page initialized */
-	unsigned long zeroed_page;
+	void *zeroed_page;
 
 	int cpus;
 	/* Per-CPU free block list */
@@ -853,8 +853,6 @@ extern int pmfs_new_data_blocks(struct super_block *sb, struct pmfs_inode *pi,
 extern int pmfs_new_log_blocks(struct super_block *sb, unsigned long pmfs_ino,
 	unsigned long *blocknr, unsigned int num, unsigned short btype,
 	int zero);
-int pmfs_new_cache_block(struct super_block *sb, unsigned long *addr,
-	int zero, int nosleep);
 extern unsigned long pmfs_count_free_blocks(struct super_block *sb);
 inline int pmfs_search_inodetree(struct pmfs_sb_info *sbi,
 	unsigned long ino, struct pmfs_range_node **ret_node);
@@ -866,7 +864,6 @@ int pmfs_find_free_slot(struct pmfs_sb_info *sbi,
 	struct rb_root *tree, unsigned long range_low,
 	unsigned long range_high, struct pmfs_range_node **prev,
 	struct pmfs_range_node **next);
-void pmfs_free_cache_block(struct super_block *sb, unsigned long addr);
 
 /* bbuild.c */
 inline void set_bm(unsigned long bit, struct scan_bitmap *bm,

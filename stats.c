@@ -33,10 +33,8 @@ const char *Timingstring[TIMING_NUM] =
 
 	"new_data_blocks",
 	"new_log_blocks",
-	"new_cache_page",
 	"free_data_blocks",
 	"free_log_blocks",
-	"free_cache_blocks",
 
 	"logging",
 	"append_inode_entry",
@@ -73,8 +71,6 @@ unsigned long free_data_pages;
 unsigned long alloc_log_pages;
 unsigned long free_log_pages;
 atomic64_t fsync_pages = ATOMIC_INIT(0);
-atomic64_t cache_alloc = ATOMIC_INIT(0);
-atomic64_t cache_free = ATOMIC_INIT(0);
 atomic64_t header_alloc = ATOMIC_INIT(0);
 atomic64_t header_free = ATOMIC_INIT(0);
 atomic64_t range_alloc = ATOMIC_INIT(0);
@@ -102,8 +98,6 @@ void pmfs_print_alloc_stats(struct super_block *sb)
 	printk("Freed %lu data pages\n", free_data_pages);
 	printk("Allocated %lu log pages\n", alloc_log_pages);
 	printk("Freed %lu log pages\n", free_log_pages);
-	printk("Allocated %ld cache pages\n",
-			atomic64_read(&cache_alloc));
 	printk("Allocated %ld info headers\n",
 			atomic64_read(&header_alloc));
 	printk("Allocated %ld range nodes\n",
@@ -277,11 +271,6 @@ void pmfs_print_free_lists(struct super_block *sb)
 
 void pmfs_detect_memory_leak(struct super_block *sb)
 {
-	if (atomic64_read(&cache_alloc) != atomic64_read(&cache_free))
-		pmfs_dbg("%s: cache block memory leak! "
-			"allocated %ld, freed %ld\n", __func__,
-			atomic64_read(&cache_alloc),
-			atomic64_read(&cache_free));
 	if (atomic64_read(&header_alloc) != atomic64_read(&header_free))
 		pmfs_dbg("%s: inode header memory leak! "
 			"allocated %ld, freed %ld\n", __func__,

@@ -56,37 +56,38 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 			addr[i] = get_zeroed_page(flags);
 			page = virt_to_page((void *)addr[i]);
 			pfn = page_to_pfn(page);
-//			pmfs_dbg("get_zero_page: page %p pfn %d\n", page, pfn);
+			pmfs_dbgv("get_zero_page: page %p pfn %d\n", page, pfn);
 			break;
 		case TEST_NORMAL:
 			addr[i] = __get_free_page(flags);
 			page = virt_to_page((void *)addr[i]);
 			pfn = page_to_pfn(page);
-//			pmfs_dbg("get_free_page: page %p pfn %d\n", page, pfn);
+			pmfs_dbgv("get_free_page: page %p pfn %d\n", page, pfn);
 			break;
 		case TEST_VMALLOC:
 			addr[i] = (unsigned long)vmalloc(PAGE_SIZE);
 			page = vmalloc_to_page((void *)addr[i]);
 			pfn = page_to_pfn(page);
-//			pmfs_dbg("vmalloc: page %p pfn %d\n", page, pfn);
+			pmfs_dbgv("vmalloc: page %p pfn %d\n", page, pfn);
 			break;
 		case TEST_KMALLOC:
 			addr[i] = (unsigned long)kmalloc(PAGE_SIZE, flags);
 			page = virt_to_page((void *)addr[i]);
 			pfn = page_to_pfn(page);
-//			pmfs_dbg("kmalloc: page %p pfn %d\n", page, pfn);
+			pmfs_dbgv("kmalloc: page %p pfn %d\n", page, pfn);
 			break;
 		case TEST_KZALLOC:
 			addr[i] = (unsigned long)kzalloc(PAGE_SIZE, flags);
 			page = virt_to_page((void *)addr[i]);
 			pfn = page_to_pfn(page);
-//			pmfs_dbg("kzalloc: page %p pfn %d\n", page, pfn);
+			pmfs_dbgv("kzalloc: page %p pfn %d\n", page, pfn);
 			break;
 		case TEST_PAGEALLOC:
 			addr[i] = (unsigned long)alloc_page(flags);
 			page_addr = kmap_atomic((struct page *)addr[i]);
 //			*(unsigned long *)page_addr = 1;
-//			pmfs_dbg("alloc page: 0x%lx\n", (unsigned long)page_addr);
+//			pmfs_dbgv("alloc page: 0x%lx\n",
+//					(unsigned long)page_addr);
 			kunmap_atomic(page_addr);
 			check = 0;
 			break;
@@ -95,7 +96,8 @@ void pmfs_malloc_test(struct super_block *sb, int category, int size)
 			addr[i] = (unsigned long)alloc_page(flags);
 			page_addr = kmap_atomic((struct page *)addr[i]);
 //			*(unsigned long *)page_addr = 1;
-//			pmfs_dbg("alloc page: 0x%lx\n", (unsigned long)page_addr);
+//			pmfs_dbgv("alloc page: 0x%lx\n",
+//					(unsigned long)page_addr);
 			kunmap_atomic(page_addr);
 			check = 0;
 			break;

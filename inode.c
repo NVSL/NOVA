@@ -112,7 +112,8 @@ static int pmfs_delete_cache_tree(struct super_block *sb,
 		addr = (unsigned long)radix_tree_lookup(&sih->cache_tree, i);
 		if (addr) {
 			ret = radix_tree_delete(&sih->cache_tree, i);
-			pmfs_free_cache_block(sb, addr);
+			pmfs_free_data_blocks(sb, addr >> PAGE_SHIFT,
+							1, btype);
 			sih->mmap_pages--;
 		}
 	}

@@ -53,10 +53,8 @@ enum timing_category {
 	/* Memory management */
 	new_data_blocks_t,
 	new_log_blocks_t,
-	new_cache_page_t,
 	free_data_t,
 	free_log_t,
-	free_cache_t,
 
 	/* Logging and journaling */
 	logging_t,
@@ -96,8 +94,6 @@ extern unsigned long free_data_pages;
 extern unsigned long alloc_log_pages;
 extern unsigned long free_log_pages;
 extern atomic64_t fsync_pages;
-extern atomic64_t cache_alloc;
-extern atomic64_t cache_free;
 extern atomic64_t header_alloc;
 extern atomic64_t header_free;
 extern atomic64_t range_alloc;
