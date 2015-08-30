@@ -315,8 +315,6 @@ struct pmfs_inode_info {
 	struct pmfs_inode_info_header *header;
 	__u32   i_dir_start_lookup;
 	struct inode vfs_inode;
-	unsigned long low_dirty;	/* Dirty low range */
-	unsigned long high_dirty;	/* Dirty high range */
 	unsigned long low_mmap;		/* Mmap low range */
 	unsigned long high_mmap;	/* Mmap high range */
 };
@@ -726,13 +724,6 @@ static inline int pmfs_is_mounting(struct super_block *sb)
 {
 	struct pmfs_sb_info *sbi = (struct pmfs_sb_info *)sb->s_fs_info;
 	return sbi->s_mount_opt & PMFS_MOUNT_MOUNTING;
-}
-
-static inline int pmfs_has_page_cache(struct super_block *sb)
-{
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-
-	return sbi->s_mount_opt & PMFS_MOUNT_PAGECACHE;
 }
 
 static inline void check_eof_blocks(struct super_block *sb, 

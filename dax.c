@@ -478,7 +478,6 @@ static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 	struct pmfs_inode_info_header *sih = si->header;
 	unsigned long start_blk;
 	unsigned long cache_addr;
-	void *mmap_addr;
 	u64 nvmm_block;
 	void *nvmm_addr;
 	loff_t offset;
@@ -503,16 +502,10 @@ static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 			goto out;
 		}
 
-		if (pmfs_has_page_cache(sb)) {
-			mmap_addr = (void *)MMAP_ADDR(cache_addr);
-			copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
-				mmap_addr + offset, bytes);
-		} else {
-			nvmm_block = MMAP_ADDR(cache_addr);
-			nvmm_addr = pmfs_get_block(sb, nvmm_block);
-			copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
+		nvmm_block = MMAP_ADDR(cache_addr);
+		nvmm_addr = pmfs_get_block(sb, nvmm_block);
+		copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
 				nvmm_addr + offset, bytes);
-		}
 
 		if (copied > 0) {
 			status = copied;

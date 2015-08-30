@@ -154,7 +154,7 @@ enum {
 	Opt_mode, Opt_uid,
 	Opt_gid, Opt_blocksize, Opt_wprotect,
 	Opt_err_cont, Opt_err_panic, Opt_err_ro,
-	Opt_hugemmap, Opt_nohugeioremap, Opt_pagecache,
+	Opt_hugemmap, Opt_nohugeioremap,
 	Opt_dbgmask, Opt_err
 };
 
@@ -171,7 +171,6 @@ static const match_table_t tokens = {
 	{ Opt_err_ro,	     "errors=remount-ro"  },
 	{ Opt_hugemmap,	     "hugemmap"		  },
 	{ Opt_nohugeioremap, "nohugeioremap"	  },
-	{ Opt_pagecache,     "pagecache"	  },
 	{ Opt_dbgmask,	     "dbgmask=%u"	  },
 	{ Opt_err,	     NULL		  },
 };
@@ -289,11 +288,6 @@ static int pmfs_parse_options(char *options, struct pmfs_sb_info *sbi,
 				goto bad_opt;
 			clear_opt(sbi->s_mount_opt, HUGEIOREMAP);
 			pmfs_info("PMFS: Disabling huge ioremap\n");
-			break;
-		case Opt_pagecache:
-			set_opt(sbi->s_mount_opt, PAGECACHE);
-			pmfs_info("PMFS: Enabling DRAM page cache "
-				"for writing\n");
 			break;
 		case Opt_dbgmask:
 			if (match_int(&args[0], &option))
@@ -802,8 +796,6 @@ static int pmfs_show_options(struct seq_file *seq, struct dentry *root)
 		seq_puts(seq, ",hugemmap");
 	if (test_opt(root->d_sb, HUGEIOREMAP))
 		seq_puts(seq, ",hugeioremap");
-	if (test_opt(root->d_sb, PAGECACHE))
-		seq_puts(seq, ",pagecache");
 	if (test_opt(root->d_sb, DAX))
 		seq_puts(seq, ",dax");
 
@@ -930,8 +922,6 @@ static struct inode *pmfs_alloc_inode(struct super_block *sb)
 		return NULL;
 
 	vi->header = NULL;
-	vi->low_dirty = ULONG_MAX;
-	vi->high_dirty = 0;
 	vi->low_mmap = ULONG_MAX;
 	vi->high_mmap = 0;
 	vi->vfs_inode.i_version = 1;

@@ -236,29 +236,7 @@ static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 	return flush_bytes;
 }
 
-static void pmfs_update_dirty_range(struct pmfs_inode_info *si,
-	loff_t start, loff_t end)
-{
-	u64 low;
-	u64 high;
-
-	if (si->low_dirty > si->high_dirty)
-		return;
-
-	low = si->low_dirty << PAGE_SHIFT;
-	high = (si->high_dirty + 1) << PAGE_SHIFT;
-
-	if (start <= low && end >= high) {
-		si->low_dirty = ULONG_MAX;
-		si->high_dirty = 0;
-	} else if (start <= low && end > low) {
-		si->low_dirty = end >> PAGE_SHIFT;
-	} else if (end >= high && start < high) {
-		si->high_dirty = start >> PAGE_SHIFT ;
-	}
-}
-
-static void pmfs_get_sync_range(struct pmfs_inode_info *si, int mmaped,
+static void pmfs_get_sync_range(struct pmfs_inode_info *si,
 	loff_t *start, loff_t *end)
 {
 	unsigned long start_blk, end_blk;
@@ -267,12 +245,8 @@ static void pmfs_get_sync_range(struct pmfs_inode_info *si, int mmaped,
 	start_blk = *start >> PAGE_SHIFT;
 	end_blk = *end >> PAGE_SHIFT;
 
-	low_blk = si->low_dirty;
-	high_blk = si->high_dirty;
-	if (mmaped && si->low_mmap < low_blk)
-		low_blk = si->low_mmap;
-	if (mmaped && si->high_mmap > high_blk)
-		high_blk = si->high_mmap;
+	low_blk = si->low_mmap;
+	high_blk = si->high_mmap;
 
 	if (start_blk < low_blk)
 		*start = low_blk << PAGE_SHIFT;
@@ -297,26 +271,18 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	u64 end_tail = 0, begin_tail = 0;
 	u64 begin_temp = 0, end_temp = 0;
 	int ret = 0;
-	int mmaped = 0;
 	loff_t sync_start, sync_end;
 	loff_t isize;
 	timing_t fsync_time;
 
 	PMFS_START_TIMING(fsync_t, fsync_time);
-	if (mapping_mapped(mapping))
-		mmaped = 1;
-
-	if (!pmfs_has_page_cache(sb) && mmaped == 0)
+	if (!mapping_mapped(mapping))
 		goto out;
 
 	mutex_lock(&inode->i_mutex);
 
 	/* Check the dirty range */
 	pi = pmfs_get_inode(sb, inode);
-	if (mmaped == 0 && si->low_dirty > si->high_dirty) {
-		mutex_unlock(&inode->i_mutex);
-		goto out;
-	}
 
 	end += 1; /* end is inclusive. We like our indices normal please! */
 
@@ -333,13 +299,13 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		return 0;
 	}
 
-	pmfs_get_sync_range(si, mmaped, &start, &end);
+	pmfs_get_sync_range(si, &start, &end);
 	start_blk = start >> PAGE_SHIFT;
 	end_blk = end >> PAGE_SHIFT;
 
-	pmfs_dbgv("%s: mmaped %d, start %llu, end %llu, size %llu, "
+	pmfs_dbgv("%s: start %llu, end %llu, size %llu, "
 			" start_blk %lu, end_blk %lu\n",
-			__func__, mmaped, start, end, isize, start_blk,
+			__func__, start, end, isize, start_blk,
 			end_blk);
 
 	sync_start = start;
@@ -363,9 +329,6 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		start += nr_flush_bytes;
 	} while (start < end);
 
-	if (pmfs_has_page_cache(sb))
-		pmfs_update_dirty_range(si, sync_start, sync_end);
-
 	end_tail = end_temp;
 	if (begin_tail && end_tail && end_tail != pi->log_tail) {
 		pmfs_update_tail(pi, end_tail);
@@ -387,25 +350,8 @@ out:
 /* This callback is called when a file is closed */
 static int pmfs_flush(struct file *file, fl_owner_t id)
 {
-	struct address_space *mapping = file->f_mapping;
-	struct inode *inode = mapping->host;
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	loff_t isize, start, end;
-	int ret = 0;
-
-	/* if the file was opened for writing, make it persistent.
-	 * Only sync the dirty range. Mmap needs to call msync() explicitly.
-	 */
-	isize = i_size_read(inode);
-	if (si->low_dirty <= si->high_dirty) {
-		start = si->low_dirty << PAGE_SHIFT;
-		end = (si->high_dirty + 1) << PAGE_SHIFT;
-		if (end > isize)
-			end = isize;
-		pmfs_fsync(file, start, end, 1);
-	}
-
-	return ret;
+	 /* Mmap needs to call msync() explicitly. */
+	return 0;
 }
 
 static int pmfs_open(struct inode *inode, struct file *filp)
