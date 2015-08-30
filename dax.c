@@ -146,11 +146,6 @@ memcpy:
 			PMFS_END_TIMING(memcpy_r_nvmm_t, memcpy_time);
 		}
 
-		if (pmfs_has_page_cache(sb)) {
-//			if (pair && pair->page)
-//				kunmap_atomic(dax_mem);
-		}
-
 		if (left) {
 			pmfs_dbg("%s ERROR!: bytes %lu, left %lu\n",
 				__func__, nr, left);
