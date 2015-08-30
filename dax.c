@@ -59,7 +59,6 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 		unsigned long nvmm;
 		void *dax_mem = NULL;
 		int zero = 0;
-		int dram_copy = 0;
 
 		/* nr is the maximum number of bytes to copy from this page */
 		if (index >= end_index) {
@@ -103,11 +102,7 @@ memcpy:
 		if (nr > len - copied)
 			nr = len - copied;
 
-		if (dram_copy) {
-			PMFS_START_TIMING(memcpy_r_dram_t, memcpy_time);
-		} else {
-			PMFS_START_TIMING(memcpy_r_nvmm_t, memcpy_time);
-		}
+		PMFS_START_TIMING(memcpy_r_nvmm_t, memcpy_time);
 
 		if (!zero)
 			left = __copy_to_user(buf + copied,
@@ -115,11 +110,7 @@ memcpy:
 		else
 			left = __clear_user(buf + copied, nr);
 
-		if (dram_copy) {
-			PMFS_END_TIMING(memcpy_r_dram_t, memcpy_time);
-		} else {
-			PMFS_END_TIMING(memcpy_r_nvmm_t, memcpy_time);
-		}
+		PMFS_END_TIMING(memcpy_r_nvmm_t, memcpy_time);
 
 		if (left) {
 			pmfs_dbg("%s ERROR!: bytes %lu, left %lu\n",

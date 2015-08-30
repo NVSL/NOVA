@@ -42,14 +42,11 @@ enum timing_category {
 	/* I/O operations */
 	dax_read_t,
 	cow_write_t,
-	page_cache_write_t,
 	copy_to_nvmm_t,
 
 	/* Memory operations */
 	memcpy_r_nvmm_t,
-	memcpy_r_dram_t,
 	memcpy_w_nvmm_t,
-	memcpy_w_dram_t,
 	memcpy_w_wb_t,
 	partial_block_t,
 
@@ -91,7 +88,6 @@ extern unsigned long long Timingstats[TIMING_NUM];
 extern u64 Countstats[TIMING_NUM];
 extern unsigned long long read_bytes;
 extern unsigned long long cow_write_bytes;
-extern unsigned long long page_cache_write_bytes;
 extern unsigned long long fsync_bytes;
 extern unsigned long long checked_pages;
 extern unsigned long gc_pages;

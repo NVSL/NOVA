@@ -24,13 +24,10 @@ const char *Timingstring[TIMING_NUM] =
 
 	"dax_read",
 	"cow_write",
-	"page_cache_write",
 	"copy_to_nvmm",
 
 	"memcpy_read_nvmm",
-	"memcpy_read_dram",
 	"memcpy_write_nvmm",
-	"memcpy_write_dram",
 	"memcpy_write_back_to_nvmm",
 	"handle_partial_block",
 
@@ -68,7 +65,6 @@ unsigned long free_steps;
 unsigned long write_breaks;
 unsigned long long read_bytes;
 unsigned long long cow_write_bytes;
-unsigned long long page_cache_write_bytes;
 unsigned long long fsync_bytes;
 unsigned long long checked_pages;
 unsigned long gc_pages;
@@ -128,13 +124,6 @@ void pmfs_print_IO_stats(struct super_block *sb)
 			cow_write_bytes / Countstats[cow_write_t] : 0,
 		write_breaks, Countstats[cow_write_t] ?
 			write_breaks / Countstats[cow_write_t] : 0);
-	printk("Page cache write %llu, bytes %llu, average %llu, "
-		"write breaks %lu, average %llu\n",
-		Countstats[page_cache_write_t], page_cache_write_bytes,
-		Countstats[page_cache_write_t] ?
-		page_cache_write_bytes / Countstats[page_cache_write_t] : 0,
-		write_breaks, Countstats[page_cache_write_t] ?
-			write_breaks / Countstats[page_cache_write_t] : 0);
 	printk("Copy to NVMM %llu, bytes %llu, average %llu\n",
 		Countstats[copy_to_nvmm_t], fsync_bytes,
 		Countstats[copy_to_nvmm_t] ?
