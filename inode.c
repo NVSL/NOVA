@@ -298,46 +298,6 @@ out:
 	return ret;
 }
 
-int pmfs_assign_cache_range(struct super_block *sb,
-	struct pmfs_inode *pi,
-	struct pmfs_inode_info_header *sih,
-	struct pmfs_file_write_entry *entry)
-{
-	void *old_addr;
-	unsigned long addr;
-	unsigned int start_pgoff = entry->pgoff;
-	unsigned int num = entry->num_pages;
-	unsigned long curr_pgoff;
-	int i;
-	int ret;
-	timing_t assign_time;
-
-	PMFS_START_TIMING(assign_t, assign_time);
-	for (i = 0; i < num; i++) {
-		curr_pgoff = start_pgoff + i;
-
-		old_addr = radix_tree_lookup(&sih->cache_tree,
-							curr_pgoff);
-		if (!old_addr) {
-			ret = pmfs_new_cache_block(sb, &addr, 0, 0);
-			if (ret)
-				goto out;
-//			addr |= UNINIT_BIT;
-			ret = radix_tree_insert(&sih->cache_tree,
-						curr_pgoff, (void *)addr);
-			if (ret) {
-				pmfs_dbg("%s: ERROR %d\n", __func__, ret);
-				goto out;
-			}
-		}
-	}
-
-out:
-	PMFS_END_TIMING(assign_t, assign_time);
-
-	return ret;
-}
-
 static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 	u64 pi_addr, int rebuild)
 {

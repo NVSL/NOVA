@@ -56,7 +56,6 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	end_index = (isize - 1) >> PAGE_CACHE_SHIFT;
 	do {
 		unsigned long nr, left;
-//		unsigned long addr = 0;
 		unsigned long nvmm;
 		void *dax_mem = NULL;
 		int zero = 0;
@@ -80,30 +79,6 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 			zero = 1;
 			goto memcpy;
 		}
-
-#if 0
-		if (pmfs_has_page_cache(sb)) {
-			addr = pmfs_get_dram_addr(pair);
-			if (addr) {
-				nr = PAGE_SIZE;
-				dax_mem = (void *)DRAM_ADDR(addr);
-				pmfs_dbgv("%s: memory @ 0x%lx\n", __func__,
-						(unsigned long)dax_mem);
-				if (unlikely(OUTDATE(pair->cache))) {
-					pmfs_dbg("%s: inode %lu DRAM page %lu "
-						"is out-of-date\n", __func__,
-						inode->i_ino, index);
-				} else if (unlikely(UNINIT(pair->cache))) {
-					pmfs_dbg("%s: inode %lu DRAM page %lu "
-						"is unitialized\n", __func__,
-						inode->i_ino, index);
-				} else {
-					dram_copy = 1;
-					goto memcpy;
-				}
-			}
-		}
-#endif
 
 		/* Find contiguous blocks */
 		if (index < entry->pgoff ||
@@ -195,17 +170,6 @@ static inline int pmfs_copy_partial_block(struct super_block *sb,
 	void *ptr;
 	unsigned long nvmm;
 
-	/* Copy from dram page cache, otherwise from nvmm */
-#if 0
-	if (pair->page) {
-		ptr = kmap_atomic(pair->page);
-	} else if (pair->cache) {
-		ptr = (void *)DRAM_ADDR(pair->cache);
-	} else {
-		nvmm = get_nvmm(sb, pair, index);
-		ptr = pmfs_get_block(sb, (nvmm << PAGE_SHIFT));
-	}
-#endif
 	nvmm = get_nvmm(sb, entry, index);
 	ptr = pmfs_get_block(sb, (nvmm << PAGE_SHIFT));
 	if (ptr != NULL) {
@@ -215,9 +179,6 @@ static inline int pmfs_copy_partial_block(struct super_block *sb,
 		else 
 			memcpy(kmem, ptr, offset);
 	}
-
-//	if (pair->page)
-//		kunmap_atomic(ptr);
 
 	return 0;
 }
@@ -501,7 +462,7 @@ ssize_t pmfs_cow_file_write(struct file *filp,
 
 	ret = written;
 	write_breaks += step;
-//	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
+	pmfs_dbgv("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
 
 	*ppos = pos;
 	if (pos > inode->i_size) {
@@ -517,207 +478,6 @@ out:
 	cow_write_bytes += written;
 	return ret;
 }
-
-#if 0
-/* Handle partial and unitialized dram page */
-static void pmfs_preprocess_dram_block(struct super_block *sb,
-	struct pmfs_inode_info *si, struct mem_addr *pair, void *kmem,
-	unsigned long start_blk, size_t offset, size_t tail)
-{
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	u64 bp;
-	void *nvmm;
-
-	/* If only NVMM page presents, copy the partial block */
-	if ((OUTDATE(pair->cache)) && (offset || tail)) {
-		bp = __pmfs_find_nvmm_block(sb, si, pair, start_blk);
-		nvmm = pmfs_get_block(sb, bp);
-		memcpy(kmem, nvmm, PAGE_SIZE);
-		pair->cache &= ~UNINIT_BIT;
-	}
-
-	/* If DRAM is uninitialized, memset the partial block to 0 */
-	if ((UNINIT(pair->cache)) && (offset || tail)) {
-		if (offset)
-			memcpy(kmem, (void *)DRAM_ADDR(sbi->zeroed_page),
-					offset);
-		if (tail)
-			memcpy(kmem + tail,
-				(void *)DRAM_ADDR(sbi->zeroed_page),
-				PAGE_SIZE - tail);
-	}
-}
-
-static void pmfs_postprocess_dram_block(struct super_block *sb,
-	struct pmfs_inode_info *si, struct mem_addr *pair,
-	unsigned long start_blk)
-{
-	if (OUTDATE(pair->cache))
-		pair->cache &= ~OUTDATE_BIT;
-	if (UNINIT(pair->cache))
-		pair->cache &= ~UNINIT_BIT;
-
-	pair->cache |= DIRTY_BIT;
-	if (start_blk < si->low_dirty)
-		si->low_dirty = start_blk;
-	if (start_blk > si->high_dirty)
-		si->high_dirty = start_blk;
-
-}
-
-ssize_t pmfs_page_cache_file_write(struct file *filp,
-	const char __user *buf,	size_t len, loff_t *ppos)
-{
-	struct address_space *mapping = filp->f_mapping;
-	struct inode *inode = mapping->host;
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
-	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi;
-	struct pmfs_file_write_entry entry_data;
-	struct mem_addr *pair = NULL;
-	unsigned long start_blk, num_blocks;
-	unsigned long total_blocks;
-	unsigned long page_addr = 0;
-	size_t count, offset, copied, ret, tail;
-	ssize_t	written = 0;
-	loff_t pos;
-	void* kmem;
-	size_t bytes;
-	long status = 0;
-	timing_t dram_write_time, memcpy_time, find_cache_time;
-	unsigned long step = 0;
-
-	PMFS_START_TIMING(page_cache_write_t, dram_write_time);
-
-	sb_start_write(inode->i_sb);
-	mutex_lock(&inode->i_mutex);
-
-	if (!access_ok(VERIFY_READ, buf, len)) {
-		ret = -EFAULT;
-		goto out;
-	}
-	pos = *ppos;
-	count = len;
-
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,0,9)
-	ret = generic_write_checks(filp, &pos, &count, S_ISBLK(inode->i_mode));
-	if (ret || count == 0)
-		goto out;
-#endif
-	pi = pmfs_get_inode(sb, inode);
-
-	offset = pos & (sb->s_blocksize - 1);
-	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
-	total_blocks = num_blocks;
-	/* offset in the actual block size block */
-
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,1,0)
-	ret = file_remove_suid(filp);
-#else
-	ret = file_remove_privs(filp);
-#endif
-	if (ret) {
-		goto out;
-	}
-	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
-
-	pmfs_dbg_verbose("%s: ino %lu, block %llu, offset %lu, count %lu\n",
-		__func__, inode->i_ino, pos >> sb->s_blocksize_bits, offset,
-		count);
-
-	/* Allocate dram pages for the required extent */
-	start_blk = pos >> sb->s_blocksize_bits;
-	entry_data.pgoff = start_blk;
-	entry_data.num_pages = num_blocks;
-	pmfs_assign_cache_range(sb, pi, sih, &entry_data);
-
-	while (num_blocks > 0) {
-		offset = pos & (pmfs_inode_blk_size(pi) - 1);
-		start_blk = pos >> sb->s_blocksize_bits;
-		page_addr = 0;
-
-		/* don't zero-out the allocated blocks */
-		PMFS_START_TIMING(find_cache_t, find_cache_time);
-		pair = pmfs_get_mem_pair(sb, si, start_blk);
-		PMFS_END_TIMING(find_cache_t, find_cache_time);
-
-		if (pair == NULL) {
-			pmfs_err(sb, "%s dram page not found!\n", __func__);
-			ret = -EINVAL;
-			goto out;
-		}
-
-		step++;
-		bytes = sb->s_blocksize - offset;
-		if (bytes > count)
-			bytes = count;
-
-		page_addr = pmfs_get_dram_addr(pair);
-		kmem = (void *)DRAM_ADDR(page_addr);
-		pmfs_dbg_verbose("Write: 0x%lx\n", page_addr);
-
-		tail = (offset + bytes) & (PAGE_SIZE - 1);
-
-		pmfs_preprocess_dram_block(sb, si, pair, kmem,
-						start_blk, offset, tail);
-
-		/* Now copy from user buf */
-		PMFS_START_TIMING(memcpy_w_dram_t, memcpy_time);
-		copied = bytes - __copy_from_user(kmem + offset, buf, bytes);
-		PMFS_END_TIMING(memcpy_w_dram_t, memcpy_time);
-
-		if (pair->page)
-			kunmap_atomic(kmem);
-
-		pmfs_postprocess_dram_block(sb, si, pair, start_blk);
-
-		pmfs_dbg_verbose("Write: %p, %lu\n", kmem, copied);
-		if (copied > 0) {
-			status = copied;
-			written += copied;
-			pos += copied;
-			buf += copied;
-			count -= copied;
-			num_blocks -= 1;
-		}
-		if (unlikely(copied != bytes)) {
-			pmfs_dbg("%s ERROR!: %p, bytes %lu, copied %lu\n",
-				__func__, kmem, bytes, copied);
-			if (status >= 0)
-				status = -EFAULT;
-		}
-		if (status < 0)
-			break;
-	}
-
-	inode->i_blocks = le64_to_cpu(pi->i_blocks);
-	if (pos > inode->i_size) {
-		i_size_write(inode, pos);
-		sih->i_size = pos;
-	}
-
-	/*
-	 * We have pre-allocated page cache for the whole write range;
-	 * if write fails, we still needs to update sih->i_size,
-	 * otherwise we may have memory leak.
-	 */
-	if (status < 0 && len + *ppos > sih->i_size)
-		sih->i_size = len + *ppos;
-
-	*ppos = pos;
-	ret = written;
-	write_breaks += step;
-//	pmfs_dbg("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
-
-out:
-	mutex_unlock(&inode->i_mutex);
-	sb_end_write(inode->i_sb);
-	PMFS_END_TIMING(page_cache_write_t, dram_write_time);
-	page_cache_write_bytes += written;
-	return ret;
-}
-#endif
 
 static ssize_t pmfs_flush_mmap_to_nvmm(struct super_block *sb,
 	struct inode *inode, struct pmfs_inode *pi, loff_t pos,
@@ -916,61 +676,6 @@ ssize_t pmfs_dax_file_write(struct file *filp, const char __user *buf,
 	return pmfs_cow_file_write(filp, buf, len, ppos, true);
 }
 
-#if 0
-ssize_t pmfs_dax_file_write(struct file *filp, const char __user *buf,
-	size_t len, loff_t *ppos)
-{
-	if (!pmfs_has_page_cache(filp->f_mapping->host->i_sb)) {
-		return pmfs_cow_file_write(filp, buf, len, ppos, true);
-	} else {
-		if (filp->f_flags & O_DIRECT)
-			return pmfs_cow_file_write(filp, buf, len, ppos, true);
-		else
-			return pmfs_page_cache_file_write(filp, buf, len,
-								ppos);
-	}
-}
-
-static int pmfs_get_dram_pfn(struct super_block *sb,
-	struct pmfs_inode_info *si, struct mem_addr *pair, pgoff_t pgoff,
-	vm_flags_t vm_flags, void **kmem, unsigned long *pfn)
-{
-	unsigned long addr = 0;
-	u64 bp;
-	void *nvmm;
-	int err;
-
-	addr = pmfs_get_dram_addr(pair);
-	if (addr == 0 || (pair->cache & OUTDATE_BIT)) {
-		if (addr == 0) {
-			err = pmfs_new_cache_block(sb, pair, 0, 0);
-			if (err)
-				return err;
-			addr = pmfs_get_dram_addr(pair);
-		}
-		/* Copy from NVMM to dram */
-		bp = __pmfs_find_nvmm_block(sb, si, pair, pgoff);
-		nvmm = pmfs_get_block(sb, bp);
-		memcpy((void *)DRAM_ADDR(addr), nvmm, PAGE_SIZE);
-		pair->cache &= ~OUTDATE_BIT;
-		pair->cache &= ~UNINIT_BIT;
-	}
-
-	if (vm_flags & VM_WRITE)
-		pair->cache |= MMAP_WRITE_BIT;
-
-	*kmem = (void *)DRAM_ADDR(addr);
-	if (pair->page) {
-		kunmap_atomic((void *)addr);
-		*pfn = page_to_pfn(pair->page);
-	} else {
-		*pfn = vmalloc_to_pfn(*kmem);
-	}
-
-	return 0;
-}
-#endif
-
 static int pmfs_get_nvmm_pfn(struct super_block *sb, struct pmfs_inode *pi,
 	struct pmfs_inode_info *si, u64 nvmm, pgoff_t pgoff,
 	vm_flags_t vm_flags, void **kmem, unsigned long *pfn)
@@ -1041,20 +746,6 @@ static int pmfs_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 		pmfs_dbg("%s: nvmm page does not exist\n", __func__);
 		return -EINVAL;
 	}
-
-	/*
-	 * If pagecache is enabled, use dram mmap,
-	 * otherwise use nvmm mmap.
-	 */
-#if 0
-	if (pmfs_has_page_cache(sb)) {
-		ret = pmfs_get_dram_pfn(sb, si, pair, pgoff, vm_flags,
-						kmem, pfn);
-	} else {
-		ret = pmfs_get_nvmm_pfn(sb, pi, si, pair, pgoff, vm_flags,
-						kmem, pfn);
-	}
-#endif
 
 	ret = pmfs_get_nvmm_pfn(sb, pi, si, nvmm, pgoff, vm_flags,
 						kmem, pfn);
