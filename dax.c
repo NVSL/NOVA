@@ -332,7 +332,7 @@ int pmfs_reassign_file_btree(struct super_block *sb,
 		}
 
 		pmfs_assign_nvmm_entry(sb, pi, sih, entry_data,
-					curr_p, NULL, true);
+					NULL, true);
 		curr_p += entry_size;
 	}
 

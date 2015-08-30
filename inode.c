@@ -247,7 +247,7 @@ int pmfs_assign_nvmm_entry(struct super_block *sb,
 	struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih,
 	struct pmfs_file_write_entry *entry,
-	u64 address, struct scan_bitmap *bm, bool free)
+	struct scan_bitmap *bm, bool free)
 {
 	struct pmfs_file_write_entry *old_entry;
 	void **pentry;
@@ -1686,7 +1686,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 			 * Don't double free them, just re-assign the pointers.
 			 */
 			pmfs_assign_nvmm_entry(sb, pi, sih, entry,
-						curr_p, bm, false);
+						bm, false);
 		}
 
 		pmfs_rebuild_file_time_and_size(sb, pi, entry);

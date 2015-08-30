@@ -966,7 +966,7 @@ int pmfs_assign_nvmm_entry(struct super_block *sb,
 	struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih,
 	struct pmfs_file_write_entry *entry,
-	u64 address, struct scan_bitmap *bm, bool free);
+	struct scan_bitmap *bm, bool free);
 int pmfs_assign_cache_range(struct super_block *sb,
 	struct pmfs_inode *pi,
 	struct pmfs_inode_info_header *sih,
