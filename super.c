@@ -403,7 +403,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	memset_nt(super, 0, reserved_space);
 	super->s_size = cpu_to_le64(size);
 	super->s_blocksize = cpu_to_le32(blocksize);
-	super->s_magic = cpu_to_le16(NOVA_SUPER_MAGIC);
+	super->s_magic = cpu_to_le32(NOVA_SUPER_MAGIC);
 	super->s_inode_table_offset = cpu_to_le64(inode_table_start);
 
 	nova_init_blockmap(sb, 0);
@@ -486,8 +486,8 @@ int nova_check_integrity(struct super_block *sb,
 		(struct nova_super_block *)((char *)super + NOVA_SB_SIZE);
 
 	/* Do sanity checks on the superblock */
-	if (le16_to_cpu(super->s_magic) != NOVA_SUPER_MAGIC) {
-		if (le16_to_cpu(super_redund->s_magic) != NOVA_SUPER_MAGIC) {
+	if (le32_to_cpu(super->s_magic) != NOVA_SUPER_MAGIC) {
+		if (le32_to_cpu(super_redund->s_magic) != NOVA_SUPER_MAGIC) {
 			printk(KERN_ERR "Can't find a valid nova partition\n");
 			goto out;
 		} else {
@@ -667,7 +667,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 
 	if (nova_check_integrity(sb, super) == 0) {
 		nova_dbg("Memory contains invalid nova %x:%x\n",
-				le16_to_cpu(super->s_magic), NOVA_SUPER_MAGIC);
+				le32_to_cpu(super->s_magic), NOVA_SUPER_MAGIC);
 		goto out;
 	}
 
@@ -684,7 +684,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 
 	/* Set it all up.. */
 setup_sb:
-	sb->s_magic = le16_to_cpu(super->s_magic);
+	sb->s_magic = le32_to_cpu(super->s_magic);
 	sb->s_op = &nova_sops;
 	sb->s_maxbytes = nova_max_size(sb->s_blocksize_bits);
 	sb->s_time_gran = 1;
