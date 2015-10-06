@@ -1,8 +1,8 @@
 #
-# Makefile for the linux pmfs-filesystem routines.
+# Makefile for the linux NOVA filesystem routines.
 #
 
-obj-m += pmfs.o pmem.o
+obj-m += pmfs.o
 
 pmfs-y := balloc.o bbuild.o dax.o dir.o file.o inode.o ioctl.o journal.o namei.o stats.o super.o symlink.o wprotect.o
 
