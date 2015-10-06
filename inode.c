@@ -3,6 +3,7 @@
  *
  * Inode methods (allocate/free/read/write).
  *
+ * Copyright 2015 NVSL, UC San Diego
  * Copyright 2012-2013 Intel Corporation
  * Copyright 2009-2011 Marco Stornelli <marco.stornelli@gmail.com>
  * Copyright 2003 Sony Corporation
@@ -21,44 +22,43 @@
 #include <linux/backing-dev.h>
 #include <linux/types.h>
 #include <linux/ratelimit.h>
-#include "pmfs.h"
-#include "dax.h"
+#include "nova.h"
 
-unsigned int blk_type_to_shift[PMFS_BLOCK_TYPE_MAX] = {12, 21, 30};
-uint32_t blk_type_to_size[PMFS_BLOCK_TYPE_MAX] = {0x1000, 0x200000, 0x40000000};
+unsigned int blk_type_to_shift[NOVA_BLOCK_TYPE_MAX] = {12, 21, 30};
+uint32_t blk_type_to_size[NOVA_BLOCK_TYPE_MAX] = {0x1000, 0x200000, 0x40000000};
 
-void pmfs_print_inode_entry(struct pmfs_file_write_entry *entry)
+void nova_print_inode_entry(struct nova_file_write_entry *entry)
 {
-	pmfs_dbg("entry @%p: pgoff %u, num_pages %u, block 0x%llx, "
+	nova_dbg("entry @%p: pgoff %u, num_pages %u, block 0x%llx, "
 		"size %llu\n", entry, entry->pgoff, entry->num_pages,
 		entry->block, entry->size);
 }
 
-static int pmfs_init_inode_inuse_list(struct super_block *sb)
+static int nova_init_inode_inuse_list(struct super_block *sb)
 {
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_range_node *range_node;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_range_node *range_node;
 
-	range_node = pmfs_alloc_inode_node(sb);
+	range_node = nova_alloc_inode_node(sb);
 	if (range_node == NULL)
 		return -ENOMEM;
 	range_node->range_low = 0;
-	range_node->range_high = PMFS_NORMAL_INODE_START - 1;
-	pmfs_insert_inodetree(sbi, range_node);
+	range_node->range_high = NOVA_NORMAL_INODE_START - 1;
+	nova_insert_inodetree(sbi, range_node);
 	sbi->num_range_node_inode = 1;
-	sbi->s_inodes_used_count = PMFS_NORMAL_INODE_START;
+	sbi->s_inodes_used_count = NOVA_NORMAL_INODE_START;
 	sbi->first_inode_range = range_node;
 
 	return 0;
 }
 
-/* Initialize the inode table. The pmfs_inode struct corresponding to the
+/* Initialize the inode table. The nova_inode struct corresponding to the
  * inode table has already been zero'd out */
-int pmfs_init_inode_table(struct super_block *sb)
+int nova_init_inode_table(struct super_block *sb)
 {
-	struct pmfs_inode *pi = pmfs_get_inode_table(sb);
+	struct nova_inode *pi = nova_get_inode_table(sb);
 
-	pmfs_memunlock_inode(sb, pi);
+	nova_memunlock_inode(sb, pi);
 	pi->i_mode = 0;
 	pi->i_uid = 0;
 	pi->i_gid = 0;
@@ -69,13 +69,13 @@ int pmfs_init_inode_table(struct super_block *sb)
 	 * Now inodes are resided in dir logs, and inode_table is
 	 * only used to save inodes on umount
 	 */
-	pi->i_blk_type = PMFS_BLOCK_TYPE_4K;
+	pi->i_blk_type = NOVA_BLOCK_TYPE_4K;
 
-	return pmfs_init_inode_inuse_list(sb);
+	return nova_init_inode_inuse_list(sb);
 }
 
-static inline void pmfs_free_contiguous_blocks(struct super_block *sb,
-	struct pmfs_file_write_entry *entry, unsigned long pgoff,
+static inline void nova_free_contiguous_blocks(struct super_block *sb,
+	struct nova_file_write_entry *entry, unsigned long pgoff,
 	unsigned long *start_blocknr, unsigned long *num_free,
 	unsigned int btype)
 {
@@ -92,7 +92,7 @@ static inline void pmfs_free_contiguous_blocks(struct super_block *sb,
 			(*num_free)++;
 		} else {
 			/* A new start */
-			pmfs_free_data_blocks(sb, *start_blocknr,
+			nova_free_data_blocks(sb, *start_blocknr,
 						*num_free, btype);
 			*start_blocknr = nvmm;
 			*num_free = 1;
@@ -100,8 +100,8 @@ static inline void pmfs_free_contiguous_blocks(struct super_block *sb,
 	}
 }
 
-static int pmfs_delete_cache_tree(struct super_block *sb,
-	struct pmfs_inode_info_header *sih, unsigned long start_blocknr,
+static int nova_delete_cache_tree(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long start_blocknr,
 	unsigned long last_blocknr, unsigned int btype)
 {
 	unsigned long addr;
@@ -112,7 +112,7 @@ static int pmfs_delete_cache_tree(struct super_block *sb,
 		addr = (unsigned long)radix_tree_lookup(&sih->cache_tree, i);
 		if (addr) {
 			ret = radix_tree_delete(&sih->cache_tree, i);
-			pmfs_free_data_blocks(sb, addr >> PAGE_SHIFT,
+			nova_free_data_blocks(sb, addr >> PAGE_SHIFT,
 							1, btype);
 			sih->mmap_pages--;
 		}
@@ -121,12 +121,12 @@ static int pmfs_delete_cache_tree(struct super_block *sb,
 	return 0;
 }
 
-static int pmfs_delete_file_tree(struct super_block *sb,
-	struct pmfs_inode_info_header *sih, unsigned long start_blocknr,
+static int nova_delete_file_tree(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long start_blocknr,
 	bool delete_nvmm)
 {
-	struct pmfs_file_write_entry *entry;
-	struct pmfs_inode *pi;
+	struct nova_file_write_entry *entry;
+	struct nova_inode *pi;
 	unsigned long free_blocknr = 0, num_free = 0;
 	unsigned long last_blocknr;
 	unsigned long pgoff = start_blocknr;
@@ -136,18 +136,18 @@ static int pmfs_delete_file_tree(struct super_block *sb,
 	int freed = 0;
 	void *ret;
 
-	pi = (struct pmfs_inode *)pmfs_get_block(sb, sih->pi_addr);
+	pi = (struct nova_inode *)nova_get_block(sb, sih->pi_addr);
 	btype = pi->i_blk_type;
 	data_bits = blk_type_to_shift[btype];
 
-	PMFS_START_TIMING(delete_file_tree_t, delete_time);
+	NOVA_START_TIMING(delete_file_tree_t, delete_time);
 
 	if (sih->i_size == 0)
 		goto out;
 
 	last_blocknr = (sih->i_size - 1) >> data_bits;
 	if (sih->mmap_pages)
-		pmfs_delete_cache_tree(sb, sih, start_blocknr,
+		nova_delete_cache_tree(sb, sih, start_blocknr,
 						last_blocknr, btype);
 
 	for (pgoff = start_blocknr; pgoff <= last_blocknr; pgoff++) {
@@ -156,36 +156,36 @@ static int pmfs_delete_file_tree(struct super_block *sb,
 			ret = radix_tree_delete(&sih->tree, pgoff);
 			BUG_ON(!ret || ret != entry);
 			if (delete_nvmm)
-				pmfs_free_contiguous_blocks(sb, entry, pgoff,
+				nova_free_contiguous_blocks(sb, entry, pgoff,
 					&free_blocknr, &num_free, btype);
 			freed++;
 		}
 	}
 
 	if (free_blocknr)
-		pmfs_free_data_blocks(sb, free_blocknr, num_free, btype);
+		nova_free_data_blocks(sb, free_blocknr, num_free, btype);
 out:
-	PMFS_END_TIMING(delete_file_tree_t, delete_time);
+	NOVA_END_TIMING(delete_file_tree_t, delete_time);
 	return freed;
 }
 
 /*
  * Free data blocks from inode in the range start <=> end
  */
-static void pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
+static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
 				    loff_t end)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
+	struct nova_inode *pi = nova_get_inode(sb, inode);
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
 	unsigned long first_blocknr, last_blocknr;
 	int freed = 0;
 
 	inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
 
-	pmfs_dbg_verbose("truncate: pi %p iblocks %llx %llx %llx %llx\n", pi,
+	nova_dbg_verbose("truncate: pi %p iblocks %llx %llx %llx %llx\n", pi,
 			 pi->i_blocks, start, end, pi->i_size);
 
 	first_blocknr = (start + (1UL << data_bits) - 1) >> data_bits;
@@ -197,7 +197,7 @@ static void pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
 	if (first_blocknr > last_blocknr)
 		return;
 
-	freed = pmfs_delete_file_tree(sb, sih, first_blocknr, 1);
+	freed = nova_delete_file_tree(sb, sih, first_blocknr, 1);
 
 	inode->i_blocks -= (freed * (1 << (data_bits -
 				sb->s_blocksize_bits)));
@@ -218,12 +218,12 @@ static void pmfs_truncate_file_blocks(struct inode *inode, loff_t start,
  * @hole_found: indicates whether a hole was found
  * hole: whether we are looking for a hole or data
  */
-static int pmfs_lookup_hole_in_range(struct super_block *sb,
-	struct pmfs_inode_info_header *sih,
+static int nova_lookup_hole_in_range(struct super_block *sb,
+	struct nova_inode_info_header *sih,
 	unsigned long first_blocknr, unsigned long last_blocknr,
 	int *data_found, int *hole_found, int hole)
 {
-	struct pmfs_file_write_entry *entry;
+	struct nova_file_write_entry *entry;
 	unsigned long blocks = 0;
 	int i;
 
@@ -244,13 +244,13 @@ done:
 	return blocks;
 }
 
-int pmfs_assign_nvmm_entry(struct super_block *sb,
-	struct pmfs_inode *pi,
-	struct pmfs_inode_info_header *sih,
-	struct pmfs_file_write_entry *entry,
+int nova_assign_nvmm_entry(struct super_block *sb,
+	struct nova_inode *pi,
+	struct nova_inode_info_header *sih,
+	struct nova_file_write_entry *entry,
 	struct scan_bitmap *bm, bool free)
 {
-	struct pmfs_file_write_entry *old_entry;
+	struct nova_file_write_entry *old_entry;
 	void **pentry;
 	unsigned long old_nvmm, nvmm;
 	unsigned int start_pgoff = entry->pgoff;
@@ -260,7 +260,7 @@ int pmfs_assign_nvmm_entry(struct super_block *sb,
 	int ret;
 	timing_t assign_time;
 
-	PMFS_START_TIMING(assign_t, assign_time);
+	NOVA_START_TIMING(assign_t, assign_time);
 	for (i = 0; i < num; i++) {
 		curr_pgoff = start_pgoff + i;
 
@@ -272,7 +272,7 @@ int pmfs_assign_nvmm_entry(struct super_block *sb,
 				clear_bm(old_nvmm, bm, BM_4K);
 			if (free) {
 				old_entry->invalid_pages++;
-				pmfs_free_data_blocks(sb, old_nvmm, 1,
+				nova_free_data_blocks(sb, old_nvmm, 1,
 							pi->i_blk_type);
 			}
 			if (bm || free)
@@ -281,7 +281,7 @@ int pmfs_assign_nvmm_entry(struct super_block *sb,
 		} else {
 			ret = radix_tree_insert(&sih->tree, curr_pgoff, entry);
 			if (ret) {
-				pmfs_dbg("%s: ERROR %d\n", __func__, ret);
+				nova_dbg("%s: ERROR %d\n", __func__, ret);
 				goto out;
 			}
 		}
@@ -294,27 +294,27 @@ int pmfs_assign_nvmm_entry(struct super_block *sb,
 	}
 
 out:
-	PMFS_END_TIMING(assign_t, assign_time);
+	NOVA_END_TIMING(assign_t, assign_time);
 
 	return ret;
 }
 
-static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
+static int nova_read_inode(struct super_block *sb, struct inode *inode,
 	u64 pi_addr, int rebuild)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode *pi;
-	struct pmfs_inode_info_header *sih;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode *pi;
+	struct nova_inode_info_header *sih;
 	int ret = -EIO;
 	unsigned long ino;
 
-	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
+	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
 	inode->i_mode = le16_to_cpu(pi->i_mode);
 	i_uid_write(inode, le32_to_cpu(pi->i_uid));
 	i_gid_write(inode, le32_to_cpu(pi->i_gid));
 //	set_nlink(inode, le16_to_cpu(pi->i_links_count));
 	inode->i_generation = le32_to_cpu(pi->i_generation);
-	pmfs_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
+	nova_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
 	ino = inode->i_ino;
 
 	/* check if the inode is active. */
@@ -325,31 +325,31 @@ static int pmfs_read_inode(struct super_block *sb, struct inode *inode,
 	}
 
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
-	inode->i_mapping->a_ops = &pmfs_aops_dax;
+	inode->i_mapping->a_ops = &nova_aops_dax;
 
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFREG:
-		inode->i_op = &pmfs_file_inode_operations;
-		inode->i_fop = &pmfs_dax_file_operations;
+		inode->i_op = &nova_file_inode_operations;
+		inode->i_fop = &nova_dax_file_operations;
 		break;
 	case S_IFDIR:
-		inode->i_op = &pmfs_dir_inode_operations;
-		inode->i_fop = &pmfs_dir_operations;
-		if (rebuild && inode->i_ino == PMFS_ROOT_INO) {
-			pmfs_assign_info_header(sb, ino, &sih,
+		inode->i_op = &nova_dir_inode_operations;
+		inode->i_fop = &nova_dir_operations;
+		if (rebuild && inode->i_ino == NOVA_ROOT_INO) {
+			nova_assign_info_header(sb, ino, &sih,
 						inode->i_mode, 1);
-			pmfs_dbg_verbose("%s: rebuild root dir\n", __func__);
-			pmfs_rebuild_dir_inode_tree(sb, pi, pi_addr,
+			nova_dbg_verbose("%s: rebuild root dir\n", __func__);
+			nova_rebuild_dir_inode_tree(sb, pi, pi_addr,
 					sih, NULL);
 			si->header = sih;
 		}
 		break;
 	case S_IFLNK:
-		inode->i_op = &pmfs_symlink_inode_operations;
+		inode->i_op = &nova_symlink_inode_operations;
 		break;
 	default:
 		inode->i_size = 0;
-		inode->i_op = &pmfs_special_inode_operations;
+		inode->i_op = &nova_special_inode_operations;
 		init_special_inode(inode, inode->i_mode,
 				   le32_to_cpu(pi->dev.rdev));
 		break;
@@ -370,30 +370,30 @@ bad_inode:
 	return ret;
 }
 
-static void pmfs_get_inode_flags(struct inode *inode, struct pmfs_inode *pi)
+static void nova_get_inode_flags(struct inode *inode, struct nova_inode *pi)
 {
 	unsigned int flags = inode->i_flags;
-	unsigned int pmfs_flags = le32_to_cpu(pi->i_flags);
+	unsigned int nova_flags = le32_to_cpu(pi->i_flags);
 
-	pmfs_flags &= ~(FS_SYNC_FL | FS_APPEND_FL | FS_IMMUTABLE_FL |
+	nova_flags &= ~(FS_SYNC_FL | FS_APPEND_FL | FS_IMMUTABLE_FL |
 			 FS_NOATIME_FL | FS_DIRSYNC_FL);
 	if (flags & S_SYNC)
-		pmfs_flags |= FS_SYNC_FL;
+		nova_flags |= FS_SYNC_FL;
 	if (flags & S_APPEND)
-		pmfs_flags |= FS_APPEND_FL;
+		nova_flags |= FS_APPEND_FL;
 	if (flags & S_IMMUTABLE)
-		pmfs_flags |= FS_IMMUTABLE_FL;
+		nova_flags |= FS_IMMUTABLE_FL;
 	if (flags & S_NOATIME)
-		pmfs_flags |= FS_NOATIME_FL;
+		nova_flags |= FS_NOATIME_FL;
 	if (flags & S_DIRSYNC)
-		pmfs_flags |= FS_DIRSYNC_FL;
+		nova_flags |= FS_DIRSYNC_FL;
 
-	pi->i_flags = cpu_to_le32(pmfs_flags);
+	pi->i_flags = cpu_to_le32(nova_flags);
 }
 
-static void pmfs_update_inode(struct inode *inode, struct pmfs_inode *pi)
+static void nova_update_inode(struct inode *inode, struct nova_inode *pi)
 {
-	pmfs_memunlock_inode(inode->i_sb, pi);
+	nova_memunlock_inode(inode->i_sb, pi);
 	pi->i_mode = cpu_to_le16(inode->i_mode);
 	pi->i_uid = cpu_to_le32(i_uid_read(inode));
 	pi->i_gid = cpu_to_le32(i_gid_read(inode));
@@ -404,25 +404,25 @@ static void pmfs_update_inode(struct inode *inode, struct pmfs_inode *pi)
 	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
 	pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
 	pi->i_generation = cpu_to_le32(inode->i_generation);
-	pmfs_get_inode_flags(inode, pi);
+	nova_get_inode_flags(inode, pi);
 
 	if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
 		pi->dev.rdev = cpu_to_le32(inode->i_rdev);
 
-	pmfs_memlock_inode(inode->i_sb, pi);
+	nova_memlock_inode(inode->i_sb, pi);
 }
 
-static int pmfs_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
+static int nova_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
 {
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_range_node *i, *next_i;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_range_node *i, *next_i;
 	struct rb_node *temp, *next;
 	unsigned long next_range_low;
 	unsigned long new_ino;
 	unsigned long MAX_INODE = 1UL << 31;
 
 	i = sbi->first_inode_range;
-	PMFS_ASSERT(i);
+	NOVA_ASSERT(i);
 	temp = &i->node;
 	next = rb_next(temp);
 
@@ -430,7 +430,7 @@ static int pmfs_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
 		next_i = NULL;
 		next_range_low = MAX_INODE;
 	} else {
-		next_i = container_of(next, struct pmfs_range_node, node);
+		next_i = container_of(next, struct nova_range_node, node);
 		next_range_low = next_i->range_low;
 	}
 
@@ -440,13 +440,13 @@ static int pmfs_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
 		/* Fill the gap completely */
 		i->range_high = next_i->range_high;
 		rb_erase(&next_i->node, &sbi->inode_inuse_tree);
-		pmfs_free_inode_node(sb, next_i);
+		nova_free_inode_node(sb, next_i);
 		sbi->num_range_node_inode--;
 	} else if (new_ino < (next_range_low - 1)) {
 		/* Aligns to left */
 		i->range_high = new_ino;
 	} else {
-		pmfs_dbg("%s: ERROR: new ino %lu, next low %lu\n", __func__,
+		nova_dbg("%s: ERROR: new ino %lu, next low %lu\n", __func__,
 			new_ino, next_range_low);
 		return -ENOSPC;
 	}
@@ -454,29 +454,29 @@ static int pmfs_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
 	*ino = new_ino;
 	sbi->s_inodes_used_count++;
 
-	pmfs_dbg_verbose("Alloc ino %lu\n", *ino);
+	nova_dbg_verbose("Alloc ino %lu\n", *ino);
 	return 0;
 }
 
-static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
+static void nova_free_inuse_inode(struct super_block *sb, unsigned long ino)
 {
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_range_node *i = NULL;
-	struct pmfs_range_node *curr_node;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_range_node *i = NULL;
+	struct nova_range_node *curr_node;
 	int found = 0;
 
-	pmfs_dbg_verbose("Free inuse ino: %lu\n", ino);
+	nova_dbg_verbose("Free inuse ino: %lu\n", ino);
 
-	found = pmfs_search_inodetree(sbi, ino, &i);
+	found = nova_search_inodetree(sbi, ino, &i);
 	if (!found) {
-		pmfs_dbg("%s ERROR: ino %lu not found\n", __func__, ino);
+		nova_dbg("%s ERROR: ino %lu not found\n", __func__, ino);
 		return;
 	}
 
 	if ((ino == i->range_low) && (ino == i->range_high)) {
 		/* fits entire node */
 		rb_erase(&i->node, &sbi->inode_inuse_tree);
-		pmfs_free_inode_node(sb, i);
+		nova_free_inode_node(sb, i);
 		sbi->num_range_node_inode--;
 		goto block_found;
 	}
@@ -492,8 +492,8 @@ static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
 	}
 	if ((ino > i->range_low) && (ino < i->range_high)) {
 		/* Aligns somewhere in the middle */
-		curr_node = pmfs_alloc_inode_node(sb);
-		PMFS_ASSERT(curr_node);
+		curr_node = nova_alloc_inode_node(sb);
+		NOVA_ASSERT(curr_node);
 		if (curr_node == NULL) {
 			/* returning without freeing the block */
 			goto block_found;
@@ -501,13 +501,13 @@ static void pmfs_free_inuse_inode(struct super_block *sb, unsigned long ino)
 		curr_node->range_low = ino + 1;
 		curr_node->range_high = i->range_high;
 		i->range_high = ino - 1;
-		pmfs_insert_inodetree(sbi, curr_node);
+		nova_insert_inodetree(sbi, curr_node);
 		sbi->num_range_node_inode++;
 		goto block_found;
 	}
 
-	pmfs_error_mng(sb, "Unable to free inode %lu\n", ino);
-	pmfs_error_mng(sb, "Found inuse block %lu - %lu\n",
+	nova_error_mng(sb, "Unable to free inode %lu\n", ino);
+	nova_error_mng(sb, "Found inuse block %lu - %lu\n",
 				 i->range_low, i->range_high);
 
 block_found:
@@ -522,26 +522,26 @@ block_found:
  * through the filesystem because the directory entry
  * has been deleted earlier.
  */
-static int pmfs_free_inode(struct inode *inode,
-	struct pmfs_inode_info_header *sih)
+static int nova_free_inode(struct inode *inode,
+	struct nova_inode_info_header *sih)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
-	struct pmfs_inode *pi;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_inode *pi;
 	int err = 0;
 	timing_t free_time;
 
-	PMFS_START_TIMING(free_inode_t, free_time);
+	NOVA_START_TIMING(free_inode_t, free_time);
 
-	pi = pmfs_get_inode(sb, inode);
+	pi = nova_get_inode(sb, inode);
 
 	if (pi->valid) {
-		pmfs_dbg("%s: inode %lu still valid\n",
+		nova_dbg("%s: inode %lu still valid\n",
 				__func__, inode->i_ino);
 		pi->valid = 0;
 	}
 
-	pmfs_free_inode_log(sb, pi);
+	nova_free_inode_log(sb, pi);
 	pi->i_blocks = 0;
 
 	/* Clear the si header, but not free it - leave for future use */
@@ -550,16 +550,16 @@ static int pmfs_free_inode(struct inode *inode,
 	sih->pi_addr = 0;
 
 	mutex_lock(&sbi->inode_table_mutex);
-	pmfs_free_inuse_inode(sb, pi->pmfs_ino);
+	nova_free_inuse_inode(sb, pi->nova_ino);
 	mutex_unlock(&sbi->inode_table_mutex);
-	PMFS_END_TIMING(free_inode_t, free_time);
+	NOVA_END_TIMING(free_inode_t, free_time);
 	return err;
 }
 
-struct inode *pmfs_iget(struct super_block *sb, unsigned long ino)
+struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 {
-	struct pmfs_inode_info *si;
-	struct pmfs_inode_info_header *sih = NULL;
+	struct nova_inode_info *si;
+	struct nova_inode_info_header *sih = NULL;
 	struct inode *inode;
 	int rebuild = 0;
 	u64 pi_addr;
@@ -571,19 +571,19 @@ struct inode *pmfs_iget(struct super_block *sb, unsigned long ino)
 	if (!(inode->i_state & I_NEW))
 		return inode;
 
-	if (ino == PMFS_ROOT_INO) {
-		si = PMFS_I(inode);
-		sih = pmfs_find_info_header(sb, ino);
+	if (ino == NOVA_ROOT_INO) {
+		si = NOVA_I(inode);
+		sih = nova_find_info_header(sb, ino);
 		if (sih)
 			si->header = sih;
 		else
 			rebuild = 1;
-		pi_addr = PMFS_ROOT_INO_START;
+		pi_addr = NOVA_ROOT_INO_START;
 	} else {
-		si = PMFS_I(inode);
-		sih = pmfs_find_info_header(sb, ino);
+		si = NOVA_I(inode);
+		sih = nova_find_info_header(sb, ino);
 		if (!sih) {
-			pmfs_dbg("%s: sih for ino %lu not found!\n",
+			nova_dbg("%s: sih for ino %lu not found!\n",
 					__func__, ino);
 			err = -EACCES;
 			goto fail;
@@ -595,7 +595,7 @@ struct inode *pmfs_iget(struct super_block *sb, unsigned long ino)
 		err = -EACCES;
 		goto fail;
 	}
-	err = pmfs_read_inode(sb, inode, pi_addr, rebuild);
+	err = nova_read_inode(sb, inode, pi_addr, rebuild);
 	if (unlikely(err))
 		goto fail;
 	inode->i_ino = ino;
@@ -607,23 +607,23 @@ fail:
 	return ERR_PTR(err);
 }
 
-void pmfs_evict_inode(struct inode *inode)
+void nova_evict_inode(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
+	struct nova_inode *pi = nova_get_inode(sb, inode);
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
 	timing_t evict_time;
 	int err = 0;
 	int freed = 0;
 
 	if (!sih) {
-		pmfs_dbg("%s: ino %lu sih is NULL!\n", __func__, inode->i_ino);
+		nova_dbg("%s: ino %lu sih is NULL!\n", __func__, inode->i_ino);
 		BUG();
 	}
 
-	PMFS_START_TIMING(evict_inode_t, evict_time);
-	pmfs_dbg_verbose("%s: %lu\n", __func__, inode->i_ino);
+	NOVA_START_TIMING(evict_inode_t, evict_time);
+	nova_dbg_verbose("%s: %lu\n", __func__, inode->i_ino);
 	if (!inode->i_nlink && !is_bad_inode(inode)) {
 		if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
 			S_ISLNK(inode->i_mode)))
@@ -634,27 +634,27 @@ void pmfs_evict_inode(struct inode *inode)
 		/* We need the log to free the blocks from the b-tree */
 		switch (inode->i_mode & S_IFMT) {
 		case S_IFREG:
-			pmfs_dbgv("%s: file ino %lu\n", __func__, inode->i_ino);
-			freed = pmfs_delete_file_tree(sb, sih, 0, true);
+			nova_dbgv("%s: file ino %lu\n", __func__, inode->i_ino);
+			freed = nova_delete_file_tree(sb, sih, 0, true);
 			break;
 		case S_IFDIR:
-			pmfs_dbgv("%s: dir ino %lu\n", __func__, inode->i_ino);
-			pmfs_delete_dir_tree(sb, sih);
+			nova_dbgv("%s: dir ino %lu\n", __func__, inode->i_ino);
+			nova_delete_dir_tree(sb, sih);
 			break;
 		case S_IFLNK:
 			/* Log will be freed later */
 			break;
 		default:
-			pmfs_dbg("%s: unknown\n", __func__);
+			nova_dbg("%s: unknown\n", __func__);
 			break;
 		}
 
-		pmfs_dbg_verbose("%s: Freed %d\n", __func__, freed);
+		nova_dbg_verbose("%s: Freed %d\n", __func__, freed);
 		/* Then we can free the inode */
-		err = pmfs_free_inode(inode, sih);
+		err = nova_free_inode(inode, sih);
 		if (err)
 			goto out;
-		pi = NULL; /* we no longer own the pmfs_inode */
+		pi = NULL; /* we no longer own the nova_inode */
 
 		inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
 		inode->i_size = 0;
@@ -665,57 +665,57 @@ out:
 	truncate_inode_pages(&inode->i_data, 0);
 
 	clear_inode(inode);
-	PMFS_END_TIMING(evict_inode_t, evict_time);
+	NOVA_END_TIMING(evict_inode_t, evict_time);
 }
 
 /* Returns 0 on failure */
-u64 pmfs_new_pmfs_inode(struct super_block *sb,
-	struct pmfs_inode_info_header **return_sih)
+u64 nova_new_nova_inode(struct super_block *sb,
+	struct nova_inode_info_header **return_sih)
 {
-	struct pmfs_inode_info_header *sih;
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct nova_inode_info_header *sih;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	unsigned long free_ino = 0;
 	u64 ino = 0;
 	int ret;
 	timing_t new_inode_time;
 
-	PMFS_START_TIMING(new_pmfs_inode_t, new_inode_time);
+	NOVA_START_TIMING(new_nova_inode_t, new_inode_time);
 
 	mutex_lock(&sbi->inode_table_mutex);
-	ret = pmfs_alloc_unused_inode(sb, &free_ino);
+	ret = nova_alloc_unused_inode(sb, &free_ino);
 	if (ret) {
-		pmfs_dbg("%s: alloc inode failed %d\n", __func__, ret);
+		nova_dbg("%s: alloc inode failed %d\n", __func__, ret);
 		mutex_unlock(&sbi->inode_table_mutex);
 		return 0;
 	}
 
-	pmfs_assign_info_header(sb, free_ino, &sih, 0, 0);
+	nova_assign_info_header(sb, free_ino, &sih, 0, 0);
 	mutex_unlock(&sbi->inode_table_mutex);
 
 	ino = free_ino;
 	*return_sih = sih;
 
-	PMFS_END_TIMING(new_pmfs_inode_t, new_inode_time);
+	NOVA_END_TIMING(new_nova_inode_t, new_inode_time);
 	return ino;
 }
 
-struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
+struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	struct inode *dir, u64 pi_addr,
-	struct pmfs_inode_info_header *sih, u64 ino, umode_t mode,
+	struct nova_inode_info_header *sih, u64 ino, umode_t mode,
 	size_t size, dev_t rdev, const struct qstr *qstr)
 {
 	struct super_block *sb;
-	struct pmfs_sb_info *sbi;
+	struct nova_sb_info *sbi;
 	struct inode *inode;
-	struct pmfs_inode *diri = NULL;
-	struct pmfs_inode_info *si;
-	struct pmfs_inode *pi;
+	struct nova_inode *diri = NULL;
+	struct nova_inode_info *si;
+	struct nova_inode *pi;
 	int errval;
 	timing_t new_inode_time;
 
-	PMFS_START_TIMING(new_vfs_inode_t, new_inode_time);
+	NOVA_START_TIMING(new_vfs_inode_t, new_inode_time);
 	sb = dir->i_sb;
-	sbi = (struct pmfs_sb_info *)sb->s_fs_info;
+	sbi = (struct nova_sb_info *)sb->s_fs_info;
 	inode = new_inode(sb);
 	if (!inode) {
 		errval = -ENOMEM;
@@ -729,14 +729,14 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	inode->i_generation = atomic_add_return(1, &sbi->next_generation);
 	inode->i_size = size;
 
-	diri = pmfs_get_inode(sb, dir);
+	diri = nova_get_inode(sb, dir);
 	if (!diri) {
 		errval = -EACCES;
 		goto fail2;
 	}
 
-	pi = (struct pmfs_inode *)pmfs_get_block(sb, pi_addr);
-	pmfs_dbg_verbose("%s: allocating inode %llu @ 0x%llx\n",
+	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
+	nova_dbg_verbose("%s: allocating inode %llu @ 0x%llx\n",
 					__func__, ino, pi_addr);
 
 	/* chosen inode is in ino */
@@ -744,26 +744,26 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 
 	switch (type) {
 		case TYPE_CREATE:
-			inode->i_op = &pmfs_file_inode_operations;
-			inode->i_mapping->a_ops = &pmfs_aops_dax;
-			inode->i_fop = &pmfs_dax_file_operations;
+			inode->i_op = &nova_file_inode_operations;
+			inode->i_mapping->a_ops = &nova_aops_dax;
+			inode->i_fop = &nova_dax_file_operations;
 			break;
 		case TYPE_MKNOD:
 			init_special_inode(inode, mode, rdev);
-			inode->i_op = &pmfs_special_inode_operations;
+			inode->i_op = &nova_special_inode_operations;
 			break;
 		case TYPE_SYMLINK:
-			inode->i_op = &pmfs_symlink_inode_operations;
-			inode->i_mapping->a_ops = &pmfs_aops_dax;
+			inode->i_op = &nova_symlink_inode_operations;
+			inode->i_mapping->a_ops = &nova_aops_dax;
 			break;
 		case TYPE_MKDIR:
-			inode->i_op = &pmfs_dir_inode_operations;
-			inode->i_fop = &pmfs_dir_operations;
-			inode->i_mapping->a_ops = &pmfs_aops_dax;
+			inode->i_op = &nova_dir_inode_operations;
+			inode->i_fop = &nova_dir_operations;
+			inode->i_mapping->a_ops = &nova_aops_dax;
 			set_nlink(inode, 2);
 			break;
 		default:
-			pmfs_dbg("Unknown new inode type %d\n", type);
+			nova_dbg("Unknown new inode type %d\n", type);
 			break;
 	}
 
@@ -771,42 +771,42 @@ struct inode *pmfs_new_vfs_inode(enum pmfs_new_inode_type type,
 	 * Pi is part of the dir log so no transaction is needed,
 	 * but we need to flush to NVMM.
 	 */
-	pmfs_memunlock_inode(sb, pi);
-	pi->i_blk_type = PMFS_DEFAULT_BLOCK_TYPE;
-	pi->i_flags = pmfs_mask_flags(mode, diri->i_flags);
+	nova_memunlock_inode(sb, pi);
+	pi->i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
+	pi->i_flags = nova_mask_flags(mode, diri->i_flags);
 	pi->log_head = 0;
 	pi->log_tail = 0;
-	pi->pmfs_ino = ino;
+	pi->nova_ino = ino;
 	pi->valid = 1;
-	pmfs_memlock_inode(sb, pi);
+	nova_memlock_inode(sb, pi);
 
-	si = PMFS_I(inode);
+	si = NOVA_I(inode);
 	sih->i_mode = inode->i_mode;
 	sih->pi_addr = pi_addr;
 	si->header = sih;
 
-	pmfs_update_inode(inode, pi);
+	nova_update_inode(inode, pi);
 
-	pmfs_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
+	nova_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
 
 	if (insert_inode_locked(inode) < 0) {
-		pmfs_err(sb, "pmfs_new_inode failed ino %lx\n", inode->i_ino);
+		nova_err(sb, "nova_new_inode failed ino %lx\n", inode->i_ino);
 		errval = -EINVAL;
 		goto fail1;
 	}
 
-	pmfs_flush_buffer(&pi, PMFS_INODE_SIZE, 0);
-	PMFS_END_TIMING(new_vfs_inode_t, new_inode_time);
+	nova_flush_buffer(&pi, NOVA_INODE_SIZE, 0);
+	NOVA_END_TIMING(new_vfs_inode_t, new_inode_time);
 	return inode;
 fail1:
 	make_bad_inode(inode);
 	iput(inode);
 fail2:
-	PMFS_END_TIMING(new_vfs_inode_t, new_inode_time);
+	NOVA_END_TIMING(new_vfs_inode_t, new_inode_time);
 	return ERR_PTR(errval);
 }
 
-int pmfs_write_inode(struct inode *inode, struct writeback_control *wbc)
+int nova_write_inode(struct inode *inode, struct writeback_control *wbc)
 {
 	/* write_inode should never be called because we always keep our inodes
 	 * clean. So let us know if write_inode ever gets called. */
@@ -816,33 +816,33 @@ int pmfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 
 /*
  * dirty_inode() is called from mark_inode_dirty_sync()
- * usually dirty_inode should not be called because PMFS always keeps its inodes
+ * usually dirty_inode should not be called because NOVA always keeps its inodes
  * clean. Only exception is touch_atime which calls dirty_inode to update the
  * i_atime field.
  */
-void pmfs_dirty_inode(struct inode *inode, int flags)
+void nova_dirty_inode(struct inode *inode, int flags)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
+	struct nova_inode *pi = nova_get_inode(sb, inode);
 
 	/* only i_atime should have changed if at all.
 	 * we can do in-place atomic update */
-	pmfs_memunlock_inode(sb, pi);
+	nova_memunlock_inode(sb, pi);
 	pi->i_atime = cpu_to_le32(inode->i_atime.tv_sec);
-	pmfs_memlock_inode(sb, pi);
+	nova_memlock_inode(sb, pi);
 	/* Relax atime persistency */
-	pmfs_flush_buffer(&pi->i_atime, sizeof(pi->i_atime), 0);
+	nova_flush_buffer(&pi->i_atime, sizeof(pi->i_atime), 0);
 }
 
-static void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
+static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 {
 	/* We only support truncate regular file */
 	if (!(S_ISREG(inode->i_mode))) {
-		pmfs_err(inode->i_sb, "%s:wrong file mode %x\n", inode->i_mode);
+		nova_err(inode->i_sb, "%s:wrong file mode %x\n", inode->i_mode);
 		return;
 	}
 
-	pmfs_dbgv("%s: inode %lu, old size %llu, new size %llu\n",
+	nova_dbgv("%s: inode %lu, old size %llu, new size %llu\n",
 		__func__, inode->i_ino, oldsize, newsize);
 
 	if (newsize != oldsize)
@@ -852,10 +852,10 @@ static void pmfs_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 	 * before truncating it. Also we need to munmap the truncated range
 	 * from application address space, if mmapped. */
 	/* synchronize_rcu(); */
-	pmfs_truncate_file_blocks(inode, newsize, oldsize);
+	nova_truncate_file_blocks(inode, newsize, oldsize);
 }
 
-int pmfs_getattr(struct vfsmount *mnt, struct dentry *dentry,
+int nova_getattr(struct vfsmount *mnt, struct dentry *dentry,
 		         struct kstat *stat)
 {
 	struct inode *inode;
@@ -867,8 +867,8 @@ int pmfs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	return 0;
 }
 
-static void pmfs_update_setattr_entry(struct inode *inode,
-	struct pmfs_setattr_logentry *entry, struct iattr *attr)
+static void nova_update_setattr_entry(struct inode *inode,
+	struct nova_setattr_logentry *entry, struct iattr *attr)
 {
 	unsigned int ia_valid = attr->ia_valid, attr_mask;
 
@@ -890,11 +890,11 @@ static void pmfs_update_setattr_entry(struct inode *inode,
 	else
 		entry->size = cpu_to_le64(inode->i_size);
 
-	pmfs_flush_buffer(entry, sizeof(struct pmfs_setattr_logentry), 0);
+	nova_flush_buffer(entry, sizeof(struct nova_setattr_logentry), 0);
 }
 
-void pmfs_apply_setattr_entry(struct pmfs_inode *pi,
-	struct pmfs_setattr_logentry *entry)
+void nova_apply_setattr_entry(struct nova_inode *pi,
+	struct nova_setattr_logentry *entry)
 {
 	if (entry->entry_type != SET_ATTR)
 		BUG();
@@ -911,45 +911,45 @@ void pmfs_apply_setattr_entry(struct pmfs_inode *pi,
 }
 
 /* Returns new tail after append */
-u64 pmfs_append_setattr_entry(struct super_block *sb, struct pmfs_inode *pi,
+u64 nova_append_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct iattr *attr, u64 tail)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
-	struct pmfs_setattr_logentry *entry;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
+	struct nova_setattr_logentry *entry;
 	u64 curr_p, new_tail = 0;
-	size_t size = sizeof(struct pmfs_setattr_logentry);
+	size_t size = sizeof(struct nova_setattr_logentry);
 	timing_t append_time;
 
-	PMFS_START_TIMING(append_entry_t, append_time);
-	pmfs_dbg_verbose("%s: inode %lu attr change\n",
+	NOVA_START_TIMING(append_entry_t, append_time);
+	nova_dbg_verbose("%s: inode %lu attr change\n",
 				__func__, inode->i_ino);
 
-	curr_p = pmfs_get_append_head(sb, pi, sih, tail, size, 0, 1);
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size, 0, 1);
 	if (curr_p == 0)
 		BUG();
 
-	entry = (struct pmfs_setattr_logentry *)pmfs_get_block(sb, curr_p);
+	entry = (struct nova_setattr_logentry *)nova_get_block(sb, curr_p);
 	/* inode is already updated with attr */
-	pmfs_update_setattr_entry(inode, entry, attr);
+	nova_update_setattr_entry(inode, entry, attr);
 	new_tail = curr_p + size;
 
-	PMFS_END_TIMING(append_entry_t, append_time);
+	NOVA_END_TIMING(append_entry_t, append_time);
 	return new_tail;
 }
 
-int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
+int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 {
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
+	struct nova_inode *pi = nova_get_inode(sb, inode);
 	int ret;
 	unsigned int ia_valid = attr->ia_valid, attr_mask;
 	loff_t oldsize = inode->i_size;
 	u64 new_tail;
 	timing_t setattr_time;
 
-	PMFS_START_TIMING(setattr_t, setattr_time);
+	NOVA_START_TIMING(setattr_t, setattr_time);
 	if (!pi)
 		return -EACCES;
 
@@ -969,24 +969,24 @@ int pmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 		return ret;
 
 	/* We are holding i_mutex so OK to append the log */
-	new_tail = pmfs_append_setattr_entry(sb, pi, inode, attr, 0);
+	new_tail = nova_append_setattr_entry(sb, pi, inode, attr, 0);
 
-	pmfs_update_tail(pi, new_tail);
+	nova_update_tail(pi, new_tail);
 
 	/* Only after log entry is committed, we can truncate size */
 	if ((ia_valid & ATTR_SIZE) && (attr->ia_size != oldsize ||
-			pi->i_flags & cpu_to_le32(PMFS_EOFBLOCKS_FL))) {
-//		pmfs_set_blocksize_hint(sb, inode, pi, attr->ia_size);
+			pi->i_flags & cpu_to_le32(NOVA_EOFBLOCKS_FL))) {
+//		nova_set_blocksize_hint(sb, inode, pi, attr->ia_size);
 
 		/* now we can freely truncate the inode */
-		pmfs_setsize(inode, oldsize, attr->ia_size);
+		nova_setsize(inode, oldsize, attr->ia_size);
 	}
 
-	PMFS_END_TIMING(setattr_t, setattr_time);
+	NOVA_END_TIMING(setattr_t, setattr_time);
 	return ret;
 }
 
-void pmfs_set_inode_flags(struct inode *inode, struct pmfs_inode *pi,
+void nova_set_inode_flags(struct inode *inode, struct nova_inode *pi,
 	unsigned int flags)
 {
 	inode->i_flags &=
@@ -1008,7 +1008,7 @@ void pmfs_set_inode_flags(struct inode *inode, struct pmfs_inode *pi,
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(4,0,9)
 
-static ssize_t pmfs_direct_IO(int rw, struct kiocb *iocb,
+static ssize_t nova_direct_IO(int rw, struct kiocb *iocb,
 	struct iov_iter *iter, loff_t offset)
 {
 	struct file *filp = iocb->ki_filp;
@@ -1020,7 +1020,7 @@ static ssize_t pmfs_direct_IO(int rw, struct kiocb *iocb,
 	const struct iovec *iv = iter->iov;
 	timing_t dio_time;
 
-	PMFS_START_TIMING(direct_IO_t, dio_time);
+	NOVA_START_TIMING(direct_IO_t, dio_time);
 	for (seg = 0; seg < nr_segs; seg++) {
 		end += iv->iov_len;
 		iv++;
@@ -1028,18 +1028,18 @@ static ssize_t pmfs_direct_IO(int rw, struct kiocb *iocb,
 
 	if ((rw == WRITE) && end > i_size_read(inode)) {
 		/* FIXME: Do we need to check for out of bounds IO for R/W */
-		printk(KERN_ERR "pmfs: needs to grow (size = %lld)\n", end);
+		printk(KERN_ERR "nova: needs to grow (size = %lld)\n", end);
 		return err;
 	}
 
-	pmfs_dbg_verbose("%s\n", __func__);
+	nova_dbg_verbose("%s\n", __func__);
 	iv = iter->iov;
 	for (seg = 0; seg < nr_segs; seg++) {
 		if (rw == READ) {
-			err = pmfs_dax_file_read(filp, iv->iov_base,
+			err = nova_dax_file_read(filp, iv->iov_base,
 					iv->iov_len, &offset);
 		} else if (rw == WRITE) {
-			err = pmfs_cow_file_write(filp, iv->iov_base,
+			err = nova_cow_file_write(filp, iv->iov_base,
 					iv->iov_len, &offset, false);
 		}
 		if (err <= 0)
@@ -1052,16 +1052,16 @@ static ssize_t pmfs_direct_IO(int rw, struct kiocb *iocb,
 		iv++;
 	}
 	if (offset != end)
-		printk(KERN_ERR "pmfs: direct_IO: end = %lld"
+		printk(KERN_ERR "nova: direct_IO: end = %lld"
 			"but offset = %lld\n", end, offset);
 err:
-	PMFS_END_TIMING(direct_IO_t, dio_time);
+	NOVA_END_TIMING(direct_IO_t, dio_time);
 	return err;
 }
 
 #else
 
-static ssize_t pmfs_direct_IO(struct kiocb *iocb,
+static ssize_t nova_direct_IO(struct kiocb *iocb,
 	struct iov_iter *iter, loff_t offset)
 {
 	struct file *filp = iocb->ki_filp;
@@ -1074,23 +1074,23 @@ static ssize_t pmfs_direct_IO(struct kiocb *iocb,
 	const struct iovec *iv = iter->iov;
 	timing_t dio_time;
 
-	PMFS_START_TIMING(direct_IO_t, dio_time);
+	NOVA_START_TIMING(direct_IO_t, dio_time);
 	end = offset + count;
 
 	if ((iov_iter_rw(iter) == WRITE) && end > i_size_read(inode)) {
 		/* FIXME: Do we need to check for out of bounds IO for R/W */
-		printk(KERN_ERR "pmfs: needs to grow (size = %lld)\n", end);
+		printk(KERN_ERR "nova: needs to grow (size = %lld)\n", end);
 		return err;
 	}
 
-	pmfs_dbg_verbose("%s\n", __func__);
+	nova_dbg_verbose("%s\n", __func__);
 	iv = iter->iov;
 	for (seg = 0; seg < nr_segs; seg++) {
 		if (iov_iter_rw(iter) == READ) {
-			err = pmfs_dax_file_read(filp, iv->iov_base,
+			err = nova_dax_file_read(filp, iv->iov_base,
 					iv->iov_len, &offset);
 		} else if (iov_iter_rw(iter) == WRITE) {
-			err = pmfs_cow_file_write(filp, iv->iov_base,
+			err = nova_cow_file_write(filp, iv->iov_base,
 					iv->iov_len, &offset, false);
 		}
 		if (err <= 0)
@@ -1103,42 +1103,42 @@ static ssize_t pmfs_direct_IO(struct kiocb *iocb,
 		iv++;
 	}
 	if (offset != end)
-		printk(KERN_ERR "pmfs: direct_IO: end = %lld"
+		printk(KERN_ERR "nova: direct_IO: end = %lld"
 			"but offset = %lld\n", end, offset);
 err:
-	PMFS_END_TIMING(direct_IO_t, dio_time);
+	NOVA_END_TIMING(direct_IO_t, dio_time);
 	return err;
 }
 
 #endif
 
-static int pmfs_coalesce_log_pages(struct super_block *sb,
+static int nova_coalesce_log_pages(struct super_block *sb,
 	unsigned long prev_blocknr, unsigned long first_blocknr,
 	unsigned long num_pages)
 {
 	unsigned long next_blocknr;
 	u64 curr_block;
-	struct pmfs_inode_log_page *curr_page;
+	struct nova_inode_log_page *curr_page;
 	int i;
 
 	if (prev_blocknr) {
 		/* Link prev block and newly allocated head block */
-		curr_block = pmfs_get_block_off(sb, prev_blocknr,
-						PMFS_BLOCK_TYPE_4K);
-		curr_page = (struct pmfs_inode_log_page *)
-				pmfs_get_block(sb, curr_block);
-		curr_page->page_tail.next_page = pmfs_get_block_off(sb,
-				first_blocknr, PMFS_BLOCK_TYPE_4K);
+		curr_block = nova_get_block_off(sb, prev_blocknr,
+						NOVA_BLOCK_TYPE_4K);
+		curr_page = (struct nova_inode_log_page *)
+				nova_get_block(sb, curr_block);
+		curr_page->page_tail.next_page = nova_get_block_off(sb,
+				first_blocknr, NOVA_BLOCK_TYPE_4K);
 	}
 
 	next_blocknr = first_blocknr + 1;
-	curr_block = pmfs_get_block_off(sb, first_blocknr,
-						PMFS_BLOCK_TYPE_4K);
-	curr_page = (struct pmfs_inode_log_page *)
-				pmfs_get_block(sb, curr_block);
+	curr_block = nova_get_block_off(sb, first_blocknr,
+						NOVA_BLOCK_TYPE_4K);
+	curr_page = (struct nova_inode_log_page *)
+				nova_get_block(sb, curr_block);
 	for (i = 0; i < num_pages - 1; i++) {
-		curr_page->page_tail.next_page = pmfs_get_block_off(sb,
-				next_blocknr, PMFS_BLOCK_TYPE_4K);
+		curr_page->page_tail.next_page = nova_get_block_off(sb,
+				next_blocknr, NOVA_BLOCK_TYPE_4K);
 		curr_page++;
 		next_blocknr++;
 	}
@@ -1147,8 +1147,8 @@ static int pmfs_coalesce_log_pages(struct super_block *sb,
 }
 
 /* Log block resides in NVMM */
-int pmfs_allocate_inode_log_pages(struct super_block *sb,
-	struct pmfs_inode *pi, unsigned long num_pages,
+int nova_allocate_inode_log_pages(struct super_block *sb,
+	struct nova_inode *pi, unsigned long num_pages,
 	u64 *new_block)
 {
 	unsigned long new_inode_blocknr;
@@ -1157,46 +1157,46 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
 	int allocated;
 	int ret_pages = 0;
 
-	allocated = pmfs_new_log_blocks(sb, pi->pmfs_ino, &new_inode_blocknr,
-					num_pages, PMFS_BLOCK_TYPE_4K, 1);
+	allocated = nova_new_log_blocks(sb, pi->nova_ino, &new_inode_blocknr,
+					num_pages, NOVA_BLOCK_TYPE_4K, 1);
 
 	if (allocated <= 0) {
-		pmfs_err(sb, "ERROR: no inode log page available: %d %d\n",
+		nova_err(sb, "ERROR: no inode log page available: %d %d\n",
 			num_pages, allocated);
 		return allocated;
 	}
 	ret_pages += allocated;
 	num_pages -= allocated;
-	pmfs_dbg_verbose("Pi %llu: Alloc %d log blocks @ 0x%lx\n",
-			pi->pmfs_ino, allocated, new_inode_blocknr);
+	nova_dbg_verbose("Pi %llu: Alloc %d log blocks @ 0x%lx\n",
+			pi->nova_ino, allocated, new_inode_blocknr);
 
 	/* Coalesce the pages */
-	pmfs_coalesce_log_pages(sb, 0, new_inode_blocknr, allocated);
+	nova_coalesce_log_pages(sb, 0, new_inode_blocknr, allocated);
 	first_blocknr = new_inode_blocknr;
 	prev_blocknr = new_inode_blocknr + allocated - 1;
 
 	/* Allocate remaining pages */
 	while (num_pages) {
-		allocated = pmfs_new_log_blocks(sb, pi->pmfs_ino,
+		allocated = nova_new_log_blocks(sb, pi->nova_ino,
 					&new_inode_blocknr, num_pages,
-					PMFS_BLOCK_TYPE_4K, 1);
+					NOVA_BLOCK_TYPE_4K, 1);
 
-		pmfs_dbg_verbose("Alloc %d log blocks @ 0x%lx\n",
+		nova_dbg_verbose("Alloc %d log blocks @ 0x%lx\n",
 					allocated, new_inode_blocknr);
 		if (allocated <= 0) {
-			pmfs_err(sb, "ERROR: no inode log page available: "
+			nova_err(sb, "ERROR: no inode log page available: "
 				"%d %d\n", num_pages, allocated);
 			return allocated;
 		}
 		ret_pages += allocated;
 		num_pages -= allocated;
-		pmfs_coalesce_log_pages(sb, prev_blocknr, new_inode_blocknr,
+		nova_coalesce_log_pages(sb, prev_blocknr, new_inode_blocknr,
 						allocated);
 		prev_blocknr = new_inode_blocknr + allocated - 1;
 	}
 
-	*new_block = pmfs_get_block_off(sb, first_blocknr,
-						PMFS_BLOCK_TYPE_4K);
+	*new_block = nova_get_block_off(sb, first_blocknr,
+						NOVA_BLOCK_TYPE_4K);
 
 	return ret_pages;
 }
@@ -1206,18 +1206,18 @@ int pmfs_allocate_inode_log_pages(struct super_block *sb,
  * merge entries if possible
  */
 #if 0
-int pmfs_inode_log_gabbage_collection(struct super_block *sb,
-	struct pmfs_inode *pi, u64 new_block, unsigned long num_pages)
+int nova_inode_log_gabbage_collection(struct super_block *sb,
+	struct nova_inode *pi, u64 new_block, unsigned long num_pages)
 {
-	struct pmfs_file_write_entry *curr_entry, *new_entry;
+	struct nova_file_write_entry *curr_entry, *new_entry;
 	u64 old_head, new_head;
-	struct pmfs_inode_log_page *last_page;
-	size_t entry_size = sizeof(struct pmfs_file_write_entry);
+	struct nova_inode_log_page *last_page;
+	size_t entry_size = sizeof(struct nova_file_write_entry);
 
 	old_head = pi->log_head;
 	new_head = new_block;
-	last_page = (struct pmfs_inode_log_page *)
-		pmfs_get_block(sb, new_block + ((num_pages - 1) << PAGE_SHIFT));
+	last_page = (struct nova_inode_log_page *)
+		nova_get_block(sb, new_block + ((num_pages - 1) << PAGE_SHIFT));
 
 	while (old_head != pi->log_tail) {
 		if (is_last_entry(old_head))
@@ -1228,11 +1228,11 @@ int pmfs_inode_log_gabbage_collection(struct super_block *sb,
 		if (old_head == pi->log_tail)
 			break;
 
-		curr_entry = pmfs_get_block(sb, old_head);
+		curr_entry = nova_get_block(sb, old_head);
 		if (curr_entry->num_pages == curr_entry->invalid_pages) {
 			goto update;
 		}
-		new_entry = pmfs_get_block(sb, new_head);
+		new_entry = nova_get_block(sb, new_head);
 		memcpy(new_entry, curr_entry, entry_size);
 update:
 		old_head += entry_size;
@@ -1240,67 +1240,67 @@ update:
 	}
 
 	last_page->page_tail.next_page = pi->log_head;
-	pmfs_flush_buffer(pmfs_get_block(sb, new_block),
+	nova_flush_buffer(nova_get_block(sb, new_block),
 				num_pages * PAGE_SIZE, 1);
 	return 0;
 }
 #endif
 
-static bool curr_page_invalid(struct super_block *sb, struct pmfs_inode *pi,
-	struct pmfs_inode_log_page *curr_page)
+static bool curr_page_invalid(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_log_page *curr_page)
 {
-	struct pmfs_file_write_entry *entry;
+	struct nova_file_write_entry *entry;
 	int i;
 	timing_t check_time;
 
-	PMFS_START_TIMING(check_invalid_t, check_time);
+	NOVA_START_TIMING(check_invalid_t, check_time);
 	for (i = 0; i < ENTRIES_PER_PAGE; i++) {
 		entry = &curr_page->entries[i];
 		/* Do not recycle inode change entry */
-		if (pmfs_get_entry_type(entry) != FILE_WRITE) {
-			PMFS_END_TIMING(check_invalid_t, check_time);
+		if (nova_get_entry_type(entry) != FILE_WRITE) {
+			NOVA_END_TIMING(check_invalid_t, check_time);
 			return false;
 		}
 		if (entry->num_pages != entry->invalid_pages) {
-			PMFS_END_TIMING(check_invalid_t, check_time);
+			NOVA_END_TIMING(check_invalid_t, check_time);
 			return false;
 		}
 	}
 
-	PMFS_END_TIMING(check_invalid_t, check_time);
+	NOVA_END_TIMING(check_invalid_t, check_time);
 	return true;
 }
 
-static void free_curr_page(struct super_block *sb, struct pmfs_inode *pi,
-	struct pmfs_inode_log_page *curr_page,
-	struct pmfs_inode_log_page *last_page, u64 curr_head)
+static void free_curr_page(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_log_page *curr_page,
+	struct nova_inode_log_page *last_page, u64 curr_head)
 {
 	unsigned short btype = pi->i_blk_type;
 
 	last_page->page_tail.next_page = curr_page->page_tail.next_page;
-	pmfs_flush_buffer(&last_page->page_tail.next_page, CACHELINE_SIZE, 1);
-	pmfs_free_log_blocks(sb, pmfs_get_blocknr(sb, curr_head, btype),
+	nova_flush_buffer(&last_page->page_tail.next_page, CACHELINE_SIZE, 1);
+	nova_free_log_blocks(sb, nova_get_blocknr(sb, curr_head, btype),
 					1, btype);
 }
 
-int pmfs_inode_log_garbage_collection(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_inode_info_header *sih,
+int nova_inode_log_garbage_collection(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 curr_tail, u64 new_block, int num_pages)
 {
 	u64 curr, next, possible_head = 0;
 	u64 page_tail;
 	int found_head = 0;
-	struct pmfs_inode_log_page *last_page = NULL;
-	struct pmfs_inode_log_page *curr_page = NULL;
+	struct nova_inode_log_page *last_page = NULL;
+	struct nova_inode_log_page *curr_page = NULL;
 	int first_need_free = 0;
 	unsigned short btype = pi->i_blk_type;
 	int freed_pages = 0;
 	timing_t gc_time;
 
-	PMFS_START_TIMING(log_gc_t, gc_time);
+	NOVA_START_TIMING(log_gc_t, gc_time);
 	curr = pi->log_head;
 
-	pmfs_dbg_verbose("%s: log head 0x%llx, tail 0x%llx\n",
+	nova_dbg_verbose("%s: log head 0x%llx, tail 0x%llx\n",
 				__func__, curr, curr_tail);
 	while (1) {
 		if (curr >> PAGE_SHIFT == pi->log_tail >> PAGE_SHIFT) {
@@ -1310,18 +1310,18 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 			break;
 		}
 
-		curr_page = (struct pmfs_inode_log_page *)
-					pmfs_get_block(sb, curr);
+		curr_page = (struct nova_inode_log_page *)
+					nova_get_block(sb, curr);
 		next = curr_page->page_tail.next_page;
-		pmfs_dbg_verbose("curr 0x%llx, next 0x%llx\n", curr, next);
+		nova_dbg_verbose("curr 0x%llx, next 0x%llx\n", curr, next);
 		if (curr_page_invalid(sb, pi, curr_page)) {
-			pmfs_dbg_verbose("curr page %p invalid\n", curr_page);
+			nova_dbg_verbose("curr page %p invalid\n", curr_page);
 			if (curr == pi->log_head) {
 				/* Free first page later */
 				first_need_free = 1;
 				last_page = curr_page;
 			} else {
-				pmfs_dbg_verbose("Free log block 0x%llx\n",
+				nova_dbg_verbose("Free log block 0x%llx\n",
 						curr >> PAGE_SHIFT);
 				free_curr_page(sb, pi, curr_page, last_page,
 						curr);
@@ -1343,32 +1343,32 @@ int pmfs_inode_log_garbage_collection(struct super_block *sb,
 	}
 
 	page_tail = PAGE_TAIL(curr_tail);
-	((struct pmfs_inode_page_tail *)
-		pmfs_get_block(sb, page_tail))->next_page = new_block;
+	((struct nova_inode_page_tail *)
+		nova_get_block(sb, page_tail))->next_page = new_block;
 
 	curr = pi->log_head;
 
 	pi->log_head = possible_head;
-	pmfs_dbg_verbose("%s: %d new head 0x%llx\n", __func__,
+	nova_dbg_verbose("%s: %d new head 0x%llx\n", __func__,
 					found_head, possible_head);
-	pmfs_dbg_verbose("Num pages %d, freed %d\n", num_pages, freed_pages);
+	nova_dbg_verbose("Num pages %d, freed %d\n", num_pages, freed_pages);
 	sih->log_pages += num_pages - freed_pages;
 	pi->i_blocks += num_pages - freed_pages;
 	/* Don't update log tail pointer here */
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 
 	if (first_need_free) {
-		pmfs_dbg_verbose("Free log head block 0x%llx\n",
+		nova_dbg_verbose("Free log head block 0x%llx\n",
 					curr >> PAGE_SHIFT);
-		pmfs_free_log_blocks(sb, pmfs_get_blocknr(sb, curr, btype),
+		nova_free_log_blocks(sb, nova_get_blocknr(sb, curr, btype),
 					1, btype);
 	}
-	PMFS_END_TIMING(log_gc_t, gc_time);
+	NOVA_END_TIMING(log_gc_t, gc_time);
 	return 0;
 }
 
-u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
-	struct pmfs_inode_info_header *sih, u64 curr_p, int is_file)
+u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_info_header *sih, u64 curr_p, int is_file)
 {
 	u64 new_block;
 	int allocated;
@@ -1376,58 +1376,58 @@ u64 pmfs_extend_inode_log(struct super_block *sb, struct pmfs_inode *pi,
 	u64 page_tail;
 
 	if (curr_p == 0) {
-		allocated = pmfs_allocate_inode_log_pages(sb, pi,
+		allocated = nova_allocate_inode_log_pages(sb, pi,
 					1, &new_block);
 		if (allocated != 1) {
-			pmfs_err(sb, "ERROR: no inode log page "
+			nova_err(sb, "ERROR: no inode log page "
 					"available\n");
 			return 0;
 		}
 		pi->log_tail = new_block;
-		pmfs_flush_buffer(&pi->log_tail, CACHELINE_SIZE, 0);
+		nova_flush_buffer(&pi->log_tail, CACHELINE_SIZE, 0);
 		pi->log_head = new_block;
 		sih->log_pages = 1;
 		pi->i_blocks++;
-		pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+		nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 	} else {
 		num_pages = sih->log_pages >= 256 ?
 				256 : sih->log_pages;
-//		pmfs_dbg("Before append log pages:\n");
-//		pmfs_print_inode_log_page(sb, inode);
-		allocated = pmfs_allocate_inode_log_pages(sb, pi,
+//		nova_dbg("Before append log pages:\n");
+//		nova_print_inode_log_page(sb, inode);
+		allocated = nova_allocate_inode_log_pages(sb, pi,
 					num_pages, &new_block);
-		pmfs_dbg_verbose("Link block %llu to block %llu\n",
+		nova_dbg_verbose("Link block %llu to block %llu\n",
 					curr_p >> PAGE_SHIFT,
 					new_block >> PAGE_SHIFT);
 		if (allocated <= 0) {
-			pmfs_err(sb, "ERROR: no inode log page "
+			nova_err(sb, "ERROR: no inode log page "
 					"available\n");
 			return 0;
 		}
 
 		if (is_file) {
-			pmfs_inode_log_garbage_collection(sb, pi, sih, curr_p,
+			nova_inode_log_garbage_collection(sb, pi, sih, curr_p,
 						new_block, allocated);
 		} else {
 			/* TODO: Disable GC for dir inode by now */
 			page_tail = PAGE_TAIL(curr_p);
-			((struct pmfs_inode_page_tail *)
-				pmfs_get_block(sb, page_tail))->next_page
+			((struct nova_inode_page_tail *)
+				nova_get_block(sb, page_tail))->next_page
 								= new_block;
 			sih->log_pages += num_pages;
 			pi->i_blocks += num_pages;
 		}
 
-//		pmfs_dbg("After append log pages:\n");
-//		pmfs_print_inode_log_page(sb, inode);
+//		nova_dbg("After append log pages:\n");
+//		nova_print_inode_log_page(sb, inode);
 		/* Atomic switch to new log */
-//		pmfs_switch_to_new_log(sb, pi, new_block, num_pages);
+//		nova_switch_to_new_log(sb, pi, new_block, num_pages);
 	}
 	return new_block;
 }
 
-u64 pmfs_get_append_head(struct super_block *sb, struct pmfs_inode *pi,
-	struct pmfs_inode_info_header *sih, u64 tail, size_t size,
+u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_info_header *sih, u64 tail, size_t size,
 	int new_inode, int is_file)
 {
 	u64 curr_p;
@@ -1439,7 +1439,7 @@ u64 pmfs_get_append_head(struct super_block *sb, struct pmfs_inode *pi,
 
 	if (curr_p == 0 || (is_last_entry(curr_p, size, new_inode) &&
 				next_log_page(sb, curr_p) == 0)) {
-		curr_p = pmfs_extend_inode_log(sb, pi, sih, curr_p, is_file);
+		curr_p = nova_extend_inode_log(sb, pi, sih, curr_p, is_file);
 		if (curr_p == 0)
 			return 0;
 	}
@@ -1451,43 +1451,43 @@ u64 pmfs_get_append_head(struct super_block *sb, struct pmfs_inode *pi,
 }
 
 /*
- * Append a pmfs_file_write_entry to the current pmfs_inode_log_page.
+ * Append a nova_file_write_entry to the current nova_inode_log_page.
  * blocknr and start_blk are pgoff.
  * We cannot update pi->log_tail here because a transaction may contain
  * multiple entries.
  */
-u64 pmfs_append_file_write_entry(struct super_block *sb, struct pmfs_inode *pi,
-	struct inode *inode, struct pmfs_file_write_entry *data, u64 tail)
+u64 nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
+	struct inode *inode, struct nova_file_write_entry *data, u64 tail)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
-	struct pmfs_file_write_entry *entry;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
+	struct nova_file_write_entry *entry;
 	u64 curr_p;
-	size_t size = sizeof(struct pmfs_file_write_entry);
+	size_t size = sizeof(struct nova_file_write_entry);
 	timing_t append_time;
 
-	PMFS_START_TIMING(append_entry_t, append_time);
+	NOVA_START_TIMING(append_entry_t, append_time);
 
-	curr_p = pmfs_get_append_head(sb, pi, sih, tail, size, 0, 1);
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size, 0, 1);
 	if (curr_p == 0)
 		return curr_p;
 
-	entry = (struct pmfs_file_write_entry *)pmfs_get_block(sb, curr_p);
+	entry = (struct nova_file_write_entry *)nova_get_block(sb, curr_p);
 	memcpy_to_pmem_nocache(entry, data,
-			sizeof(struct pmfs_file_write_entry));
-	pmfs_dbg_verbose("file %lu entry @ 0x%llx: pgoff %u, num %u, "
+			sizeof(struct nova_file_write_entry));
+	nova_dbg_verbose("file %lu entry @ 0x%llx: pgoff %u, num %u, "
 			"block %llu, size %llu\n", inode->i_ino,
 			curr_p, entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT, entry->size);
 	/* entry->invalid is set to 0 */
 
-	PMFS_END_TIMING(append_entry_t, append_time);
+	NOVA_END_TIMING(append_entry_t, append_time);
 	return curr_p;
 }
 
-void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
+void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi)
 {
-	struct pmfs_inode_log_page *curr_page;
+	struct nova_inode_log_page *curr_page;
 	u64 curr_block;
 	unsigned long blocknr, start_blocknr = 0;
 	int num_free = 0;
@@ -1497,20 +1497,20 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 	if (pi->log_head == 0 || pi->log_tail == 0)
 		return;
 
-	PMFS_START_TIMING(free_inode_log_t, free_time);
+	NOVA_START_TIMING(free_inode_log_t, free_time);
 
 	curr_block = pi->log_head;
 	while (curr_block) {
 		if (curr_block & INVALID_MASK) {
-			pmfs_dbg("%s: ERROR: invalid block %llu\n",
+			nova_dbg("%s: ERROR: invalid block %llu\n",
 					__func__, curr_block);
 			break;
 		}
-		curr_page = (struct pmfs_inode_log_page *)pmfs_get_block(sb,
+		curr_page = (struct nova_inode_log_page *)nova_get_block(sb,
 							curr_block);
-		blocknr = pmfs_get_blocknr(sb, le64_to_cpu(curr_block),
+		blocknr = nova_get_blocknr(sb, le64_to_cpu(curr_block),
 				    btype);
-		pmfs_dbg_verbose("%s: free page %llu\n", __func__, curr_block);
+		nova_dbg_verbose("%s: free page %llu\n", __func__, curr_block);
 		curr_block = curr_page->page_tail.next_page;
 
 		if (start_blocknr == 0) {
@@ -1521,7 +1521,7 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 				num_free++;
 			} else {
 				/* A new start */
-				pmfs_free_log_blocks(sb, start_blocknr,
+				nova_free_log_blocks(sb, start_blocknr,
 					num_free, btype);
 				start_blocknr = blocknr;
 				num_free = 1;
@@ -1529,16 +1529,16 @@ void pmfs_free_inode_log(struct super_block *sb, struct pmfs_inode *pi)
 		}
 	}
 	if (start_blocknr)
-		pmfs_free_log_blocks(sb, start_blocknr,	num_free, btype);
+		nova_free_log_blocks(sb, start_blocknr,	num_free, btype);
 
 	pi->log_head = 0;
-	pmfs_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
-	pmfs_update_tail(pi, 0);
-	PMFS_END_TIMING(free_inode_log_t, free_time);
+	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
+	nova_update_tail(pi, 0);
+	NOVA_END_TIMING(free_inode_log_t, free_time);
 }
 
-int pmfs_free_dram_resource(struct super_block *sb,
-	struct pmfs_inode_info_header *sih)
+int nova_free_dram_resource(struct super_block *sb,
+	struct nova_inode_info_header *sih)
 {
 	int freed = 0;
 
@@ -1546,17 +1546,17 @@ int pmfs_free_dram_resource(struct super_block *sb,
 		return 0;
 
 	if (S_ISREG(sih->i_mode)) {
-		freed = pmfs_delete_file_tree(sb, sih, 0, false);
+		freed = nova_delete_file_tree(sb, sih, 0, false);
 	} else {
-		pmfs_delete_dir_tree(sb, sih);
+		nova_delete_dir_tree(sb, sih);
 		freed = 1;
 	}
 
 	return freed;
 }
 
-static inline void pmfs_rebuild_file_time_and_size(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_file_write_entry *entry)
+static inline void nova_rebuild_file_time_and_size(struct super_block *sb,
+	struct nova_inode *pi, struct nova_file_write_entry *entry)
 {
 	if (!entry || !pi)
 		return;
@@ -1566,21 +1566,21 @@ static inline void pmfs_rebuild_file_time_and_size(struct super_block *sb,
 	pi->i_size = cpu_to_le64(entry->size);
 }
 
-int pmfs_rebuild_file_inode_tree(struct super_block *sb,
-	struct pmfs_inode *pi, u64 pi_addr,
-	struct pmfs_inode_info_header *sih, struct scan_bitmap *bm)
+int nova_rebuild_file_inode_tree(struct super_block *sb,
+	struct nova_inode *pi, u64 pi_addr,
+	struct nova_inode_info_header *sih, struct scan_bitmap *bm)
 {
-	struct pmfs_file_write_entry *entry = NULL;
-	struct pmfs_setattr_logentry *attr_entry = NULL;
-	struct pmfs_link_change_entry *link_change_entry = NULL;
-	struct pmfs_inode_log_page *curr_page;
-	u64 ino = pi->pmfs_ino;
+	struct nova_file_write_entry *entry = NULL;
+	struct nova_setattr_logentry *attr_entry = NULL;
+	struct nova_link_change_entry *link_change_entry = NULL;
+	struct nova_inode_log_page *curr_page;
+	u64 ino = pi->nova_ino;
 	void *addr;
 	u64 curr_p;
 	u64 next;
 	u8 type;
 
-	pmfs_dbg_verbose("Rebuild file inode %llu tree\n", ino);
+	nova_dbg_verbose("Rebuild file inode %llu tree\n", ino);
 	/*
 	 * We will regenerate the tree during blocks assignment.
 	 * Set height to 0.
@@ -1588,7 +1588,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 	sih->pi_addr = pi_addr;
 
 	curr_p = pi->log_head;
-	pmfs_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
+	nova_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
 				curr_p, pi->log_tail);
 	if (curr_p == 0 && pi->log_tail == 0)
 		return 0;
@@ -1600,7 +1600,7 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 	}
 	while (curr_p != pi->log_tail) {
 		if (is_last_entry(curr_p,
-				sizeof(struct pmfs_file_write_entry), 0)) {
+				sizeof(struct nova_file_write_entry), 0)) {
 			sih->log_pages++;
 			curr_p = next_log_page(sb, curr_p);
 			if (bm) {
@@ -1610,57 +1610,57 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 		}
 
 		if (curr_p == 0) {
-			pmfs_err(sb, "File inode %llu log is NULL!\n", ino);
+			nova_err(sb, "File inode %llu log is NULL!\n", ino);
 			BUG();
 		}
 
-		addr = (void *)pmfs_get_block(sb, curr_p);
-		type = pmfs_get_entry_type(addr);
+		addr = (void *)nova_get_block(sb, curr_p);
+		type = nova_get_entry_type(addr);
 		switch (type) {
 			case SET_ATTR:
 				attr_entry =
-					(struct pmfs_setattr_logentry *)addr;
-				pmfs_apply_setattr_entry(pi, attr_entry);
-				curr_p += sizeof(struct pmfs_setattr_logentry);
+					(struct nova_setattr_logentry *)addr;
+				nova_apply_setattr_entry(pi, attr_entry);
+				curr_p += sizeof(struct nova_setattr_logentry);
 				continue;
 			case LINK_CHANGE:
 				link_change_entry =
-					(struct pmfs_link_change_entry *)addr;
-				pmfs_apply_link_change_entry(pi,
+					(struct nova_link_change_entry *)addr;
+				nova_apply_link_change_entry(pi,
 							link_change_entry);
-				curr_p += sizeof(struct pmfs_link_change_entry);
+				curr_p += sizeof(struct nova_link_change_entry);
 				continue;
 			case FILE_WRITE:
 				break;
 			default:
-				pmfs_dbg("%s: unknown type %d, 0x%llx\n",
+				nova_dbg("%s: unknown type %d, 0x%llx\n",
 							__func__, type, curr_p);
-				PMFS_ASSERT(0);
+				NOVA_ASSERT(0);
 		}
 
-		entry = (struct pmfs_file_write_entry *)addr;
-//		pmfs_print_inode_entry(entry);
+		entry = (struct nova_file_write_entry *)addr;
+//		nova_print_inode_entry(entry);
 
 		if (entry->num_pages != entry->invalid_pages) {
 			/*
 			 * The overlaped blocks are already freed.
 			 * Don't double free them, just re-assign the pointers.
 			 */
-			pmfs_assign_nvmm_entry(sb, pi, sih, entry,
+			nova_assign_nvmm_entry(sb, pi, sih, entry,
 						bm, false);
 		}
 
-		pmfs_rebuild_file_time_and_size(sb, pi, entry);
-		curr_p += sizeof(struct pmfs_file_write_entry);
+		nova_rebuild_file_time_and_size(sb, pi, entry);
+		curr_p += sizeof(struct nova_file_write_entry);
 	}
 
 	sih->i_size = le64_to_cpu(pi->i_size);
 	sih->i_mode = le16_to_cpu(pi->i_mode);
-	pmfs_flush_buffer(pi, sizeof(struct pmfs_inode), 0);
+	nova_flush_buffer(pi, sizeof(struct nova_inode), 0);
 
 	/* Keep traversing until log ends */
 	curr_p &= PAGE_MASK;
-	curr_page = (struct pmfs_inode_log_page *)pmfs_get_block(sb, curr_p);
+	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr_p);
 	while ((next = curr_page->page_tail.next_page) != 0) {
 		sih->log_pages++;
 		curr_p = next;
@@ -1668,26 +1668,26 @@ int pmfs_rebuild_file_inode_tree(struct super_block *sb,
 			BUG_ON(curr_p & (PAGE_SIZE - 1));
 			set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
 		}
-		curr_page = (struct pmfs_inode_log_page *)
-			pmfs_get_block(sb, curr_p);
+		curr_page = (struct nova_inode_log_page *)
+			nova_get_block(sb, curr_p);
 	}
 
 	if (bm)
 		pi->i_blocks += sih->log_pages;
 
-//	pmfs_print_inode_log_page(sb, inode);
+//	nova_print_inode_log_page(sb, inode);
 	return 0;
 }
 
 /*
  * find the file offset for SEEK_DATA/SEEK_HOLE
  */
-unsigned long pmfs_find_region(struct inode *inode, loff_t *offset, int hole)
+unsigned long nova_find_region(struct inode *inode, loff_t *offset, int hole)
 {
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
+	struct nova_inode *pi = nova_get_inode(sb, inode);
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
 	unsigned long first_blocknr, last_blocknr;
 	unsigned long blocks = 0, offset_in_block;
@@ -1708,11 +1708,11 @@ unsigned long pmfs_find_region(struct inode *inode, loff_t *offset, int hole)
 	first_blocknr = *offset >> data_bits;
 	last_blocknr = inode->i_size >> data_bits;
 
-	pmfs_dbg_verbose("find_region offset %llx, first_blocknr %lx,"
+	nova_dbg_verbose("find_region offset %llx, first_blocknr %lx,"
 		" last_blocknr %lx hole %d\n",
 		  *offset, first_blocknr, last_blocknr, hole);
 
-	blocks = pmfs_lookup_hole_in_range(inode->i_sb, sih,
+	blocks = nova_lookup_hole_in_range(inode->i_sb, sih,
 		first_blocknr, last_blocknr, &data_found, &hole_found, hole);
 
 	/* Searching data but only hole found till the end */
@@ -1747,7 +1747,7 @@ unsigned long pmfs_find_region(struct inode *inode, loff_t *offset, int hole)
 	return 0;
 }
 
-const struct address_space_operations pmfs_aops_dax = {
-	.direct_IO		= pmfs_direct_IO,
-	/*.dax_mem_protect	= pmfs_dax_mem_protect,*/
+const struct address_space_operations nova_aops_dax = {
+	.direct_IO		= nova_direct_IO,
+	/*.dax_mem_protect	= nova_dax_mem_protect,*/
 };

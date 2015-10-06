@@ -1,6 +1,9 @@
 /*
- * Persistent Memory File System
- * Copyright (c) 2012-2013, Intel Corporation.
+ * NOVA journal header
+ *
+ * Copyright 2015 NVSL, UC San Diego
+ * Copyright 2012-2013 Intel Corporation
+ * Copyright 2009-2011 Marco Stornelli <marco.stornelli@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -15,22 +18,22 @@
  * this program; if not, write to the Free Software Foundation, Inc., 
  * 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
  */
-#ifndef __PMFS_JOURNAL_H__
-#define __PMFS_JOURNAL_H__
+#ifndef __NOVA_JOURNAL_H__
+#define __NOVA_JOURNAL_H__
 #include <linux/slab.h>
 
 /* Lite journal */
-struct pmfs_lite_journal_entry {
+struct nova_lite_journal_entry {
 	/* The highest byte of addr is type */
 	u64 addrs[4];
 	u64 values[4];
 };
 
-int pmfs_lite_journal_soft_init(struct super_block *sb);
-int pmfs_lite_journal_hard_init(struct super_block *sb);
-u64 pmfs_create_lite_transaction(struct super_block *sb,
-	struct pmfs_lite_journal_entry *dram_entry1,
-	struct pmfs_lite_journal_entry *dram_entry2,
+int nova_lite_journal_soft_init(struct super_block *sb);
+int nova_lite_journal_hard_init(struct super_block *sb);
+u64 nova_create_lite_transaction(struct super_block *sb,
+	struct nova_lite_journal_entry *dram_entry1,
+	struct nova_lite_journal_entry *dram_entry2,
 	int entries);
-void pmfs_commit_lite_transaction(struct super_block *sb, u64 tail);
-#endif    /* __PMFS_JOURNAL_H__ */
+void nova_commit_lite_transaction(struct super_block *sb, u64 tail);
+#endif    /* __NOVA_JOURNAL_H__ */

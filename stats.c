@@ -1,4 +1,28 @@
-#include "pmfs.h"
+/*
+ * NOVA File System statistics
+ *
+ * Copyright 2015 NVSL, UC San Diego
+ * Copyright 2012-2013 Intel Corporation
+ * Copyright 2009-2011 Marco Stornelli <marco.stornelli@gmail.com>
+ * Copyright 2003 Sony Corporation
+ * Copyright 2003 Matsushita Electric Industrial Co., Ltd.
+ * 2003-2004 (c) MontaVista Software, Inc. , Steve Longerbeam
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2, as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+#include "nova.h"
 
 const char *Timingstring[TIMING_NUM] = 
 {
@@ -48,7 +72,7 @@ const char *Timingstring[TIMING_NUM] =
 	"delete_file_tree",
 	"delete_dir_tree",
 	"new_vfs_inode",
-	"new_pmfs_inode",
+	"new_nova_inode",
 	"free_inode",
 	"free_inode_log",
 	"evict_inode",
@@ -75,9 +99,9 @@ atomic64_t header_free = ATOMIC_INIT(0);
 atomic64_t range_alloc = ATOMIC_INIT(0);
 atomic64_t range_free = ATOMIC_INIT(0);
 
-void pmfs_print_alloc_stats(struct super_block *sb)
+void nova_print_alloc_stats(struct super_block *sb)
 {
-	printk("=========== PMFS allocation stats ===========\n");
+	printk("=========== NOVA allocation stats ===========\n");
 	printk("Alloc %llu, alloc steps %lu, average %llu\n",
 		Countstats[new_data_blocks_t], alloc_steps,
 		Countstats[new_data_blocks_t] ?
@@ -103,9 +127,9 @@ void pmfs_print_alloc_stats(struct super_block *sb)
 			atomic64_read(&range_alloc));
 }
 
-void pmfs_print_IO_stats(struct super_block *sb)
+void nova_print_IO_stats(struct super_block *sb)
 {
-	printk("=========== PMFS I/O stats ===========\n");
+	printk("=========== NOVA I/O stats ===========\n");
 	printk("Read %llu, bytes %llu, average %llu\n",
 		Countstats[dax_read_t], read_bytes,
 		Countstats[dax_read_t] ?
@@ -124,11 +148,11 @@ void pmfs_print_IO_stats(struct super_block *sb)
 	printk("Fsync %ld pages\n", atomic64_read(&fsync_pages));
 }
 
-void pmfs_print_timing_stats(struct super_block *sb)
+void nova_print_timing_stats(struct super_block *sb)
 {
 	int i;
 
-	printk("======== PMFS kernel timing stats ========\n");
+	printk("======== NOVA kernel timing stats ========\n");
 	for (i = 0; i < TIMING_NUM; i++) {
 		if (measure_timing || Timingstats[i]) {
 			printk("%s: count %llu, timing %llu, average %llu\n",
@@ -144,46 +168,46 @@ void pmfs_print_timing_stats(struct super_block *sb)
 		}
 	}
 
-	pmfs_print_alloc_stats(sb);
-	pmfs_print_IO_stats(sb);
+	nova_print_alloc_stats(sb);
+	nova_print_IO_stats(sb);
 }
 
-void pmfs_clear_stats(void)
+void nova_clear_stats(void)
 {
 	int i;
 
-	printk("======== Clear PMFS kernel timing stats ========\n");
+	printk("======== Clear NOVA kernel timing stats ========\n");
 	for (i = 0; i < TIMING_NUM; i++) {
 		Countstats[i] = 0;
 		Timingstats[i] = 0;
 	}
 }
 
-void pmfs_print_inode_log(struct super_block *sb, struct inode *inode)
+void nova_print_inode_log(struct super_block *sb, struct inode *inode)
 {
-	struct pmfs_inode *pi;
-	size_t entry_size = sizeof(struct pmfs_file_write_entry);
+	struct nova_inode *pi;
+	size_t entry_size = sizeof(struct nova_file_write_entry);
 	u64 curr;
 
-	pi = pmfs_get_inode(sb, inode);
+	pi = nova_get_inode(sb, inode);
 	if (pi->log_tail == 0)
 		return;
 
 	curr = pi->log_head;
-	pmfs_dbg("Pi %lu: log head block @ %llu, tail @ block %llu, %llu\n",
+	nova_dbg("Pi %lu: log head block @ %llu, tail @ block %llu, %llu\n",
 			inode->i_ino, curr >> PAGE_SHIFT,
 			pi->log_tail >> PAGE_SHIFT, pi->log_tail);
 	while (curr != pi->log_tail) {
 		if ((curr & (PAGE_SIZE - 1)) == LAST_ENTRY) {
-			struct pmfs_inode_page_tail *tail =
-					pmfs_get_block(sb, curr);
-			pmfs_dbg("Log tail. Next page @ block %llu\n",
+			struct nova_inode_page_tail *tail =
+					nova_get_block(sb, curr);
+			nova_dbg("Log tail. Next page @ block %llu\n",
 					tail->next_page >> PAGE_SHIFT);
 			curr = tail->next_page;
 		} else {
-			struct pmfs_file_write_entry *entry =
-					pmfs_get_block(sb, curr);
-			pmfs_dbg("entry @ %llu: offset %u, size %u, "
+			struct nova_file_write_entry *entry =
+					nova_get_block(sb, curr);
+			nova_dbg("entry @ %llu: offset %u, size %u, "
 				"blocknr %llu, invalid count %u\n",
 				(curr & (PAGE_SIZE - 1)) / entry_size,
 				entry->pgoff, entry->num_pages,
@@ -194,59 +218,59 @@ void pmfs_print_inode_log(struct super_block *sb, struct inode *inode)
 	}
 }
 
-void pmfs_print_inode_log_pages(struct super_block *sb, struct inode *inode)
+void nova_print_inode_log_pages(struct super_block *sb, struct inode *inode)
 {
-	struct pmfs_inode *pi;
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
-	struct pmfs_inode_log_page *curr_page;
+	struct nova_inode *pi;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_log_page *curr_page;
 	u64 curr, next;
 	int count = 1;
 	int used = count;
 
-	pi = pmfs_get_inode(sb, inode);
+	pi = nova_get_inode(sb, inode);
 	if (pi->log_tail == 0) {
-		pmfs_dbg("Pi %lu has no log\n", inode->i_ino);
+		nova_dbg("Pi %lu has no log\n", inode->i_ino);
 		return;
 	}
 
 	curr = pi->log_head;
-	pmfs_dbg("Pi %lu: log head @ 0x%llx, tail @ 0x%llx\n",
+	nova_dbg("Pi %lu: log head @ 0x%llx, tail @ 0x%llx\n",
 			inode->i_ino, curr, pi->log_tail);
-	curr_page = (struct pmfs_inode_log_page *)pmfs_get_block(sb, curr);
+	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr);
 	while ((next = curr_page->page_tail.next_page) != 0) {
-		pmfs_dbg_verbose("Current page 0x%llx, next page 0x%llx\n",
+		nova_dbg_verbose("Current page 0x%llx, next page 0x%llx\n",
 			curr >> PAGE_SHIFT, next >> PAGE_SHIFT);
 		if (pi->log_tail >> PAGE_SHIFT == curr >> PAGE_SHIFT)
 			used = count;
 		curr = next;
-		curr_page = (struct pmfs_inode_log_page *)
-			pmfs_get_block(sb, curr);
+		curr_page = (struct nova_inode_log_page *)
+			nova_get_block(sb, curr);
 		count++;
 	}
 	if (pi->log_tail >> PAGE_SHIFT == curr >> PAGE_SHIFT)
 		used = count;
-	pmfs_dbg("Pi %lu: log used %d pages, has %d pages, "
+	nova_dbg("Pi %lu: log used %d pages, has %d pages, "
 		"si reports %lu pages\n", inode->i_ino, used, count,
 		sih->log_pages);
 }
 
-void pmfs_print_free_lists(struct super_block *sb)
+void nova_print_free_lists(struct super_block *sb)
 {
-	struct pmfs_sb_info *sbi = PMFS_SB(sb);
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct free_list *free_list;
 	int i;
 
-	pmfs_dbg("======== PMFS per-CPU free list allocation stats ========\n");
+	nova_dbg("======== NOVA per-CPU free list allocation stats ========\n");
 	for (i = 0; i < sbi->cpus; i++) {
-		free_list = pmfs_get_free_list(sb, i);
-		pmfs_dbg("Free list %d: block start %lu, block end %lu, "
+		free_list = nova_get_free_list(sb, i);
+		nova_dbg("Free list %d: block start %lu, block end %lu, "
 			"num_blocks %lu, num_free_blocks %lu, blocknode %lu\n",
 			i, free_list->block_start, free_list->block_end,
 			free_list->block_end - free_list->block_start + 1,
 			free_list->num_free_blocks, free_list->num_blocknode);
 
-		pmfs_dbg("Free list %d: alloc count %lu, "
+		nova_dbg("Free list %d: alloc count %lu, "
 			"free count %lu, allocated blocks %lu, "
 			"freed blocks %lu\n", i,
 			free_list->alloc_count,	free_list->free_count,
@@ -254,29 +278,29 @@ void pmfs_print_free_lists(struct super_block *sb)
 	}
 
 	i = SHARED_CPU;
-	free_list = pmfs_get_free_list(sb, i);
-	pmfs_dbg("Free list %d: block start %lu, block end %lu, "
+	free_list = nova_get_free_list(sb, i);
+	nova_dbg("Free list %d: block start %lu, block end %lu, "
 		"num_blocks %lu, num_free_blocks %lu, blocknode %lu\n",
 		i, free_list->block_start, free_list->block_end,
 		free_list->block_end - free_list->block_start + 1,
 		free_list->num_free_blocks, free_list->num_blocknode);
 
-	pmfs_dbg("Free list %d: alloc count %lu, "
+	nova_dbg("Free list %d: alloc count %lu, "
 		"free count %lu, allocated blocks %lu, "
 		"freed blocks %lu\n", i,
 		free_list->alloc_count,	free_list->free_count,
 		free_list->allocated_blocks, free_list->freed_blocks);
 }
 
-void pmfs_detect_memory_leak(struct super_block *sb)
+void nova_detect_memory_leak(struct super_block *sb)
 {
 	if (atomic64_read(&header_alloc) != atomic64_read(&header_free))
-		pmfs_dbg("%s: inode header memory leak! "
+		nova_dbg("%s: inode header memory leak! "
 			"allocated %ld, freed %ld\n", __func__,
 			atomic64_read(&header_alloc),
 			atomic64_read(&header_free));
 	if (atomic64_read(&range_alloc) != atomic64_read(&range_free))
-		pmfs_dbg("%s: range node memory leak! "
+		nova_dbg("%s: range node memory leak! "
 			"allocated %ld, freed %ld\n", __func__,
 			atomic64_read(&range_alloc),
 			atomic64_read(&range_free));

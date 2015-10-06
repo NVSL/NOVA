@@ -1,5 +1,12 @@
 /*
- * Persistent Memory File System
+ * NOVA File System statistics
+ *
+ * Copyright 2015 NVSL, UC San Diego
+ * Copyright 2012-2013 Intel Corporation
+ * Copyright 2009-2011 Marco Stornelli <marco.stornelli@gmail.com>
+ * Copyright 2003 Sony Corporation
+ * Copyright 2003 Matsushita Electric Industrial Co., Ltd.
+ * 2003-2004 (c) MontaVista Software, Inc. , Steve Longerbeam
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -70,7 +77,7 @@ enum timing_category {
 	delete_file_tree_t,
 	delete_dir_tree_t,
 	new_vfs_inode_t,
-	new_pmfs_inode_t,
+	new_nova_inode_t,
 	free_inode_t,
 	free_inode_log_t,
 	evict_inode_t,
@@ -100,10 +107,10 @@ extern atomic64_t range_free;
 
 typedef struct timespec timing_t;
 
-#define PMFS_START_TIMING(name, start) \
+#define NOVA_START_TIMING(name, start) \
 	{if (measure_timing) getrawmonotonic(&start);}
 
-#define PMFS_END_TIMING(name, start) \
+#define NOVA_END_TIMING(name, start) \
 	{if (measure_timing) { \
 		timing_t end; \
 		getrawmonotonic(&end); \

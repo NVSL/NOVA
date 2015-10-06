@@ -3,6 +3,7 @@
  *
  * File operations for files.
  *
+ * Copyright 2015 NVSL, UC San Diego
  * Copyright 2012-2013 Intel Corporation
  * Copyright 2009-2011 Marco Stornelli <marco.stornelli@gmail.com>
  * Copyright 2003 Sony Corporation
@@ -18,14 +19,13 @@
 #include <linux/uaccess.h>
 #include <linux/falloc.h>
 #include <asm/mman.h>
-#include "pmfs.h"
-#include "dax.h"
+#include "nova.h"
 
-static inline int pmfs_can_set_blocksize_hint(struct inode *inode,
-	struct pmfs_inode *pi, loff_t new_size)
+static inline int nova_can_set_blocksize_hint(struct inode *inode,
+	struct nova_inode *pi, loff_t new_size)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
 
 	/* Currently, we don't deallocate data blocks till the file is deleted.
 	 * So no changing blocksize hints once allocation is done. */
@@ -34,39 +34,39 @@ static inline int pmfs_can_set_blocksize_hint(struct inode *inode,
 	return 1;
 }
 
-int pmfs_set_blocksize_hint(struct super_block *sb, struct inode *inode,
-	struct pmfs_inode *pi, loff_t new_size)
+int nova_set_blocksize_hint(struct super_block *sb, struct inode *inode,
+	struct nova_inode *pi, loff_t new_size)
 {
 	unsigned short block_type;
 
-	if (!pmfs_can_set_blocksize_hint(inode, pi, new_size))
+	if (!nova_can_set_blocksize_hint(inode, pi, new_size))
 		return 0;
 
 	if (new_size >= 0x40000000) {   /* 1G */
-		block_type = PMFS_BLOCK_TYPE_1G;
+		block_type = NOVA_BLOCK_TYPE_1G;
 		goto hint_set;
 	}
 
 	if (new_size >= 0x200000) {     /* 2M */
-		block_type = PMFS_BLOCK_TYPE_2M;
+		block_type = NOVA_BLOCK_TYPE_2M;
 		goto hint_set;
 	}
 
 	/* defaulting to 4K */
-	block_type = PMFS_BLOCK_TYPE_4K;
+	block_type = NOVA_BLOCK_TYPE_4K;
 
 hint_set:
-	pmfs_dbg_verbose(
+	nova_dbg_verbose(
 		"Hint: new_size 0x%llx, i_size 0x%llx\n",
 		new_size, pi->i_size);
-	pmfs_dbg_verbose("Setting the hint to 0x%x\n", block_type);
-	pmfs_memunlock_inode(sb, pi);
+	nova_dbg_verbose("Setting the hint to 0x%x\n", block_type);
+	nova_memunlock_inode(sb, pi);
 	pi->i_blk_type = block_type;
-	pmfs_memlock_inode(sb, pi);
+	nova_memlock_inode(sb, pi);
 	return 0;
 }
 
-static loff_t pmfs_llseek(struct file *file, loff_t offset, int origin)
+static loff_t nova_llseek(struct file *file, loff_t offset, int origin)
 {
 	struct inode *inode = file->f_path.dentry->d_inode;
 	int retval;
@@ -77,14 +77,14 @@ static loff_t pmfs_llseek(struct file *file, loff_t offset, int origin)
 	mutex_lock(&inode->i_mutex);
 	switch (origin) {
 	case SEEK_DATA:
-		retval = pmfs_find_region(inode, &offset, 0);
+		retval = nova_find_region(inode, &offset, 0);
 		if (retval) {
 			mutex_unlock(&inode->i_mutex);
 			return retval;
 		}
 		break;
 	case SEEK_HOLE:
-		retval = pmfs_find_region(inode, &offset, 1);
+		retval = nova_find_region(inode, &offset, 1);
 		if (retval) {
 			mutex_unlock(&inode->i_mutex);
 			return retval;
@@ -107,7 +107,7 @@ static loff_t pmfs_llseek(struct file *file, loff_t offset, int origin)
 	return offset;
 }
 
-int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
+int nova_is_page_dirty(struct mm_struct *mm, unsigned long address,
 	int category, int set_clean)
 {
 	pgd_t *pgd;
@@ -117,7 +117,7 @@ int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
 	int ret = 0;
 
 	if (!mm) {
-		pmfs_dbg("%s: mm is NULL\n", __func__);
+		nova_dbg("%s: mm is NULL\n", __func__);
 		return 0;
 	}
 
@@ -125,30 +125,30 @@ int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
 
 	pgd = pgd_offset(mm, address);
 	if (!pgd_present(*pgd)) {
-		pmfs_dbg("%s: pgd not found for 0x%lx\n", __func__, address);
+		nova_dbg("%s: pgd not found for 0x%lx\n", __func__, address);
 		goto out;
 	}
 
 	pud = pud_offset(pgd, address);
 	if (!pud_present(*pud)) {
-		pmfs_dbg("%s: pud not found for 0x%lx\n", __func__, address);
+		nova_dbg("%s: pud not found for 0x%lx\n", __func__, address);
 		goto out;
 	}
 
 	pmd = pmd_offset(pud, address);
 	if (!pmd_present(*pmd)) {
-		pmfs_dbg("%s: pmd not found for 0x%lx\n", __func__, address);
+		nova_dbg("%s: pmd not found for 0x%lx\n", __func__, address);
 		goto out;
 	}
 
 	ptep = pte_offset_map(pmd, address);
 	if (!pte_present(*ptep)) {
-		pmfs_dbg("%s: pte not found for 0x%lx\n", __func__, address);
+		nova_dbg("%s: pte not found for 0x%lx\n", __func__, address);
 		goto out;
 	}
 
 	if (pte_dirty(*ptep)) {
-		pmfs_dbg("%s: page is dirty: 0x%lx\n", __func__, address);
+		nova_dbg("%s: page is dirty: 0x%lx\n", __func__, address);
 		ret = 1;
 		if (set_clean) {
 			pte = *ptep;
@@ -157,7 +157,7 @@ int pmfs_is_page_dirty(struct mm_struct *mm, unsigned long address,
 			__flush_tlb_one(address);
 		}
 	} else {
-		pmfs_dbg("%s: page is clean: 0x%lx\n", __func__, address);
+		nova_dbg("%s: page is clean: 0x%lx\n", __func__, address);
 	}
 
 out:
@@ -165,7 +165,7 @@ out:
 	return ret;
 }
 
-static inline int pmfs_set_page_clean(struct mm_struct *mm,
+static inline int nova_set_page_clean(struct mm_struct *mm,
 	unsigned long address, pte_t *ptep)
 {
 	pte_t pte;
@@ -179,7 +179,7 @@ static inline int pmfs_set_page_clean(struct mm_struct *mm,
 	return 0;
 }
 
-static inline int pmfs_check_page_dirty(struct super_block *sb,
+static inline int nova_check_page_dirty(struct super_block *sb,
 	unsigned long addr)
 {
 	int ret;
@@ -188,15 +188,15 @@ static inline int pmfs_check_page_dirty(struct super_block *sb,
 //	unsigned long nvmm_addr;
 
 //	nvmm_block = pair->nvmm_mmap << PAGE_SHIFT;
-//	nvmm_addr = (unsigned long)pmfs_get_block(sb, nvmm_block);
-//	ret = pmfs_is_page_dirty(&init_mm, nvmm_addr, TEST_NVMM, 1);
+//	nvmm_addr = (unsigned long)nova_get_block(sb, nvmm_block);
+//	ret = nova_is_page_dirty(&init_mm, nvmm_addr, TEST_NVMM, 1);
 	ret = IS_MAP_WRITE(addr);
 
 	return ret;
 }
 
-static unsigned long pmfs_get_dirty_range(struct super_block *sb,
-	struct pmfs_inode *pi, struct pmfs_inode_info *si, loff_t *start,
+static unsigned long nova_get_dirty_range(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info *si, loff_t *start,
 	loff_t end)
 {
 	unsigned long flush_bytes = 0;
@@ -215,8 +215,8 @@ static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 		if (bytes > (end - temp))
 			bytes = end - temp;
 
-		cache_addr = pmfs_get_cache_addr(sb, si, pgoff);
-		if (cache_addr && pmfs_check_page_dirty(sb, cache_addr)) {
+		cache_addr = nova_get_cache_addr(sb, si, pgoff);
+		if (cache_addr && nova_check_page_dirty(sb, cache_addr)) {
 			if (flush_bytes == 0)
 				dirty_start = temp;
 			flush_bytes += bytes;
@@ -236,7 +236,7 @@ static unsigned long pmfs_get_dirty_range(struct super_block *sb,
 	return flush_bytes;
 }
 
-static void pmfs_get_sync_range(struct pmfs_inode_info *si,
+static void nova_get_sync_range(struct nova_inode_info *si,
 	loff_t *start, loff_t *end)
 {
 	unsigned long start_blk, end_blk;
@@ -255,18 +255,18 @@ static void pmfs_get_sync_range(struct pmfs_inode_info *si,
 }
 
 /* This function is called by both msync() and fsync().
- * TODO: Check if we can avoid calling pmfs_flush_buffer() for fsync. We use
+ * TODO: Check if we can avoid calling nova_flush_buffer() for fsync. We use
  * movnti to write data to files, so we may want to avoid doing unnecessary
- * pmfs_flush_buffer() on fsync() */
-int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
+ * nova_flush_buffer() on fsync() */
+int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 {
 	/* Sync from start to end[inclusive] */
 	struct address_space *mapping = file->f_mapping;
 	struct inode *inode = mapping->host;
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi;
+	struct nova_inode *pi;
 	unsigned long start_blk, end_blk;
 	u64 end_tail = 0, begin_tail = 0;
 	u64 begin_temp = 0, end_temp = 0;
@@ -275,14 +275,14 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	loff_t isize;
 	timing_t fsync_time;
 
-	PMFS_START_TIMING(fsync_t, fsync_time);
+	NOVA_START_TIMING(fsync_t, fsync_time);
 	if (!mapping_mapped(mapping))
 		goto out;
 
 	mutex_lock(&inode->i_mutex);
 
 	/* Check the dirty range */
-	pi = pmfs_get_inode(sb, inode);
+	pi = nova_get_inode(sb, inode);
 
 	end += 1; /* end is inclusive. We like our indices normal please! */
 
@@ -292,18 +292,18 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		end = isize;
 	if (!isize || (start >= end))
 	{
-		pmfs_dbg_verbose("[%s:%d] : (ERR) isize(%llx), start(%llx),"
+		nova_dbg_verbose("[%s:%d] : (ERR) isize(%llx), start(%llx),"
 			" end(%llx)\n", __func__, __LINE__, isize, start, end);
-		PMFS_END_TIMING(fsync_t, fsync_time);
+		NOVA_END_TIMING(fsync_t, fsync_time);
 		mutex_unlock(&inode->i_mutex);
 		return 0;
 	}
 
-	pmfs_get_sync_range(si, &start, &end);
+	nova_get_sync_range(si, &start, &end);
 	start_blk = start >> PAGE_SHIFT;
 	end_blk = end >> PAGE_SHIFT;
 
-	pmfs_dbgv("%s: start %llu, end %llu, size %llu, "
+	nova_dbgv("%s: start %llu, end %llu, size %llu, "
 			" start_blk %lu, end_blk %lu\n",
 			__func__, start, end, isize, start_blk,
 			end_blk);
@@ -315,12 +315,12 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	do {
 		unsigned long nr_flush_bytes = 0;
 
-		nr_flush_bytes = pmfs_get_dirty_range(sb, pi, si, &start, end);
+		nr_flush_bytes = nova_get_dirty_range(sb, pi, si, &start, end);
 
-		pmfs_dbgv("start %llu, flush bytes %lu\n",
+		nova_dbgv("start %llu, flush bytes %lu\n",
 				start, nr_flush_bytes);
 		if (nr_flush_bytes) {
-			pmfs_copy_to_nvmm(sb, inode, pi, start,
+			nova_copy_to_nvmm(sb, inode, pi, start,
 				nr_flush_bytes, &begin_temp, &end_temp);
 			if (begin_tail == 0)
 				begin_tail = begin_temp;
@@ -331,10 +331,10 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
 	end_tail = end_temp;
 	if (begin_tail && end_tail && end_tail != pi->log_tail) {
-		pmfs_update_tail(pi, end_tail);
+		nova_update_tail(pi, end_tail);
 
 		/* Free the overlap blocks after the write is committed */
-		ret = pmfs_reassign_file_btree(sb, pi, sih, begin_tail);
+		ret = nova_reassign_file_btree(sb, pi, sih, begin_tail);
 
 		inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	}
@@ -342,25 +342,25 @@ int pmfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	mutex_unlock(&inode->i_mutex);
 
 out:
-	PMFS_END_TIMING(fsync_t, fsync_time);
+	NOVA_END_TIMING(fsync_t, fsync_time);
 
 	return ret;
 }
 
 /* This callback is called when a file is closed */
-static int pmfs_flush(struct file *file, fl_owner_t id)
+static int nova_flush(struct file *file, fl_owner_t id)
 {
 	 /* Mmap needs to call msync() explicitly. */
 	return 0;
 }
 
-static int pmfs_open(struct inode *inode, struct file *filp)
+static int nova_open(struct inode *inode, struct file *filp)
 {
 	return generic_file_open(inode, filp);
 }
 
 static unsigned long
-pmfs_get_unmapped_area(struct file *file, unsigned long addr,
+nova_get_unmapped_area(struct file *file, unsigned long addr,
 			unsigned long len, unsigned long pgoff,
 			unsigned long flags)
 {
@@ -368,15 +368,15 @@ pmfs_get_unmapped_area(struct file *file, unsigned long addr,
 	struct vm_area_struct *vma;
 	struct mm_struct *mm = current->mm;
 	struct inode *inode = file->f_mapping->host;
-	struct pmfs_inode *pi = pmfs_get_inode(inode->i_sb, inode);
+	struct nova_inode *pi = nova_get_inode(inode->i_sb, inode);
 	struct vm_unmapped_area_info info;
 
 	if (len > TASK_SIZE)
 		return -ENOMEM;
 
-	if (pi->i_blk_type == PMFS_BLOCK_TYPE_1G)
+	if (pi->i_blk_type == NOVA_BLOCK_TYPE_1G)
 		align_size = PUD_SIZE;
-	else if (pi->i_blk_type == PMFS_BLOCK_TYPE_2M)
+	else if (pi->i_blk_type == NOVA_BLOCK_TYPE_2M)
 		align_size = PMD_SIZE;
 	else
 		align_size = PAGE_SIZE;
@@ -411,25 +411,25 @@ pmfs_get_unmapped_area(struct file *file, unsigned long addr,
 	return vm_unmapped_area(&info);
 }
 
-const struct file_operations pmfs_dax_file_operations = {
-	.llseek			= pmfs_llseek,
-	.read			= pmfs_dax_file_read,
-	.write			= pmfs_dax_file_write,
+const struct file_operations nova_dax_file_operations = {
+	.llseek			= nova_llseek,
+	.read			= nova_dax_file_read,
+	.write			= nova_dax_file_write,
 	.read_iter		= generic_file_read_iter,
 	.write_iter		= generic_file_write_iter,
-	.mmap			= pmfs_dax_file_mmap,
-	.open			= pmfs_open,
-	.fsync			= pmfs_fsync,
-	.flush			= pmfs_flush,
-	.get_unmapped_area	= pmfs_get_unmapped_area,
-	.unlocked_ioctl		= pmfs_ioctl,
+	.mmap			= nova_dax_file_mmap,
+	.open			= nova_open,
+	.fsync			= nova_fsync,
+	.flush			= nova_flush,
+	.get_unmapped_area	= nova_get_unmapped_area,
+	.unlocked_ioctl		= nova_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl		= pmfs_compat_ioctl,
+	.compat_ioctl		= nova_compat_ioctl,
 #endif
 };
 
-const struct inode_operations pmfs_file_inode_operations = {
-	.setattr	= pmfs_notify_change,
-	.getattr	= pmfs_getattr,
+const struct inode_operations nova_file_inode_operations = {
+	.setattr	= nova_notify_change,
+	.getattr	= nova_getattr,
 	.get_acl	= NULL,
 };

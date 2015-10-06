@@ -3,11 +3,15 @@
  *
  * Symlink operations
  *
+ * Copyright 2015 NVSL, UC San Diego
  * Copyright 2012-2013 Intel Corporation
  * Copyright 2009-2011 Marco Stornelli <marco.stornelli@gmail.com>
  * Copyright 2003 Sony Corporation
  * Copyright 2003 Matsushita Electric Industrial Co., Ltd.
  * 2003-2004 (c) MontaVista Software, Inc. , Steve Longerbeam
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ *
  * This file is licensed under the terms of the GNU General Public
  * License version 2. This program is licensed "as is" without any
  * warranty of any kind, whether express or implied.
@@ -15,58 +19,58 @@
 
 #include <linux/fs.h>
 #include <linux/namei.h>
-#include "pmfs.h"
+#include "nova.h"
 
 /* symname is always written at the beginning of log page */
-int pmfs_block_symlink(struct super_block *sb, struct pmfs_inode *pi,
+int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, unsigned long blocknr, const char *symname,
 	int len)
 {
-	struct pmfs_inode_info *si = PMFS_I(inode);
-	struct pmfs_inode_info_header *sih = si->header;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
 	u64 block;
 	char *blockp;
 
-	block = pmfs_get_block_off(sb, blocknr,	PMFS_BLOCK_TYPE_4K);
-	blockp = (char *)pmfs_get_block(sb, block);
+	block = nova_get_block_off(sb, blocknr,	NOVA_BLOCK_TYPE_4K);
+	blockp = (char *)nova_get_block(sb, block);
 
-	pmfs_memunlock_block(sb, blockp);
+	nova_memunlock_block(sb, blockp);
 	memcpy_to_pmem_nocache(blockp, symname, len);
 	blockp[len] = '\0';
-	pmfs_memlock_block(sb, blockp);
+	nova_memlock_block(sb, blockp);
 
 	sih->log_pages = 1;
 	pi->log_head = block;
 
-	pmfs_update_tail(pi, block + len + 1);
+	nova_update_tail(pi, block + len + 1);
 	return 0;
 }
 
-static int pmfs_readlink(struct dentry *dentry, char __user *buffer, int buflen)
+static int nova_readlink(struct dentry *dentry, char __user *buffer, int buflen)
 {
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
+	struct nova_inode *pi = nova_get_inode(sb, inode);
 	char *blockp;
 
-	blockp = (char *)pmfs_get_block(sb, pi->log_head);
+	blockp = (char *)nova_get_block(sb, pi->log_head);
 	return readlink_copy(buffer, buflen, blockp);
 }
 
-static void *pmfs_follow_link(struct dentry *dentry, struct nameidata *nd)
+static void *nova_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
-	struct pmfs_inode *pi = pmfs_get_inode(sb, inode);
+	struct nova_inode *pi = nova_get_inode(sb, inode);
 	char *blockp;
 
-	blockp = (char *)pmfs_get_block(sb, pi->log_head);
+	blockp = (char *)nova_get_block(sb, pi->log_head);
 	nd_set_link(nd, blockp);
 	return NULL;
 }
 
-const struct inode_operations pmfs_symlink_inode_operations = {
-	.readlink	= pmfs_readlink,
-	.follow_link	= pmfs_follow_link,
-	.setattr	= pmfs_notify_change,
+const struct inode_operations nova_symlink_inode_operations = {
+	.readlink	= nova_readlink,
+	.follow_link	= nova_follow_link,
+	.setattr	= nova_notify_change,
 };
