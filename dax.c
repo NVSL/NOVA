@@ -755,7 +755,7 @@ static int __nova_dax_file_fault(struct vm_area_struct *vma,
 	struct inode *inode = mapping->host;
 	pgoff_t size;
 	void *dax_mem;
-	unsigned long dax_pfn;
+	unsigned long dax_pfn = 0;
 	int err;
 
 	size = (i_size_read(inode) + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
@@ -787,6 +787,9 @@ static int __nova_dax_file_fault(struct vm_area_struct *vma,
 			PAGE_SIZE, (unsigned long)vmf->virtual_address,
 			(unsigned long)dax_pfn << PAGE_SHIFT);
 
+	if (dax_pfn == 0)
+		return VM_FAULT_SIGBUS;
+
 	err = vm_insert_mixed(vma, (unsigned long)vmf->virtual_address, dax_pfn);
 
 	if (err == -ENOMEM)
@@ -813,225 +816,22 @@ static int nova_dax_file_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	return ret;
 }
 
-static unsigned long nova_data_block_size(struct vm_area_struct *vma,
-				    unsigned long addr, unsigned long pgoff)
-{
-	struct file *file = vma->vm_file;
-	struct inode *inode = file->f_mapping->host;
-	struct nova_inode *pi;
-	unsigned long map_virt;
-
-	if (addr < vma->vm_start || addr >= vma->vm_end)
-		return -EFAULT;
-
-	pi = nova_get_inode(inode->i_sb, inode);
-
-	map_virt = addr & PUD_MASK;
-
-	if (!cpu_has_gbpages || pi->i_blk_type != NOVA_BLOCK_TYPE_1G ||
-	    (vma->vm_start & ~PUD_MASK) ||
-	    map_virt < vma->vm_start ||
-	    (map_virt + PUD_SIZE) > vma->vm_end)
-		goto use_2M_mappings;
-
-	nova_dbg_mmapv("[%s:%d] Using 1G Mappings : "
-			"vma_start(0x%lx), vma_end(0x%lx), file_pgoff(0x%lx), "
-			"VA(0x%lx), MAP_VA(%lx)\n", __func__, __LINE__,
-			vma->vm_start, vma->vm_end, pgoff, addr, map_virt);
-	return PUD_SIZE;
-
-use_2M_mappings:
-	map_virt = addr & PMD_MASK;
-
-	if (!cpu_has_pse || pi->i_blk_type != NOVA_BLOCK_TYPE_2M ||
-	    (vma->vm_start & ~PMD_MASK) ||
-	    map_virt < vma->vm_start ||
-	    (map_virt + PMD_SIZE) > vma->vm_end)
-		goto use_4K_mappings;
-
-	nova_dbg_mmapv("[%s:%d] Using 2M Mappings : "
-			"vma_start(0x%lx), vma_end(0x%lx), file_pgoff(0x%lx), "
-			"VA(0x%lx), MAP_VA(%lx)\n", __func__, __LINE__,
-			vma->vm_start, vma->vm_end, pgoff, addr, map_virt);
-
-	return PMD_SIZE;
-
-use_4K_mappings:
-	nova_dbg_mmapvv("[%s:%d] 4K Mappings : "
-			 "vma_start(0x%lx), vma_end(0x%lx), file_pgoff(0x%lx), "
-			 "VA(0x%lx)\n", __func__, __LINE__,
-			 vma->vm_start, vma->vm_end, pgoff, addr);
-
-	return PAGE_SIZE;
-}
-
-static inline pte_t *nova_dax_hugetlb_pte_offset(struct mm_struct *mm,
-						  unsigned long	addr,
-						  unsigned long *sz)
-{
-	return pte_offset_pagesz(mm, addr, sz);
-}
-
-static inline pte_t *nova_pte_alloc(struct mm_struct *mm,
-				     unsigned long addr, unsigned long sz)
-{
-	return pte_alloc_pagesz(mm, addr, sz);
-}
-
-static pte_t nova_make_huge_pte(struct vm_area_struct *vma,
-				 unsigned long pfn, unsigned long sz,
-				 int writable)
-{
-	pte_t entry;
-
-	if (writable)
-		entry = pte_mkwrite(pte_mkdirty(pfn_pte(pfn, vma->vm_page_prot)));
-	else
-		entry = pte_wrprotect(pfn_pte(pfn, vma->vm_page_prot));
-
-	entry = pte_mkspecial(pte_mkyoung(entry));
-
-	if (sz != PAGE_SIZE) {
-		BUG_ON(sz != PMD_SIZE && sz != PUD_SIZE);
-		entry = pte_mkhuge(entry);
-	}
-
-	return entry;
-}
-
-static int __nova_dax_file_hpage_fault(struct vm_area_struct *vma,
-					struct vm_fault *vmf)
-{
-	int ret;
-	pte_t *ptep, new_pte;
-	unsigned long size, block_sz;
-	struct mm_struct *mm = vma->vm_mm;
-	struct inode *inode = vma->vm_file->f_mapping->host;
-	unsigned long address = (unsigned long)vmf->virtual_address;
-
-	static DEFINE_MUTEX(nova_instantiation_mutex);
-
-	size = (i_size_read(inode) + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
-
-	if (vmf->pgoff >= size) {
-		nova_dbg("[%s:%d] pgoff >= size(SIGBUS). vm_start(0x%lx),"
-			" vm_end(0x%lx), pgoff(0x%lx), VA(%lx)\n",
-			__func__, __LINE__, vma->vm_start, vma->vm_end,
-			vmf->pgoff, (unsigned long)vmf->virtual_address);
-		return VM_FAULT_SIGBUS;
-	}
-
-	block_sz = nova_data_block_size(vma, address, vmf->pgoff);
-	address &= ~(block_sz - 1);
-	BUG_ON(block_sz == PAGE_SIZE);
-	nova_dbg_mmapvv("[%s:%d] BlockSz : %lx",
-			 __func__, __LINE__, block_sz);
-
-	ptep = nova_pte_alloc(mm, address, block_sz);
-	if (!ptep) {
-		nova_dbg("[%s:%d] nova_pte_alloc failed(OOM). vm_start(0x%lx),"
-			" vm_end(0x%lx), pgoff(0x%lx), VA(%lx)\n",
-			__func__, __LINE__, vma->vm_start, vma->vm_end,
-			vmf->pgoff, (unsigned long)vmf->virtual_address);
-		return VM_FAULT_SIGBUS;
-	}
-
-	/* Serialize hugepage allocation and instantiation, so that we don't
-	 * get spurious allocation failures if two CPUs race to instantiate
-	 * the same page in the page cache.
-	 */
-	mutex_lock(&nova_instantiation_mutex);
-	if (pte_none(*ptep)) {
-		void *dax_mem;
-		unsigned long dax_pfn;
-		if (nova_get_mmap_addr(inode, vma, vmf->pgoff, 1,
-						&dax_mem, &dax_pfn) != 0) {
-			nova_dbg("[%s:%d] get_mmap_addr failed. vm_start(0x"
-				"%lx), vm_end(0x%lx), pgoff(0x%lx), VA(%lx)\n",
-				__func__, __LINE__, vma->vm_start,
-				vma->vm_end, vmf->pgoff,
-				(unsigned long)vmf->virtual_address);
-			ret = VM_FAULT_SIGBUS;
-			goto out_mutex;
-		}
-
-		/* VA has already been aligned. Align dax_pfn to block_sz. */
-		dax_pfn <<= PAGE_SHIFT;
-		dax_pfn &= ~(block_sz - 1);
-		dax_pfn >>= PAGE_SHIFT;
-		new_pte = nova_make_huge_pte(vma, dax_pfn, block_sz,
-					      ((vma->vm_flags & VM_WRITE) &&
-					       (vma->vm_flags & VM_SHARED)));
-		/* FIXME: Is lock necessary ? */
-		spin_lock(&mm->page_table_lock);
-		set_pte_at(mm, address, ptep, new_pte);
-		spin_unlock(&mm->page_table_lock);
-
-		if (ptep_set_access_flags(vma, address, ptep, new_pte,
-					  vmf->flags & FAULT_FLAG_WRITE))
-			update_mmu_cache(vma, address, ptep);
-	}
-	ret = VM_FAULT_NOPAGE;
-
-out_mutex:
-	mutex_unlock(&nova_instantiation_mutex);
-	return ret;
-}
-
-static int nova_dax_file_hpage_fault(struct vm_area_struct *vma,
-							struct vm_fault *vmf)
-{
-	int ret = 0;
-
-	rcu_read_lock();
-	ret = __nova_dax_file_hpage_fault(vma, vmf);
-	rcu_read_unlock();
-	return ret;
-}
-
 static const struct vm_operations_struct nova_dax_vm_ops = {
 	.fault	= nova_dax_file_fault,
 };
 
-static const struct vm_operations_struct nova_dax_hpage_vm_ops = {
-	.fault	= nova_dax_file_hpage_fault,
-};
-
-static inline int nova_has_huge_mmap(struct super_block *sb)
-{
-	struct nova_sb_info *sbi = (struct nova_sb_info *)sb->s_fs_info;
-
-	return sbi->s_mount_opt & NOVA_MOUNT_HUGEMMAP;
-}
-
 int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 {
-	unsigned long block_sz;
-
 	file_accessed(file);
 
 	vma->vm_flags |= VM_MIXEDMAP;
 
-	block_sz = nova_data_block_size(vma, vma->vm_start, 0);
-	if (nova_has_huge_mmap(file->f_mapping->host->i_sb) &&
-	    (vma->vm_flags & VM_SHARED) &&
-	    (block_sz == PUD_SIZE || block_sz == PMD_SIZE)) {
-		/* vma->vm_flags |= (VM_XIP_HUGETLB | VM_SHARED | VM_DONTCOPY); */
-		vma->vm_flags |= VM_XIP_HUGETLB;
-		vma->vm_ops = &nova_dax_hpage_vm_ops;
-		nova_dbg_mmaphuge("[%s:%d] MMAP HUGEPAGE vm_start(0x%lx),"
-			" vm_end(0x%lx), vm_flags(0x%lx), "
-			"vm_page_prot(0x%lx)\n", __func__,
-			__LINE__, vma->vm_start, vma->vm_end, vma->vm_flags,
-			pgprot_val(vma->vm_page_prot));
-	} else {
-		vma->vm_ops = &nova_dax_vm_ops;
-		nova_dbg_mmap4k("[%s:%d] MMAP 4KPAGE vm_start(0x%lx),"
+	vma->vm_ops = &nova_dax_vm_ops;
+	nova_dbg_mmap4k("[%s:%d] MMAP 4KPAGE vm_start(0x%lx),"
 			" vm_end(0x%lx), vm_flags(0x%lx), "
 			"vm_page_prot(0x%lx)\n", __func__,
 			__LINE__, vma->vm_start, vma->vm_end,
 			vma->vm_flags, pgprot_val(vma->vm_page_prot));
-	}
 
 	return 0;
 }

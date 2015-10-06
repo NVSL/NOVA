@@ -359,6 +359,7 @@ static int nova_open(struct inode *inode, struct file *filp)
 	return generic_file_open(inode, filp);
 }
 
+#if 0
 static unsigned long
 nova_get_unmapped_area(struct file *file, unsigned long addr,
 			unsigned long len, unsigned long pgoff,
@@ -410,6 +411,7 @@ nova_get_unmapped_area(struct file *file, unsigned long addr,
 	info.align_offset = 0;
 	return vm_unmapped_area(&info);
 }
+#endif
 
 const struct file_operations nova_dax_file_operations = {
 	.llseek			= nova_llseek,
@@ -421,7 +423,7 @@ const struct file_operations nova_dax_file_operations = {
 	.open			= nova_open,
 	.fsync			= nova_fsync,
 	.flush			= nova_flush,
-	.get_unmapped_area	= nova_get_unmapped_area,
+//	.get_unmapped_area	= nova_get_unmapped_area,
 	.unlocked_ioctl		= nova_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl		= nova_compat_ioctl,

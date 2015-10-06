@@ -57,7 +57,7 @@ static int nova_readlink(struct dentry *dentry, char __user *buffer, int buflen)
 	return readlink_copy(buffer, buflen, blockp);
 }
 
-static void *nova_follow_link(struct dentry *dentry, struct nameidata *nd)
+static const char *nova_follow_link(struct dentry *dentry, void **cookie)
 {
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
@@ -65,8 +65,7 @@ static void *nova_follow_link(struct dentry *dentry, struct nameidata *nd)
 	char *blockp;
 
 	blockp = (char *)nova_get_block(sb, pi->log_head);
-	nd_set_link(nd, blockp);
-	return NULL;
+	return blockp;
 }
 
 const struct inode_operations nova_symlink_inode_operations = {

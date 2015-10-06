@@ -84,26 +84,17 @@ static void nova_set_blocksize(struct super_block *sb, unsigned long size)
 	sb->s_blocksize = (1 << bits);
 }
 
-static inline int nova_has_huge_ioremap(struct super_block *sb)
-{
-	struct nova_sb_info *sbi = (struct nova_sb_info *)sb->s_fs_info;
-
-	return sbi->s_mount_opt & NOVA_MOUNT_HUGEIOREMAP;
-}
-
 void *nova_ioremap(struct super_block *sb, phys_addr_t phys_addr, ssize_t size)
 {
 	void __iomem *retval;
-	int protect, hugeioremap;
+	int protect;
 	timing_t remap_time;
 
 	NOVA_START_TIMING(ioremap_t, remap_time);
 	if (sb) {
 		protect = nova_is_wprotected(sb);
-		hugeioremap = nova_has_huge_ioremap(sb);
 	} else {
 		protect = 0;
-		hugeioremap = 1;
 	}
 
 	/*
@@ -118,15 +109,10 @@ void *nova_ioremap(struct super_block *sb, phys_addr_t phys_addr, ssize_t size)
 		goto fail;
 
 	if (protect) {
-		if (hugeioremap)
-			retval = ioremap_hpage_cache_ro(phys_addr, size);
-		else
-			retval = ioremap_cache_ro(phys_addr, size);
+		/* FIXME: ioremap_cache_ro not support in 4.2 */
+		retval = ioremap_cache(phys_addr, size);
 	} else {
-		if (hugeioremap)
-			retval = ioremap_hpage_cache(phys_addr, size);
-		else
-			retval = ioremap_cache(phys_addr, size);
+		retval = ioremap_cache(phys_addr, size);
 	}
 
 fail:
@@ -158,7 +144,6 @@ enum {
 	Opt_mode, Opt_uid,
 	Opt_gid, Opt_blocksize, Opt_wprotect,
 	Opt_err_cont, Opt_err_panic, Opt_err_ro,
-	Opt_hugemmap, Opt_nohugeioremap,
 	Opt_dbgmask, Opt_err
 };
 
@@ -173,8 +158,6 @@ static const match_table_t tokens = {
 	{ Opt_err_cont,	     "errors=continue"	  },
 	{ Opt_err_panic,     "errors=panic"	  },
 	{ Opt_err_ro,	     "errors=remount-ro"  },
-	{ Opt_hugemmap,	     "hugemmap"		  },
-	{ Opt_nohugeioremap, "nohugeioremap"	  },
 	{ Opt_dbgmask,	     "dbgmask=%u"	  },
 	{ Opt_err,	     NULL		  },
 };
@@ -280,18 +263,6 @@ static int nova_parse_options(char *options, struct nova_sb_info *sbi,
 			set_opt(sbi->s_mount_opt, PROTECT);
 			nova_info("NOVA: Enabling new Write Protection "
 				"(CR0.WP)\n");
-			break;
-		case Opt_hugemmap:
-			if (remount)
-				goto bad_opt;
-			set_opt(sbi->s_mount_opt, HUGEMMAP);
-			nova_info("NOVA: Enabling huge mappings for mmap\n");
-			break;
-		case Opt_nohugeioremap:
-			if (remount)
-				goto bad_opt;
-			clear_opt(sbi->s_mount_opt, HUGEIOREMAP);
-			nova_info("NOVA: Disabling huge ioremap\n");
 			break;
 		case Opt_dbgmask:
 			if (match_int(&args[0], &option))
@@ -796,10 +767,6 @@ static int nova_show_options(struct seq_file *seq, struct dentry *root)
 	/* memory protection disabled by default */
 	if (test_opt(root->d_sb, PROTECT))
 		seq_puts(seq, ",wprotect");
-	if (test_opt(root->d_sb, HUGEMMAP))
-		seq_puts(seq, ",hugemmap");
-	if (test_opt(root->d_sb, HUGEIOREMAP))
-		seq_puts(seq, ",hugeioremap");
 	if (test_opt(root->d_sb, DAX))
 		seq_puts(seq, ",dax");
 
