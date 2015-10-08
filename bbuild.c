@@ -30,289 +30,11 @@
 #include "nova.h"
 
 static unsigned long alive_inode;
-static struct kmem_cache *nova_bmentry_cachep;
 
-static int __init init_bmentry_cache(void)
+static inline void set_scan_bm(unsigned long bit,
+	struct single_scan_bm *scan_bm)
 {
-	nova_bmentry_cachep = kmem_cache_create("nova_bmentry_cache",
-					       sizeof(struct multi_set_entry),
-					       0, (SLAB_RECLAIM_ACCOUNT |
-						   SLAB_MEM_SPREAD), NULL);
-	if (nova_bmentry_cachep == NULL)
-		return -ENOMEM;
-	return 0;
-}
-
-static void destroy_bmentry_cache(void)
-{
-	kmem_cache_destroy(nova_bmentry_cachep);
-}
-
-inline int nova_rbtree_compare_bmentry(struct multi_set_entry *curr,
-	unsigned long bit)
-{
-	if (bit < curr->bit_low)
-		return -1;
-	if (bit > curr->bit_high)
-		return 1;
-
-	return 0;
-}
-
-static int nova_find_bmentry(struct single_scan_bm *scan_bm,
-	unsigned long bit, struct multi_set_entry **entry)
-{
-	struct multi_set_entry *curr;
-	struct rb_node *temp;
-	int compVal;
-
-	temp = scan_bm->multi_set_tree.rb_node;
-
-	while (temp) {
-		curr = container_of(temp, struct multi_set_entry, node);
-		compVal = nova_rbtree_compare_bmentry(curr, bit);
-
-		if (compVal == -1) {
-			temp = temp->rb_left;
-		} else if (compVal == 1) {
-			temp = temp->rb_right;
-		} else {
-			*entry = curr;
-			return 1;
-		}
-	}
-
-	return 0;
-}
-
-static int nova_insert_bmentry(struct single_scan_bm *scan_bm,
-	struct multi_set_entry *entry)
-{
-	struct multi_set_entry *curr;
-	struct rb_node **temp, *parent;
-	int compVal;
-
-	temp = &(scan_bm->multi_set_tree.rb_node);
-	parent = NULL;
-
-	while (*temp) {
-		curr = container_of(*temp, struct multi_set_entry, node);
-		compVal = nova_rbtree_compare_bmentry(curr, entry->bit_low);
-		parent = *temp;
-
-		if (compVal == -1) {
-			temp = &((*temp)->rb_left);
-		} else if (compVal == 1) {
-			temp = &((*temp)->rb_right);
-		} else {
-			nova_dbg("%s: entry %lu - %lu already exists\n",
-				__func__, entry->bit_low, entry->bit_high);
-			return -EINVAL;
-		}
-	}
-
-	rb_link_node(&entry->node, parent, temp);
-	rb_insert_color(&entry->node, &scan_bm->multi_set_tree);
-	scan_bm->num_entries++;
-	return 0;
-}
-
-static void nova_try_merge_bmentry(struct single_scan_bm *scan_bm,
-	struct multi_set_entry *curr_entry)
-{
-	struct rb_node *prev, *next;
-	struct multi_set_entry *prev_entry, *next_entry;
-
-	prev = rb_prev(&curr_entry->node);
-	if (prev) {
-		prev_entry = rb_entry(prev, struct multi_set_entry, node);
-		if (prev_entry->bit_high >= curr_entry->bit_low) {
-			nova_dbg("%s: ERROR: entry overlap: prev low %lu, "
-				"high %lu, curr low %lu, high %lu\n", __func__,
-				prev_entry->bit_low, prev_entry->bit_high,
-				curr_entry->bit_low, curr_entry->bit_high);
-			return;
-		}
-		if (prev_entry->bit_high + 1 == curr_entry->bit_low &&
-				prev_entry->refcount == curr_entry->refcount) {
-			rb_erase(&curr_entry->node, &scan_bm->multi_set_tree);
-			prev_entry->bit_high = curr_entry->bit_high;
-			kmem_cache_free(nova_bmentry_cachep, curr_entry);
-			curr_entry = prev_entry;
-			scan_bm->num_entries--;
-		}
-	}
-
-	next = rb_next(&curr_entry->node);
-	if (next) {
-		next_entry = rb_entry(next, struct multi_set_entry, node);
-		if (curr_entry->bit_high >= next_entry->bit_low) {
-			nova_dbg("%s: ERROR: entry overlap: curr low %lu, "
-				"high %lu, next low %lu, high %lu\n", __func__,
-				curr_entry->bit_low, curr_entry->bit_high,
-				next_entry->bit_low, next_entry->bit_high);
-			return;
-		}
-		if (curr_entry->bit_high + 1 == next_entry->bit_low &&
-				curr_entry->refcount == next_entry->refcount) {
-			rb_erase(&next_entry->node, &scan_bm->multi_set_tree);
-			curr_entry->bit_high = next_entry->bit_high;
-			kmem_cache_free(nova_bmentry_cachep, next_entry);
-			scan_bm->num_entries--;
-		}
-	}
-}
-
-static void nova_insert_bit_range_to_tree(struct single_scan_bm *scan_bm,
-	unsigned long bit_low, unsigned long bit_high, int refcount,
-	int try_merge)
-{
-	struct multi_set_entry *entry;
-
-	if (bit_low > bit_high || refcount < 2) {
-		nova_dbg("%s: insert invalid range: low %lu, high %lu, "
-			"refcount %d\n", __func__, bit_low, bit_high,
-			refcount);
-		return;
-	}
-
-	entry = kmem_cache_alloc(nova_bmentry_cachep, GFP_NOFS);
-	if (!entry)
-		NOVA_ASSERT(0);
-
-	entry->bit_low = bit_low;
-	entry->bit_high = bit_high;
-	entry->refcount = refcount;
-	nova_insert_bmentry(scan_bm, entry);
-	if (try_merge)
-		nova_try_merge_bmentry(scan_bm, entry);
-}
-
-static void nova_inc_bit_in_bmentry(struct single_scan_bm *scan_bm,
-	unsigned long bit, struct multi_set_entry *entry)
-{
-	unsigned long new_bit_low, new_bit_high;
-
-	/* Single bit entry */
-	if (bit == entry->bit_low && bit == entry->bit_high) {
-		entry->refcount++;
-		return;
-	}
-
-	/* Align to left */
-	if (bit == entry->bit_low) {
-		entry->bit_low++;
-		nova_insert_bit_range_to_tree(scan_bm, bit, bit,
-					entry->refcount + 1, 1);
-		return;
-	}
-
-	/* Align to right */
-	if (bit == entry->bit_high) {
-		entry->bit_high--;
-		nova_insert_bit_range_to_tree(scan_bm, bit, bit,
-					entry->refcount + 1, 1);
-		return;
-	}
-
-	/* In the middle. Break the entry and insert new ones */
-	new_bit_low = bit + 1;
-	new_bit_high = entry->bit_high;
-	entry->bit_high = bit - 1;
-
-	nova_insert_bit_range_to_tree(scan_bm, bit, bit,
-					entry->refcount + 1, 0);
-
-	nova_insert_bit_range_to_tree(scan_bm, new_bit_low, new_bit_high,
-					entry->refcount, 0);
-}
-
-static void set_scan_bm(unsigned long bit,
-	struct single_scan_bm *scan_bm, enum bm_type type)
-{
-	struct multi_set_entry *entry;
-	int found = 0;
-
-	if (test_and_set_bit(bit, scan_bm->bitmap) == 0)
-		return;
-
-	nova_dbgv("%s: type %d, bit %lu exists\n", __func__, type, bit);
-
-	if (scan_bm->num_entries) {
-		found = nova_find_bmentry(scan_bm, bit, &entry);
-		if (found == 1) {
-			nova_inc_bit_in_bmentry(scan_bm, bit, entry);
-			return;
-		}
-	}
-
-	nova_insert_bit_range_to_tree(scan_bm, bit, bit, 2, 1);
-}
-
-static void nova_dec_bit_in_bmentry(struct single_scan_bm *scan_bm,
-	unsigned long bit, struct multi_set_entry *entry)
-{
-	unsigned long new_bit_low, new_bit_high;
-
-	/* Single bit entry */
-	if (bit == entry->bit_low && bit == entry->bit_high) {
-		entry->refcount--;
-		if (entry->refcount == 1) {
-			rb_erase(&entry->node, &scan_bm->multi_set_tree);
-			kmem_cache_free(nova_bmentry_cachep, entry);
-			scan_bm->num_entries--;
-		}
-		return;
-	}
-
-	/* Align to left */
-	if (bit == entry->bit_low) {
-		entry->bit_low++;
-		if (entry->refcount == 2)
-			return;
-		nova_insert_bit_range_to_tree(scan_bm, bit, bit,
-					entry->refcount - 1, 1);
-		return;
-	}
-
-	/* Align to right */
-	if (bit == entry->bit_high) {
-		entry->bit_high--;
-		if (entry->refcount == 2)
-			return;
-		nova_insert_bit_range_to_tree(scan_bm, bit, bit,
-					entry->refcount - 1, 1);
-		return;
-	}
-
-	/* In the middle. Break the entry and insert new ones */
-	new_bit_low = bit + 1;
-	new_bit_high = entry->bit_high;
-	entry->bit_high = bit - 1;
-
-	if (entry->refcount > 2)
-		nova_insert_bit_range_to_tree(scan_bm, bit, bit,
-					entry->refcount - 1, 0);
-
-	nova_insert_bit_range_to_tree(scan_bm, new_bit_low, new_bit_high,
-					entry->refcount, 0);
-}
-
-static void clear_scan_bm(unsigned long bit,
-	struct single_scan_bm *scan_bm, enum bm_type type)
-{
-	struct multi_set_entry *entry;
-	int found = 0;
-
-	if (scan_bm->num_entries) {
-		found = nova_find_bmentry(scan_bm, bit, &entry);
-		if (found == 1) {
-			nova_dec_bit_in_bmentry(scan_bm, bit, entry);
-			return;
-		}
-	}
-
-	clear_bit(bit, scan_bm->bitmap);
+	set_bit(bit, scan_bm->bitmap);
 }
 
 inline void set_bm(unsigned long bit, struct scan_bitmap *bm,
@@ -320,31 +42,13 @@ inline void set_bm(unsigned long bit, struct scan_bitmap *bm,
 {
 	switch (type) {
 		case BM_4K:
-			set_scan_bm(bit, &bm->scan_bm_4K, type);
+			set_scan_bm(bit, &bm->scan_bm_4K);
 			break;
 		case BM_2M:
-			set_scan_bm(bit, &bm->scan_bm_2M, type);
+			set_scan_bm(bit, &bm->scan_bm_2M);
 			break;
 		case BM_1G:
-			set_scan_bm(bit, &bm->scan_bm_1G, type);
-			break;
-		default:
-			break;
-	}
-}
-
-inline void clear_bm(unsigned long bit, struct scan_bitmap *bm,
-	enum bm_type type)
-{
-	switch (type) {
-		case BM_4K:
-			clear_scan_bm(bit, &bm->scan_bm_4K, type);
-			break;
-		case BM_2M:
-			clear_scan_bm(bit, &bm->scan_bm_2M, type);
-			break;
-		case BM_1G:
-			clear_scan_bm(bit, &bm->scan_bm_1G, type);
+			set_scan_bm(bit, &bm->scan_bm_1G);
 			break;
 		default:
 			break;
@@ -950,44 +654,12 @@ static void nova_build_blocknode_map(struct super_block *sb,
 			bm->scan_bm_4K.bitmap_size * 8, PAGE_SHIFT - 12);
 }
 
-void nova_print_bmentry_tree(struct single_scan_bm *scan_bm,
-	enum bm_type type)
-{
-	struct multi_set_entry *entry;
-	struct rb_node *temp;
-
-	temp = rb_first(&scan_bm->multi_set_tree);
-	while (temp) {
-		entry = container_of(temp, struct multi_set_entry, node);
-		nova_dbg("%s: type %d: entry bit low %lu, bit high %lu, "
-			"refcount %d\n", __func__, type, entry->bit_low,
-			entry->bit_high, entry->refcount);
-		temp = rb_next(temp);
-	}
-
-	return;
-}
-
-static void nova_check_bmentry(struct single_scan_bm *scan_bm,
-	enum bm_type type)
-{
-	if (scan_bm->num_entries)
-		nova_dbg("%s: bm type %d: still has %d entries?\n",
-			__func__, type, scan_bm->num_entries);
-
-	nova_print_bmentry_tree(scan_bm, type);
-}
-
 static void free_bm(struct scan_bitmap *bm)
 {
 	kfree(bm->scan_bm_4K.bitmap);
 	kfree(bm->scan_bm_2M.bitmap);
 	kfree(bm->scan_bm_1G.bitmap);
-	nova_check_bmentry(&bm->scan_bm_4K, BM_4K);
-	nova_check_bmentry(&bm->scan_bm_2M, BM_2M);
-	nova_check_bmentry(&bm->scan_bm_1G, BM_1G);
 	kfree(bm);
-	destroy_bmentry_cache();
 }
 
 static struct scan_bitmap *alloc_bm(unsigned long initsize)
@@ -1012,15 +684,6 @@ static struct scan_bitmap *alloc_bm(unsigned long initsize)
 
 	if (!bm->scan_bm_4K.bitmap || !bm->scan_bm_2M.bitmap ||
 			!bm->scan_bm_1G.bitmap) {
-		free_bm(bm);
-		return NULL;
-	}
-
-	bm->scan_bm_4K.multi_set_tree = RB_ROOT;
-	bm->scan_bm_2M.multi_set_tree = RB_ROOT;
-	bm->scan_bm_1G.multi_set_tree = RB_ROOT;
-
-	if (init_bmentry_cache()) {
 		free_bm(bm);
 		return NULL;
 	}

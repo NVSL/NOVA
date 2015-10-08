@@ -325,20 +325,9 @@ enum bm_type {
 	BM_1G,
 };
 
-struct multi_set_entry {
-	unsigned long bit_low;
-	unsigned long bit_high;
-	int refcount;
-	struct rb_node node;
-};
-
 struct single_scan_bm {
 	unsigned long bitmap_size;
 	unsigned long *bitmap;
-	unsigned long multi_set_low;
-	unsigned long multi_set_high;
-	int num_entries;
-	struct rb_root multi_set_tree;	/* Multiple set bit RB tree */
 };
 
 struct scan_bitmap {
@@ -840,8 +829,6 @@ int nova_find_free_slot(struct nova_sb_info *sbi,
 
 /* bbuild.c */
 inline void set_bm(unsigned long bit, struct scan_bitmap *bm,
-	enum bm_type type);
-inline void clear_bm(unsigned long bit, struct scan_bitmap *bm,
 	enum bm_type type);
 int nova_recover_inode(struct super_block *sb, u64 pi_addr,
 	struct scan_bitmap *bm, int cpuid, int multithread);
