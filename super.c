@@ -612,6 +612,12 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 
 	super = nova_get_super(sb);
 
+	if (nova_check_integrity(sb, super) == 0) {
+		nova_dbg("Memory contains invalid nova %x:%x\n",
+				le32_to_cpu(super->s_magic), NOVA_SUPER_MAGIC);
+		goto out;
+	}
+
 	initsize = le64_to_cpu(super->s_size);
 	sbi->initsize = initsize;
 	nova_dbg_verbose("nova image appears to be %lu KB in size\n",
@@ -633,12 +639,6 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	if (nova_lite_journal_soft_init(sb)) {
 		retval = -EINVAL;
 		printk(KERN_ERR "Lite journal initialization failed\n");
-		goto out;
-	}
-
-	if (nova_check_integrity(sb, super) == 0) {
-		nova_dbg("Memory contains invalid nova %x:%x\n",
-				le32_to_cpu(super->s_magic), NOVA_SUPER_MAGIC);
 		goto out;
 	}
 
