@@ -810,7 +810,7 @@ int nova_write_inode(struct inode *inode, struct writeback_control *wbc)
 {
 	/* write_inode should never be called because we always keep our inodes
 	 * clean. So let us know if write_inode ever gets called. */
-	BUG();
+//	BUG();
 	return 0;
 }
 

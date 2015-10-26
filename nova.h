@@ -373,6 +373,7 @@ struct nova_sb_info {
 	 * base physical and virtual address of NOVA (which is also
 	 * the pointer to the super block)
 	 */
+	struct block_device *s_bdev;
 	phys_addr_t	phys_addr;
 	void		*virt_addr;
 
