@@ -770,14 +770,17 @@ static inline bool is_last_entry(u64 curr_p, size_t size, int new_inode)
 
 static inline bool is_last_dir_entry(struct super_block *sb, u64 curr_p)
 {
-	struct nova_dir_logentry *entry;
+	void *addr;
+	u8 type;
 
 	if (ENTRY_LOC(curr_p) + NOVA_DIR_LOG_REC_LEN(0) > LAST_ENTRY)
 		return true;
 
-	entry = (struct nova_dir_logentry *)nova_get_block(sb, curr_p);
-	if (entry->name_len == 0)
+	addr = (void *)nova_get_block(sb, curr_p);
+	type = nova_get_entry_type(addr);
+	if (type == 0)
 		return true;
+
 	return false;
 }
 
