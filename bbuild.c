@@ -938,7 +938,7 @@ static struct scan_bitmap *alloc_bm(unsigned long initsize)
 	return bm;
 }
 
-/************************** CoolFS recovery ****************************/
+/************************** NOVA recovery ****************************/
 
 struct kmem_cache *nova_header_cachep;
 
@@ -1133,6 +1133,9 @@ int nova_recover_inode(struct super_block *sb, u64 pi_addr,
 		}
 		break;
 	default:
+		nova_assign_info_header(sb, nova_ino, &sih,
+				__le16_to_cpu(pi->i_mode), need_lock);
+		sih->pi_addr = pi_addr;
 		break;
 	}
 
