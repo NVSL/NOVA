@@ -41,8 +41,11 @@ static struct dentry *nova_lookup(struct inode *dir, struct dentry *dentry,
 	timing_t lookup_time;
 
 	NOVA_START_TIMING(lookup_t, lookup_time);
-	if (dentry->d_name.len > NOVA_NAME_LEN)
+	if (dentry->d_name.len > NOVA_NAME_LEN) {
+		nova_dbg("%s: namelen %u exceeds limit\n",
+			__func__, dentry->d_name.len);
 		return ERR_PTR(-ENAMETOOLONG);
+	}
 
 	nova_dbg_verbose("%s: %s\n", __func__, dentry->d_name.name);
 	ino = nova_inode_by_name(dir, &dentry->d_name, &de);
@@ -50,9 +53,9 @@ static struct dentry *nova_lookup(struct inode *dir, struct dentry *dentry,
 	if (ino) {
 		inode = nova_iget(dir->i_sb, ino);
 		if (inode == ERR_PTR(-ESTALE)) {
-			nova_err(dir->i_sb, __func__,
-				  "deleted inode referenced: %lu",
-				  (unsigned long)ino);
+			nova_err(dir->i_sb,
+				  "%s: deleted inode referenced: %lu\n",
+				  __func__, (unsigned long)ino);
 			return ERR_PTR(-EIO);
 		}
 	}
