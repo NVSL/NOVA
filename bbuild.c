@@ -1026,6 +1026,7 @@ unsigned int nova_free_header_tree(struct super_block *sb)
 	nova_flush_buffer(&inode_table->log_head, CACHELINE_SIZE, 1);
 	nova_dbg("%s: freed %u, alive inode %lu\n",
 				__func__, freed, alive_inode);
+	alive_inode = 0;
 	return freed;
 }
 
