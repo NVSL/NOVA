@@ -68,6 +68,7 @@ void nova_init_blockmap(struct super_block *sb, int recovery)
 	struct free_list *free_list;
 	unsigned long per_list_blocks;
 	int i;
+	int ret;
 
 	num_used_block = sbi->reserved_blocks;
 
@@ -94,7 +95,12 @@ void nova_init_blockmap(struct super_block *sb, int recovery)
 				NOVA_ASSERT(0);
 			blknode->range_low = free_list->block_start;
 			blknode->range_high = free_list->block_end;
-			nova_insert_blocktree(sbi, tree, blknode);
+			ret = nova_insert_blocktree(sbi, tree, blknode);
+			if (ret) {
+				nova_err(sb, "%s failed\n", __func__);
+				nova_free_blocknode(sb, blknode);
+				return;
+			}
 			free_list->first_node = blknode;
 			free_list->num_blocknode = 1;
 		}
@@ -332,7 +338,11 @@ static int nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 	curr_node->range_low = block_low;
 	curr_node->range_high = block_high;
 	new_node_used = 1;
-	nova_insert_blocktree(sbi, tree, curr_node);
+	ret = nova_insert_blocktree(sbi, tree, curr_node);
+	if (ret) {
+		new_node_used = 0;
+		goto out;
+	}
 	if (!prev)
 		free_list->first_node = curr_node;
 	free_list->num_blocknode++;
@@ -340,12 +350,13 @@ static int nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 block_found:
 	free_list->freed_blocks += num_blocks;
 	free_list->num_free_blocks += num_blocks;
+out:
 	spin_unlock(&free_list->s_lock);
 	if (new_node_used == 0)
 		nova_free_blocknode(sb, curr_node);
 	free_steps += step;
 
-	return 0;
+	return ret;
 }
 
 int nova_free_data_blocks(struct super_block *sb, unsigned long blocknr,
