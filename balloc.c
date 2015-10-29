@@ -238,7 +238,7 @@ int nova_find_free_slot(struct nova_sb_info *sbi,
 	return 0;
 }
 
-static void nova_free_blocks(struct super_block *sb, unsigned long blocknr,
+static int nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 	int num, unsigned short btype)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -257,7 +257,7 @@ static void nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 
 	if (num <= 0) {
 		nova_dbg("%s ERROR: free %d\n", __func__, num);
-		return;
+		return -EINVAL;
 	}
 
 	cpuid = blocknr / sbi->per_list_blocks;
@@ -268,7 +268,7 @@ static void nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 	curr_node = nova_alloc_blocknode(sb);
 	if (curr_node == NULL) {
 		/* returning without freeing the block*/
-		return;
+		return -ENOMEM;
 	}
 
 	free_list = nova_get_free_list(sb, cpuid);
@@ -290,7 +290,7 @@ static void nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 		nova_dbg("%s: find free slot fail: %d\n", __func__, ret);
 		spin_unlock(&free_list->s_lock);
 		nova_free_blocknode(sb, curr_node);
-		return;
+		return ret;
 	}
 
 	if (prev && next && (block_low == prev->range_high + 1) &&
@@ -329,38 +329,54 @@ block_found:
 	if (new_node_used == 0)
 		nova_free_blocknode(sb, curr_node);
 	free_steps += step;
+
+	return 0;
 }
 
-void nova_free_data_blocks(struct super_block *sb, unsigned long blocknr,
+int nova_free_data_blocks(struct super_block *sb, unsigned long blocknr,
 	int num, unsigned short btype)
 {
+	int ret;
 	timing_t free_time;
 
 	nova_dbgv("Free %d data block from %lu\n", num, blocknr);
 	if (blocknr == 0) {
 		nova_dbg("%s: ERROR: %lu, %d\n", __func__, blocknr, num);
-		return;
+		return -EINVAL;
 	}
 	NOVA_START_TIMING(free_data_t, free_time);
-	nova_free_blocks(sb, blocknr, num, btype);
-	free_data_pages += num;
+	ret = nova_free_blocks(sb, blocknr, num, btype);
+	if (ret == 0)
+		free_data_pages += num;
+	else
+		nova_err(sb, "Free %d data block from %lu failed!\n",
+				num, blocknr);
 	NOVA_END_TIMING(free_data_t, free_time);
+
+	return ret;
 }
 
-void nova_free_log_blocks(struct super_block *sb, unsigned long blocknr,
+int nova_free_log_blocks(struct super_block *sb, unsigned long blocknr,
 	int num, unsigned short btype)
 {
+	int ret;
 	timing_t free_time;
 
 	nova_dbgv("Free %d log block from %lu\n", num, blocknr);
 	if (blocknr == 0) {
 		nova_dbg("%s: ERROR: %lu, %d\n", __func__, blocknr, num);
-		return;
+		return -EINVAL;
 	}
 	NOVA_START_TIMING(free_log_t, free_time);
-	nova_free_blocks(sb, blocknr, num, btype);
-	free_log_pages += num;
+	ret = nova_free_blocks(sb, blocknr, num, btype);
+	if (ret == 0)
+		free_log_pages += num;
+	else
+		nova_err(sb, "Free %d log block from %lu failed!\n",
+				num, blocknr);
 	NOVA_END_TIMING(free_log_t, free_time);
+
+	return ret;
 }
 
 static unsigned long nova_alloc_blocks_in_free_list(struct super_block *sb,

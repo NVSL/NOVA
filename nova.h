@@ -811,9 +811,9 @@ inline void nova_free_blocknode(struct super_block *sb,
 inline void nova_free_inode_node(struct super_block *sb,
 	struct nova_range_node *bnode);
 extern void nova_init_blockmap(struct super_block *sb, int recovery);
-extern void nova_free_data_blocks(struct super_block *sb,
+extern int nova_free_data_blocks(struct super_block *sb,
 	unsigned long blocknr, int num, unsigned short btype);
-extern void nova_free_log_blocks(struct super_block *sb,
+extern int nova_free_log_blocks(struct super_block *sb,
 	unsigned long blocknr, int num, unsigned short btype);
 extern int nova_new_data_blocks(struct super_block *sb, struct nova_inode *pi,
 	unsigned long *blocknr, unsigned int num, unsigned long start_blk,
