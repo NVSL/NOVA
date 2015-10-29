@@ -1138,6 +1138,9 @@ int nova_recover_inode(struct super_block *sb, u64 pi_addr,
 	default:
 		nova_assign_info_header(sb, nova_ino, &sih,
 				__le16_to_cpu(pi->i_mode), need_lock);
+		/* In case of special inode, walk the log */
+		if (pi->log_head)
+			nova_rebuild_file_inode_tree(sb, pi, pi_addr, sih, bm);
 		sih->pi_addr = pi_addr;
 		break;
 	}
