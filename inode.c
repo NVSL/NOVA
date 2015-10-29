@@ -625,9 +625,6 @@ void nova_evict_inode(struct inode *inode)
 	NOVA_START_TIMING(evict_inode_t, evict_time);
 	nova_dbg_verbose("%s: %lu\n", __func__, inode->i_ino);
 	if (!inode->i_nlink && !is_bad_inode(inode)) {
-		if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
-			S_ISLNK(inode->i_mode)))
-			goto out;
 		if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
 			goto out;
 
