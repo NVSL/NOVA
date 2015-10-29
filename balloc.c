@@ -169,9 +169,12 @@ static int nova_insert_range_node(struct nova_sb_info *sbi,
 		} else if (compVal == 1) {
 			temp = &((*temp)->rb_right);
 		} else {
-			nova_dbg("%s: entry %lu - %lu already exists\n",
-				__func__, new_node->range_low,
-				new_node->range_high);
+			nova_dbg("%s: entry %lu - %lu already exists: "
+				"%lu - %lu\n", __func__,
+				new_node->range_low,
+				new_node->range_high,
+				curr->range_low,
+				curr->range_high);
 			return -EINVAL;
 		}
 	}
@@ -185,13 +188,25 @@ static int nova_insert_range_node(struct nova_sb_info *sbi,
 inline int nova_insert_blocktree(struct nova_sb_info *sbi,
 	struct rb_root *tree, struct nova_range_node *new_node)
 {
-	return nova_insert_range_node(sbi, tree, new_node);
+	int ret;
+
+	ret = nova_insert_range_node(sbi, tree, new_node);
+	if (ret)
+		nova_dbg("ERROR: %s failed %d\n", __func__, ret);
+
+	return ret;
 }
 
 inline int nova_insert_inodetree(struct nova_sb_info *sbi,
 	struct nova_range_node *new_node)
 {
-	return nova_insert_range_node(sbi, &sbi->inode_inuse_tree, new_node);
+	int ret;
+
+	ret = nova_insert_range_node(sbi, &sbi->inode_inuse_tree, new_node);
+	if (ret)
+		nova_dbg("ERROR: %s failed %d\n", __func__, ret);
+
+	return ret;
 }
 
 /* Used for both block free tree and inode inuse tree */
