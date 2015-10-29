@@ -508,6 +508,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	if (!sbi)
 		return -ENOMEM;
 	sb->s_fs_info = sbi;
+	sbi->sb = sb;
 
 	set_default_opts(sbi);
 

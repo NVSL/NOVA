@@ -369,6 +369,7 @@ struct free_list {
  * NOVA super-block data in memory
  */
 struct nova_sb_info {
+	struct super_block *sb;
 	/*
 	 * base physical and virtual address of NOVA (which is also
 	 * the pointer to the super block)
