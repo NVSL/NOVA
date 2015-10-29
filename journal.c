@@ -207,6 +207,7 @@ int nova_lite_journal_hard_init(struct super_block *sb)
 
 	pi = nova_get_inode_by_ino(sb, NOVA_LITEJOURNAL_INO);
 	nova_ino = NOVA_LITEJOURNAL_INO;
+	pi->nova_ino = nova_ino;
 	allocated = nova_new_log_blocks(sb, nova_ino, &blocknr, 1,
 						NOVA_BLOCK_TYPE_4K, 1);
 	nova_dbg_verbose("%s: allocate log @ 0x%lx\n", __func__, blocknr);
@@ -216,7 +217,7 @@ int nova_lite_journal_hard_init(struct super_block *sb)
 	pi->i_blocks = 1;
 	block = nova_get_block_off(sb, blocknr,	NOVA_BLOCK_TYPE_4K);
 	pi->log_head = pi->log_tail = block;
-	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+	nova_flush_buffer(pi, CACHELINE_SIZE * 2, 1);
 
 	return nova_lite_journal_soft_init(sb);
 }

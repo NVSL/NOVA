@@ -264,7 +264,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	unsigned long blocksize;
 	u64 inode_table_start;
 	unsigned long reserved_space, reserved_blocks;
-	struct nova_inode *root_i;
+	struct nova_inode *root_i, *pi;
 	struct nova_super_block *super;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	timing_t init_time;
@@ -335,6 +335,14 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	if (nova_init_inode_table(sb) < 0)
 		return ERR_PTR(-EINVAL);
 
+	pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
+	pi->nova_ino = NOVA_BLOCKNODE_INO;
+	nova_flush_buffer(pi, CACHELINE_SIZE, 1);
+
+	pi = nova_get_inode_by_ino(sb, NOVA_INODELIST_INO);
+	pi->nova_ino = NOVA_INODELIST_INO;
+	nova_flush_buffer(pi, CACHELINE_SIZE, 1);
+
 	nova_memunlock_range(sb, super, NOVA_SB_SIZE*2);
 	nova_sync_super(super);
 	nova_memlock_range(sb, super, NOVA_SB_SIZE*2);
@@ -356,7 +364,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	root_i->i_size = cpu_to_le64(sb->s_blocksize);
 	root_i->i_atime = root_i->i_mtime = root_i->i_ctime =
 		cpu_to_le32(get_seconds());
-	root_i->nova_ino = 1;
+	root_i->nova_ino = NOVA_ROOT_INO;
 	root_i->valid = 1;
 	/* nova_sync_inode(root_i); */
 	nova_memlock_inode(sb, root_i);
