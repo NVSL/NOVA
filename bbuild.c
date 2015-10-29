@@ -404,11 +404,16 @@ static int nova_dfs_insert_inodetree(struct super_block *sb,
 	new_node = nova_alloc_inode_node(sb);
 	NOVA_ASSERT(new_node);
 	new_node->range_low = new_node->range_high = nova_ino;
-	nova_insert_inodetree(sbi, new_node);
+	ret = nova_insert_inodetree(sbi, new_node);
+	if (ret) {
+		nova_err(sb, "%s failed\n", __func__);
+		nova_free_inode_node(sb, new_node);
+		goto finish;
+	}
 	sbi->num_range_node_inode++;
 
 finish:
-	return 0;
+	return ret;
 }
 
 static int nova_init_blockmap_from_inode(struct super_block *sb)
@@ -472,7 +477,7 @@ out:
 	return ret;
 }
 
-static void nova_init_inode_list_from_inode(struct super_block *sb)
+static int nova_init_inode_list_from_inode(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODELIST_INO);
@@ -481,11 +486,14 @@ static void nova_init_inode_list_from_inode(struct super_block *sb)
 	size_t size = sizeof(struct nova_range_node_lowhigh);
 	unsigned long num_inode_node = 0;
 	u64 curr_p;
+	int ret;
 
 	sbi->num_range_node_inode = 0;
 	curr_p = pi->log_head;
-	if (curr_p == 0)
+	if (curr_p == 0) {
 		nova_dbg("%s: pi head is 0!\n", __func__);
+		return -EINVAL;
+	}
 
 	while (curr_p != pi->log_tail) {
 		if (is_last_entry(curr_p, size, 0)) {
@@ -504,7 +512,12 @@ static void nova_init_inode_list_from_inode(struct super_block *sb)
 			NOVA_ASSERT(0);
 		range_node->range_low = entry->range_low;
 		range_node->range_high = entry->range_high;
-		nova_insert_inodetree(sbi, range_node);
+		ret = nova_insert_inodetree(sbi, range_node);
+		if (ret) {
+			nova_err(sb, "%s failed\n", __func__);
+			nova_free_inode_node(sb, range_node);
+			goto out;
+		}
 
 		sbi->s_inodes_used_count +=
 			range_node->range_high - range_node->range_low + 1;
@@ -517,7 +530,9 @@ static void nova_init_inode_list_from_inode(struct super_block *sb)
 	}
 
 	nova_dbg("%s: %lu inode nodes\n", __func__, num_inode_node);
+out:
 	nova_free_inode_log(sb, pi);
+	return ret;
 }
 
 static bool nova_can_skip_full_scan(struct super_block *sb)
@@ -532,7 +547,9 @@ static bool nova_can_skip_full_scan(struct super_block *sb)
 	if (ret)
 		return false;
 
-	nova_init_inode_list_from_inode(sb);
+	ret = nova_init_inode_list_from_inode(sb);
+	if (ret)
+		return false;
 
 	return true;
 }

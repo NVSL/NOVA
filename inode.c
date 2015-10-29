@@ -38,13 +38,19 @@ static int nova_init_inode_inuse_list(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_range_node *range_node;
+	int ret;
 
 	range_node = nova_alloc_inode_node(sb);
 	if (range_node == NULL)
 		return -ENOMEM;
 	range_node->range_low = 0;
 	range_node->range_high = NOVA_NORMAL_INODE_START - 1;
-	nova_insert_inodetree(sbi, range_node);
+	ret = nova_insert_inodetree(sbi, range_node);
+	if (ret) {
+		nova_err(sb, "%s failed\n", __func__);
+		nova_free_inode_node(sb, range_node);
+		return ret;
+	}
 	sbi->num_range_node_inode = 1;
 	sbi->s_inodes_used_count = NOVA_NORMAL_INODE_START;
 	sbi->first_inode_range = range_node;
@@ -458,19 +464,20 @@ static int nova_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
 	return 0;
 }
 
-static void nova_free_inuse_inode(struct super_block *sb, unsigned long ino)
+static int nova_free_inuse_inode(struct super_block *sb, unsigned long ino)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_range_node *i = NULL;
 	struct nova_range_node *curr_node;
 	int found = 0;
+	int ret = 0;
 
 	nova_dbg_verbose("Free inuse ino: %lu\n", ino);
 
 	found = nova_search_inodetree(sbi, ino, &i);
 	if (!found) {
 		nova_dbg("%s ERROR: ino %lu not found\n", __func__, ino);
-		return;
+		return -EINVAL;
 	}
 
 	if ((ino == i->range_low) && (ino == i->range_high)) {
@@ -501,17 +508,24 @@ static void nova_free_inuse_inode(struct super_block *sb, unsigned long ino)
 		curr_node->range_low = ino + 1;
 		curr_node->range_high = i->range_high;
 		i->range_high = ino - 1;
-		nova_insert_inodetree(sbi, curr_node);
+		ret = nova_insert_inodetree(sbi, curr_node);
+		if (ret) {
+			nova_free_inode_node(sb, curr_node);
+			goto err;
+		}
 		sbi->num_range_node_inode++;
 		goto block_found;
 	}
 
+err:
 	nova_error_mng(sb, "Unable to free inode %lu\n", ino);
 	nova_error_mng(sb, "Found inuse block %lu - %lu\n",
 				 i->range_low, i->range_high);
+	return ret;
 
 block_found:
 	sbi->s_inodes_used_count--;
+	return ret;
 }
 
 /*
@@ -550,7 +564,7 @@ static int nova_free_inode(struct inode *inode,
 	sih->pi_addr = 0;
 
 	mutex_lock(&sbi->inode_table_mutex);
-	nova_free_inuse_inode(sb, pi->nova_ino);
+	err = nova_free_inuse_inode(sb, pi->nova_ino);
 	mutex_unlock(&sbi->inode_table_mutex);
 	NOVA_END_TIMING(free_inode_t, free_time);
 	return err;
@@ -652,8 +666,11 @@ void nova_evict_inode(struct inode *inode)
 		nova_dbg_verbose("%s: Freed %d\n", __func__, freed);
 		/* Then we can free the inode */
 		err = nova_free_inode(inode, sih);
-		if (err)
+		if (err) {
+			nova_err(sb, "%s: free inode %lu failed\n",
+					__func__, inode->i_ino);
 			goto out;
+		}
 		pi = NULL; /* we no longer own the nova_inode */
 
 		inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
