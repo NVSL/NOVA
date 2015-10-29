@@ -640,9 +640,12 @@ void nova_evict_inode(struct inode *inode)
 			break;
 		case S_IFLNK:
 			/* Log will be freed later */
+			nova_dbgv("%s: symlink ino %lu\n",
+					__func__, inode->i_ino);
 			break;
 		default:
-			nova_dbg("%s: unknown\n", __func__);
+			nova_dbgv("%s: special ino %lu\n",
+					__func__, inode->i_ino);
 			break;
 		}
 
