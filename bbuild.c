@@ -416,6 +416,41 @@ finish:
 	return ret;
 }
 
+static void nova_destroy_range_node_tree(struct super_block *sb,
+	struct rb_root *tree)
+{
+	struct nova_range_node *curr;
+	struct rb_node *temp;
+
+	temp = rb_first(tree);
+	while (temp) {
+		curr = container_of(temp, struct nova_range_node, node);
+		temp = rb_next(temp);
+		rb_erase(&curr->node, tree);
+		nova_free_range_node(curr);
+	}
+}
+
+static void nova_destroy_blocknode_tree(struct super_block *sb, int cpu)
+{
+	struct free_list *free_list;
+
+	free_list = nova_get_free_list(sb, cpu);
+	nova_destroy_range_node_tree(sb, &free_list->block_free_tree);
+}
+
+static void nova_destroy_blocknode_trees(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	int i;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		nova_destroy_blocknode_tree(sb, i);
+	}
+
+	nova_destroy_blocknode_tree(sb, SHARED_CPU);
+}
+
 static int nova_init_blockmap_from_inode(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -463,6 +498,7 @@ static int nova_init_blockmap_from_inode(struct super_block *sb)
 			nova_err(sb, "%s failed\n", __func__);
 			nova_free_blocknode(sb, blknode);
 			NOVA_ASSERT(0);
+			nova_destroy_blocknode_trees(sb);
 			goto out;
 		}
 		free_list->num_blocknode++;
@@ -475,6 +511,13 @@ static int nova_init_blockmap_from_inode(struct super_block *sb)
 out:
 	nova_free_inode_log(sb, pi);
 	return ret;
+}
+
+static void nova_destroy_inode_tree(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+
+	nova_destroy_range_node_tree(sb, &sbi->inode_inuse_tree);
 }
 
 static int nova_init_inode_list_from_inode(struct super_block *sb)
@@ -516,6 +559,8 @@ static int nova_init_inode_list_from_inode(struct super_block *sb)
 		if (ret) {
 			nova_err(sb, "%s failed\n", __func__);
 			nova_free_inode_node(sb, range_node);
+			NOVA_ASSERT(0);
+			nova_destroy_inode_tree(sb);
 			goto out;
 		}
 
@@ -544,12 +589,19 @@ static bool nova_can_skip_full_scan(struct super_block *sb)
 		return false;
 
 	ret = nova_init_blockmap_from_inode(sb);
-	if (ret)
+	if (ret) {
+		nova_err(sb, "init blockmap failed, "
+				"fall back to DFS recovery\n");
 		return false;
+	}
 
 	ret = nova_init_inode_list_from_inode(sb);
-	if (ret)
+	if (ret) {
+		nova_err(sb, "init inode list failed, "
+				"fall back to DFS recovery\n");
+		nova_destroy_blocknode_trees(sb);
 		return false;
+	}
 
 	return true;
 }
