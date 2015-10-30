@@ -365,8 +365,8 @@ int nova_free_data_blocks(struct super_block *sb, struct nova_inode *pi,
 	int ret;
 	timing_t free_time;
 
-	nova_dbgv("Inode %llu: free %d data block from %lu\n",
-			pi->nova_ino, num, blocknr);
+	nova_dbgv("Inode %llu: free %d data block from %lu to %lu\n",
+			pi->nova_ino, num, blocknr, blocknr + num - 1);
 	if (blocknr == 0) {
 		nova_dbg("%s: ERROR: %lu, %d\n", __func__, blocknr, num);
 		return -EINVAL;
@@ -376,8 +376,9 @@ int nova_free_data_blocks(struct super_block *sb, struct nova_inode *pi,
 	if (ret == 0)
 		free_data_pages += num;
 	else
-		nova_err(sb, "Inode %llu: free %d data block from %lu "
-				"failed!\n", pi->nova_ino, num, blocknr);
+		nova_err(sb, "Inode %llu: free %d data block from %lu to %lu "
+				"failed!\n", pi->nova_ino, num, blocknr,
+				blocknr + num - 1);
 	NOVA_END_TIMING(free_data_t, free_time);
 
 	return ret;
@@ -389,8 +390,8 @@ int nova_free_log_blocks(struct super_block *sb, struct nova_inode *pi,
 	int ret;
 	timing_t free_time;
 
-	nova_dbgv("Inode %llu: free %d log block from %lu\n",
-			pi->nova_ino, num, blocknr);
+	nova_dbgv("Inode %llu: free %d log block from %lu to %lu\n",
+			pi->nova_ino, num, blocknr, blocknr + num - 1);
 	if (blocknr == 0) {
 		nova_dbg("%s: ERROR: %lu, %d\n", __func__, blocknr, num);
 		return -EINVAL;
@@ -400,8 +401,9 @@ int nova_free_log_blocks(struct super_block *sb, struct nova_inode *pi,
 	if (ret == 0)
 		free_log_pages += num;
 	else
-		nova_err(sb, "Inode %llu: free %d log block from %lu "
-				"failed!\n", pi->nova_ino, num, blocknr);
+		nova_err(sb, "Inode %llu: free %d log block from %lu to %lu "
+				"failed!\n", pi->nova_ino, num, blocknr,
+				blocknr + num - 1);
 	NOVA_END_TIMING(free_log_t, free_time);
 
 	return ret;
@@ -578,9 +580,10 @@ inline int nova_new_data_blocks(struct super_block *sb, struct nova_inode *pi,
 	NOVA_START_TIMING(new_data_blocks_t, alloc_time);
 	allocated = nova_new_blocks(sb, blocknr, num, btype, zero, 0);
 	NOVA_END_TIMING(new_data_blocks_t, alloc_time);
-	nova_dbgv("%s: inode %llu, start blk %lu, cow %d, %d blocks @ %lu\n",
-				__func__, pi->nova_ino,	start_blk, cow,
-				allocated, *blocknr);
+	nova_dbgv("Inode %llu, start blk %lu, cow %d, "
+			"alloc %d data blocks from %lu to %lu\n",
+			pi->nova_ino, start_blk, cow, allocated, *blocknr,
+			*blocknr + allocated - 1);
 	return allocated;
 }
 
@@ -593,8 +596,9 @@ inline int nova_new_log_blocks(struct super_block *sb, unsigned long nova_ino,
 	NOVA_START_TIMING(new_log_blocks_t, alloc_time);
 	allocated = nova_new_blocks(sb, blocknr, num, btype, zero, 1);
 	NOVA_END_TIMING(new_log_blocks_t, alloc_time);
-	nova_dbgv("%s: inode %lu, %d blocks @ %lu\n", __func__,
-				nova_ino, allocated, *blocknr);
+	nova_dbgv("Inode %lu, alloc %d log blocks from %lu to %lu\n",
+			nova_ino, allocated, *blocknr,
+			*blocknr + allocated - 1);
 	return allocated;
 }
 
