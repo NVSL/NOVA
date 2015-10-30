@@ -81,11 +81,12 @@ int nova_init_inode_table(struct super_block *sb)
 }
 
 static inline void nova_free_contiguous_blocks(struct super_block *sb,
-	struct nova_file_write_entry *entry, unsigned long pgoff,
-	unsigned long *start_blocknr, unsigned long *num_free,
-	unsigned int btype)
+	struct nova_inode *pi, struct nova_file_write_entry *entry,
+	unsigned long pgoff, unsigned long *start_blocknr,
+	unsigned long *num_free)
 {
 	unsigned long nvmm;
+	unsigned int btype = pi->i_blk_type;
 
 	entry->invalid_pages++;
 	nvmm = get_nvmm(sb, entry, pgoff);
@@ -107,11 +108,12 @@ static inline void nova_free_contiguous_blocks(struct super_block *sb,
 }
 
 static int nova_delete_cache_tree(struct super_block *sb,
-	struct nova_inode_info_header *sih, unsigned long start_blocknr,
-	unsigned long last_blocknr, unsigned int btype)
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	unsigned long start_blocknr, unsigned long last_blocknr)
 {
 	unsigned long addr;
 	unsigned long i;
+	unsigned int btype = pi->i_blk_type;
 	void *ret;
 
 	for (i = start_blocknr; i <= last_blocknr; i++) {
@@ -153,8 +155,8 @@ static int nova_delete_file_tree(struct super_block *sb,
 
 	last_blocknr = (sih->i_size - 1) >> data_bits;
 	if (sih->mmap_pages)
-		nova_delete_cache_tree(sb, sih, start_blocknr,
-						last_blocknr, btype);
+		nova_delete_cache_tree(sb, pi, sih, start_blocknr,
+						last_blocknr);
 
 	for (pgoff = start_blocknr; pgoff <= last_blocknr; pgoff++) {
 		entry = radix_tree_lookup(&sih->tree, pgoff);
@@ -162,8 +164,8 @@ static int nova_delete_file_tree(struct super_block *sb,
 			ret = radix_tree_delete(&sih->tree, pgoff);
 			BUG_ON(!ret || ret != entry);
 			if (delete_nvmm)
-				nova_free_contiguous_blocks(sb, entry, pgoff,
-					&free_blocknr, &num_free, btype);
+				nova_free_contiguous_blocks(sb, pi, entry,
+					pgoff, &free_blocknr, &num_free);
 			freed++;
 		}
 	}

@@ -208,7 +208,12 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 					S_IFLNK|S_IRWXUGO, len, 0,
 					&dentry->d_name);
 	if (IS_ERR(inode)) {
+		struct nova_inode fake_pi;
+
 		err = PTR_ERR(inode);
+		fake_pi.nova_ino = ino;
+		fake_pi.i_blk_type = NOVA_BLOCK_TYPE_4K;
+
 		nova_free_log_blocks(sb, blocknr, 1,
 					NOVA_BLOCK_TYPE_4K);
 		goto out_fail1;
