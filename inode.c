@@ -80,11 +80,12 @@ int nova_init_inode_table(struct super_block *sb)
 	return nova_init_inode_inuse_list(sb);
 }
 
-static inline void nova_free_contiguous_blocks(struct super_block *sb,
+static inline int nova_free_contiguous_blocks(struct super_block *sb,
 	struct nova_inode *pi, struct nova_file_write_entry *entry,
 	unsigned long pgoff, unsigned long *start_blocknr,
 	unsigned long *num_free)
 {
+	int freed = 0;
 	unsigned long nvmm;
 
 	entry->invalid_pages++;
@@ -100,10 +101,13 @@ static inline void nova_free_contiguous_blocks(struct super_block *sb,
 			/* A new start */
 			nova_free_data_blocks(sb, pi, *start_blocknr,
 						*num_free);
+			freed = *num_free;
 			*start_blocknr = nvmm;
 			*num_free = 1;
 		}
 	}
+
+	return freed;
 }
 
 static int nova_delete_cache_tree(struct super_block *sb,
@@ -133,7 +137,7 @@ static int nova_delete_file_tree(struct super_block *sb,
 	struct nova_file_write_entry *entry;
 	struct nova_inode *pi;
 	unsigned long free_blocknr = 0, num_free = 0;
-	unsigned long last_blocknr;
+	unsigned long last_blocknr = 0;
 	unsigned long pgoff = start_blocknr;
 	unsigned int btype;
 	unsigned int data_bits;
@@ -151,6 +155,7 @@ static int nova_delete_file_tree(struct super_block *sb,
 		goto out;
 
 	last_blocknr = (sih->i_size - 1) >> data_bits;
+
 	if (sih->mmap_pages)
 		nova_delete_cache_tree(sb, pi, sih, start_blocknr,
 						last_blocknr);
@@ -161,16 +166,22 @@ static int nova_delete_file_tree(struct super_block *sb,
 			ret = radix_tree_delete(&sih->tree, pgoff);
 			BUG_ON(!ret || ret != entry);
 			if (delete_nvmm)
-				nova_free_contiguous_blocks(sb, pi, entry,
-					pgoff, &free_blocknr, &num_free);
-			freed++;
+				freed += nova_free_contiguous_blocks(sb, pi,
+						entry, pgoff, &free_blocknr,
+						&num_free);
 		}
 	}
 
-	if (free_blocknr)
+	if (free_blocknr) {
 		nova_free_data_blocks(sb, pi, free_blocknr, num_free);
+		freed += num_free;
+	}
 out:
 	NOVA_END_TIMING(delete_file_tree_t, delete_time);
+	nova_dbgv("Inode %llu: delete file tree from pgoff %lu to %lu, "
+			"%d blocks freed\n",
+			pi->nova_ino, start_blocknr, last_blocknr, freed);
+
 	return freed;
 }
 
