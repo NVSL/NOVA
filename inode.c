@@ -86,7 +86,6 @@ static inline void nova_free_contiguous_blocks(struct super_block *sb,
 	unsigned long *num_free)
 {
 	unsigned long nvmm;
-	unsigned int btype = pi->i_blk_type;
 
 	entry->invalid_pages++;
 	nvmm = get_nvmm(sb, entry, pgoff);
@@ -99,8 +98,8 @@ static inline void nova_free_contiguous_blocks(struct super_block *sb,
 			(*num_free)++;
 		} else {
 			/* A new start */
-			nova_free_data_blocks(sb, *start_blocknr,
-						*num_free, btype);
+			nova_free_data_blocks(sb, pi, *start_blocknr,
+						*num_free);
 			*start_blocknr = nvmm;
 			*num_free = 1;
 		}
@@ -113,15 +112,13 @@ static int nova_delete_cache_tree(struct super_block *sb,
 {
 	unsigned long addr;
 	unsigned long i;
-	unsigned int btype = pi->i_blk_type;
 	void *ret;
 
 	for (i = start_blocknr; i <= last_blocknr; i++) {
 		addr = (unsigned long)radix_tree_lookup(&sih->cache_tree, i);
 		if (addr) {
 			ret = radix_tree_delete(&sih->cache_tree, i);
-			nova_free_data_blocks(sb, addr >> PAGE_SHIFT,
-							1, btype);
+			nova_free_data_blocks(sb, pi, addr >> PAGE_SHIFT, 1);
 			sih->mmap_pages--;
 		}
 	}
@@ -171,7 +168,7 @@ static int nova_delete_file_tree(struct super_block *sb,
 	}
 
 	if (free_blocknr)
-		nova_free_data_blocks(sb, free_blocknr, num_free, btype);
+		nova_free_data_blocks(sb, pi, free_blocknr, num_free);
 out:
 	NOVA_END_TIMING(delete_file_tree_t, delete_time);
 	return freed;
@@ -280,8 +277,7 @@ int nova_assign_nvmm_entry(struct super_block *sb,
 				clear_bm(old_nvmm, bm, BM_4K);
 			if (free) {
 				old_entry->invalid_pages++;
-				nova_free_data_blocks(sb, old_nvmm, 1,
-							pi->i_blk_type);
+				nova_free_data_blocks(sb, pi, old_nvmm, 1);
 			}
 			if (bm || free)
 				pi->i_blocks--;
@@ -1298,8 +1294,8 @@ static void free_curr_page(struct super_block *sb, struct nova_inode *pi,
 
 	last_page->page_tail.next_page = curr_page->page_tail.next_page;
 	nova_flush_buffer(&last_page->page_tail.next_page, CACHELINE_SIZE, 1);
-	nova_free_log_blocks(sb, nova_get_blocknr(sb, curr_head, btype),
-					1, btype);
+	nova_free_log_blocks(sb, pi,
+			nova_get_blocknr(sb, curr_head, btype), 1);
 }
 
 int nova_inode_log_garbage_collection(struct super_block *sb,
@@ -1379,8 +1375,8 @@ int nova_inode_log_garbage_collection(struct super_block *sb,
 	if (first_need_free) {
 		nova_dbg_verbose("Free log head block 0x%llx\n",
 					curr >> PAGE_SHIFT);
-		nova_free_log_blocks(sb, nova_get_blocknr(sb, curr, btype),
-					1, btype);
+		nova_free_log_blocks(sb, pi,
+				nova_get_blocknr(sb, curr, btype), 1);
 	}
 	NOVA_END_TIMING(log_gc_t, gc_time);
 	return 0;
@@ -1540,15 +1536,15 @@ void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi)
 				num_free++;
 			} else {
 				/* A new start */
-				nova_free_log_blocks(sb, start_blocknr,
-					num_free, btype);
+				nova_free_log_blocks(sb, pi, start_blocknr,
+							num_free);
 				start_blocknr = blocknr;
 				num_free = 1;
 			}
 		}
 	}
 	if (start_blocknr)
-		nova_free_log_blocks(sb, start_blocknr,	num_free, btype);
+		nova_free_log_blocks(sb, pi, start_blocknr, num_free);
 
 	pi->log_head = 0;
 	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
