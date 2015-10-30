@@ -768,10 +768,14 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = nova_get_free_list(sb, i);
 		num_blocknode += free_list->num_blocknode;
+		nova_dbgv("%s: free list %d: %lu nodes\n", __func__,
+				i, free_list->num_blocknode);
 	}
 
 	free_list = nova_get_free_list(sb, SHARED_CPU);
 	num_blocknode += free_list->num_blocknode;
+	nova_dbgv("%s: shared list: %lu nodes\n", __func__,
+				free_list->num_blocknode);
 
 	num_pages = num_blocknode / RANGENODE_PER_PAGE;
 	if (num_blocknode % RANGENODE_PER_PAGE)
