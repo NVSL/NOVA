@@ -362,7 +362,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 
 		/* don't zero-out the allocated blocks */
 		allocated = nova_new_data_blocks(sb, pi, &blocknr, num_blocks,
-					start_blk, pi->i_blk_type, 0, 1);
+						start_blk, 0, 1);
 		nova_dbg_verbose("%s: alloc %d blocks @ %lu\n", __func__,
 						allocated, blocknr);
 
@@ -569,7 +569,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 		offset = pos & (nova_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
 		allocated = nova_new_data_blocks(sb, pi, &blocknr, num_blocks,
-					start_blk, pi->i_blk_type, 0, 0);
+						start_blk, 0, 0);
 		if (allocated <= 0) {
 			nova_err(sb, "%s alloc blocks failed!, %d\n", __func__,
 								allocated);
@@ -680,7 +680,7 @@ static int nova_get_nvmm_pfn(struct super_block *sb, struct nova_inode *pi,
 		mmap_addr = nova_get_block(sb, mmap_block);
 	} else {
 		ret = nova_new_data_blocks(sb, pi, &blocknr, 1,
-					pgoff, pi->i_blk_type, 0, 1);
+						pgoff, 0, 1);
 
 		if (ret <= 0) {
 			nova_err(sb, "%s alloc blocks failed!, %d\n",

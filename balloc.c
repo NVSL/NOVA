@@ -573,12 +573,12 @@ retry:
 
 inline int nova_new_data_blocks(struct super_block *sb, struct nova_inode *pi,
 	unsigned long *blocknr,	unsigned int num, unsigned long start_blk,
-	unsigned short btype, int zero, int cow)
+	int zero, int cow)
 {
 	int allocated;
 	timing_t alloc_time;
 	NOVA_START_TIMING(new_data_blocks_t, alloc_time);
-	allocated = nova_new_blocks(sb, blocknr, num, btype, zero, 0);
+	allocated = nova_new_blocks(sb, blocknr, num, pi->i_blk_type, zero, 0);
 	NOVA_END_TIMING(new_data_blocks_t, alloc_time);
 	nova_dbgv("Inode %llu, start blk %lu, cow %d, "
 			"alloc %d data blocks from %lu to %lu\n",
