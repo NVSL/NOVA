@@ -587,17 +587,17 @@ inline int nova_new_data_blocks(struct super_block *sb, struct nova_inode *pi,
 	return allocated;
 }
 
-inline int nova_new_log_blocks(struct super_block *sb, unsigned long nova_ino,
-	unsigned long *blocknr, unsigned int num, unsigned short btype,
-	int zero)
+inline int nova_new_log_blocks(struct super_block *sb, struct nova_inode *pi,
+	unsigned long *blocknr, unsigned int num, int zero)
 {
 	int allocated;
 	timing_t alloc_time;
 	NOVA_START_TIMING(new_log_blocks_t, alloc_time);
-	allocated = nova_new_blocks(sb, blocknr, num, btype, zero, 1);
+	allocated = nova_new_blocks(sb, blocknr, num,
+					NOVA_BLOCK_TYPE_4K, zero, 1);
 	NOVA_END_TIMING(new_log_blocks_t, alloc_time);
-	nova_dbgv("Inode %lu, alloc %d log blocks from %lu to %lu\n",
-			nova_ino, allocated, *blocknr,
+	nova_dbgv("Inode %llu, alloc %d log blocks from %lu to %lu\n",
+			pi->nova_ino, allocated, *blocknr,
 			*blocknr + allocated - 1);
 	return allocated;
 }

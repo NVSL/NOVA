@@ -168,6 +168,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 			 const char *symname)
 {
 	struct super_block *sb = dir->i_sb;
+	struct nova_inode fake_pi;
 	int err = -ENAMETOOLONG;
 	unsigned len = strlen(symname);
 	struct inode *inode;
@@ -198,9 +199,11 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	if (err)
 		goto out_fail1;
 
+	fake_pi.nova_ino = ino;
+	fake_pi.i_blk_type = NOVA_BLOCK_TYPE_4K;
+
 	/* Pre-allocate symlink log page before allocating inode */
-	allocated = nova_new_log_blocks(sb, ino, &blocknr, 1,
-					NOVA_BLOCK_TYPE_4K, 1);
+	allocated = nova_new_log_blocks(sb, &fake_pi, &blocknr, 1, 1);
 	if (allocated != 1 || blocknr == 0)
 		goto out_fail1;
 
@@ -208,12 +211,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 					S_IFLNK|S_IRWXUGO, len, 0,
 					&dentry->d_name);
 	if (IS_ERR(inode)) {
-		struct nova_inode fake_pi;
-
 		err = PTR_ERR(inode);
-		fake_pi.nova_ino = ino;
-		fake_pi.i_blk_type = NOVA_BLOCK_TYPE_4K;
-
 		nova_free_log_blocks(sb, &fake_pi, blocknr, 1);
 		goto out_fail1;
 	}

@@ -208,8 +208,7 @@ int nova_lite_journal_hard_init(struct super_block *sb)
 	pi = nova_get_inode_by_ino(sb, NOVA_LITEJOURNAL_INO);
 	nova_ino = NOVA_LITEJOURNAL_INO;
 	pi->nova_ino = nova_ino;
-	allocated = nova_new_log_blocks(sb, nova_ino, &blocknr, 1,
-						NOVA_BLOCK_TYPE_4K, 1);
+	allocated = nova_new_log_blocks(sb, pi, &blocknr, 1, 1);
 	nova_dbg_verbose("%s: allocate log @ 0x%lx\n", __func__, blocknr);
 	if (allocated != 1 || blocknr == 0)
 		return -ENOSPC;

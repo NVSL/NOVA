@@ -819,9 +819,8 @@ extern int nova_free_log_blocks(struct super_block *sb, struct nova_inode *pi,
 extern int nova_new_data_blocks(struct super_block *sb, struct nova_inode *pi,
 	unsigned long *blocknr, unsigned int num, unsigned long start_blk,
 	unsigned short btype, int zero, int cow);
-extern int nova_new_log_blocks(struct super_block *sb, unsigned long nova_ino,
-	unsigned long *blocknr, unsigned int num, unsigned short btype,
-	int zero);
+extern int nova_new_log_blocks(struct super_block *sb, struct nova_inode *pi,
+	unsigned long *blocknr, unsigned int num, int zero);
 extern unsigned long nova_count_free_blocks(struct super_block *sb);
 inline int nova_search_inodetree(struct nova_sb_info *sbi,
 	unsigned long ino, struct nova_range_node **ret_node);
