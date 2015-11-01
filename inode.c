@@ -665,6 +665,7 @@ void nova_evict_inode(struct inode *inode)
 			/* Log will be freed later */
 			nova_dbgv("%s: symlink ino %lu\n",
 					__func__, inode->i_ino);
+			freed = nova_delete_file_tree(sb, sih, 0, true);
 			break;
 		default:
 			nova_dbgv("%s: special ino %lu\n",

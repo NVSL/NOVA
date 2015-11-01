@@ -1215,17 +1215,10 @@ int nova_recover_inode(struct super_block *sb, u64 pi_addr,
 				"nova ino %lu, head 0x%llx, tail 0x%llx\n",
 				cpuid, pi, nova_ino, pi->log_head,
 				pi->log_tail);
-		/* No need to rebuild tree for symlink files */
+		/* Treat symlink files as normal files */
 		nova_assign_info_header(sb, nova_ino, &sih,
 				__le16_to_cpu(pi->i_mode), need_lock);
-		sih->pi_addr = pi_addr;
-		if (pi->log_head) {
-			sih->log_pages = 1;
-			if (bm) {
-				BUG_ON(pi->log_head & (PAGE_SIZE - 1));
-				set_bm(pi->log_head >> PAGE_SHIFT, bm, BM_4K);
-			}
-		}
+		nova_rebuild_file_inode_tree(sb, pi, pi_addr, sih, bm);
 		break;
 	default:
 		nova_assign_info_header(sb, nova_ino, &sih,

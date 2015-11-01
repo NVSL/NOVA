@@ -252,8 +252,8 @@ static inline void nova_update_tail(struct nova_inode *pi, u64 new_tail)
 
 /* symlink.c */
 int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
-	struct inode *inode, unsigned long blocknr, const char *symname,
-	int len);
+	struct inode *inode, unsigned long log_blocknr,
+	unsigned long name_blocknr, const char *symname, int len);
 
 /* Inline functions start here */
 

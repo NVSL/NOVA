@@ -175,7 +175,8 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	u64 pi_addr = 0;
 	struct nova_inode *pidir, *pi;
 	struct nova_inode_info_header *sih;
-	unsigned long blocknr = 0;
+	unsigned long log_blocknr = 0;
+	unsigned long name_blocknr = 0;
 	int allocated;
 	u64 tail = 0;
 	u64 ino;
@@ -203,23 +204,31 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	fake_pi.i_blk_type = NOVA_BLOCK_TYPE_4K;
 
 	/* Pre-allocate symlink log page before allocating inode */
-	allocated = nova_new_log_blocks(sb, &fake_pi, &blocknr, 1, 1);
-	if (allocated != 1 || blocknr == 0)
+	allocated = nova_new_log_blocks(sb, &fake_pi, &log_blocknr, 1, 1);
+	if (allocated != 1 || log_blocknr == 0) {
+		err = allocated;
 		goto out_fail1;
+	}
+
+	allocated = nova_new_data_blocks(sb, &fake_pi, &name_blocknr,
+					1, 0, 1, 0);
+	if (allocated != 1 || name_blocknr == 0) {
+		err = allocated;
+		goto out_fail2;
+	}
 
 	inode = nova_new_vfs_inode(TYPE_SYMLINK, dir, pi_addr, sih, ino,
 					S_IFLNK|S_IRWXUGO, len, 0,
 					&dentry->d_name);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
-		nova_free_log_blocks(sb, &fake_pi, blocknr, 1);
-		goto out_fail1;
+		goto out_fail3;
 	}
 
 	pi = nova_get_inode(sb, inode);
-	pi->i_blocks = 1;
-	nova_block_symlink(sb, pi, inode, blocknr, symname, len);
-
+	pi->i_blocks = 2;
+	nova_block_symlink(sb, pi, inode, log_blocknr, name_blocknr,
+				symname, len);
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
 
@@ -228,6 +237,10 @@ out:
 	NOVA_END_TIMING(symlink_t, symlink_time);
 	return err;
 
+out_fail3:
+	nova_free_data_blocks(sb, &fake_pi, name_blocknr, 1);
+out_fail2:
+	nova_free_log_blocks(sb, &fake_pi, log_blocknr, 1);
 out_fail1:
 	nova_err(sb, "%s return %d\n", __func__, err);
 	goto out;
