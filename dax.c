@@ -73,7 +73,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 
 		entry = nova_get_write_entry(sb, si, index);
 		if (unlikely(entry == NULL)) {
-			nova_dbg("Required extent not found: pgoff %lu, "
+			nova_dbgv("Required extent not found: pgoff %lu, "
 				"inode size %lld\n", index, isize);
 			nr = PAGE_SIZE;
 			zero = 1;
