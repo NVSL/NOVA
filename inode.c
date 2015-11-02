@@ -70,6 +70,7 @@ int nova_init_inode_table(struct super_block *sb)
 	pi->i_gid = 0;
 	pi->i_links_count = cpu_to_le16(1);
 	pi->i_flags = 0;
+	pi->nova_ino = NOVA_INODETABLE;
 
 	/*
 	 * Now inodes are resided in dir logs, and inode_table is

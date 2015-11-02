@@ -656,7 +656,7 @@ static inline struct nova_inode *nova_get_basic_inode(struct super_block *sb,
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
 	return (struct nova_inode *)(sbi->virt_addr + NOVA_SB_SIZE * 2 +
-				 (inode_number - 1) * NOVA_INODE_SIZE);
+			 (inode_number - NOVA_ROOT_INO) * NOVA_INODE_SIZE);
 }
 
 /* If this is part of a read-modify-write of the inode metadata,

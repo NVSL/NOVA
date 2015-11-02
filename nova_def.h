@@ -161,10 +161,11 @@ struct nova_super_block {
 #define NOVA_FAST_MOUNT_FIELD_SIZE  (36)
 
 /* The root inode follows immediately after the redundant super block */
-#define NOVA_ROOT_INO		(1)
-#define NOVA_BLOCKNODE_INO	(2)
-#define NOVA_INODELIST_INO	(3)
-#define NOVA_LITEJOURNAL_INO	(4)
+#define NOVA_INODETABLE		(1)
+#define NOVA_ROOT_INO		(2)
+#define NOVA_BLOCKNODE_INO	(3)
+#define NOVA_INODELIST_INO	(4)
+#define NOVA_LITEJOURNAL_INO	(5)
 
 #define	NOVA_ROOT_INO_START	(NOVA_SB_SIZE * 2)
 
