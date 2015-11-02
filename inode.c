@@ -919,20 +919,46 @@ static void nova_update_setattr_entry(struct inode *inode,
 	nova_flush_buffer(entry, sizeof(struct nova_setattr_logentry), 0);
 }
 
-void nova_apply_setattr_entry(struct nova_inode *pi,
-	struct nova_setattr_logentry *entry)
+void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_info_header *sih,
+	struct nova_setattr_logentry *entry, struct scan_bitmap *bm)
 {
+	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
+	unsigned long first_blocknr, last_blocknr;
+	loff_t start, end;
+	int freed = 0;
+
 	if (entry->entry_type != SET_ATTR)
 		BUG();
 
 	pi->i_mode	= entry->mode;
 	pi->i_uid	= entry->uid;
 	pi->i_gid	= entry->gid;
-	pi->i_size	= entry->size;
 	pi->i_atime	= entry->atime;
 	pi->i_ctime	= entry->ctime;
 	pi->i_mtime	= entry->mtime;
 
+	if (pi->i_size > entry->size && S_ISREG(pi->i_mode)) {
+		start = entry->size;
+		end = pi->i_size;
+
+		first_blocknr = (start + (1UL << data_bits) - 1) >> data_bits;
+
+		last_blocknr = (end - 1) >> data_bits;
+
+		if (first_blocknr > last_blocknr)
+			goto out;
+
+		freed = nova_delete_file_tree(sb, sih, first_blocknr, 0);
+
+		if (bm)
+			pi->i_blocks -= (freed * (1 << (data_bits -
+					sb->s_blocksize_bits)));
+
+	}
+out:
+	pi->i_size	= entry->size;
+	sih->i_size = le64_to_cpu(pi->i_size);
 	/* Do not flush now */
 }
 
@@ -1646,7 +1672,8 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 			case SET_ATTR:
 				attr_entry =
 					(struct nova_setattr_logentry *)addr;
-				nova_apply_setattr_entry(pi, attr_entry);
+				nova_apply_setattr_entry(sb, pi, sih,
+							attr_entry, bm);
 				curr_p += sizeof(struct nova_setattr_logentry);
 				continue;
 			case LINK_CHANGE:
@@ -1677,6 +1704,8 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 		}
 
 		nova_rebuild_file_time_and_size(sb, pi, entry);
+		/* Update sih->i_size for setattr apply operations */
+		sih->i_size = le64_to_cpu(pi->i_size);
 		curr_p += sizeof(struct nova_file_write_entry);
 	}
 
