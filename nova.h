@@ -976,6 +976,6 @@ void nova_clear_stats(void);
 void nova_print_inode_log(struct super_block *sb, struct inode *inode);
 void nova_print_inode_log_pages(struct super_block *sb, struct inode *inode);
 void nova_print_free_lists(struct super_block *sb);
-void nova_detect_memory_leak(struct super_block *sb);
+void nova_detect_memory_leak(void);
 
 #endif /* __NOVA_H */

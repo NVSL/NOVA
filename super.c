@@ -761,7 +761,6 @@ static void nova_put_super(struct super_block *sb)
 	nova_delete_free_lists(sb);
 
 	kfree(sbi->zeroed_page);
-	nova_detect_memory_leak(sb);
 	sb->s_fs_info = NULL;
 	nova_dbgmask = 0;
 	kfree(sbi);
@@ -1012,6 +1011,7 @@ out1:
 static void __exit exit_nova_fs(void)
 {
 	unregister_filesystem(&nova_fs_type);
+	nova_detect_memory_leak();
 	destroy_inodecache();
 	destroy_rangenode_cache();
 	destroy_header_cache();

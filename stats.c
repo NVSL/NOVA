@@ -292,7 +292,7 @@ void nova_print_free_lists(struct super_block *sb)
 		free_list->allocated_blocks, free_list->freed_blocks);
 }
 
-void nova_detect_memory_leak(struct super_block *sb)
+void nova_detect_memory_leak(void)
 {
 	if (atomic64_read(&header_alloc) != atomic64_read(&header_free))
 		nova_dbg("%s: inode header memory leak! "
