@@ -722,7 +722,6 @@ void nova_save_inode_list_to_log(struct super_block *sb)
 	unsigned long num_blocks;
 	struct nova_inode *pi =  nova_get_inode_by_ino(sb, NOVA_INODELIST_INO);
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	int step = 0;
 	u64 temp_tail;
 	u64 new_block;
 	int allocated;
@@ -745,8 +744,8 @@ void nova_save_inode_list_to_log(struct super_block *sb)
 								new_block);
 	nova_update_tail(pi, temp_tail);
 
-	nova_dbg("%s: %lu inode nodes, step %d, pi head 0x%llx, tail 0x%llx\n",
-		__func__, sbi->num_range_node_inode, step, pi->log_head,
+	nova_dbg("%s: %lu inode nodes, pi head 0x%llx, tail 0x%llx\n",
+		__func__, sbi->num_range_node_inode, pi->log_head,
 		pi->log_tail);
 }
 
@@ -758,7 +757,6 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 	struct free_list *free_list;
 	unsigned long num_blocknode = 0;
 	unsigned long num_pages;
-	int step = 0;
 	int allocated;
 	u64 new_block = 0;
 	u64 temp_tail;
@@ -815,9 +813,9 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 	temp_tail = nova_save_free_list_blocknodes(sb, SHARED_CPU, temp_tail);
 	nova_update_tail(pi, temp_tail);
 
-	nova_dbg("%s: %lu blocknodes, %lu log pages, step %d, pi head 0x%llx, "
+	nova_dbg("%s: %lu blocknodes, %lu log pages, pi head 0x%llx, "
 		"tail 0x%llx\n", __func__, num_blocknode, num_pages,
-		step, pi->log_head, pi->log_tail);
+		pi->log_head, pi->log_tail);
 }
 
 static int nova_insert_blocknode_map(struct super_block *sb,
@@ -1550,7 +1548,7 @@ int nova_multithread_recovery(struct super_block *sb)
 	int ret;
 
 	cpus = num_online_cpus();
-	nova_dbg("%s: %d cpus\n", __func__, cpus);
+	nova_dbgv("%s: %d cpus\n", __func__, cpus);
 
 	ret = allocate_resources(sb, cpus);
 	if (ret)
