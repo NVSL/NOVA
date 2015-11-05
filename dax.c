@@ -770,11 +770,10 @@ static int __nova_dax_file_fault(struct vm_area_struct *vma,
 	err = nova_get_mmap_addr(inode, vma, vmf->pgoff, 1,
 						&dax_mem, &dax_pfn);
 	if (unlikely(err)) {
-		nova_dbg("[%s:%d] get_mmap_addr failed(OOM). vm_start(0x%lx),"
+		nova_dbg("[%s:%d] get_mmap_addr failed. vm_start(0x%lx),"
 			" vm_end(0x%lx), pgoff(0x%lx), VA(%lx)\n",
 			__func__, __LINE__, vma->vm_start, vma->vm_end,
 			vmf->pgoff, (unsigned long)vmf->virtual_address);
-		dump_stack();
 		return VM_FAULT_SIGBUS;
 	}
 
