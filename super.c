@@ -480,30 +480,6 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	BUILD_BUG_ON(sizeof(struct nova_inode) > NOVA_INODE_SIZE);
 	BUILD_BUG_ON(sizeof(struct nova_inode_log_page) != PAGE_SIZE);
 
-	if (arch_has_pcommit()) {
-		nova_info("arch has PCOMMIT support\n");
-		support_pcommit = 1;
-	} else {
-		nova_info("arch does not have PCOMMIT support\n");
-	}
-
-	if (arch_has_clwb()) {
-		nova_info("arch has CLWB support\n");
-		support_clwb = 1;
-	} else {
-		nova_info("arch does not have CLWB support\n");
-	}
-
-	nova_dbg("Data structure size: inode %lu, log_page %lu, "
-		"file_write_entry %lu, dir_entry(max) %lu, "
-		"setattr_entry %lu, link_change_entry %lu\n",
-		sizeof(struct nova_inode),
-		sizeof(struct nova_inode_log_page),
-		sizeof(struct nova_file_write_entry),
-		sizeof(struct nova_dir_logentry),
-		sizeof(struct nova_setattr_logentry),
-		sizeof(struct nova_link_change_entry));
-
 	sbi = kzalloc(sizeof(struct nova_sb_info), GFP_KERNEL);
 	if (!sbi)
 		return -ENOMEM;
@@ -980,6 +956,27 @@ static int __init init_nova_fs(void)
 	timing_t init_time;
 
 	NOVA_START_TIMING(init_t, init_time);
+	nova_dbg("%s: %d cpus online\n", __func__, num_online_cpus());
+	if (arch_has_pcommit())
+		support_pcommit = 1;
+
+	if (arch_has_clwb())
+		support_clwb = 1;
+
+	nova_info("Arch new instructions support: PCOMMIT %s, CLWB %s\n",
+			support_pcommit ? "YES" : "NO",
+			support_clwb ? "YES" : "NO");
+
+	nova_dbg("Data structure size: inode %lu, log_page %lu, "
+		"file_write_entry %lu, dir_entry(max) %lu, "
+		"setattr_entry %lu, link_change_entry %lu\n",
+		sizeof(struct nova_inode),
+		sizeof(struct nova_inode_log_page),
+		sizeof(struct nova_file_write_entry),
+		sizeof(struct nova_dir_logentry),
+		sizeof(struct nova_setattr_logentry),
+		sizeof(struct nova_link_change_entry));
+
 	rc = init_rangenode_cache();
 	if (rc)
 		return rc;

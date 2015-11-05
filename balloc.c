@@ -33,7 +33,6 @@ int nova_alloc_block_free_lists(struct super_block *sb)
 	int i;
 
 	sbi->cpus = num_online_cpus();
-	nova_dbg("%s: %d cpus online\n", __func__, sbi->cpus);
 
 	sbi->free_lists = kzalloc(sbi->cpus * sizeof(struct free_list),
 							GFP_KERNEL);
