@@ -207,6 +207,9 @@ static unsigned long nova_get_dirty_range(struct super_block *sb,
 	loff_t dirty_start;
 	loff_t temp = *start;
 
+	nova_dbgv("%s: inode %llu, start %llu, end %llu\n",
+			__func__, pi->nova_ino, *start, end);
+
 	dirty_start = temp;
 	while (temp < end) {
 		pgoff = temp >> PAGE_CACHE_SHIFT;
@@ -350,7 +353,13 @@ out:
 /* This callback is called when a file is closed */
 static int nova_flush(struct file *file, fl_owner_t id)
 {
-	 /* Mmap needs to call msync() explicitly. */
+	struct address_space *mapping = file->f_mapping;
+	struct inode *inode = mapping->host;
+
+	 /* Issue a msync() on close */
+	if (mapping_mapped(mapping))
+		nova_fsync(file, 0, i_size_read(inode), 0);
+
 	return 0;
 }
 

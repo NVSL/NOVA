@@ -117,7 +117,12 @@ static int nova_delete_cache_tree(struct super_block *sb,
 {
 	unsigned long addr;
 	unsigned long i;
+	int deleted = 0;
 	void *ret;
+
+	nova_dbgv("%s: inode %lu, mmap pages %lu, start %lu, last %lu\n",
+			__func__, sih->ino, sih->mmap_pages,
+			start_blocknr, last_blocknr);
 
 	for (i = start_blocknr; i <= last_blocknr; i++) {
 		addr = (unsigned long)radix_tree_lookup(&sih->cache_tree, i);
@@ -125,8 +130,12 @@ static int nova_delete_cache_tree(struct super_block *sb,
 			ret = radix_tree_delete(&sih->cache_tree, i);
 			nova_free_data_blocks(sb, pi, addr >> PAGE_SHIFT, 1);
 			sih->mmap_pages--;
+			deleted++;
 		}
 	}
+
+	nova_dbgv("%s: inode %lu, deleted mmap pages %d\n",
+			__func__, sih->ino, deleted);
 
 	return 0;
 }
@@ -157,6 +166,7 @@ static int nova_delete_file_tree(struct super_block *sb,
 
 	last_blocknr = (sih->i_size - 1) >> data_bits;
 
+	/* FIXME: We should not discard mmap pages on setsize? */
 	if (sih->mmap_pages)
 		nova_delete_cache_tree(sb, pi, sih, start_blocknr,
 						last_blocknr);

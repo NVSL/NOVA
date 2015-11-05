@@ -632,7 +632,8 @@ static inline unsigned long nova_get_cache_addr(struct super_block *sb,
 	unsigned long addr;
 
 	addr = (unsigned long)radix_tree_lookup(&sih->cache_tree, blocknr);
-
+	nova_dbgv("%s: inode %lu, blocknr %lu, addr 0x%lx\n",
+		__func__, sih->ino, blocknr, addr);
 	return addr;
 }
 

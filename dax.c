@@ -351,7 +351,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	time = CURRENT_TIME_SEC.tv_sec;
 
-	nova_dbg_verbose("%s: inode %lu, block %llu, offset %lu, count %lu\n",
+	nova_dbgv("%s: inode %lu, block %llu, offset %lu, count %lu\n",
 			__func__, inode->i_ino,	pos >> sb->s_blocksize_bits,
 			offset, count);
 
@@ -694,6 +694,9 @@ static int nova_get_nvmm_pfn(struct super_block *sb, struct nova_inode *pi,
 		if (vm_flags & VM_WRITE)
 			mmap_block |= MMAP_WRITE_BIT;
 
+		nova_dbgv("%s: inode %lu, pgoff %lu, mmap block 0x%llx\n",
+			__func__, sih->ino, pgoff, mmap_block);
+
 		ret = radix_tree_insert(&sih->cache_tree, pgoff,
 					(void *)mmap_block);
 		if (ret) {
@@ -780,9 +783,9 @@ static int __nova_dax_file_fault(struct vm_area_struct *vma,
 	nova_dbgv("%s flags: vma 0x%lx, vmf 0x%x\n",
 			__func__, vma->vm_flags, vmf->flags);
 
-	nova_dbg_mmapv("[%s:%d] vm_start(0x%lx), vm_end(0x%lx), pgoff(0x%lx), "
-			"BlockSz(0x%lx), VA(0x%lx)->PA(0x%lx)\n", __func__,
-			__LINE__, vma->vm_start, vma->vm_end, vmf->pgoff,
+	nova_dbgv("DAX mmap: inode %lu, vm_start(0x%lx), vm_end(0x%lx), "
+			"pgoff(0x%lx), BlockSz(%lu), VA(0x%lx)->PA(0x%lx)\n",
+			inode->i_ino, vma->vm_start, vma->vm_end, vmf->pgoff,
 			PAGE_SIZE, (unsigned long)vmf->virtual_address,
 			(unsigned long)dax_pfn << PAGE_SHIFT);
 
