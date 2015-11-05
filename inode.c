@@ -1080,12 +1080,6 @@ static ssize_t nova_direct_IO(int rw, struct kiocb *iocb,
 		iv++;
 	}
 
-	if ((rw == WRITE) && end > i_size_read(inode)) {
-		/* FIXME: Do we need to check for out of bounds IO for R/W */
-		printk(KERN_ERR "nova: needs to grow (size = %lld)\n", end);
-		return err;
-	}
-
 	nova_dbg_verbose("%s\n", __func__);
 	iv = iter->iov;
 	for (seg = 0; seg < nr_segs; seg++) {
@@ -1119,7 +1113,6 @@ static ssize_t nova_direct_IO(struct kiocb *iocb,
 	struct iov_iter *iter, loff_t offset)
 {
 	struct file *filp = iocb->ki_filp;
-	struct inode *inode = filp->f_mapping->host;
 	loff_t end = offset;
 	size_t count = iov_iter_count(iter);
 	ssize_t err = -EINVAL;
@@ -1130,12 +1123,6 @@ static ssize_t nova_direct_IO(struct kiocb *iocb,
 
 	NOVA_START_TIMING(direct_IO_t, dio_time);
 	end = offset + count;
-
-	if ((iov_iter_rw(iter) == WRITE) && end > i_size_read(inode)) {
-		/* FIXME: Do we need to check for out of bounds IO for R/W */
-		printk(KERN_ERR "nova: needs to grow (size = %lld)\n", end);
-		return err;
-	}
 
 	nova_dbg_verbose("%s\n", __func__);
 	iv = iter->iov;
