@@ -599,14 +599,15 @@ nova_get_write_entry(struct super_block *sb,
 static inline unsigned long get_nvmm(struct super_block *sb,
 	struct nova_file_write_entry *data, unsigned long pgoff)
 {
-	if (data->pgoff > pgoff || data->pgoff +
-			data->num_pages <= pgoff) {
+	if (data->pgoff > pgoff || (unsigned long)data->pgoff +
+			(unsigned long)data->num_pages <= pgoff) {
 		nova_dbg("Entry ERROR: pgoff %lu, entry pgoff %u, "
 			"num %u\n", pgoff, data->pgoff, data->num_pages);
 		BUG();
 	}
 
-	return (data->block >> PAGE_SHIFT) + pgoff - data->pgoff;
+	return (unsigned long)(data->block >> PAGE_SHIFT) + pgoff
+		- data->pgoff;
 }
 
 static inline u64 nova_find_nvmm_block(struct super_block *sb,
