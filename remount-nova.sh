@@ -9,5 +9,5 @@ echo "Unmount done."
 sleep 1
 
 echo "Mounting..."
-mount -t NOVA -o physaddr=0x200000000 NOVA /mnt/ramdisk
+mount -t NOVA /dev/pmem0 /mnt/ramdisk
 
