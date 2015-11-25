@@ -183,10 +183,63 @@ void nova_clear_stats(void)
 	}
 }
 
+static inline void nova_print_file_write_entry(struct super_block *sb,
+	u64 curr, struct nova_file_write_entry *entry)
+{
+	nova_dbg("file write entry @ 0x%llx: offset %u, size %u, "
+			"blocknr %llu, invalid count %u\n",
+			curr, entry->pgoff, entry->num_pages,
+			entry->block >> PAGE_SHIFT,
+			entry->invalid_pages);
+}
+
+static inline void nova_print_set_attr_entry(struct super_block *sb,
+	u64 curr, struct nova_setattr_logentry *entry)
+{
+	nova_dbg("set attr entry @ 0x%llx: mode %u, size %llu\n",
+			curr, entry->mode, entry->size);
+}
+
+static inline void nova_print_link_change_entry(struct super_block *sb,
+	u64 curr, struct nova_link_change_entry *entry)
+{
+	nova_dbg("link change entry @ 0x%llx: links %u, flags %u\n",
+			curr, entry->links, entry->flags);
+}
+
+static u64 nova_print_log_entry(struct super_block *sb, u64 curr)
+{
+	void *addr;
+	u8 type;
+
+	addr = (void *)nova_get_block(sb, curr);
+	type = nova_get_entry_type(addr);
+	switch (type) {
+		case SET_ATTR:
+			nova_print_set_attr_entry(sb, curr, addr);
+			curr += sizeof(struct nova_setattr_logentry);
+			break;
+		case LINK_CHANGE:
+			nova_print_link_change_entry(sb, curr, addr);
+			curr += sizeof(struct nova_link_change_entry);
+			break;
+		case FILE_WRITE:
+			nova_print_file_write_entry(sb, curr, addr);
+			curr += sizeof(struct nova_file_write_entry);
+			break;
+		default:
+			nova_dbg("%s: unknown type %d, 0x%llx\n",
+						__func__, type, curr);
+			curr += sizeof(struct nova_file_write_entry);
+			NOVA_ASSERT(0);
+	}
+
+	return curr;
+}
+
 void nova_print_inode_log(struct super_block *sb, struct inode *inode)
 {
 	struct nova_inode *pi;
-	size_t entry_size = sizeof(struct nova_file_write_entry);
 	u64 curr;
 
 	pi = nova_get_inode(sb, inode);
@@ -205,15 +258,7 @@ void nova_print_inode_log(struct super_block *sb, struct inode *inode)
 					tail->next_page >> PAGE_SHIFT);
 			curr = tail->next_page;
 		} else {
-			struct nova_file_write_entry *entry =
-					nova_get_block(sb, curr);
-			nova_dbg("entry @ %llu: offset %u, size %u, "
-				"blocknr %llu, invalid count %u\n",
-				(curr & (PAGE_SIZE - 1)) / entry_size,
-				entry->pgoff, entry->num_pages,
-				entry->block >> PAGE_SHIFT,
-				entry->invalid_pages);
-			curr += entry_size;
+			curr = nova_print_log_entry(sb, curr);
 		}
 	}
 }
