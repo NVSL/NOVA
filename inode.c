@@ -874,6 +874,9 @@ void nova_dirty_inode(struct inode *inode, int flags)
 
 static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 {
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
+
 	/* We only support truncate regular file */
 	if (!(S_ISREG(inode->i_mode))) {
 		nova_err(inode->i_sb, "%s:wrong file mode %x\n", inode->i_mode);
@@ -883,8 +886,10 @@ static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 	nova_dbgv("%s: inode %lu, old size %llu, new size %llu\n",
 		__func__, inode->i_ino, oldsize, newsize);
 
-	if (newsize != oldsize)
+	if (newsize != oldsize) {
 		i_size_write(inode, newsize);
+		sih->i_size = newsize;
+	}
 
 	/* FIXME: we should make sure that there is nobody reading the inode
 	 * before truncating it. Also we need to munmap the truncated range
