@@ -166,8 +166,9 @@ struct nova_file_write_entry {
 	__le64	size;
 } __attribute((__packed__));
 
-struct	nova_inode_page_tail {
-	__le64	padding1;
+struct nova_inode_page_tail {
+	/* Record the link inodes count on this page */
+	__le64	num_links;
 	__le64	padding2;
 	__le64	padding3;
 	__le64	next_page;
@@ -603,7 +604,7 @@ static inline unsigned long get_nvmm(struct super_block *sb,
 			(unsigned long)data->num_pages <= pgoff) {
 		nova_dbg("Entry ERROR: pgoff %lu, entry pgoff %u, "
 			"num %u\n", pgoff, data->pgoff, data->num_pages);
-		BUG();
+		NOVA_ASSERT(0);
 	}
 
 	return (unsigned long)(data->block >> PAGE_SHIFT) + pgoff
