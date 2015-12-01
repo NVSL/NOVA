@@ -418,6 +418,7 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 	nova_lite_transaction_for_time_and_link(sb, pi, pidir,
 					pi_tail, pidir_tail, invalidate);
 
+	nova_remove_entry_from_tree(dentry);
 	NOVA_END_TIMING(unlink_t, unlink_time);
 	return 0;
 out:
@@ -567,6 +568,7 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 	nova_lite_transaction_for_time_and_link(sb, pi, pidir,
 						pi_tail, pidir_tail, 1);
 
+	nova_remove_entry_from_tree(dentry);
 	NOVA_END_TIMING(rmdir_t, rmdir_time);
 	return err;
 
@@ -746,6 +748,11 @@ static int nova_rename(struct inode *old_dir,
 
 	if (need_new_pi && pi_newaddr)
 		sih->pi_addr = pi_newaddr;
+
+	if (new_inode)
+		nova_remove_entry_from_tree(new_dentry);
+
+	nova_remove_entry_from_tree(old_dentry);
 
 	NOVA_END_TIMING(rename_t, rename_time);
 	return 0;

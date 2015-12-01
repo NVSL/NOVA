@@ -878,6 +878,7 @@ extern int nova_add_entry(struct dentry *dentry, u64 *pi_addr, u64 ino,
 	int inc_link, int new_inode, u64 tail, u64 *new_tail);
 extern int nova_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
 	u64 *new_tail);
+void nova_remove_entry_from_tree(struct dentry *dentry);
 void nova_print_dir_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long ino);
 void nova_delete_dir_tree(struct super_block *sb,
