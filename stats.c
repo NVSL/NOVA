@@ -237,6 +237,23 @@ static u64 nova_print_log_entry(struct super_block *sb, u64 curr)
 	return curr;
 }
 
+void nova_print_curr_log_page(struct super_block *sb, u64 curr)
+{
+	struct nova_inode_page_tail *tail;
+	u64 start, end;
+
+	start = curr & (~INVALID_MASK);
+	end = PAGE_TAIL(curr);
+
+	while (start < end) {
+		start = nova_print_log_entry(sb, start);
+	}
+
+	tail = nova_get_block(sb, end);
+	nova_dbg("Page tail. Next page @ block 0x%llx\n",
+			tail->next_page >> PAGE_SHIFT);
+}
+
 void nova_print_inode_log(struct super_block *sb, struct inode *inode)
 {
 	struct nova_inode *pi;
@@ -254,7 +271,7 @@ void nova_print_inode_log(struct super_block *sb, struct inode *inode)
 		if ((curr & (PAGE_SIZE - 1)) == LAST_ENTRY) {
 			struct nova_inode_page_tail *tail =
 					nova_get_block(sb, curr);
-			nova_dbg("Log tail. Next page @ block %llu\n",
+			nova_dbg("Log tail. Next page @ block 0x%llx\n",
 					tail->next_page >> PAGE_SHIFT);
 			curr = tail->next_page;
 		} else {

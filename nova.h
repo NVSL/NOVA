@@ -472,6 +472,21 @@ static inline void *nova_get_block(struct super_block *sb, u64 block)
 	return block ? ((void *)ps + block) : NULL;
 }
 
+static inline u64
+nova_get_addr_off(struct nova_sb_info *sbi, void *addr)
+{
+	NOVA_ASSERT((addr >= sbi->virt_addr) &&
+			(addr < (sbi->virt_addr + sbi->initsize)));
+	return (u64)(addr - sbi->virt_addr);
+}
+
+static inline u64
+nova_get_block_off(struct super_block *sb, unsigned long blocknr,
+		    unsigned short btype)
+{
+	return (u64)blocknr << PAGE_SHIFT;
+}
+
 static inline
 struct free_list *nova_get_free_list(struct super_block *sb, int cpu)
 {
@@ -597,13 +612,20 @@ nova_get_write_entry(struct super_block *sb,
 	return entry;
 }
 
+void nova_print_curr_log_page(struct super_block *sb, u64 curr);
+
 static inline unsigned long get_nvmm(struct super_block *sb,
 	struct nova_file_write_entry *data, unsigned long pgoff)
 {
 	if (data->pgoff > pgoff || (unsigned long)data->pgoff +
 			(unsigned long)data->num_pages <= pgoff) {
-		nova_dbg("Entry ERROR: pgoff %lu, entry pgoff %u, "
-			"num %u\n", pgoff, data->pgoff, data->num_pages);
+		struct nova_sb_info *sbi = NOVA_SB(sb);
+		u64 curr;
+
+		curr = nova_get_addr_off(sbi, data);
+		nova_dbg("Entry ERROR: curr 0x%llx, pgoff %lu, entry pgoff %u, "
+			"num %u\n", curr, pgoff, data->pgoff, data->num_pages);
+		nova_print_curr_log_page(sb, curr);
 		NOVA_ASSERT(0);
 	}
 
@@ -680,21 +702,6 @@ static inline struct nova_inode *nova_get_inode(struct super_block *sb,
 	struct nova_inode_info_header *sih = si->header;
 
 	return (struct nova_inode *)nova_get_block(sb, sih->pi_addr);
-}
-
-static inline u64
-nova_get_addr_off(struct nova_sb_info *sbi, void *addr)
-{
-	NOVA_ASSERT((addr >= sbi->virt_addr) &&
-			(addr < (sbi->virt_addr + sbi->initsize)));
-	return (u64)(addr - sbi->virt_addr);
-}
-
-static inline u64
-nova_get_block_off(struct super_block *sb, unsigned long blocknr,
-		    unsigned short btype)
-{
-	return (u64)blocknr << PAGE_SHIFT;
 }
 
 static inline unsigned long
