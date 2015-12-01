@@ -114,7 +114,7 @@ struct nova_inode {
 	struct {
 		__le32 rdev;	/* major/minor # */
 	} dev;			/* device inode */
-};
+} __attribute((__packed__));
 
 
 #define NOVA_SB_SIZE 512       /* must be power of two */
@@ -153,7 +153,7 @@ struct nova_super_block {
 	__le32		s_wtime;            /* write time */
 	/* fields for fast mount support. Always keep them together */
 	__le64		s_num_free_blocks;
-};
+} __attribute((__packed__));
 
 #define NOVA_SB_STATIC_SIZE(ps) ((u64)&ps->s_start_dynamic - (u64)ps)
 
