@@ -615,6 +615,7 @@ nova_get_write_entry(struct super_block *sb,
 void nova_print_curr_log_page(struct super_block *sb, u64 curr);
 
 static inline unsigned long get_nvmm(struct super_block *sb,
+	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *data, unsigned long pgoff)
 {
 	if (data->pgoff > pgoff || (unsigned long)data->pgoff +
@@ -623,8 +624,9 @@ static inline unsigned long get_nvmm(struct super_block *sb,
 		u64 curr;
 
 		curr = nova_get_addr_off(sbi, data);
-		nova_dbg("Entry ERROR: curr 0x%llx, pgoff %lu, entry pgoff %u, "
-			"num %u\n", curr, pgoff, data->pgoff, data->num_pages);
+		nova_dbg("Entry ERROR: inode %lu, curr 0x%llx, pgoff %lu, "
+			"entry pgoff %u, num %u\n", sih->ino,
+			curr, pgoff, data->pgoff, data->num_pages);
 		nova_print_curr_log_page(sb, curr);
 		NOVA_ASSERT(0);
 	}
@@ -645,7 +647,7 @@ static inline u64 nova_find_nvmm_block(struct super_block *sb,
 			return 0;
 	}
 
-	nvmm = get_nvmm(sb, entry, blocknr);
+	nvmm = get_nvmm(sb, si->header, entry, blocknr);
 	return nvmm << PAGE_SHIFT;
 }
 

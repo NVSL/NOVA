@@ -24,6 +24,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	struct inode *inode = filp->f_mapping->host;
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
 	struct nova_file_write_entry *entry;
 	pgoff_t index, end_index;
 	unsigned long offset;
@@ -95,7 +96,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 			nr = PAGE_SIZE;
 		}
 
-		nvmm = get_nvmm(sb, entry, index);
+		nvmm = get_nvmm(sb, sih, entry, index);
 		dax_mem = nova_get_block(sb, (nvmm << PAGE_SHIFT));
 
 memcpy:
@@ -156,13 +157,14 @@ ssize_t nova_dax_file_read(struct file *filp, char __user *buf,
 }
 
 static inline int nova_copy_partial_block(struct super_block *sb,
+	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry, unsigned long index,
 	size_t offset, void* kmem, bool is_end_blk)
 {
 	void *ptr;
 	unsigned long nvmm;
 
-	nvmm = get_nvmm(sb, entry, index);
+	nvmm = get_nvmm(sb, sih, entry, index);
 	ptr = nova_get_block(sb, (nvmm << PAGE_SHIFT));
 	if (ptr != NULL) {
 		if (is_end_blk)
@@ -185,6 +187,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 	void *kmem)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
 	size_t offset, eblk_offset;
 	unsigned long start_blk, end_blk, num_blocks;
 	unsigned long file_end_blk;
@@ -217,7 +220,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 		    	memset(kmem, 0, offset);
 		} else {
 			/* Copy from original block */
-			nova_copy_partial_block(sb, entry, start_blk,
+			nova_copy_partial_block(sb, sih, entry, start_blk,
 					offset, kmem, false);
 		}
 		nova_flush_buffer(kmem, offset, 0);
@@ -241,7 +244,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 					sb->s_blocksize - eblk_offset);
 		} else {
 			/* Copy from original block */
-			nova_copy_partial_block(sb, entry, end_blk,
+			nova_copy_partial_block(sb, sih, entry, end_blk,
 					eblk_offset, kmem, true);
 		}
 		nova_flush_buffer(kmem + eblk_offset,

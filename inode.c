@@ -82,15 +82,15 @@ int nova_init_inode_table(struct super_block *sb)
 }
 
 static inline int nova_free_contiguous_blocks(struct super_block *sb,
-	struct nova_inode *pi, struct nova_file_write_entry *entry,
-	unsigned long pgoff, unsigned long *start_blocknr,
-	unsigned long *num_free)
+	struct nova_inode_info_header *sih, struct nova_inode *pi,
+	struct nova_file_write_entry *entry, unsigned long pgoff,
+	unsigned long *start_blocknr, unsigned long *num_free)
 {
 	int freed = 0;
 	unsigned long nvmm;
 
 	entry->invalid_pages++;
-	nvmm = get_nvmm(sb, entry, pgoff);
+	nvmm = get_nvmm(sb, sih, entry, pgoff);
 
 	if (*start_blocknr == 0) {
 		*start_blocknr = nvmm;
@@ -177,8 +177,8 @@ static int nova_delete_file_tree(struct super_block *sb,
 			ret = radix_tree_delete(&sih->tree, pgoff);
 			BUG_ON(!ret || ret != entry);
 			if (delete_nvmm)
-				freed += nova_free_contiguous_blocks(sb, pi,
-						entry, pgoff, &free_blocknr,
+				freed += nova_free_contiguous_blocks(sb, sih,
+						pi, entry, pgoff, &free_blocknr,
 						&num_free);
 		}
 	}
@@ -294,7 +294,7 @@ int nova_assign_nvmm_entry(struct super_block *sb,
 		pentry = radix_tree_lookup_slot(&sih->tree, curr_pgoff);
 		if (pentry) {
 			old_entry = radix_tree_deref_slot(pentry);
-			old_nvmm = get_nvmm(sb, old_entry, curr_pgoff);
+			old_nvmm = get_nvmm(sb, sih, old_entry, curr_pgoff);
 			if (bm)
 				clear_bm(old_nvmm, bm, BM_4K);
 			if (free) {
@@ -313,7 +313,7 @@ int nova_assign_nvmm_entry(struct super_block *sb,
 		}
 
 		if (bm) {
-			nvmm = get_nvmm(sb, entry, curr_pgoff);
+			nvmm = get_nvmm(sb, sih, entry, curr_pgoff);
 			set_bm(nvmm, bm, BM_4K);
 			pi->i_blocks++;
 		}
