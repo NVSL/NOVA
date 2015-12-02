@@ -575,6 +575,19 @@ static int nova_free_inode(struct inode *inode,
 		pi->valid = 0;
 	}
 
+	if (pi->nova_ino != inode->i_ino) {
+		nova_err(sb, "%s: inode %lu ino does not match: %llu\n",
+				__func__, inode->i_ino, pi->nova_ino);
+		nova_dbg("inode size %llu, pi addr 0x%lx, pi head 0x%llx, "
+				"tail 0x%llx, mode %u\n",
+				inode->i_size, sih->pi_addr, pi->log_head,
+				pi->log_tail, pi->i_mode);
+		nova_dbg("sih: ino %lu, inode size %lu, mode %u, "
+				"inode mode %u\n", sih->ino, sih->i_size,
+				sih->i_mode, inode->i_mode);
+		nova_print_inode_log(sb, inode);
+	}
+
 	nova_free_inode_log(sb, pi);
 	pi->i_blocks = 0;
 
@@ -652,8 +665,10 @@ void nova_evict_inode(struct inode *inode)
 	int freed = 0;
 
 	if (!sih) {
-		nova_dbg("%s: ino %lu sih is NULL!\n", __func__, inode->i_ino);
-		BUG();
+		nova_err(sb, "%s: ino %lu sih is NULL!\n",
+				__func__, inode->i_ino);
+		NOVA_ASSERT(0);
+		goto out;
 	}
 
 	NOVA_START_TIMING(evict_inode_t, evict_time);
