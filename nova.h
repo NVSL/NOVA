@@ -199,10 +199,10 @@ struct nova_dir_logentry {
 	__le32	mtime;			/* For both mtime and ctime */
 	__le64	ino;                    /* inode no pointed to by this entry */
 	__le64	size;
-	char	name[NOVA_NAME_LEN];   /* File name */
+	char	name[NOVA_NAME_LEN];	/* File name */
 } __attribute((__packed__));
 
-#define NOVA_DIR_PAD            4
+#define NOVA_DIR_PAD            32	/* Align to log entry size */
 #define NOVA_DIR_ROUND          (NOVA_DIR_PAD - 1)
 #define NOVA_DIR_LOG_REC_LEN(name_len)  (((name_len) + 28 + NOVA_DIR_ROUND) & \
 				      ~NOVA_DIR_ROUND)

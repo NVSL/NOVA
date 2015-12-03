@@ -593,7 +593,7 @@ inline int nova_new_log_blocks(struct super_block *sb, struct nova_inode *pi,
 	timing_t alloc_time;
 	NOVA_START_TIMING(new_log_blocks_t, alloc_time);
 	allocated = nova_new_blocks(sb, blocknr, num,
-					NOVA_BLOCK_TYPE_4K, zero, 1);
+					pi->i_blk_type, zero, 1);
 	NOVA_END_TIMING(new_log_blocks_t, alloc_time);
 	nova_dbgv("Inode %llu, alloc %d log blocks from %lu to %lu\n",
 			pi->nova_ino, allocated, *blocknr,
