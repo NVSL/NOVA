@@ -106,6 +106,7 @@ struct nova_inode {
 	__le32	i_uid;		/* Owner Uid */
 	__le32	i_gid;		/* Group Id */
 	__le32	i_generation;	/* File version (for NFS) */
+	__le32	padding;
 	__le64	nova_ino;	/* nova inode number */
 
 	__le64	log_head;	/* Log head pointer */
@@ -114,6 +115,8 @@ struct nova_inode {
 	struct {
 		__le32 rdev;	/* major/minor # */
 	} dev;			/* device inode */
+
+	/* Leave 8 bytes for inode table tail pointer */
 } __attribute((__packed__));
 
 

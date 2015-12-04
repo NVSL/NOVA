@@ -76,6 +76,7 @@ int nova_init_inode_table(struct super_block *sb)
 	 * only used to save inodes on umount
 	 */
 	pi->i_blk_type = NOVA_BLOCK_TYPE_4K;
+	nova_flush_buffer(&pi, NOVA_INODE_SIZE, 1);
 
 	return nova_init_inode_inuse_list(sb);
 }
@@ -103,6 +104,58 @@ int nova_init_inode_table1(struct super_block *sb)
 		return -EINVAL;
 
 	pi->log_head = nova_get_block_off(sb, blocknr, NOVA_BLOCK_TYPE_2M);
+	nova_flush_buffer(&pi, NOVA_INODE_SIZE, 1);
+
+	return 0;
+}
+
+static int nova_get_inode_address(struct super_block *sb, u64 ino, u64 *pi_addr)
+{
+	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
+	unsigned int data_bits;
+	unsigned int num_inodes_bits;
+	u64 curr;
+	unsigned int superpage_count;
+	unsigned int index;
+	unsigned int i = 0;
+	unsigned long blocknr;
+	unsigned long curr_addr;
+	int allocated;
+
+	data_bits = blk_type_to_shift[pi->i_blk_type];
+	num_inodes_bits = data_bits - NOVA_INODE_BITS;
+	superpage_count = ino >> num_inodes_bits;
+	index = ino & ((1 << num_inodes_bits) - 1);
+
+	curr = pi->log_head;
+	if (curr == 0)
+		return -EINVAL;
+
+	for (i = 0; i < superpage_count; i++) {
+		if (curr == 0)
+			return -EINVAL;
+
+		curr_addr = (unsigned long)nova_get_block(sb, curr);
+		/* Next page pointer in the last 8 bytes of the superpage */
+		curr_addr += 2097152 - 8;
+		curr = *(u64 *)(curr_addr);
+
+		if (curr == 0) {
+			allocated = nova_new_log_blocks(sb, pi, &blocknr,
+							1, 1);
+
+			if (allocated != 1)
+				return -EINVAL;
+
+			curr = nova_get_block_off(sb, blocknr,
+						NOVA_BLOCK_TYPE_2M);
+			*(u64 *)(curr_addr) = curr;
+			nova_flush_buffer((void *)curr_addr,
+						NOVA_INODE_SIZE, 1);
+		}
+	}
+
+	*pi_addr = curr + index * NOVA_INODE_SIZE;
 
 	return 0;
 }
@@ -755,6 +808,7 @@ u64 nova_new_nova_inode(struct super_block *sb,
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	unsigned long free_ino = 0;
 	u64 ino = 0;
+	u64 pi_addr;
 	int ret;
 	timing_t new_inode_time;
 
@@ -763,7 +817,14 @@ u64 nova_new_nova_inode(struct super_block *sb,
 	mutex_lock(&sbi->inode_table_mutex);
 	ret = nova_alloc_unused_inode(sb, &free_ino);
 	if (ret) {
-		nova_dbg("%s: alloc inode failed %d\n", __func__, ret);
+		nova_dbg("%s: alloc inode number failed %d\n", __func__, ret);
+		mutex_unlock(&sbi->inode_table_mutex);
+		return 0;
+	}
+
+	ret = nova_get_inode_address(sb, free_ino, &pi_addr);
+	if (ret) {
+		nova_dbg("%s: get inode address failed %d\n", __func__, ret);
 		mutex_unlock(&sbi->inode_table_mutex);
 		return 0;
 	}
