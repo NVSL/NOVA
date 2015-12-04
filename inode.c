@@ -64,7 +64,6 @@ int nova_init_inode_table(struct super_block *sb)
 {
 	struct nova_inode *pi = nova_get_inode_table(sb);
 
-	nova_memunlock_inode(sb, pi);
 	pi->i_mode = 0;
 	pi->i_uid = 0;
 	pi->i_gid = 0;
@@ -79,6 +78,33 @@ int nova_init_inode_table(struct super_block *sb)
 	pi->i_blk_type = NOVA_BLOCK_TYPE_4K;
 
 	return nova_init_inode_inuse_list(sb);
+}
+
+int nova_init_inode_table1(struct super_block *sb)
+{
+	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
+	unsigned long blocknr;
+	int allocated;
+
+	pi->i_mode = 0;
+	pi->i_uid = 0;
+	pi->i_gid = 0;
+	pi->i_links_count = cpu_to_le16(1);
+	pi->i_flags = 0;
+	pi->nova_ino = NOVA_INODETABLE_INO;
+
+	pi->i_blk_type = NOVA_BLOCK_TYPE_2M;
+
+	/* Allocate superpage for inodes */
+	allocated = nova_new_log_blocks(sb, pi, &blocknr,
+					1, 1);
+
+	if (allocated != 1)
+		return -EINVAL;
+
+	pi->log_head = nova_get_block_off(sb, blocknr, NOVA_BLOCK_TYPE_2M);
+
+	return 0;
 }
 
 static inline int nova_free_contiguous_blocks(struct super_block *sb,

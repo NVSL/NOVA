@@ -335,6 +335,9 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	if (nova_init_inode_table(sb) < 0)
 		return ERR_PTR(-EINVAL);
 
+	if (nova_init_inode_table1(sb) < 0)
+		return ERR_PTR(-EINVAL);
+
 	pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
 	pi->nova_ino = NOVA_BLOCKNODE_INO;
 	nova_flush_buffer(pi, CACHELINE_SIZE, 1);

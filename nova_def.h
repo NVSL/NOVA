@@ -163,9 +163,10 @@ struct nova_super_block {
 /* The root inode follows immediately after the redundant super block */
 #define NOVA_INODETABLE		(1)
 #define NOVA_ROOT_INO		(2)
-#define NOVA_BLOCKNODE_INO	(3)
-#define NOVA_INODELIST_INO	(4)
-#define NOVA_LITEJOURNAL_INO	(5)
+#define NOVA_INODETABLE_INO	(3)	/* Temporaty inode table */
+#define NOVA_BLOCKNODE_INO	(4)
+#define NOVA_INODELIST_INO	(5)
+#define NOVA_LITEJOURNAL_INO	(6)
 
 #define	NOVA_ROOT_INO_START	(NOVA_SB_SIZE * 2)
 
