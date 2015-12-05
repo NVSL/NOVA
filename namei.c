@@ -461,7 +461,8 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		goto out_err;
 
 	nova_dbgv("%s: name %s\n", __func__, dentry->d_name.name);
-	nova_dbgv("%s: inode %llu, dir %lu\n", __func__, ino, dir->i_ino);
+	nova_dbgv("%s: inode %llu, dir %lu, link %d\n", __func__,
+				ino, dir->i_ino, dir->i_nlink);
 	err = nova_add_entry(dentry, ino, 1, 0, &tail);
 	if (err) {
 		nova_dbg("failed to add dir entry\n");
@@ -556,12 +557,12 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 	if (!nova_empty_dir(inode))
 		return err;
 
-	nova_dbgv("%s: inode %lu, dir %lu\n", __func__,
-				inode->i_ino, dir->i_ino);
+	nova_dbgv("%s: inode %lu, dir %lu, link %d\n", __func__,
+				inode->i_ino, dir->i_ino, dir->i_nlink);
 
 	if (inode->i_nlink != 2)
-		nova_dbg("empty directory %lu has nlink!=2 (%d)",
-				inode->i_ino, inode->i_nlink);
+		nova_dbg("empty directory %lu has nlink!=2 (%d), dir %lu",
+				inode->i_ino, inode->i_nlink, dir->i_ino);
 
 	err = nova_remove_entry(dentry, -1, 0, &pidir_tail);
 	if (err)
@@ -613,8 +614,10 @@ static int nova_rename(struct inode *old_dir,
 
 	nova_dbgv("%s: rename %s to %s,\n", __func__,
 			old_dentry->d_name.name, new_dentry->d_name.name);
-	nova_dbgv("%s: inode %lu, old dir %lu, new dir %lu\n", __func__,
-			old_inode->i_ino, old_dir->i_ino, new_dir->i_ino);
+	nova_dbgv("%s: %s inode %lu, old dir %lu, new dir %lu, new inode %lu\n",
+			__func__, S_ISDIR(old_inode->i_mode) ? "dir" : "normal",
+			old_inode->i_ino, old_dir->i_ino, new_dir->i_ino,
+			new_inode ? new_inode->i_ino : 0);
 	NOVA_START_TIMING(rename_t, rename_time);
 
 	if (new_inode) {
@@ -656,12 +659,18 @@ static int nova_rename(struct inode *old_dir,
 	if (err)
 		goto out;
 
+	if (inc_link)
+		inc_nlink(new_dir);
+
 	if (old_dir == new_dir)
 		old_tail = new_tail;
 
 	err = nova_remove_entry(old_dentry, dec_link, old_tail, &old_tail);
 	if (err)
 		goto out;
+
+	if (dec_link < 0)
+		drop_nlink(old_dir);
 
 	if (new_inode) {
 		new_pi = nova_get_inode(sb, new_inode);
@@ -679,11 +688,6 @@ static int nova_rename(struct inode *old_dir,
 		if (err)
 			goto out;
 	}
-
-	if (inc_link)
-		inc_nlink(new_dir);
-	if (dec_link < 0)
-		drop_nlink(old_dir);
 
 	entries = 1;
 	memset(&entry, 0, sizeof(struct nova_lite_journal_entry));
