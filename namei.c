@@ -100,8 +100,8 @@ static int nova_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (err)
 		goto out_err;
 
-	nova_dbgv("%s: %s, ino %llu, dir %lu\n", __func__,
-				dentry->d_name.name, ino, dir->i_ino);
+	nova_dbgv("%s: %s\n", __func__, dentry->d_name.name);
+	nova_dbgv("%s: inode %llu, dir %lu\n", __func__, ino, dir->i_ino);
 	inode = nova_new_vfs_inode(TYPE_CREATE, dir, pi_addr, sih, ino, mode,
 					0, 0, &dentry->d_name);
 	if (IS_ERR(inode))
@@ -142,8 +142,8 @@ static int nova_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (ino == 0)
 		goto out_err;
 
-	nova_dbgv("%s: %s, ino %llu, dir %lu\n", __func__,
-				dentry->d_name.name, ino, dir->i_ino);
+	nova_dbgv("%s: %s\n", __func__, dentry->d_name.name);
+	nova_dbgv("%s: inode %llu, dir %lu\n", __func__, ino, dir->i_ino);
 	err = nova_add_entry(dentry, ino, 0, 0, &tail);
 	if (err)
 		goto out_err;
@@ -195,8 +195,9 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	if (ino == 0)
 		goto out_fail1;
 
-	nova_dbgv("%s: name %s, symname %s, inode %llu, dir %lu\n", __func__,
-			dentry->d_name.name, symname, ino, dir->i_ino);
+	nova_dbgv("%s: name %s, symname %s\n", __func__,
+				dentry->d_name.name, symname);
+	nova_dbgv("%s: inode %llu, dir %lu\n", __func__, ino, dir->i_ino);
 	err = nova_add_entry(dentry, ino, 0, 0, &tail);
 	if (err)
 		goto out_fail1;
@@ -355,8 +356,9 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 
 	ihold(inode);
 
-	nova_dbgv("%s: name %s, dest %s, inode %lu, dir %lu\n", __func__,
-			dentry->d_name.name, dest_dentry->d_name.name,
+	nova_dbgv("%s: name %s, dest %s\n", __func__,
+			dentry->d_name.name, dest_dentry->d_name.name);
+	nova_dbgv("%s: inode %lu, dir %lu\n", __func__,
 			inode->i_ino, dir->i_ino);
 	err = nova_add_entry(dentry, inode->i_ino, 0, 0, &pidir_tail);
 	if (err) {
@@ -406,8 +408,9 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 	if (!pidir)
 		goto out;
 
-	nova_dbgv("%s: %s, ino %lu, dir %lu\n", __func__,
-				dentry->d_name.name, inode->i_ino, dir->i_ino);
+	nova_dbgv("%s: %s\n", __func__, dentry->d_name.name);
+	nova_dbgv("%s: inode %lu, dir %lu\n", __func__,
+				inode->i_ino, dir->i_ino);
 	retval = nova_remove_entry(dentry, 0, 0, &pidir_tail);
 	if (retval)
 		goto out;
@@ -457,8 +460,8 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	if (ino == 0)
 		goto out_err;
 
-	nova_dbgv("%s: name %s, inode %llu, dir %lu\n", __func__,
-			dentry->d_name.name, ino, dir->i_ino);
+	nova_dbgv("%s: name %s\n", __func__, dentry->d_name.name);
+	nova_dbgv("%s: inode %llu, dir %lu\n", __func__, ino, dir->i_ino);
 	err = nova_add_entry(dentry, ino, 1, 0, &tail);
 	if (err) {
 		nova_dbg("failed to add dir entry\n");
@@ -542,9 +545,7 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 	if (!inode)
 		return -ENOENT;
 
-	nova_dbgv("%s: name %s, inode %lu, dir %lu\n", __func__,
-			dentry->d_name.name, inode->i_ino,
-			dir->i_ino);
+	nova_dbgv("%s: name %s\n", __func__, dentry->d_name.name);
 	pidir = nova_get_inode(sb, dir);
 	if (!pidir)
 		return -EINVAL;
@@ -555,8 +556,12 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 	if (!nova_empty_dir(inode))
 		return err;
 
+	nova_dbgv("%s: inode %lu, dir %lu\n", __func__,
+				inode->i_ino, dir->i_ino);
+
 	if (inode->i_nlink != 2)
-		nova_dbg("empty directory has nlink!=2 (%d)", inode->i_nlink);
+		nova_dbg("empty directory %lu has nlink!=2 (%d)",
+				inode->i_ino, inode->i_nlink);
 
 	err = nova_remove_entry(dentry, -1, 0, &pidir_tail);
 	if (err)
@@ -606,9 +611,10 @@ static int nova_rename(struct inode *old_dir,
 	u64 journal_tail;
 	timing_t rename_time;
 
-	nova_dbgv("%s: rename %s to %s, old dir %lu, new dir %lu\n", __func__,
-			old_dentry->d_name.name, new_dentry->d_name.name,
-			old_dir->i_ino, new_dir->i_ino);
+	nova_dbgv("%s: rename %s to %s,\n", __func__,
+			old_dentry->d_name.name, new_dentry->d_name.name);
+	nova_dbgv("%s: inode %lu, old dir %lu, new dir %lu\n", __func__,
+			old_inode->i_ino, old_dir->i_ino, new_dir->i_ino);
 	NOVA_START_TIMING(rename_t, rename_time);
 
 	if (new_inode) {
