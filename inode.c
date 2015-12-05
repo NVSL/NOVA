@@ -221,29 +221,19 @@ static int nova_delete_cache_tree(struct super_block *sb,
 
 static int nova_delete_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long start_blocknr,
-	bool delete_nvmm)
+	unsigned long last_blocknr, bool delete_nvmm)
 {
 	struct nova_file_write_entry *entry;
 	struct nova_inode *pi;
 	unsigned long free_blocknr = 0, num_free = 0;
-	unsigned long last_blocknr = 0;
 	unsigned long pgoff = start_blocknr;
-	unsigned int btype;
-	unsigned int data_bits;
 	timing_t delete_time;
 	int freed = 0;
 	void *ret;
 
 	pi = (struct nova_inode *)nova_get_block(sb, sih->pi_addr);
-	btype = pi->i_blk_type;
-	data_bits = blk_type_to_shift[btype];
 
 	NOVA_START_TIMING(delete_file_tree_t, delete_time);
-
-	if (sih->i_size == 0)
-		goto out;
-
-	last_blocknr = (sih->i_size - 1) >> data_bits;
 
 	/* FIXME: We should not discard mmap pages on setsize? */
 	if (sih->mmap_pages)
@@ -266,7 +256,7 @@ static int nova_delete_file_tree(struct super_block *sb,
 		nova_free_data_blocks(sb, pi, free_blocknr, num_free);
 		freed += num_free;
 	}
-out:
+
 	NOVA_END_TIMING(delete_file_tree_t, delete_time);
 	nova_dbgv("Inode %llu: delete file tree from pgoff %lu to %lu, "
 			"%d blocks freed\n",
@@ -303,7 +293,7 @@ static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
 	if (first_blocknr > last_blocknr)
 		return;
 
-	freed = nova_delete_file_tree(sb, sih, first_blocknr, 1);
+	freed = nova_delete_file_tree(sb, sih, first_blocknr, last_blocknr, 1);
 
 	inode->i_blocks -= (freed * (1 << (data_bits -
 				sb->s_blocksize_bits)));
@@ -733,12 +723,33 @@ fail:
 	return ERR_PTR(err);
 }
 
+static unsigned long nova_get_last_blocknr(struct super_block *sb,
+	struct nova_inode_info_header *sih)
+{
+	struct nova_inode *pi;
+	unsigned long last_blocknr;
+	unsigned int btype;
+	unsigned int data_bits;
+
+	pi = nova_get_block(sb, sih->pi_addr);
+	btype = pi->i_blk_type;
+	data_bits = blk_type_to_shift[btype];
+
+	if (sih->i_size == 0)
+		last_blocknr = 0;
+	else
+		last_blocknr = (sih->i_size - 1) >> data_bits;
+
+	return last_blocknr;
+}
+
 void nova_evict_inode(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = si->header;
+	unsigned long last_blocknr;
 	timing_t evict_time;
 	int err = 0;
 	int freed = 0;
@@ -759,8 +770,10 @@ void nova_evict_inode(struct inode *inode)
 		/* We need the log to free the blocks from the b-tree */
 		switch (inode->i_mode & S_IFMT) {
 		case S_IFREG:
+			last_blocknr = nova_get_last_blocknr(sb, sih);
 			nova_dbgv("%s: file ino %lu\n", __func__, inode->i_ino);
-			freed = nova_delete_file_tree(sb, sih, 0, true);
+			freed = nova_delete_file_tree(sb, sih, 0,
+						last_blocknr, true);
 			break;
 		case S_IFDIR:
 			nova_dbgv("%s: dir ino %lu\n", __func__, inode->i_ino);
@@ -770,7 +783,7 @@ void nova_evict_inode(struct inode *inode)
 			/* Log will be freed later */
 			nova_dbgv("%s: symlink ino %lu\n",
 					__func__, inode->i_ino);
-			freed = nova_delete_file_tree(sb, sih, 0, true);
+			freed = nova_delete_file_tree(sb, sih, 0, 0, true);
 			break;
 		default:
 			nova_dbgv("%s: special ino %lu\n",
@@ -1067,7 +1080,8 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 		if (first_blocknr > last_blocknr)
 			goto out;
 
-		freed = nova_delete_file_tree(sb, sih, first_blocknr, 0);
+		freed = nova_delete_file_tree(sb, sih, first_blocknr,
+						last_blocknr, 0);
 
 		if (bm)
 			pi->i_blocks -= (freed * (1 << (data_bits -
@@ -1701,13 +1715,15 @@ void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi)
 int nova_free_dram_resource(struct super_block *sb,
 	struct nova_inode_info_header *sih)
 {
+	unsigned long last_blocknr;
 	int freed = 0;
 
 	if (!(S_ISREG(sih->i_mode)) && !(S_ISDIR(sih->i_mode)))
 		return 0;
 
 	if (S_ISREG(sih->i_mode)) {
-		freed = nova_delete_file_tree(sb, sih, 0, false);
+		last_blocknr = nova_get_last_blocknr(sb, sih);
+		freed = nova_delete_file_tree(sb, sih, 0, last_blocknr, false);
 	} else {
 		nova_delete_dir_tree(sb, sih);
 		freed = 1;
