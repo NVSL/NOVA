@@ -52,9 +52,10 @@ static struct dentry *nova_lookup(struct inode *dir, struct dentry *dentry,
 	nova_dbg_verbose("%s: ino %lu\n", __func__, ino);
 	if (ino) {
 		inode = nova_iget(dir->i_sb, ino);
-		if (inode == ERR_PTR(-ESTALE)) {
+		if (inode == ERR_PTR(-ESTALE) || inode == ERR_PTR(-ENOMEM)
+				|| inode == ERR_PTR(-EACCES)) {
 			nova_err(dir->i_sb,
-				  "%s: deleted inode referenced: %lu\n",
+				  "%s: get inode failed: %lu\n",
 				  __func__, (unsigned long)ino);
 			return ERR_PTR(-EIO);
 		}
