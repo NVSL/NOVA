@@ -470,7 +470,7 @@ static int nova_init_blockmap_from_inode(struct super_block *sb)
 	}
 
 	while (curr_p != pi->log_tail) {
-		if (is_last_entry(curr_p, size, 0)) {
+		if (is_last_entry(curr_p, size)) {
 			curr_p = next_log_page(sb, curr_p);
 		}
 
@@ -539,7 +539,7 @@ static int nova_init_inode_list_from_inode(struct super_block *sb)
 	}
 
 	while (curr_p != pi->log_tail) {
-		if (is_last_entry(curr_p, size, 0)) {
+		if (is_last_entry(curr_p, size)) {
 			curr_p = next_log_page(sb, curr_p);
 		}
 
@@ -618,13 +618,13 @@ static u64 nova_append_range_node_entry(struct super_block *sb,
 
 	curr_p = tail;
 
-	if (curr_p == 0 || (is_last_entry(curr_p, size, 0) &&
+	if (curr_p == 0 || (is_last_entry(curr_p, size) &&
 				next_log_page(sb, curr_p) == 0)) {
 		nova_dbg("%s: inode log reaches end?\n", __func__);
 		goto out;
 	}
 
-	if (is_last_entry(curr_p, size, 0))
+	if (is_last_entry(curr_p, size))
 		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct nova_range_node_lowhigh *)nova_get_block(sb, curr_p);
@@ -653,7 +653,7 @@ static u64 nova_append_alive_inode_entry(struct super_block *sb,
 
 	curr_p = inode_table->log_tail;
 
-	if (curr_p == 0 || (is_last_entry(curr_p, size, 0) &&
+	if (curr_p == 0 || (is_last_entry(curr_p, size) &&
 				next_log_page(sb, curr_p) == 0)) {
 		curr_p = nova_extend_inode_log(sb, inode_table,
 						inode_table_sih, curr_p, 0);
@@ -663,7 +663,7 @@ static u64 nova_append_alive_inode_entry(struct super_block *sb,
 		}
 	}
 
-	if (is_last_entry(curr_p, size, 0))
+	if (is_last_entry(curr_p, size))
 		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct nova_alive_inode_entry *)nova_get_block(sb, curr_p);
@@ -1287,7 +1287,7 @@ static void nova_inode_table_singlethread_crawl(struct super_block *sb,
 		return;
 
 	while (curr_p != inode_table->log_tail) {
-		if (is_last_entry(curr_p, size, 0))
+		if (is_last_entry(curr_p, size))
 			curr_p = next_log_page(sb, curr_p);
 
 		if (curr_p == 0) {
@@ -1453,7 +1453,7 @@ static void nova_inode_table_multithread_crawl(struct super_block *sb,
 		return;
 
 	while (curr_p != inode_table->log_tail) {
-		if (is_last_entry(curr_p, size, 0))
+		if (is_last_entry(curr_p, size))
 			curr_p = next_log_page(sb, curr_p);
 
 		if (curr_p == 0) {

@@ -101,14 +101,14 @@ void nova_delete_dir_tree(struct super_block *sb,
  * after append.
  */
 static u64 nova_append_dir_inode_entry(struct super_block *sb,
-	struct nova_inode *pidir, struct inode *dir, u64 *pi_addr,
+	struct nova_inode *pidir, struct inode *dir,
 	u64 ino, struct dentry *dentry, unsigned short de_len, u64 tail,
-	int link_change, int new_inode,	u64 *curr_tail)
+	int link_change, u64 *curr_tail)
 {
 	struct nova_inode_info *si = NOVA_I(dir);
 	struct nova_inode_info_header *sih = si->header;
 	struct nova_dir_logentry *entry;
-	u64 curr_p, inode_start;
+	u64 curr_p;
 	size_t size = de_len;
 	unsigned short links_count;
 	timing_t append_time;
@@ -116,7 +116,7 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 	NOVA_START_TIMING(append_entry_t, append_time);
 
 	curr_p = nova_get_append_head(sb, pidir, sih, tail,
-						size, new_inode, 0);
+						size, 0);
 	if (curr_p == 0)
 		BUG();
 
@@ -129,7 +129,6 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 	entry->file_type = 0;
 	entry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
 	entry->size = cpu_to_le64(dir->i_size);
-	entry->new_inode = new_inode;
 
 	links_count = cpu_to_le16(dir->i_nlink);
 	if (links_count == 0 && link_change == -1)
@@ -148,21 +147,6 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 	nova_flush_buffer(entry, de_len, 0);
 
 	*curr_tail = curr_p + de_len;
-
-	if (new_inode) {
-		/* Allocate space for the new inode */
-		if (is_last_entry(curr_p, de_len, new_inode))
-			inode_start = next_log_page(sb, curr_p);
-		else
-			inode_start = (*curr_tail & (CACHELINE_SIZE - 1)) == 0
-				? *curr_tail : CACHE_ALIGN(*curr_tail) +
-						CACHELINE_SIZE;
-
-		if (pi_addr)
-			*pi_addr = inode_start;
-
-		*curr_tail = inode_start + NOVA_INODE_SIZE;
-	}
 
 	dir->i_blocks = pidir->i_blocks;
 	NOVA_END_TIMING(append_entry_t, append_time);
@@ -227,8 +211,8 @@ int nova_append_dir_init_entries(struct super_block *sb,
 /* adds a directory entry pointing to the inode. assumes the inode has
  * already been logged for consistency
  */
-int nova_add_entry(struct dentry *dentry, u64 *pi_addr, u64 ino, int inc_link,
-	int new_inode, u64 tail, u64 *new_tail)
+int nova_add_entry(struct dentry *dentry, u64 ino, int inc_link,
+	u64 tail, u64 *new_tail)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -260,8 +244,8 @@ int nova_add_entry(struct dentry *dentry, u64 *pi_addr, u64 ino, int inc_link,
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
 
 	loglen = NOVA_DIR_LOG_REC_LEN(namelen);
-	curr_entry = nova_append_dir_inode_entry(sb, pidir, dir, pi_addr, ino,
-				dentry,	loglen, tail, inc_link, new_inode,
+	curr_entry = nova_append_dir_inode_entry(sb, pidir, dir, ino,
+				dentry,	loglen, tail, inc_link,
 				&curr_tail);
 
 	direntry = (struct nova_dir_logentry *)nova_get_block(sb, curr_entry);
@@ -295,8 +279,8 @@ int nova_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
 
 	loglen = NOVA_DIR_LOG_REC_LEN(entry->len);
-	curr_entry = nova_append_dir_inode_entry(sb, pidir, dir, NULL, 0,
-				dentry, loglen, tail, dec_link, 0, &curr_tail);
+	curr_entry = nova_append_dir_inode_entry(sb, pidir, dir, 0,
+				dentry, loglen, tail, dec_link, &curr_tail);
 	*new_tail = curr_tail;
 
 	/*
@@ -449,32 +433,6 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 
 		de_len = le16_to_cpu(entry->de_len);
 		curr_p += de_len;
-
-		/*
-		 * If following by a new inode, find the inode
-		 * and its end first
-		 */
-		if (entry->new_inode) {
-			if (is_last_entry(curr_p - de_len, de_len, 1)) {
-				sih->log_pages++;
-				curr_p = next_log_page(sb, curr_p);
-				if (bm) {
-					BUG_ON(curr_p & (PAGE_SIZE - 1));
-					set_bm(curr_p >> PAGE_SHIFT,
-							bm, BM_4K);
-				}
-			} else {
-				curr_p = (curr_p & (CACHELINE_SIZE - 1)) == 0 ?
-					curr_p : CACHE_ALIGN(curr_p) +
-							CACHELINE_SIZE;
-			}
-			/* If power failure, recover the inode in DFS way */
-			if (bm)
-				nova_recover_inode(sb, curr_p,
-						bm, smp_processor_id(), 0);
-
-			curr_p += NOVA_INODE_SIZE;
-		}
 	}
 
 	sih->i_size = le64_to_cpu(pi->i_size);
@@ -551,9 +509,9 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 				(u64)ino, entry->name_len, entry->name,
 				entry->name_len, entry->de_len);
 			if (!child_sih) {
-				nova_dbg("%s: child inode %lu sih "
+				nova_dbg("%s: inode %lu, child inode %lu sih "
 					"does not exist!\n",
-					__func__, ino);
+					__func__, inode->i_ino, ino);
 				ctx->pos = READDIR_END;
 				return 0;
 			}

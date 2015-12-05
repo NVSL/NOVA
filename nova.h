@@ -765,20 +765,13 @@ static inline u64 next_log_page(struct super_block *sb, u64 curr_p)
 
 #define	CACHE_ALIGN(p)	((p) & ~(CACHELINE_SIZE - 1))
 
-/* Align inode to CACHELINE_SIZE */
-static inline bool is_last_entry(u64 curr_p, size_t size, int new_inode)
+static inline bool is_last_entry(u64 curr_p, size_t size)
 {
-	unsigned int entry_end, inode_start;
+	unsigned int entry_end;
 
 	entry_end = ENTRY_LOC(curr_p) + size;
 
-	if (new_inode == 0 || entry_end > LAST_ENTRY)
-		return entry_end > LAST_ENTRY;
-
-	inode_start = (entry_end & (CACHELINE_SIZE - 1)) == 0 ?
-			entry_end : CACHE_ALIGN(entry_end) + CACHELINE_SIZE;
-
-	return inode_start + NOVA_INODE_SIZE > LAST_ENTRY;
+	return entry_end > LAST_ENTRY;
 }
 
 static inline bool is_last_dir_entry(struct super_block *sb, u64 curr_p)
@@ -884,8 +877,8 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma);
 extern const struct file_operations nova_dir_operations;
 int nova_append_dir_init_entries(struct super_block *sb,
 	struct nova_inode *pi, u64 self_ino, u64 parent_ino);
-extern int nova_add_entry(struct dentry *dentry, u64 *pi_addr, u64 ino,
-	int inc_link, int new_inode, u64 tail, u64 *new_tail);
+extern int nova_add_entry(struct dentry *dentry, u64 ino,
+	int inc_link, u64 tail, u64 *new_tail);
 extern int nova_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
 	u64 *new_tail);
 void nova_remove_entry_from_tree(struct dentry *dentry);
@@ -935,14 +928,14 @@ int nova_allocate_inode_log_pages(struct super_block *sb,
 	u64 *new_block);
 u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih, u64 tail, size_t size,
-	int new_inode, int is_file);
+	int is_file);
 u64 nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data, u64 tail);
 int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
 	struct nova_inode_info_header *sih, struct scan_bitmap *bm);
 u64 nova_new_nova_inode(struct super_block *sb,
-	struct nova_inode_info_header **return_sih);
+	struct nova_inode_info_header **return_sih, u64 *pi_addr);
 extern struct inode *nova_new_vfs_inode(enum nova_new_inode_type,
 	struct inode *dir, u64 pi_addr,
 	struct nova_inode_info_header *sih, u64 ino, umode_t mode,

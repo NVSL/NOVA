@@ -263,7 +263,7 @@ int nova_reassign_file_btree(struct super_block *sb,
 	size_t entry_size = sizeof(struct nova_file_write_entry);
 
 	while (curr_p != pi->log_tail) {
-		if (is_last_entry(curr_p, entry_size, 0))
+		if (is_last_entry(curr_p, entry_size))
 			curr_p = next_log_page(sb, curr_p);
 
 		if (curr_p == 0) {

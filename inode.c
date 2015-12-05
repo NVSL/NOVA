@@ -802,13 +802,12 @@ out:
 
 /* Returns 0 on failure */
 u64 nova_new_nova_inode(struct super_block *sb,
-	struct nova_inode_info_header **return_sih)
+	struct nova_inode_info_header **return_sih, u64 *pi_addr)
 {
 	struct nova_inode_info_header *sih;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	unsigned long free_ino = 0;
 	u64 ino = 0;
-	u64 pi_addr;
 	int ret;
 	timing_t new_inode_time;
 
@@ -822,7 +821,7 @@ u64 nova_new_nova_inode(struct super_block *sb,
 		return 0;
 	}
 
-	ret = nova_get_inode_address(sb, free_ino, &pi_addr);
+	ret = nova_get_inode_address(sb, free_ino, pi_addr);
 	if (ret) {
 		nova_dbg("%s: get inode address failed %d\n", __func__, ret);
 		mutex_unlock(&sbi->inode_table_mutex);
@@ -1096,7 +1095,7 @@ u64 nova_append_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	nova_dbg_verbose("%s: inode %lu attr change\n",
 				__func__, inode->i_ino);
 
-	curr_p = nova_get_append_head(sb, pi, sih, tail, size, 0, 1);
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size, 1);
 	if (curr_p == 0)
 		BUG();
 
@@ -1585,7 +1584,7 @@ u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 
 u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih, u64 tail, size_t size,
-	int new_inode, int is_file)
+	int is_file)
 {
 	u64 curr_p;
 
@@ -1594,14 +1593,14 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 	else
 		curr_p = pi->log_tail;
 
-	if (curr_p == 0 || (is_last_entry(curr_p, size, new_inode) &&
+	if (curr_p == 0 || (is_last_entry(curr_p, size) &&
 				next_log_page(sb, curr_p) == 0)) {
 		curr_p = nova_extend_inode_log(sb, pi, sih, curr_p, is_file);
 		if (curr_p == 0)
 			return 0;
 	}
 
-	if (is_last_entry(curr_p, size, 0))
+	if (is_last_entry(curr_p, size))
 		curr_p = next_log_page(sb, curr_p);
 
 	return  curr_p;
@@ -1625,7 +1624,7 @@ u64 nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 
 	NOVA_START_TIMING(append_entry_t, append_time);
 
-	curr_p = nova_get_append_head(sb, pi, sih, tail, size, 0, 1);
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size, 1);
 	if (curr_p == 0)
 		return curr_p;
 
@@ -1762,7 +1761,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	}
 	while (curr_p != pi->log_tail) {
 		if (is_last_entry(curr_p,
-				sizeof(struct nova_file_write_entry), 0)) {
+				sizeof(struct nova_file_write_entry))) {
 			sih->log_pages++;
 			curr_p = next_log_page(sb, curr_p);
 			if (bm) {

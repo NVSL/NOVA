@@ -91,11 +91,11 @@ static int nova_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (!pidir)
 		goto out_err;
 
-	ino = nova_new_nova_inode(sb, &sih);
+	ino = nova_new_nova_inode(sb, &sih, &pi_addr);
 	if (ino == 0)
 		goto out_err;
 
-	err = nova_add_entry(dentry, &pi_addr, ino, 0, 1, 0, &tail);
+	err = nova_add_entry(dentry, ino, 0, 0, &tail);
 	if (err)
 		goto out_err;
 
@@ -137,13 +137,13 @@ static int nova_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (!pidir)
 		goto out_err;
 
-	ino = nova_new_nova_inode(sb, &sih);
+	ino = nova_new_nova_inode(sb, &sih, &pi_addr);
 	if (ino == 0)
 		goto out_err;
 
 	nova_dbgv("%s: %s, ino %llu, dir %lu\n", __func__,
 				dentry->d_name.name, ino, dir->i_ino);
-	err = nova_add_entry(dentry, &pi_addr, ino, 0, 1, 0, &tail);
+	err = nova_add_entry(dentry, ino, 0, 0, &tail);
 	if (err)
 		goto out_err;
 
@@ -190,13 +190,13 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	if (!pidir)
 		goto out_fail1;
 
-	ino = nova_new_nova_inode(sb, &sih);
+	ino = nova_new_nova_inode(sb, &sih, &pi_addr);
 	if (ino == 0)
 		goto out_fail1;
 
 	nova_dbgv("%s: name %s, symname %s, inode %llu, dir %lu\n", __func__,
 			dentry->d_name.name, symname, ino, dir->i_ino);
-	err = nova_add_entry(dentry, &pi_addr, ino, 0, 1, 0, &tail);
+	err = nova_add_entry(dentry, ino, 0, 0, &tail);
 	if (err)
 		goto out_fail1;
 
@@ -297,7 +297,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	nova_dbg_verbose("%s: inode %lu attr change\n",
 				__func__, inode->i_ino);
 
-	curr_p = nova_get_append_head(sb, pi, sih, tail, size, 0, 1);
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size, 1);
 	if (curr_p == 0)
 		return -ENOMEM;
 
@@ -357,7 +357,7 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 	nova_dbgv("%s: name %s, dest %s, inode %lu, dir %lu\n", __func__,
 			dentry->d_name.name, dest_dentry->d_name.name,
 			inode->i_ino, dir->i_ino);
-	err = nova_add_entry(dentry, NULL, inode->i_ino, 0, 0, 0, &pidir_tail);
+	err = nova_add_entry(dentry, inode->i_ino, 0, 0, &pidir_tail);
 	if (err) {
 		iput(inode);
 		goto out;
@@ -452,13 +452,13 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	if (dir->i_nlink >= NOVA_LINK_MAX)
 		goto out;
 
-	ino = nova_new_nova_inode(sb, &sih);
+	ino = nova_new_nova_inode(sb, &sih, &pi_addr);
 	if (ino == 0)
 		goto out_err;
 
 	nova_dbgv("%s: name %s, inode %llu, dir %lu\n", __func__,
 			dentry->d_name.name, ino, dir->i_ino);
-	err = nova_add_entry(dentry, &pi_addr, ino, 1, 1, 0, &tail);
+	err = nova_add_entry(dentry, ino, 1, 0, &tail);
 	if (err) {
 		nova_dbg("failed to add dir entry\n");
 		goto out_err;
@@ -596,14 +596,9 @@ static int nova_rename(struct inode *old_dir,
 	struct super_block *sb = old_inode->i_sb;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *old_pi = NULL, *new_pi = NULL;
-	struct nova_inode *new_old_pi = NULL;
 	struct nova_inode *new_pidir = NULL, *old_pidir = NULL;
 	struct nova_lite_journal_entry entry, entry1;
-	struct nova_inode_info *si = NOVA_I(old_inode);
-	struct nova_inode_info_header *sih = si->header;
-	u64 old_tail = 0, new_tail = 0, tail, new_pi_tail = 0, old_pi_tail = 0;
-	u64 pi_newaddr = 0;
-	int need_new_pi = 0;
+	u64 old_tail = 0, new_tail = 0, new_pi_tail = 0, old_pi_tail = 0;
 	int err = -ENOENT;
 	int inc_link = 0, dec_link = 0;
 	int entries = 0;
@@ -648,29 +643,16 @@ static int nova_rename(struct inode *old_dir,
 			goto out;
 	}
 
-	/* If old dir is different from new dir, copy the inode to new dir */
-	if (new_pidir != old_pidir)
-		need_new_pi = 1;
-
 	/* link into the new directory. */
-	err = nova_add_entry(new_dentry, &pi_newaddr, old_inode->i_ino,
-				inc_link, need_new_pi, new_tail, &new_tail);
+	err = nova_add_entry(new_dentry, old_inode->i_ino,
+				inc_link, new_tail, &new_tail);
 	if (err)
 		goto out;
 
-	/* and unlink the inode from the old directory ... */
-	if (need_new_pi) {
-		tail = 0;
-		new_old_pi = (struct nova_inode *)nova_get_block(sb,
-						pi_newaddr);
-		memcpy_to_pmem_nocache(new_old_pi, old_pi, NOVA_INODE_SIZE);
-		/* new_old_pi is part of the log so in-place update is fine */
-		nova_update_tail(new_old_pi, old_pi_tail);
-	} else {
-		tail = new_tail;
-	}
+	if (old_dir == new_dir)
+		old_tail = new_tail;
 
-	err = nova_remove_entry(old_dentry, dec_link, tail, &old_tail);
+	err = nova_remove_entry(old_dentry, dec_link, old_tail, &old_tail);
 	if (err)
 		goto out;
 
@@ -744,7 +726,6 @@ static int nova_rename(struct inode *old_dir,
 	nova_update_tail(old_pidir, old_tail);
 	if (old_pidir != new_pidir) {
 		nova_update_tail(new_pidir, new_tail);
-		old_pi->valid = 0;
 	}
 	if (new_inode) {
 		nova_update_tail(new_pi, new_pi_tail);
@@ -754,9 +735,6 @@ static int nova_rename(struct inode *old_dir,
 
 	nova_commit_lite_transaction(sb, journal_tail);
 	mutex_unlock(&sbi->lite_journal_mutex);
-
-	if (need_new_pi && pi_newaddr)
-		sih->pi_addr = pi_newaddr;
 
 	if (new_inode)
 		nova_remove_entry_from_tree(new_dentry);
