@@ -839,7 +839,7 @@ static int nova_dfs_recovery_crawl(struct super_block *sb,
 	/* First recover the root iode */
 	ret = nova_recover_inode(sb, root_addr, bm, smp_processor_id(), 0);
 
-	pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
+	pi = nova_get_inode_table(sb);
 	data_bits = blk_type_to_shift[pi->i_blk_type];
 	num_inodes_per_page = 1 << (data_bits - NOVA_INODE_BITS);
 

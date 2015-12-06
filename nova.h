@@ -437,16 +437,6 @@ static inline struct nova_super_block *nova_get_super(struct super_block *sb)
 	return (struct nova_super_block *)sbi->virt_addr;
 }
 
-#if 0
-static inline struct nova_inode *nova_get_inode_table(struct super_block *sb)
-{
-	struct nova_super_block *ps = nova_get_super(sb);
-
-	return (struct nova_inode *)((char *)ps +
-			le64_to_cpu(ps->s_inode_table_offset));
-}
-#endif
-
 static inline struct nova_super_block *nova_get_redund_super(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -666,7 +656,6 @@ static inline uint32_t nova_inode_blk_size (struct nova_inode *pi)
 
 /*
  * ROOT_INO: Start from NOVA_SB_SIZE * 2
- * BLOCKNODE_INO: NOVA_SB_SIZE * 2 + NOVA_INODE_SIZE
  */
 static inline struct nova_inode *nova_get_basic_inode(struct super_block *sb,
 	u64 inode_number)
@@ -686,6 +675,11 @@ static inline struct nova_inode *nova_get_inode_by_ino(struct super_block *sb,
 		return NULL;
 
 	return nova_get_basic_inode(sb, ino);
+}
+
+static inline struct nova_inode *nova_get_inode_table(struct super_block *sb)
+{
+	return nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
 }
 
 static inline struct nova_inode *nova_get_inode(struct super_block *sb,

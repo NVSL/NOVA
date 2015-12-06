@@ -60,7 +60,7 @@ int nova_init_inode_inuse_list(struct super_block *sb)
 
 int nova_init_inode_table(struct super_block *sb)
 {
-	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
+	struct nova_inode *pi = nova_get_inode_table(sb);
 	unsigned long blocknr;
 	int allocated;
 
@@ -89,7 +89,7 @@ int nova_init_inode_table(struct super_block *sb)
 int nova_get_inode_address(struct super_block *sb, u64 ino,
 	u64 *pi_addr, int extendable)
 {
-	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
+	struct nova_inode *pi = nova_get_inode_table(sb);
 	unsigned int data_bits;
 	unsigned int num_inodes_bits;
 	u64 curr;
