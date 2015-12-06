@@ -29,8 +29,6 @@
 #include <linux/delay.h>
 #include "nova.h"
 
-static unsigned long alive_inode;
-
 static inline void set_scan_bm(unsigned long bit,
 	struct single_scan_bm *scan_bm)
 {
@@ -340,51 +338,6 @@ static u64 nova_append_range_node_entry(struct super_block *sb,
 	nova_flush_buffer(entry, sizeof(struct nova_range_node_lowhigh), 0);
 out:
 	NOVA_END_TIMING(append_entry_t, append_time);
-	return curr_p;
-}
-
-static u64 nova_append_alive_inode_entry(struct super_block *sb,
-	struct nova_inode *inode_table, struct nova_inode *pi,
-	struct nova_inode_info_header *sih,
-	struct nova_inode_info_header *inode_table_sih)
-{
-	size_t size = sizeof(struct nova_alive_inode_entry);
-	struct nova_alive_inode_entry *entry;
-	u64 curr_p;
-	timing_t append_time;
-
-	NOVA_START_TIMING(append_entry_t, append_time);
-
-	curr_p = inode_table->log_tail;
-
-	if (curr_p == 0 || (is_last_entry(curr_p, size) &&
-				next_log_page(sb, curr_p) == 0)) {
-		curr_p = nova_extend_inode_log(sb, inode_table,
-						inode_table_sih, curr_p, 0);
-		if (curr_p == 0) {
-			nova_dbg("%s: failed to extend log\n", __func__);
-			goto out;
-		}
-	}
-
-	if (is_last_entry(curr_p, size))
-		curr_p = next_log_page(sb, curr_p);
-
-	entry = (struct nova_alive_inode_entry *)nova_get_block(sb, curr_p);
-	if (sih->ino != pi->nova_ino)
-		nova_dbg("%s: inode number not match! sih %lu, pi %llu\n",
-			__func__, sih->ino, pi->nova_ino);
-	entry->pi_addr = sih->pi_addr;
-	nova_dbg_verbose("append entry alive inode %lu, nova inode 0x%lx "
-			"@ 0x%llx\n",
-			sih->ino, sih->pi_addr, curr_p);
-
-	nova_flush_buffer(entry, sizeof(struct nova_alive_inode_entry), 0);
-	/* flush at the end */
-	inode_table->log_tail = curr_p + size;
-out:
-	NOVA_END_TIMING(append_entry_t, append_time);
-	alive_inode++;
 	return curr_p;
 }
 
@@ -724,36 +677,16 @@ static void nova_free_header(struct super_block *sb,
 	atomic64_inc(&header_free);
 }
 
-static int nova_inode_alive(struct super_block *sb,
-	struct nova_inode_info_header *sih, struct nova_inode **return_pi)
-{
-	struct nova_inode *pi;
-
-	if (sih->ino && sih->pi_addr) {
-		pi = (struct nova_inode *)nova_get_block(sb, sih->pi_addr);
-		if (pi->valid) {
-			*return_pi = pi;
-			return 1;
-		}
-	}
-
-	return 0;
-}
-
 unsigned int nova_free_header_tree(struct super_block *sb)
 {
-	struct nova_inode *inode_table = nova_get_inode_table(sb);
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_inode_info_header *sih, *inode_table_sih;
+	struct nova_inode_info_header *sih;
 	struct nova_inode_info_header *sih_array[FREE_BATCH];
 	unsigned long ino = 0;
 	int nr_sih;
-	struct nova_inode *pi = NULL;
 	unsigned int freed = 0;
 	int i;
 	void *ret;
-
-	inode_table_sih = nova_alloc_header(sb, 0);
 
 	do {
 		nr_sih = radix_tree_gang_lookup(&sbi->header_tree,
@@ -764,10 +697,6 @@ unsigned int nova_free_header_tree(struct super_block *sb)
 			ino = sih->ino;
 			ret = radix_tree_delete(&sbi->header_tree, ino);
 			BUG_ON(!ret || ret != sih);
-			if (nova_inode_alive(sb, sih, &pi))
-				nova_append_alive_inode_entry(sb,
-						inode_table, pi, sih,
-						inode_table_sih);
 			nova_free_dram_resource(sb, sih);
 			nova_free_header(sb, sih);
 			freed++;
@@ -775,11 +704,7 @@ unsigned int nova_free_header_tree(struct super_block *sb)
 		ino++;
 	} while (nr_sih == FREE_BATCH);
 
-	nova_free_header(sb, inode_table_sih);
-	nova_flush_buffer(&inode_table->log_head, CACHELINE_SIZE, 1);
-	nova_dbg("%s: freed %u, alive inode %lu\n",
-				__func__, freed, alive_inode);
-	alive_inode = 0;
+	nova_dbg("%s: freed %u\n", __func__, freed);
 	return freed;
 }
 
@@ -951,15 +876,11 @@ int nova_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	sbi->s_inodes_used_count = 0;
 
 	/* Initialize inuse inode list */
-	if (nova_init_inode_table(sb) < 0)
+	if (nova_init_inode_inuse_list(sb) < 0)
 		return -EINVAL;
 
 	/* Handle special inodes */
 	pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
-	pi->log_head = pi->log_tail = 0;
-	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
-
-	pi = nova_get_inode_table(sb);
 	pi->log_head = pi->log_tail = 0;
 	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
 
@@ -1274,7 +1195,6 @@ int nova_inode_log_recovery(struct super_block *sb, int multithread)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_super_block *super = nova_get_super(sb);
-	struct nova_inode *inode_table = nova_get_inode_table(sb);
 	unsigned long initsize = le64_to_cpu(super->s_size);
 	struct scan_bitmap *bm = NULL;
 	bool value = false;
@@ -1312,10 +1232,6 @@ int nova_inode_log_recovery(struct super_block *sb, int multithread)
 			ret = nova_multithread_recovery(sb);
 		else
 			ret = nova_singlethread_recovery(sb);
-
-		nova_free_inode_log(sb, inode_table);
-		inode_table->log_head = inode_table->log_tail = 0;
-		nova_flush_buffer(&inode_table->log_head, CACHELINE_SIZE, 1);
 	}
 
 	if (bm) {

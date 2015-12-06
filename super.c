@@ -332,10 +332,10 @@ static struct nova_inode *nova_init(struct super_block *sb,
 		return ERR_PTR(-EINVAL);
 	}
 
-	if (nova_init_inode_table(sb) < 0)
+	if (nova_init_inode_inuse_list(sb) < 0)
 		return ERR_PTR(-EINVAL);
 
-	if (nova_init_inode_table1(sb) < 0)
+	if (nova_init_inode_table(sb) < 0)
 		return ERR_PTR(-EINVAL);
 
 	pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);

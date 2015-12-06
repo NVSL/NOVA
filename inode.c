@@ -34,7 +34,7 @@ void nova_print_inode_entry(struct nova_file_write_entry *entry)
 		entry->block, entry->size);
 }
 
-static int nova_init_inode_inuse_list(struct super_block *sb)
+int nova_init_inode_inuse_list(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_range_node *range_node;
@@ -58,30 +58,7 @@ static int nova_init_inode_inuse_list(struct super_block *sb)
 	return 0;
 }
 
-/* Initialize the inode table. The nova_inode struct corresponding to the
- * inode table has already been zero'd out */
 int nova_init_inode_table(struct super_block *sb)
-{
-	struct nova_inode *pi = nova_get_inode_table(sb);
-
-	pi->i_mode = 0;
-	pi->i_uid = 0;
-	pi->i_gid = 0;
-	pi->i_links_count = cpu_to_le16(1);
-	pi->i_flags = 0;
-	pi->nova_ino = NOVA_INODETABLE;
-
-	/*
-	 * Now inodes are resided in dir logs, and inode_table is
-	 * only used to save inodes on umount
-	 */
-	pi->i_blk_type = NOVA_BLOCK_TYPE_4K;
-	nova_flush_buffer(&pi, NOVA_INODE_SIZE, 1);
-
-	return nova_init_inode_inuse_list(sb);
-}
-
-int nova_init_inode_table1(struct super_block *sb)
 {
 	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
 	unsigned long blocknr;
