@@ -797,6 +797,7 @@ static void nova_i_callback(struct rcu_head *head)
 
 static void nova_destroy_inode(struct inode *inode)
 {
+	nova_dbgv("%s: %lu\n", __func__, inode->i_ino);
 	call_rcu(&inode->i_rcu, nova_i_callback);
 }
 
