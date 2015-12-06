@@ -207,9 +207,21 @@ static inline void nova_print_link_change_entry(struct super_block *sb,
 			curr, entry->links, entry->flags);
 }
 
+static inline size_t nova_print_dir_logentry(struct super_block *sb,
+	u64 curr, struct nova_dir_logentry *entry)
+{
+	nova_dbg("dir logentry @ 0x%llx: inode %llu, "
+			"namelen %u, rec len %u\n", curr,
+			le64_to_cpu(entry->ino),
+			entry->name_len, le16_to_cpu(entry->de_len));
+
+	return le16_to_cpu(entry->de_len);
+}
+
 static u64 nova_print_log_entry(struct super_block *sb, u64 curr)
 {
 	void *addr;
+	size_t size;
 	u8 type;
 
 	addr = (void *)nova_get_block(sb, curr);
@@ -227,11 +239,16 @@ static u64 nova_print_log_entry(struct super_block *sb, u64 curr)
 			nova_print_file_write_entry(sb, curr, addr);
 			curr += sizeof(struct nova_file_write_entry);
 			break;
+		case DIR_LOG:
+			size = nova_print_dir_logentry(sb, curr, addr);
+			curr += size;
+			break;
 		default:
 			nova_dbg("%s: unknown type %d, 0x%llx\n",
 						__func__, type, curr);
 			curr += sizeof(struct nova_file_write_entry);
 			NOVA_ASSERT(0);
+			break;
 	}
 
 	return curr;
