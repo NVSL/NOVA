@@ -85,8 +85,12 @@ static void nova_lite_transaction_for_new_inode(struct super_block *sb,
 	mutex_lock(&sbi->lite_journal_mutex);
 	journal_tail = nova_create_lite_transaction(sb, &entry, NULL, 1);
 
-	nova_update_tail(pidir, pidir_tail);
+	PERSISTENT_BARRIER();
+	pidir->log_tail = pidir_tail;
+	nova_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 0);
 	pi->valid = 1;
+	nova_flush_buffer(&pi->valid, CACHELINE_SIZE, 0);
+	PERSISTENT_BARRIER();
 
 	nova_commit_lite_transaction(sb, journal_tail);
 	mutex_unlock(&sbi->lite_journal_mutex);
@@ -298,10 +302,16 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	mutex_lock(&sbi->lite_journal_mutex);
 	journal_tail = nova_create_lite_transaction(sb, &entry, NULL, 1);
 
-	nova_update_tail(pi, pi_tail);
-	nova_update_tail(pidir, pidir_tail);
-	if (invalidate)
+	PERSISTENT_BARRIER();
+	pi->log_tail = pi_tail;
+	nova_flush_buffer(&pi->log_tail, CACHELINE_SIZE, 0);
+	pidir->log_tail = pidir_tail;
+	nova_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 0);
+	if (invalidate) {
 		pi->valid = 0;
+		nova_flush_buffer(&pi->valid, CACHELINE_SIZE, 0);
+	}
+	PERSISTENT_BARRIER();
 
 	nova_commit_lite_transaction(sb, journal_tail);
 	mutex_unlock(&sbi->lite_journal_mutex);
@@ -775,22 +785,32 @@ static int nova_rename(struct inode *old_dir,
 	journal_tail = nova_create_lite_transaction(sb, &entry,
 							&entry1, entries);
 
-	nova_update_tail(old_pi, old_pi_tail);
-	nova_update_tail(old_pidir, old_tail);
+	PERSISTENT_BARRIER();
+	old_pi->log_tail = old_pi_tail;
+	nova_flush_buffer(&old_pi->log_tail, CACHELINE_SIZE, 0);
+	old_pidir->log_tail = old_tail;
+	nova_flush_buffer(&old_pidir->log_tail, CACHELINE_SIZE, 0);
+
 	if (old_pidir != new_pidir) {
-		nova_update_tail(new_pidir, new_tail);
+		new_pidir->log_tail = new_tail;
+		nova_flush_buffer(&new_pidir->log_tail, CACHELINE_SIZE, 0);
 	}
 
 	if (change_parent && father_entry) {
 		father_entry->ino = cpu_to_le64(new_dir->i_ino);
-		nova_flush_buffer(father_entry, NOVA_DIR_LOG_REC_LEN(2), 1);
+		nova_flush_buffer(father_entry, NOVA_DIR_LOG_REC_LEN(2), 0);
 	}
 
 	if (new_inode) {
-		nova_update_tail(new_pi, new_pi_tail);
-		if (!new_inode->i_nlink)
+		new_pi->log_tail = new_pi_tail;
+		nova_flush_buffer(&new_pi->log_tail, CACHELINE_SIZE, 0);
+		if (!new_inode->i_nlink) {
 			new_pi->valid = 0;
+			nova_flush_buffer(&new_pi->valid, CACHELINE_SIZE, 0);
+		}
 	}
+
+	PERSISTENT_BARRIER();
 
 	nova_commit_lite_transaction(sb, journal_tail);
 	mutex_unlock(&sbi->lite_journal_mutex);
