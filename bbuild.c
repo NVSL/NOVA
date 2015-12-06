@@ -1184,7 +1184,7 @@ int nova_recover_inode(struct super_block *sb, u64 pi_addr,
 		sbi->s_inodes_used_count++;
 	}
 
-	nova_dbg_verbose("%s: inode %lu, addr 0x%llx, valid %d, "
+	nova_dbgv("%s: inode %lu, addr 0x%llx, valid %d, "
 			"head 0x%llx, tail 0x%llx\n",
 			__func__, nova_ino, pi_addr, pi->valid,
 			pi->log_head, pi->log_tail);
@@ -1233,11 +1233,56 @@ int nova_recover_inode(struct super_block *sb, u64 pi_addr,
 
 /*********************** DFS recovery *************************/
 
+static int nova_dfs_recovery_crawl(struct super_block *sb,
+	struct scan_bitmap *bm)
+{
+	struct nova_inode *pi;
+	unsigned long curr_addr;
+	unsigned long num_inodes_per_page;
+	unsigned int data_bits;
+	u64 curr;
+	u64 root_addr = NOVA_ROOT_INO_START;
+	u64 pi_addr;
+	unsigned long i;
+	int ret;
+
+	nova_dbg_verbose("%s: rebuild alive inodes\n", __func__);
+
+	/* First recover the root iode */
+	ret = nova_recover_inode(sb, root_addr, bm, smp_processor_id(), 0);
+
+	pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
+	data_bits = blk_type_to_shift[pi->i_blk_type];
+	num_inodes_per_page = 1 << (data_bits - NOVA_INODE_BITS);
+
+	curr = pi->log_head;
+	while (curr) {
+		/*
+		 * Note: The inode log page is allocated in 2MB granularity,
+		 * but not 2MB aligned
+		 */
+		for (i = 0; i < 512; i++)
+			set_bm((curr >> PAGE_SHIFT) + i, bm, BM_4K);
+
+		for (i = 0; i < num_inodes_per_page; i++) {
+			pi_addr = curr + i * NOVA_INODE_SIZE;
+			ret = nova_recover_inode(sb, pi_addr, bm,
+						smp_processor_id(), 0);
+		}
+
+		curr_addr = (unsigned long)nova_get_block(sb, curr);
+		/* Next page pointer in the last 8 bytes of the superpage */
+		curr_addr += 2097152 - 8;
+		curr = *(u64 *)(curr_addr);
+	}
+
+	return ret;
+}
+
 int nova_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi;
-	u64 root_addr = NOVA_ROOT_INO_START;
 	int ret;
 
 	sbi->s_inodes_used_count = 0;
@@ -1260,8 +1305,7 @@ int nova_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 		set_bm(pi->log_head >> PAGE_SHIFT, bm, BM_4K);
 
 	PERSISTENT_BARRIER();
-	/* Start from the root iode */
-	ret = nova_recover_inode(sb, root_addr, bm, smp_processor_id(), 0);
+	ret = nova_dfs_recovery_crawl(sb, bm);
 
 	nova_dbg("DFS recovery total recovered %lu\n",
 				sbi->s_inodes_used_count);
