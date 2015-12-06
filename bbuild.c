@@ -1270,45 +1270,58 @@ int nova_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 
 /*********************** Singlethread recovery *************************/
 
+static u64 nova_get_last_ino(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_range_node *curr;
+	struct rb_node *temp;
+
+	/* Save in increasing order */
+	temp = rb_last(&sbi->inode_inuse_tree);
+	if (!temp)
+		return 0;
+
+	curr = container_of(temp, struct nova_range_node, node);
+
+	return le64_to_cpu(curr->range_high);
+}
+
 int *processed;
 
-static void nova_inode_table_singlethread_crawl(struct super_block *sb,
+static int nova_inode_table_singlethread_crawl(struct super_block *sb,
 	struct nova_inode *inode_table)
 {
-	struct nova_alive_inode_entry *entry = NULL;
-	size_t size = sizeof(struct nova_alive_inode_entry);
-	u64 curr_p = inode_table->log_head;
+	u64 root_addr = NOVA_ROOT_INO_START;
+	u64 pi_addr;
+	u64 last_ino, i;
+	int ret;
 
 	nova_dbg_verbose("%s: rebuild alive inodes\n", __func__);
-	nova_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
-				curr_p, inode_table->log_tail);
+	last_ino = nova_get_last_ino(sb);
 
-	if (curr_p == 0 && inode_table->log_tail == 0)
-		return;
+	nova_dbg_verbose("Last inode %llu\n", last_ino);
 
-	while (curr_p != inode_table->log_tail) {
-		if (is_last_entry(curr_p, size))
-			curr_p = next_log_page(sb, curr_p);
+	/* First recover the root iode */
+	ret = nova_recover_inode(sb, root_addr, NULL, smp_processor_id(), 0);
+	processed[smp_processor_id()]++;
 
-		if (curr_p == 0) {
-			nova_err(sb, "Alive inode log reaches NULL!\n");
-			NOVA_ASSERT(0);
+	for (i = NOVA_NORMAL_INODE_START; i <= last_ino; i++) {
+		ret = nova_get_inode_address(sb, i, &pi_addr, 0);
+		if (ret) {
+			nova_err(sb, "%s: get inode %llu address failed\n",
+					__func__, i);
+			break;
 		}
-
-		entry = (struct nova_alive_inode_entry *)nova_get_block(sb,
-								curr_p);
-
-		nova_recover_inode(sb, entry->pi_addr, NULL,
+		ret = nova_recover_inode(sb, pi_addr, NULL,
 						smp_processor_id(), 0);
 		processed[smp_processor_id()]++;
-		curr_p += size;
 	}
 
 	nova_free_inode_log(sb, inode_table);
 	inode_table->log_head = inode_table->log_tail = 0;
 	nova_flush_buffer(&inode_table->log_head, CACHELINE_SIZE, 1);
 
-	return;
+	return ret;
 }
 
 int nova_singlethread_recovery(struct super_block *sb)
@@ -1322,7 +1335,7 @@ int nova_singlethread_recovery(struct super_block *sb)
 	if (!processed)
 		return -ENOMEM;
 
-	nova_inode_table_singlethread_crawl(sb, inode_table);
+	ret = nova_inode_table_singlethread_crawl(sb, inode_table);
 
 	for (i = 0; i < cpus; i++) {
 		total += processed[i];

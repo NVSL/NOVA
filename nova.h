@@ -904,6 +904,8 @@ int nova_is_page_dirty(struct mm_struct *mm, unsigned long address,
 extern const struct address_space_operations nova_aops_dax;
 extern int nova_init_inode_table(struct super_block *sb);
 extern int nova_init_inode_table1(struct super_block *sb);
+int nova_get_inode_address(struct super_block *sb, u64 ino,
+	u64 *pi_addr, int extendable);
 int nova_set_blocksize_hint(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, loff_t new_size);
 extern struct inode *nova_iget(struct super_block *sb, unsigned long ino);

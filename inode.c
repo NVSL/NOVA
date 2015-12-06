@@ -109,7 +109,7 @@ int nova_init_inode_table1(struct super_block *sb)
 	return 0;
 }
 
-static int nova_get_inode_address(struct super_block *sb, u64 ino,
+int nova_get_inode_address(struct super_block *sb, u64 ino,
 	u64 *pi_addr, int extendable)
 {
 	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
