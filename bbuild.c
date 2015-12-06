@@ -1288,8 +1288,7 @@ static u64 nova_get_last_ino(struct super_block *sb)
 
 int *processed;
 
-static int nova_inode_table_singlethread_crawl(struct super_block *sb,
-	struct nova_inode *inode_table)
+static int nova_inode_table_singlethread_crawl(struct super_block *sb)
 {
 	u64 root_addr = NOVA_ROOT_INO_START;
 	u64 pi_addr;
@@ -1317,16 +1316,11 @@ static int nova_inode_table_singlethread_crawl(struct super_block *sb,
 		processed[smp_processor_id()]++;
 	}
 
-	nova_free_inode_log(sb, inode_table);
-	inode_table->log_head = inode_table->log_tail = 0;
-	nova_flush_buffer(&inode_table->log_head, CACHELINE_SIZE, 1);
-
 	return ret;
 }
 
 int nova_singlethread_recovery(struct super_block *sb)
 {
-	struct nova_inode *inode_table = nova_get_inode_table(sb);
 	int cpus = num_online_cpus();
 	int i, total = 0;
 	int ret = 0;
@@ -1335,7 +1329,7 @@ int nova_singlethread_recovery(struct super_block *sb)
 	if (!processed)
 		return -ENOMEM;
 
-	ret = nova_inode_table_singlethread_crawl(sb, inode_table);
+	ret = nova_inode_table_singlethread_crawl(sb);
 
 	for (i = 0; i < cpus; i++) {
 		total += processed[i];
@@ -1450,14 +1444,14 @@ static inline struct task_ring *get_free_ring(int cpus, struct task_ring *ring)
 	return NULL;
 }
 
-static void nova_inode_table_multithread_crawl(struct super_block *sb,
-	struct nova_inode *inode_table, int cpus)
+static int nova_inode_table_multithread_crawl(struct super_block *sb,
+	int cpus)
 {
 	struct task_ring *ring = NULL;
 	u64 root_addr = NOVA_ROOT_INO_START;
 	u64 pi_addr;
 	u64 last_ino, i;
-	int ret;
+	int ret = 0;
 
 	nova_dbg_verbose("%s: rebuild alive inodes\n", __func__);
 	last_ino = nova_get_last_ino(sb);
@@ -1486,11 +1480,7 @@ static void nova_inode_table_multithread_crawl(struct super_block *sb,
 		wake_up_interruptible(&ring->assign_wq);
 	}
 
-	nova_free_inode_log(sb, inode_table);
-	inode_table->log_head = inode_table->log_tail = 0;
-	nova_flush_buffer(&inode_table->log_head, CACHELINE_SIZE, 1);
-
-	return;
+	return ret;
 }
 
 static void free_resources(void)
@@ -1554,7 +1544,6 @@ static void wait_to_finish(int cpus)
 
 int nova_multithread_recovery(struct super_block *sb)
 {
-	struct nova_inode *inode_table = nova_get_inode_table(sb);
 	int cpus;
 	int ret;
 
@@ -1565,7 +1554,7 @@ int nova_multithread_recovery(struct super_block *sb)
 	if (ret)
 		return ret;
 
-	nova_inode_table_multithread_crawl(sb, inode_table, cpus);
+	ret = nova_inode_table_multithread_crawl(sb, cpus);
 
 	wait_to_finish(cpus);
 	free_resources();
@@ -1578,6 +1567,7 @@ int nova_inode_log_recovery(struct super_block *sb, int multithread)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_super_block *super = nova_get_super(sb);
+	struct nova_inode *inode_table = nova_get_inode_table(sb);
 	unsigned long initsize = le64_to_cpu(super->s_size);
 	struct scan_bitmap *bm = NULL;
 	bool value = false;
@@ -1615,6 +1605,10 @@ int nova_inode_log_recovery(struct super_block *sb, int multithread)
 			ret = nova_multithread_recovery(sb);
 		else
 			ret = nova_singlethread_recovery(sb);
+
+		nova_free_inode_log(sb, inode_table);
+		inode_table->log_head = inode_table->log_tail = 0;
+		nova_flush_buffer(&inode_table->log_head, CACHELINE_SIZE, 1);
 	}
 
 	if (bm) {
