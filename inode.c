@@ -382,7 +382,7 @@ int nova_assign_nvmm_entry(struct super_block *sb,
 {
 	struct nova_file_write_entry *old_entry;
 	void **pentry;
-	unsigned long old_nvmm, nvmm;
+	unsigned long old_nvmm;
 	unsigned int start_pgoff = entry->pgoff;
 	unsigned int num = entry->num_pages;
 	unsigned long curr_pgoff;
@@ -398,8 +398,6 @@ int nova_assign_nvmm_entry(struct super_block *sb,
 		if (pentry) {
 			old_entry = radix_tree_deref_slot(pentry);
 			old_nvmm = get_nvmm(sb, sih, old_entry, curr_pgoff);
-			if (bm)
-				clear_bm(old_nvmm, bm, BM_4K);
 			if (free) {
 				old_entry->invalid_pages++;
 				nova_free_data_blocks(sb, pi, old_nvmm, 1);
@@ -415,11 +413,8 @@ int nova_assign_nvmm_entry(struct super_block *sb,
 			}
 		}
 
-		if (bm) {
-			nvmm = get_nvmm(sb, sih, entry, curr_pgoff);
-			set_bm(nvmm, bm, BM_4K);
+		if (bm)
 			pi->i_blocks++;
-		}
 	}
 
 out:
@@ -1886,8 +1881,10 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 			nova_get_block(sb, curr_p);
 	}
 
-	if (bm)
+	if (bm) {
+		nova_set_file_bm(sb, pi, sih, bm);
 		pi->i_blocks += sih->log_pages;
+	}
 
 //	nova_print_inode_log_page(sb, inode);
 	return 0;
