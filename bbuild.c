@@ -1453,39 +1453,37 @@ static inline struct task_ring *get_free_ring(int cpus, struct task_ring *ring)
 static void nova_inode_table_multithread_crawl(struct super_block *sb,
 	struct nova_inode *inode_table, int cpus)
 {
-	struct nova_alive_inode_entry *entry = NULL;
-	size_t size = sizeof(struct nova_alive_inode_entry);
 	struct task_ring *ring = NULL;
-	u64 curr_p = inode_table->log_head;
+	u64 root_addr = NOVA_ROOT_INO_START;
+	u64 pi_addr;
+	u64 last_ino, i;
+	int ret;
 
 	nova_dbg_verbose("%s: rebuild alive inodes\n", __func__);
-	nova_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
-				curr_p, inode_table->log_tail);
+	last_ino = nova_get_last_ino(sb);
 
-	if (curr_p == 0 && inode_table->log_tail == 0)
-		return;
+	nova_dbg_verbose("Last inode %llu\n", last_ino);
 
-	while (curr_p != inode_table->log_tail) {
-		if (is_last_entry(curr_p, size))
-			curr_p = next_log_page(sb, curr_p);
+	/* First recover the root iode */
+	ring = &task_rings[0];
+	task_ring_enqueue(ring, root_addr);
+	wake_up_interruptible(&ring->assign_wq);
 
-		if (curr_p == 0) {
-			nova_err(sb, "Alive inode log reaches NULL!\n");
-			NOVA_ASSERT(0);
+	for (i = NOVA_NORMAL_INODE_START; i <= last_ino; i++) {
+		ret = nova_get_inode_address(sb, i, &pi_addr, 0);
+		if (ret) {
+			nova_err(sb, "%s: get inode %llu address failed\n",
+					__func__, i);
+			break;
 		}
-
-		entry = (struct nova_alive_inode_entry *)nova_get_block(sb,
-								curr_p);
 
 		while ((ring = get_free_ring(cpus, ring)) == NULL) {
 			wait_event_interruptible_timeout(finish_wq, false,
 							msecs_to_jiffies(1));
 		}
 
-		task_ring_enqueue(ring, entry->pi_addr);
+		task_ring_enqueue(ring, pi_addr);
 		wake_up_interruptible(&ring->assign_wq);
-
-		curr_p += size;
 	}
 
 	nova_free_inode_log(sb, inode_table);
