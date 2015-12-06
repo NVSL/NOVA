@@ -281,15 +281,14 @@ void nova_print_inode_log(struct super_block *sb, struct inode *inode)
 		return;
 
 	curr = pi->log_head;
-	nova_dbg("Pi %lu: log head block @ %llu, tail @ block %llu, %llu\n",
-			inode->i_ino, curr >> PAGE_SHIFT,
-			pi->log_tail >> PAGE_SHIFT, pi->log_tail);
+	nova_dbg("Pi %lu: log head 0x%llx, tail 0x%llx\n",
+			inode->i_ino, curr, pi->log_tail);
 	while (curr != pi->log_tail) {
 		if ((curr & (PAGE_SIZE - 1)) == LAST_ENTRY) {
 			struct nova_inode_page_tail *tail =
 					nova_get_block(sb, curr);
-			nova_dbg("Log tail. Next page @ block 0x%llx\n",
-					tail->next_page >> PAGE_SHIFT);
+			nova_dbg("Log tail. Next page 0x%llx\n",
+					tail->next_page);
 			curr = tail->next_page;
 		} else {
 			curr = nova_print_log_entry(sb, curr);
