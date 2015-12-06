@@ -65,6 +65,34 @@ static struct dentry *nova_lookup(struct inode *dir, struct dentry *dentry,
 	return d_splice_alias(inode, dentry);
 }
 
+static void nova_lite_transaction_for_new_inode(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode *pidir, u64 pidir_tail)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_lite_journal_entry entry;
+	u64 journal_tail;
+
+	/* Commit a lite transaction */
+	memset(&entry, 0, sizeof(struct nova_lite_journal_entry));
+	entry.addrs[0] = (u64)nova_get_addr_off(sbi, &pidir->log_tail);
+	entry.addrs[0] |= (u64)8 << 56;
+	entry.values[0] = pidir->log_tail;
+
+	entry.addrs[1] = (u64)nova_get_addr_off(sbi, &pi->valid);
+	entry.addrs[1] |= (u64)1 << 56;
+	entry.values[1] = pi->valid;
+
+	mutex_lock(&sbi->lite_journal_mutex);
+	journal_tail = nova_create_lite_transaction(sb, &entry, NULL, 1);
+
+	nova_update_tail(pidir, pidir_tail);
+	pi->valid = 1;
+
+	nova_commit_lite_transaction(sb, journal_tail);
+	mutex_unlock(&sbi->lite_journal_mutex);
+}
+
+/* Returns new tail after append */
 /*
  * By the time this is called, we already have created
  * the directory cache entry for the new file, but it
@@ -79,7 +107,7 @@ static int nova_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	struct inode *inode = NULL;
 	int err = PTR_ERR(inode);
 	struct super_block *sb = dir->i_sb;
-	struct nova_inode *pidir;
+	struct nova_inode *pidir, *pi;
 	u64 pi_addr = 0;
 	struct nova_inode_info_header *sih;
 	u64 tail = 0;
@@ -110,7 +138,8 @@ static int nova_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
 
-	nova_update_tail(pidir, tail);
+	pi = nova_get_block(sb, pi_addr);
+	nova_lite_transaction_for_new_inode(sb, pi, pidir, tail);
 	NOVA_END_TIMING(create_t, create_time);
 	return err;
 out_err:
@@ -126,7 +155,7 @@ static int nova_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	int err = PTR_ERR(inode);
 	struct super_block *sb = dir->i_sb;
 	u64 pi_addr = 0;
-	struct nova_inode *pidir;
+	struct nova_inode *pidir, *pi;
 	struct nova_inode_info_header *sih;
 	u64 tail = 0;
 	u64 ino;
@@ -156,7 +185,8 @@ static int nova_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
 
-	nova_update_tail(pidir, tail);
+	pi = nova_get_block(sb, pi_addr);
+	nova_lite_transaction_for_new_inode(sb, pi, pidir, tail);
 	NOVA_END_TIMING(mknod_t, mknod_time);
 	return err;
 out_err:
@@ -234,7 +264,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
 
-	nova_update_tail(pidir, tail);
+	nova_lite_transaction_for_new_inode(sb, pi, pidir, tail);
 out:
 	NOVA_END_TIMING(symlink_t, symlink_time);
 	return err;
@@ -489,8 +519,7 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
 
-	nova_update_tail(pidir, tail);
-
+	nova_lite_transaction_for_new_inode(sb, pi, pidir, tail);
 out:
 	NOVA_END_TIMING(mkdir_t, mkdir_time);
 	return err;

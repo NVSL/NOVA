@@ -935,7 +935,6 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	pi->log_head = 0;
 	pi->log_tail = 0;
 	pi->nova_ino = ino;
-	pi->valid = 1;
 	nova_memlock_inode(sb, pi);
 
 	si = NOVA_I(inode);

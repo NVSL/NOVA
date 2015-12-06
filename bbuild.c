@@ -847,7 +847,7 @@ static int nova_dfs_recovery_crawl(struct super_block *sb,
 	while (curr) {
 		/*
 		 * Note: The inode log page is allocated in 2MB granularity,
-		 * but not 2MB aligned
+		 * but not aligned on 2MB boundary
 		 */
 		for (i = 0; i < 512; i++)
 			set_bm((curr >> PAGE_SHIFT) + i, bm, BM_4K);
