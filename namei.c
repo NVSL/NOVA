@@ -605,10 +605,13 @@ static int nova_rename(struct inode *old_dir,
 	struct nova_inode *old_pi = NULL, *new_pi = NULL;
 	struct nova_inode *new_pidir = NULL, *old_pidir = NULL;
 	struct nova_lite_journal_entry entry, entry1;
+	struct nova_dir_logentry *father_entry = NULL;
+	char *head_addr = NULL;
 	u64 old_tail = 0, new_tail = 0, new_pi_tail = 0, old_pi_tail = 0;
 	int err = -ENOENT;
 	int inc_link = 0, dec_link = 0;
 	int entries = 0;
+	int change_parent = 0;
 	u64 journal_tail;
 	timing_t rename_time;
 
@@ -645,6 +648,20 @@ static int nova_rename(struct inode *old_dir,
 						old_inode, 0, &old_pi_tail);
 	if (err)
 		goto out;
+
+	if (S_ISDIR(old_inode->i_mode) && old_dir != new_dir) {
+		/* My father is changed. Update .. entry */
+		/* For simplicity, we use in-place update and journal it */
+		change_parent = 1;
+		head_addr = (char *)nova_get_block(sb, old_pi->log_head);
+		father_entry = (struct nova_dir_logentry *)(head_addr +
+					NOVA_DIR_LOG_REC_LEN(1));
+		if (le64_to_cpu(father_entry->ino) != old_dir->i_ino)
+			nova_err(sb, "%s: dir %lu parent should be %lu, "
+				"but actually %lu\n", __func__,
+				old_inode->i_ino, old_dir->i_ino,
+				le64_to_cpu(father_entry->ino));
+	}
 
 	if (new_inode) {
 		/* First remove the old entry in the new directory */
@@ -727,6 +744,24 @@ static int nova_rename(struct inode *old_dir,
 			entry1.addrs[1] |= (u64)1 << 56;
 			entry1.values[1] = new_pi->valid;
 		}
+
+	}
+
+	if (change_parent && father_entry) {
+		int index = 0;
+
+		if (entries == 1) {
+			entries++;
+			memset(&entry1, 0,
+				sizeof(struct nova_lite_journal_entry));
+		} else {
+			index = 2;
+		}
+
+		entry1.addrs[index] = (u64)nova_get_addr_off(sbi,
+						&father_entry->ino);
+		entry1.addrs[index] |= (u64)8 << 56;
+		entry1.values[index] = father_entry->ino;
 	}
 
 	mutex_lock(&sbi->lite_journal_mutex);
@@ -742,6 +777,11 @@ static int nova_rename(struct inode *old_dir,
 		nova_update_tail(new_pi, new_pi_tail);
 		if (!new_inode->i_nlink)
 			new_pi->valid = 0;
+	}
+
+	if (change_parent && father_entry) {
+		father_entry->ino = cpu_to_le64(new_dir->i_ino);
+		nova_flush_buffer(father_entry, NOVA_DIR_LOG_REC_LEN(2), 1);
 	}
 
 	nova_commit_lite_transaction(sb, journal_tail);
