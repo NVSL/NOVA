@@ -717,16 +717,18 @@ static int nova_rename(struct inode *old_dir,
 	entry.addrs[1] |= (u64)8 << 56;
 	entry.values[1] = old_pidir->log_tail;
 
-	if (old_pidir != new_pidir) {
+	if (old_dir != new_dir) {
 		entry.addrs[2] = (u64)nova_get_addr_off(sbi,
-						&old_pi->valid);
-		entry.addrs[2] |= (u64)1 << 56;
-		entry.values[2] = old_pi->valid;
-
-		entry.addrs[3] = (u64)nova_get_addr_off(sbi,
 						&new_pidir->log_tail);
-		entry.addrs[3] |= (u64)8 << 56;
-		entry.values[3] = new_pidir->log_tail;
+		entry.addrs[2] |= (u64)8 << 56;
+		entry.values[2] = new_pidir->log_tail;
+
+		if (change_parent && father_entry) {
+			entry.addrs[3] = (u64)nova_get_addr_off(sbi,
+						&father_entry->ino);
+			entry.addrs[3] |= (u64)8 << 56;
+			entry.values[3] = father_entry->ino;
+		}
 	}
 
 	if (new_inode) {
@@ -747,23 +749,6 @@ static int nova_rename(struct inode *old_dir,
 
 	}
 
-	if (change_parent && father_entry) {
-		int index = 0;
-
-		if (entries == 1) {
-			entries++;
-			memset(&entry1, 0,
-				sizeof(struct nova_lite_journal_entry));
-		} else {
-			index = 2;
-		}
-
-		entry1.addrs[index] = (u64)nova_get_addr_off(sbi,
-						&father_entry->ino);
-		entry1.addrs[index] |= (u64)8 << 56;
-		entry1.values[index] = father_entry->ino;
-	}
-
 	mutex_lock(&sbi->lite_journal_mutex);
 	journal_tail = nova_create_lite_transaction(sb, &entry,
 							&entry1, entries);
@@ -773,15 +758,16 @@ static int nova_rename(struct inode *old_dir,
 	if (old_pidir != new_pidir) {
 		nova_update_tail(new_pidir, new_tail);
 	}
-	if (new_inode) {
-		nova_update_tail(new_pi, new_pi_tail);
-		if (!new_inode->i_nlink)
-			new_pi->valid = 0;
-	}
 
 	if (change_parent && father_entry) {
 		father_entry->ino = cpu_to_le64(new_dir->i_ino);
 		nova_flush_buffer(father_entry, NOVA_DIR_LOG_REC_LEN(2), 1);
+	}
+
+	if (new_inode) {
+		nova_update_tail(new_pi, new_pi_tail);
+		if (!new_inode->i_nlink)
+			new_pi->valid = 0;
 	}
 
 	nova_commit_lite_transaction(sb, journal_tail);
