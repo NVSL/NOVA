@@ -144,8 +144,6 @@ struct nova_super_block {
 	__le32		s_blocksize;        /* blocksize in bytes */
 	__le64		s_size;             /* total size of fs in bytes */
 	char		s_volume_name[16];  /* volume name */
-	/* points to the location of struct nova_inode for the inode table */
-	__le64          s_inode_table_offset;
 
 	__le64		s_start_dynamic;
 
@@ -164,12 +162,11 @@ struct nova_super_block {
 #define NOVA_FAST_MOUNT_FIELD_SIZE  (36)
 
 /* The root inode follows immediately after the redundant super block */
-#define NOVA_INODETABLE		(1)
-#define NOVA_ROOT_INO		(2)
-#define NOVA_INODETABLE_INO	(3)	/* Temporaty inode table */
-#define NOVA_BLOCKNODE_INO	(4)
-#define NOVA_INODELIST_INO	(5)
-#define NOVA_LITEJOURNAL_INO	(6)
+#define NOVA_ROOT_INO		(1)
+#define NOVA_INODETABLE_INO	(2)	/* Temporaty inode table */
+#define NOVA_BLOCKNODE_INO	(3)
+#define NOVA_INODELIST_INO	(4)
+#define NOVA_LITEJOURNAL_INO	(5)
 
 #define	NOVA_ROOT_INO_START	(NOVA_SB_SIZE * 2)
 

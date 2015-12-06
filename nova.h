@@ -437,6 +437,7 @@ static inline struct nova_super_block *nova_get_super(struct super_block *sb)
 	return (struct nova_super_block *)sbi->virt_addr;
 }
 
+#if 0
 static inline struct nova_inode *nova_get_inode_table(struct super_block *sb)
 {
 	struct nova_super_block *ps = nova_get_super(sb);
@@ -444,6 +445,7 @@ static inline struct nova_inode *nova_get_inode_table(struct super_block *sb)
 	return (struct nova_inode *)((char *)ps +
 			le64_to_cpu(ps->s_inode_table_offset));
 }
+#endif
 
 static inline struct nova_super_block *nova_get_redund_super(struct super_block *sb)
 {

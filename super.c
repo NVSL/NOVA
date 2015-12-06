@@ -262,7 +262,6 @@ static struct nova_inode *nova_init(struct super_block *sb,
 				      unsigned long size)
 {
 	unsigned long blocksize;
-	u64 inode_table_start;
 	unsigned long reserved_space, reserved_blocks;
 	struct nova_inode *root_i, *pi;
 	struct nova_super_block *super;
@@ -293,17 +292,6 @@ static struct nova_inode *nova_init(struct super_block *sb,
 		return ERR_PTR(-EINVAL);
 	}
 
-	inode_table_start = sizeof(struct nova_super_block);
-	inode_table_start = (inode_table_start + CACHELINE_SIZE - 1) &
-		~(CACHELINE_SIZE - 1);
-
-	if ((inode_table_start + sizeof(struct nova_inode)) > NOVA_SB_SIZE) {
-		nova_dbg("NOVA super block defined too small. defined 0x%x, "
-				"required 0x%llx\n", NOVA_SB_SIZE,
-			inode_table_start + sizeof(struct nova_inode));
-		return ERR_PTR(-EINVAL);
-	}
-
 	/* Reserve space for 8 special inodes */
 	reserved_space = NOVA_SB_SIZE * 4;
 	reserved_blocks = (reserved_space + blocksize - 1) / blocksize;
@@ -323,7 +311,6 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	super->s_size = cpu_to_le64(size);
 	super->s_blocksize = cpu_to_le32(blocksize);
 	super->s_magic = cpu_to_le32(NOVA_SUPER_MAGIC);
-	super->s_inode_table_offset = cpu_to_le64(inode_table_start);
 
 	nova_init_blockmap(sb, 0);
 
