@@ -269,6 +269,36 @@ static int nova_delete_file_tree(struct super_block *sb,
 	return freed;
 }
 
+static int nova_set_file_bm(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_info_header *sih, struct scan_bitmap *bm)
+{
+	struct nova_file_write_entry *entry;
+	unsigned long start_blocknr = 0;
+	unsigned long last_blocknr;
+	unsigned long nvmm, pgoff;
+	unsigned int btype;
+	unsigned int data_bits;
+
+	btype = pi->i_blk_type;
+	data_bits = blk_type_to_shift[btype];
+
+	if (sih->i_size == 0)
+		goto out;
+
+	last_blocknr = (sih->i_size - 1) >> data_bits;
+
+	for (pgoff = start_blocknr; pgoff <= last_blocknr; pgoff++) {
+		entry = radix_tree_lookup(&sih->tree, pgoff);
+		if (entry) {
+			nvmm = get_nvmm(sb, sih, entry, pgoff);
+			set_bm(nvmm, bm, BM_4K);
+		}
+	}
+
+out:
+	return 0;
+}
+
 /*
  * Free data blocks from inode in the range start <=> end
  */
