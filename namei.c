@@ -663,10 +663,12 @@ static int nova_rename(struct inode *old_dir,
 			if (new_dir->i_nlink >= NOVA_LINK_MAX)
 				goto out;
 		}
-		if (S_ISDIR(old_inode->i_mode)) {
+	}
+
+	if (S_ISDIR(old_inode->i_mode)) {
+		dec_link = -1;
+		if (!new_inode)
 			inc_link = 1;
-			dec_link = -1;
-		}
 	}
 
 	new_pidir = nova_get_inode(sb, new_dir);
