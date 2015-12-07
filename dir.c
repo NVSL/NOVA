@@ -263,6 +263,8 @@ int nova_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
+	struct nova_inode_info *si = NOVA_I(dir);
+	struct nova_inode_info_header *sih = si->header;
 	struct nova_inode *pidir;
 	struct qstr *entry = &dentry->d_name;
 	unsigned short loglen;
@@ -283,23 +285,9 @@ int nova_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
 				dentry, loglen, tail, dec_link, &curr_tail);
 	*new_tail = curr_tail;
 
-	/*
-	 * We will remove the entry from radix tree
-	 * after the operation is persistent.
-	 */
+	nova_remove_dir_radix_tree(sb, sih, entry->name, entry->len);
 	NOVA_END_TIMING(remove_entry_t, remove_entry_time);
 	return 0;
-}
-
-void nova_remove_entry_from_tree(struct dentry *dentry)
-{
-	struct inode *dir = dentry->d_parent->d_inode;
-	struct super_block *sb = dir->i_sb;
-	struct nova_inode_info *si = NOVA_I(dir);
-	struct nova_inode_info_header *sih = si->header;
-	struct qstr *entry = &dentry->d_name;
-
-	nova_remove_dir_radix_tree(sb, sih, entry->name, entry->len);
 }
 
 inline int nova_replay_add_entry(struct super_block *sb,
