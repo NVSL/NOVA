@@ -615,6 +615,11 @@ out:
 		sbi->free_lists = NULL;
 	}
 
+	if (sbi->journal_locks) {
+		kfree(sbi->journal_locks);
+		sbi->journal_locks = NULL;
+	}
+
 	kfree(sbi);
 	return retval;
 }
@@ -736,6 +741,8 @@ static void nova_put_super(struct super_block *sb)
 	kfree(sbi->zeroed_page);
 	sb->s_fs_info = NULL;
 	nova_dbgmask = 0;
+	kfree(sbi->free_lists);
+	kfree(sbi->journal_locks);
 	kfree(sbi);
 }
 

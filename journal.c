@@ -170,9 +170,18 @@ int nova_lite_journal_soft_init(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi;
+	int i;
 	u64 temp;
 
 	mutex_init(&sbi->lite_journal_mutex);
+	sbi->journal_locks = kzalloc(sbi->cpus * sizeof(spinlock_t),
+					GFP_KERNEL);
+	if (!sbi->journal_locks)
+		return -ENOMEM;
+
+	for (i = 0; i < sbi->cpus; i++)
+		spin_lock_init(&sbi->journal_locks[i]);
+
 	pi = nova_get_inode_by_ino(sb, NOVA_LITEJOURNAL_INO);
 
 	if (pi->log_head == pi->log_tail)

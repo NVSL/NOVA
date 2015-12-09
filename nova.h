@@ -402,6 +402,7 @@ struct nova_sb_info {
 
 	/* Journaling related structures */
 	struct mutex lite_journal_mutex;
+	spinlock_t *journal_locks;
 
 	/* Header tree */
 	struct radix_tree_root	header_tree;
