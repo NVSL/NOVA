@@ -886,10 +886,6 @@ int nova_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	pi->log_head = pi->log_tail = 0;
 	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
 
-	pi = nova_get_inode_by_ino(sb, NOVA_LITEJOURNAL_INO);
-	if (pi->log_head)
-		set_bm(pi->log_head >> PAGE_SHIFT, bm, BM_4K);
-
 	for (i = 0; i < sbi->cpus; i++) {
 		pair = nova_get_journal_pointers(sb, i);
 		if (!pair)

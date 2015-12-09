@@ -401,7 +401,6 @@ struct nova_sb_info {
 	struct mutex 	s_lock;	/* protects the SB's buffer-head */
 
 	/* Journaling related structures */
-	struct mutex lite_journal_mutex;
 	spinlock_t *journal_locks;
 
 	/* Header tree */

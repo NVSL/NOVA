@@ -85,7 +85,7 @@ static void nova_lite_transaction_for_new_inode(struct super_block *sb,
 
 	cpu = smp_processor_id();
 	spin_lock(&sbi->journal_locks[cpu]);
-	journal_tail = nova_create_lite_transaction1(sb, &entry, NULL, 1, cpu);
+	journal_tail = nova_create_lite_transaction(sb, &entry, NULL, 1, cpu);
 
 	PERSISTENT_BARRIER();
 	pidir->log_tail = pidir_tail;
@@ -94,7 +94,7 @@ static void nova_lite_transaction_for_new_inode(struct super_block *sb,
 	nova_flush_buffer(&pi->valid, CACHELINE_SIZE, 0);
 	PERSISTENT_BARRIER();
 
-	nova_commit_lite_transaction1(sb, journal_tail, cpu);
+	nova_commit_lite_transaction(sb, journal_tail, cpu);
 	spin_unlock(&sbi->journal_locks[cpu]);
 }
 
@@ -304,7 +304,7 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 
 	cpu = smp_processor_id();
 	spin_lock(&sbi->journal_locks[cpu]);
-	journal_tail = nova_create_lite_transaction1(sb, &entry, NULL, 1, cpu);
+	journal_tail = nova_create_lite_transaction(sb, &entry, NULL, 1, cpu);
 
 	PERSISTENT_BARRIER();
 	pi->log_tail = pi_tail;
@@ -317,7 +317,7 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	}
 	PERSISTENT_BARRIER();
 
-	nova_commit_lite_transaction1(sb, journal_tail, cpu);
+	nova_commit_lite_transaction(sb, journal_tail, cpu);
 	spin_unlock(&sbi->journal_locks[cpu]);
 }
 
@@ -788,7 +788,7 @@ static int nova_rename(struct inode *old_dir,
 
 	cpu = smp_processor_id();
 	spin_lock(&sbi->journal_locks[cpu]);
-	journal_tail = nova_create_lite_transaction1(sb, &entry, &entry1,
+	journal_tail = nova_create_lite_transaction(sb, &entry, &entry1,
 							entries, cpu);
 
 	PERSISTENT_BARRIER();
@@ -818,7 +818,7 @@ static int nova_rename(struct inode *old_dir,
 
 	PERSISTENT_BARRIER();
 
-	nova_commit_lite_transaction1(sb, journal_tail, cpu);
+	nova_commit_lite_transaction(sb, journal_tail, cpu);
 	spin_unlock(&sbi->journal_locks[cpu]);
 
 	NOVA_END_TIMING(rename_t, rename_time);
