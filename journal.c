@@ -237,9 +237,10 @@ int nova_lite_journal_hard_init(struct super_block *sb)
 
 		block = nova_get_block_off(sb, blocknr, NOVA_BLOCK_TYPE_4K);
 		pair->journal_head = pair->journal_tail = block;
-		nova_flush_buffer(pair, CACHELINE_SIZE * 2, 1);
+		nova_flush_buffer(pair, CACHELINE_SIZE, 0);
 	}
 
+	PERSISTENT_BARRIER();
 	return nova_lite_journal_soft_init(sb);
 }
 

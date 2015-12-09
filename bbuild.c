@@ -824,14 +824,16 @@ int nova_recover_inode(struct super_block *sb, u64 pi_addr,
 static int nova_dfs_recovery_crawl(struct super_block *sb,
 	struct scan_bitmap *bm)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi;
+	struct inode_table *inode_table;
 	unsigned long curr_addr;
 	unsigned long num_inodes_per_page;
 	unsigned int data_bits;
 	u64 curr;
 	u64 root_addr = NOVA_ROOT_INO_START;
 	u64 pi_addr;
-	unsigned long i;
+	unsigned long i, cpu;
 	int ret;
 
 	nova_dbg_verbose("%s: rebuild alive inodes\n", __func__);
@@ -862,6 +864,33 @@ static int nova_dfs_recovery_crawl(struct super_block *sb,
 		/* Next page pointer in the last 8 bytes of the superpage */
 		curr_addr += 2097152 - 8;
 		curr = *(u64 *)(curr_addr);
+	}
+
+	for (cpu = 0; cpu < sbi->cpus; cpu++) {
+		inode_table = nova_get_inode_table1(sb, cpu);
+		if (!inode_table)
+			return -EINVAL;
+
+		curr = inode_table->log_head;
+		while (curr) {
+			/*
+			 * Note: The inode log page is allocated in 2MB
+			 * granularity, but not aligned on 2MB boundary.
+			 */
+			for (i = 0; i < 512; i++)
+				set_bm((curr >> PAGE_SHIFT) + i, bm, BM_4K);
+#if 0
+			for (i = 0; i < num_inodes_per_page; i++) {
+				pi_addr = curr + i * NOVA_INODE_SIZE;
+				ret = nova_recover_inode(sb, pi_addr, bm,
+							smp_processor_id(), 0);
+			}
+#endif
+			curr_addr = (unsigned long)nova_get_block(sb, curr);
+			/* Next page resides at the last 8 bytes */
+			curr_addr += 2097152 - 8;
+			curr = *(u64 *)(curr_addr);
+		}
 	}
 
 	return ret;

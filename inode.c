@@ -60,9 +60,13 @@ int nova_init_inode_inuse_list(struct super_block *sb)
 
 int nova_init_inode_table(struct super_block *sb)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct inode_table *inode_table;
 	struct nova_inode *pi = nova_get_inode_table(sb);
 	unsigned long blocknr;
+	u64 block;
 	int allocated;
+	int i;
 
 	pi->i_mode = 0;
 	pi->i_uid = 0;
@@ -81,8 +85,25 @@ int nova_init_inode_table(struct super_block *sb)
 		return -EINVAL;
 
 	pi->log_head = nova_get_block_off(sb, blocknr, NOVA_BLOCK_TYPE_2M);
-	nova_flush_buffer(&pi, NOVA_INODE_SIZE, 1);
+	nova_flush_buffer(&pi, NOVA_INODE_SIZE, 0);
 
+	for (i = 0; i < sbi->cpus; i++) {
+		inode_table = nova_get_inode_table1(sb, i);
+		if (!inode_table)
+			return -EINVAL;
+
+		allocated = nova_new_log_blocks(sb, pi, &blocknr, 1, 1);
+		nova_dbg_verbose("%s: allocate log @ 0x%lx\n", __func__,
+							blocknr);
+		if (allocated != 1 || blocknr == 0)
+			return -ENOSPC;
+
+		block = nova_get_block_off(sb, blocknr, NOVA_BLOCK_TYPE_2M);
+		inode_table->log_head = block;
+		nova_flush_buffer(inode_table, CACHELINE_SIZE, 0);
+	}
+
+	PERSISTENT_BARRIER();
 	return 0;
 }
 
