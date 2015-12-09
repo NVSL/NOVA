@@ -497,7 +497,7 @@ struct ptr_pair *nova_get_journal_pointers(struct super_block *sb, int cpu)
 		return NULL;
 
 	return (struct ptr_pair *)((char *)nova_get_block(sb,
-		NOVA_DEF_BLOCK_SIZE_4K)	+ cpu * sizeof(struct ptr_pair));
+		NOVA_DEF_BLOCK_SIZE_4K)	+ cpu * CACHELINE_SIZE);
 }
 
 // BKDR String Hash Function
