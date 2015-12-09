@@ -363,6 +363,8 @@ struct free_list {
 struct header_tree {
 	struct mutex inode_table_mutex;
 	struct radix_tree_root root;
+	struct rb_root	inode_inuse_tree;
+	struct nova_range_node *first_inode_range;
 };
 
 /*

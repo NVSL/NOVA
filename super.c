@@ -517,6 +517,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		header_tree = &sbi->header_trees[i];
 		mutex_init(&header_tree->inode_table_mutex);
 		INIT_RADIX_TREE(&header_tree->root, GFP_ATOMIC);
+		header_tree->inode_inuse_tree = RB_ROOT;
 	}
 
 	mutex_init(&sbi->s_lock);
