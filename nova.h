@@ -360,6 +360,11 @@ struct free_list {
  */
 #define	RESERVED_BLOCKS	3
 
+struct header_tree {
+	struct mutex inode_table_mutex;
+	struct radix_tree_root root;
+};
+
 /*
  * NOVA super-block data in memory
  */
@@ -395,7 +400,6 @@ struct nova_sb_info {
 	atomic_t	next_generation;
 	/* inode tracking */
 	struct mutex inode_table_mutex;
-	struct mutex *inode_table_mutexs;
 	unsigned long	num_range_node_inode;
 	unsigned long	s_inodes_used_count;
 	unsigned long	reserved_blocks;
@@ -407,6 +411,7 @@ struct nova_sb_info {
 
 	/* Header tree */
 	struct radix_tree_root	header_tree;
+	struct header_tree	*header_trees;
 
 	/* Track inuse inodes */
 	struct rb_root	inode_inuse_tree;

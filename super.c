@@ -460,6 +460,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	struct nova_inode *root_pi;
 	struct nova_sb_info *sbi = NULL;
 	struct inode *root_i = NULL;
+	struct header_tree *header_tree;
 	unsigned long blocksize;
 	u32 random = 0;
 	int retval = -EINVAL;
@@ -505,15 +506,18 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	set_opt(sbi->s_mount_opt, HUGEIOREMAP);
 
 	mutex_init(&sbi->inode_table_mutex);
-	sbi->inode_table_mutexs = kzalloc(sbi->cpus * sizeof(struct mutex),
+	sbi->header_trees = kzalloc(sbi->cpus * sizeof(struct header_tree),
 					GFP_KERNEL);
-	if (!sbi->inode_table_mutexs) {
+	if (!sbi->header_trees) {
 		retval = -ENOMEM;
 		goto out;
 	}
 
-	for (i = 0; i < sbi->cpus; i++)
-		mutex_init(&sbi->inode_table_mutexs[i]);
+	for (i = 0; i < sbi->cpus; i++) {
+		header_tree = &sbi->header_trees[i];
+		mutex_init(&header_tree->inode_table_mutex);
+		INIT_RADIX_TREE(&header_tree->root, GFP_ATOMIC);
+	}
 
 	mutex_init(&sbi->s_lock);
 
@@ -636,9 +640,9 @@ out:
 		sbi->journal_locks = NULL;
 	}
 
-	if (sbi->inode_table_mutexs) {
-		kfree(sbi->inode_table_mutexs);
-		sbi->inode_table_mutexs = NULL;
+	if (sbi->header_trees) {
+		kfree(sbi->header_trees);
+		sbi->header_trees = NULL;
 	}
 
 	kfree(sbi);
@@ -764,7 +768,7 @@ static void nova_put_super(struct super_block *sb)
 	nova_dbgmask = 0;
 	kfree(sbi->free_lists);
 	kfree(sbi->journal_locks);
-	kfree(sbi->inode_table_mutexs);
+	kfree(sbi->header_trees);
 
 	kfree(sbi);
 }
