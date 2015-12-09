@@ -479,6 +479,12 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 
 	set_default_opts(sbi);
 
+	if (sbi->cpus > 256) {
+		nova_err(sb, "NOVA needs more log pointer pages "
+				"to support more than 256 cpus.\n");
+		goto out;
+	}
+
 	if (nova_get_block_info(sb, sbi))
 		goto out;
 

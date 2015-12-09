@@ -199,10 +199,13 @@ int nova_lite_journal_soft_init(struct super_block *sb)
 
 int nova_lite_journal_hard_init(struct super_block *sb)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi;
+	struct ptr_pair *pair;
 	unsigned long blocknr = 0;
 	unsigned long nova_ino;
 	int allocated;
+	int i;
 	u64 block;
 
 	pi = nova_get_inode_by_ino(sb, NOVA_LITEJOURNAL_INO);
@@ -217,6 +220,21 @@ int nova_lite_journal_hard_init(struct super_block *sb)
 	block = nova_get_block_off(sb, blocknr,	NOVA_BLOCK_TYPE_4K);
 	pi->log_head = pi->log_tail = block;
 	nova_flush_buffer(pi, CACHELINE_SIZE * 2, 1);
+
+	for (i = 0; i < sbi->cpus; i++) {
+		pair = nova_get_journal_pointers(sb, i);
+		if (!pair)
+			return -EINVAL;
+
+		allocated = nova_new_log_blocks(sb, pi, &blocknr, 1, 1);
+		nova_dbg_verbose("%s: allocate log @ 0x%lx\n", __func__,
+							blocknr);
+		if (allocated != 1 || blocknr == 0)
+			return -ENOSPC;
+
+		pair->journal_head = pair->journal_tail = block;
+		nova_flush_buffer(pair, CACHELINE_SIZE * 2, 1);
+	}
 
 	return nova_lite_journal_soft_init(sb);
 }

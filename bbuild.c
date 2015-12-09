@@ -871,7 +871,9 @@ int nova_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi;
+	struct ptr_pair *pair;
 	int ret;
+	int i;
 
 	sbi->s_inodes_used_count = 0;
 
@@ -887,6 +889,14 @@ int nova_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	pi = nova_get_inode_by_ino(sb, NOVA_LITEJOURNAL_INO);
 	if (pi->log_head)
 		set_bm(pi->log_head >> PAGE_SHIFT, bm, BM_4K);
+
+	for (i = 0; i < sbi->cpus; i++) {
+		pair = nova_get_journal_pointers(sb, i);
+		if (!pair)
+			return -EINVAL;
+
+		set_bm(pair->journal_head >> PAGE_SHIFT, bm, BM_4K);
+	}
 
 	PERSISTENT_BARRIER();
 	ret = nova_dfs_recovery_crawl(sb, bm);
