@@ -356,8 +356,9 @@ struct free_list {
 /*
  * The first block contains super blocks and reserved inodes;
  * The second block contains pointers to journal pages.
+ * The third block contains pointers to inode tables.
  */
-#define	RESERVED_BLOCKS	2
+#define	RESERVED_BLOCKS	3
 
 /*
  * NOVA super-block data in memory
@@ -394,6 +395,7 @@ struct nova_sb_info {
 	atomic_t	next_generation;
 	/* inode tracking */
 	struct mutex inode_table_mutex;
+	struct mutex *inode_table_mutexs;
 	unsigned long	num_range_node_inode;
 	unsigned long	s_inodes_used_count;
 	unsigned long	reserved_blocks;
@@ -498,6 +500,22 @@ struct ptr_pair *nova_get_journal_pointers(struct super_block *sb, int cpu)
 
 	return (struct ptr_pair *)((char *)nova_get_block(sb,
 		NOVA_DEF_BLOCK_SIZE_4K)	+ cpu * CACHELINE_SIZE);
+}
+
+struct inode_table {
+	__le64 log_head;
+};
+
+static inline
+struct inode_table *nova_get_inode_table1(struct super_block *sb, int cpu)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+
+	if (cpu >= sbi->cpus)
+		return NULL;
+
+	return (struct inode_table *)((char *)nova_get_block(sb,
+		NOVA_DEF_BLOCK_SIZE_4K * 2) + cpu * CACHELINE_SIZE);
 }
 
 // BKDR String Hash Function

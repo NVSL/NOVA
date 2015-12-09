@@ -463,6 +463,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	unsigned long blocksize;
 	u32 random = 0;
 	int retval = -EINVAL;
+	int i;
 	timing_t mount_time;
 
 	NOVA_START_TIMING(mount_t, mount_time);
@@ -504,21 +505,35 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	set_opt(sbi->s_mount_opt, HUGEIOREMAP);
 
 	mutex_init(&sbi->inode_table_mutex);
+	sbi->inode_table_mutexs = kzalloc(sbi->cpus * sizeof(struct mutex),
+					GFP_KERNEL);
+	if (!sbi->inode_table_mutexs) {
+		retval = -ENOMEM;
+		goto out;
+	}
+
+	for (i = 0; i < sbi->cpus; i++)
+		mutex_init(&sbi->inode_table_mutexs[i]);
+
 	mutex_init(&sbi->s_lock);
 
 	sbi->inode_inuse_tree = RB_ROOT;
 
 	sbi->zeroed_page = kzalloc(PAGE_SIZE, GFP_KERNEL);
-	if (!sbi->zeroed_page)
+	if (!sbi->zeroed_page) {
+		retval = -ENOMEM;
 		goto out;
+	}
 
 	if (nova_parse_options(data, sbi, 0))
 		goto out;
 
 	set_opt(sbi->s_mount_opt, MOUNTING);
 
-	if (nova_alloc_block_free_lists(sb))
+	if (nova_alloc_block_free_lists(sb)) {
+		retval = -ENOMEM;
 		goto out;
+	}
 
 	/* Init a new nova instance */
 	if (sbi->s_mount_opt & NOVA_MOUNT_FORMAT) {
@@ -619,6 +634,11 @@ out:
 	if (sbi->journal_locks) {
 		kfree(sbi->journal_locks);
 		sbi->journal_locks = NULL;
+	}
+
+	if (sbi->inode_table_mutexs) {
+		kfree(sbi->inode_table_mutexs);
+		sbi->inode_table_mutexs = NULL;
 	}
 
 	kfree(sbi);
@@ -744,6 +764,8 @@ static void nova_put_super(struct super_block *sb)
 	nova_dbgmask = 0;
 	kfree(sbi->free_lists);
 	kfree(sbi->journal_locks);
+	kfree(sbi->inode_table_mutexs);
+
 	kfree(sbi);
 }
 
