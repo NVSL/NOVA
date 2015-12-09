@@ -116,6 +116,42 @@ u64 nova_create_lite_transaction(struct super_block *sb,
 	return new_tail;
 }
 
+u64 nova_create_lite_transaction1(struct super_block *sb,
+	struct nova_lite_journal_entry *dram_entry1,
+	struct nova_lite_journal_entry *dram_entry2,
+	int entries, int cpu)
+{
+	struct ptr_pair *pair;
+	struct nova_lite_journal_entry *entry;
+	size_t size = sizeof(struct nova_lite_journal_entry);
+	u64 new_tail, temp;;
+
+	pair = nova_get_journal_pointers(sb, cpu);
+	if (pair->journal_head == 0 || pair->journal_head != pair->journal_tail)
+		BUG();
+
+	temp = pair->journal_head;
+	entry = (struct nova_lite_journal_entry *)nova_get_block(sb,
+							temp);
+
+//	nova_print_lite_transaction(dram_entry1);
+	memcpy_to_pmem_nocache(entry, dram_entry1, size);
+
+	if (entries == 2) {
+		temp = next_lite_journal(temp);
+		entry = (struct nova_lite_journal_entry *)nova_get_block(sb,
+							temp);
+//		nova_print_lite_transaction(dram_entry2);
+		memcpy_to_pmem_nocache(entry, dram_entry2, size);
+	}
+
+	new_tail = next_lite_journal(temp);
+	pair->journal_tail = new_tail;
+	nova_flush_buffer(&pair->journal_head, CACHELINE_SIZE, 1);
+
+	return new_tail;
+}
+
 /* Caller needs to hold lite_journal_mutex until this returns. */
 void nova_commit_lite_transaction(struct super_block *sb, u64 tail)
 {
@@ -127,6 +163,18 @@ void nova_commit_lite_transaction(struct super_block *sb, u64 tail)
 
 	pi->log_head = tail;
 	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+}
+
+void nova_commit_lite_transaction1(struct super_block *sb, u64 tail, int cpu)
+{
+	struct ptr_pair *pair;
+
+	pair = nova_get_journal_pointers(sb, cpu);
+	if (pair->journal_tail != tail)
+		BUG();
+
+	pair->journal_head = tail;
+	nova_flush_buffer(&pair->journal_head, CACHELINE_SIZE, 1);
 }
 
 static void nova_undo_lite_journal_entry(struct super_block *sb,
@@ -166,10 +214,34 @@ static int nova_recover_lite_journal(struct super_block *sb,
 	return 0;
 }
 
+static int nova_recover_lite_journal1(struct super_block *sb,
+	struct ptr_pair *pair, int recover)
+{
+	struct nova_lite_journal_entry *entry;
+	u64 temp;
+
+	entry = (struct nova_lite_journal_entry *)nova_get_block(sb,
+							pair->journal_head);
+	nova_undo_lite_journal_entry(sb, entry);
+
+	if (recover == 2) {
+		temp = next_lite_journal(pair->journal_head);
+		entry = (struct nova_lite_journal_entry *)nova_get_block(sb,
+							temp);
+		nova_undo_lite_journal_entry(sb, entry);
+	}
+
+	pair->journal_tail = pair->journal_head;
+	nova_flush_buffer(&pair->journal_head, CACHELINE_SIZE, 1);
+
+	return 0;
+}
+
 int nova_lite_journal_soft_init(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi;
+	struct ptr_pair *pair;
 	int i;
 	u64 temp;
 
@@ -185,21 +257,47 @@ int nova_lite_journal_soft_init(struct super_block *sb)
 	pi = nova_get_inode_by_ino(sb, NOVA_LITEJOURNAL_INO);
 
 	if (pi->log_head == pi->log_tail)
-		return 0;
+		goto next;
 
 	/* We only allow up to two uncommited entries */
 	temp = next_lite_journal(pi->log_head);
 	if (pi->log_tail == temp) {
 		nova_recover_lite_journal(sb, pi, 1);
-		return 0;
+		goto next;
 	}
 
 	temp = next_lite_journal(temp);
 	if (pi->log_tail == temp) {
 		nova_recover_lite_journal(sb, pi, 2);
-		return 0;
+		goto next;
 	}
 
+	goto fail;
+next:
+	for (i = 0; i < sbi->cpus; i++) {
+		pair = nova_get_journal_pointers(sb, i);
+		if (pair->journal_head == pair->journal_tail)
+			continue;
+
+		/* We only allow up to two uncommited entries */
+		temp = next_lite_journal(pair->journal_head);
+		if (pair->journal_tail == temp) {
+			nova_recover_lite_journal1(sb, pair, 1);
+			continue;
+		}
+
+		temp = next_lite_journal(temp);
+		if (pair->journal_tail == temp) {
+			nova_recover_lite_journal1(sb, pair, 2);
+			continue;
+		}
+
+		goto fail;
+	}
+
+	return 0;
+
+fail:
 	/* We are in trouble */
 	nova_dbg("%s: lite journal head 0x%llx, tail 0x%llx\n",
 			__func__, pi->log_head, pi->log_tail);
