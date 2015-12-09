@@ -353,7 +353,11 @@ struct free_list {
 	u64		padding[8];	/* Cache line break */
 };
 
-#define	RESERVED_BLOCKS	1
+/*
+ * The first block contains super blocks and reserved inodes;
+ * The second block contains pointers to journal pages.
+ */
+#define	RESERVED_BLOCKS	2
 
 /*
  * NOVA super-block data in memory
@@ -477,6 +481,23 @@ struct free_list *nova_get_free_list(struct super_block *sb, int cpu)
 		return &sbi->free_lists[cpu];
 	else
 		return &sbi->shared_free_list;
+}
+
+struct ptr_pair {
+	__le64 journal_head;
+	__le64 journal_tail;
+};
+
+static inline
+struct ptr_pair *nova_get_journal_pointers(struct super_block *sb, int cpu)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+
+	if (cpu >= sbi->cpus)
+		return NULL;
+
+	return (struct ptr_pair *)((char *)nova_get_block(sb,
+		NOVA_DEF_BLOCK_SIZE_4K)	+ cpu * sizeof(struct ptr_pair));
 }
 
 // BKDR String Hash Function

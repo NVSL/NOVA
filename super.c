@@ -307,7 +307,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	super = nova_get_super(sb);
 
 	/* clear out super-block and inode table */
-	memset_nt(super, 0, reserved_space);
+	memset_nt(super, 0, sbi->reserved_blocks * sbi->blocksize);
 	super->s_size = cpu_to_le64(size);
 	super->s_blocksize = cpu_to_le32(blocksize);
 	super->s_magic = cpu_to_le32(NOVA_SUPER_MAGIC);
@@ -374,6 +374,7 @@ static inline void set_default_opts(struct nova_sb_info *sbi)
 	set_opt(sbi->s_mount_opt, HUGEIOREMAP);
 	set_opt(sbi->s_mount_opt, ERRORS_CONT);
 	sbi->reserved_blocks = RESERVED_BLOCKS;
+	sbi->cpus = num_online_cpus();
 }
 
 static void nova_root_check(struct super_block *sb, struct nova_inode *root_pi)

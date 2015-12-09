@@ -32,8 +32,6 @@ int nova_alloc_block_free_lists(struct super_block *sb)
 	struct free_list *free_list;
 	int i;
 
-	sbi->cpus = num_online_cpus();
-
 	sbi->free_lists = kzalloc(sbi->cpus * sizeof(struct free_list),
 							GFP_KERNEL);
 
