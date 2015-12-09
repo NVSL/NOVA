@@ -36,4 +36,9 @@ u64 nova_create_lite_transaction(struct super_block *sb,
 	struct nova_lite_journal_entry *dram_entry2,
 	int entries);
 void nova_commit_lite_transaction(struct super_block *sb, u64 tail);
+u64 nova_create_lite_transaction1(struct super_block *sb,
+	struct nova_lite_journal_entry *dram_entry1,
+	struct nova_lite_journal_entry *dram_entry2,
+	int entries, int cpu);
+void nova_commit_lite_transaction1(struct super_block *sb, u64 tail, int cpu);
 #endif    /* __NOVA_JOURNAL_H__ */
