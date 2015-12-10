@@ -155,13 +155,13 @@ inline int nova_search_inodetree1(struct nova_sb_info *sbi,
 	unsigned long ino, struct nova_range_node **ret_node)
 {
 	struct rb_root *tree;
-	unsigned long per_tree_ino;
+	unsigned long internal_ino;
 	int cpu;
 
 	cpu = ino % sbi->cpus;
 	tree = &sbi->header_trees[cpu].inode_inuse_tree;
-	per_tree_ino = ino / sbi->cpus;
-	return nova_find_range_node(sbi, tree, per_tree_ino, ret_node);
+	internal_ino = ino / sbi->cpus;
+	return nova_find_range_node(sbi, tree, internal_ino, ret_node);
 }
 
 static int nova_insert_range_node(struct nova_sb_info *sbi,
