@@ -842,6 +842,44 @@ unsigned int nova_free_header_tree(struct super_block *sb)
 	return freed;
 }
 
+unsigned int nova_free_header_trees(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct header_tree *header_tree;
+	struct nova_inode_info_header *sih;
+	struct nova_inode_info_header *sih_array[FREE_BATCH];
+	unsigned long ino = 0;
+	int nr_sih;
+	unsigned int freed = 0;
+	int cpu;
+	int i;
+	void *ret;
+
+	for (cpu = 0; cpu < sbi->cpus; cpu++) {
+		header_tree = &sbi->header_trees[cpu];
+
+		do {
+			nr_sih = radix_tree_gang_lookup(&sbi->header_tree,
+					(void **)sih_array, ino, FREE_BATCH);
+			for (i = 0; i < nr_sih; i++) {
+				sih = sih_array[i];
+				BUG_ON(!sih);
+				ino = sih->ino;
+				ret = radix_tree_delete(&header_tree->root,
+							ino / sbi->cpus);
+				BUG_ON(!ret || ret != sih);
+				nova_free_dram_resource(sb, sih);
+				nova_free_header(sb, sih);
+				freed++;
+			}
+			ino++;
+		} while (nr_sih == FREE_BATCH);
+	}
+
+	nova_dbg("%s: freed %u\n", __func__, freed);
+	return freed;
+}
+
 int nova_assign_info_header(struct super_block *sb, unsigned long ino,
 	struct nova_inode_info_header **sih, u16 i_mode, int need_lock)
 {
@@ -877,6 +915,53 @@ int nova_assign_info_header(struct super_block *sb, unsigned long ino,
 out:
 	if (need_lock)
 		mutex_unlock(&sbi->inode_table_mutex);
+
+	return ret;
+}
+
+int nova_assign_info_header1(struct super_block *sb, unsigned long ino,
+	struct nova_inode_info_header **sih, u16 i_mode, int need_lock)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct header_tree *header_tree;
+	struct nova_inode_info_header *old_sih, *new_sih;
+	unsigned long internal_ino;
+	int cpu;
+	int ret = 0;
+
+	nova_dbgv("assign_header ino %lu\n", ino);
+
+	cpu = ino % sbi->cpus;
+	internal_ino = ino / sbi->cpus;
+	header_tree = &sbi->header_trees[cpu];
+
+	if (need_lock)
+		mutex_lock(&header_tree->inode_table_mutex);
+
+	old_sih = radix_tree_lookup(&header_tree->root, internal_ino);
+	if (old_sih) {
+		old_sih->i_mode = i_mode;
+		*sih = old_sih;
+	} else {
+		new_sih = nova_alloc_header(sb, i_mode);
+		if (!new_sih) {
+			ret = -ENOMEM;
+			goto out;
+		}
+		ret = radix_tree_insert(&header_tree->root, internal_ino,
+						new_sih);
+		if (ret) {
+			nova_dbg("%s: ERROR %d\n", __func__, ret);
+			goto out;
+		}
+		*sih = new_sih;
+	}
+
+	if (sih && *sih)
+		(*sih)->ino = ino;
+out:
+	if (need_lock)
+		mutex_unlock(&header_tree->inode_table_mutex);
 
 	return ret;
 }

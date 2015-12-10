@@ -628,6 +628,23 @@ nova_find_info_header(struct super_block *sb, unsigned long ino)
 	return sih;
 }
 
+static inline struct nova_inode_info_header *
+nova_find_info_header1(struct super_block *sb, unsigned long ino)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_inode_info_header *sih;
+	struct header_tree *header_tree;
+	int cpu;
+
+	cpu = ino % sbi->cpus;
+	header_tree = &sbi->header_trees[cpu];
+	mutex_lock(&header_tree->inode_table_mutex);
+	sih = radix_tree_lookup(&header_tree->root, ino / sbi->cpus);
+	mutex_unlock(&header_tree->inode_table_mutex);
+
+	return sih;
+}
+
 static inline struct nova_file_write_entry *
 nova_get_write_entry(struct super_block *sb,
 	struct nova_inode_info *si, unsigned long blocknr)
