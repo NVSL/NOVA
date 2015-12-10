@@ -38,6 +38,9 @@ int nova_init_inode_inuse_list(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_range_node *range_node;
+	struct header_tree *header_tree;
+	unsigned long range_high;
+	int i;
 	int ret;
 
 	range_node = nova_alloc_inode_node(sb);
@@ -54,6 +57,29 @@ int nova_init_inode_inuse_list(struct super_block *sb)
 	sbi->num_range_node_inode = 1;
 	sbi->s_inodes_used_count = NOVA_NORMAL_INODE_START;
 	sbi->first_inode_range = range_node;
+
+	range_high = NOVA_NORMAL_INODE_START / sbi->cpus;
+	if (NOVA_NORMAL_INODE_START % sbi->cpus)
+		range_high++;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		header_tree = &sbi->header_trees[i];
+		range_node = nova_alloc_inode_node(sb);
+		if (range_node == NULL)
+			/* FIXME: free allocated memories */
+			return -ENOMEM;
+
+		range_node->range_low = 0;
+		range_node->range_high = range_high;
+		ret = nova_insert_inodetree1(sbi, range_node, i);
+		if (ret) {
+			nova_err(sb, "%s failed\n", __func__);
+			nova_free_inode_node(sb, range_node);
+			return ret;
+		}
+		header_tree->num_range_node_inode = 1;
+		header_tree->first_inode_range = range_node;
+	}
 
 	return 0;
 }

@@ -364,6 +364,7 @@ struct header_tree {
 	struct mutex inode_table_mutex;
 	struct radix_tree_root root;
 	struct rb_root	inode_inuse_tree;
+	unsigned long	num_range_node_inode;
 	struct nova_range_node *first_inode_range;
 };
 
@@ -860,10 +861,14 @@ extern int nova_new_log_blocks(struct super_block *sb, struct nova_inode *pi,
 extern unsigned long nova_count_free_blocks(struct super_block *sb);
 inline int nova_search_inodetree(struct nova_sb_info *sbi,
 	unsigned long ino, struct nova_range_node **ret_node);
+inline int nova_search_inodetree1(struct nova_sb_info *sbi,
+	unsigned long ino, struct nova_range_node **ret_node);
 inline int nova_insert_blocktree(struct nova_sb_info *sbi,
 	struct rb_root *tree, struct nova_range_node *new_node);
 inline int nova_insert_inodetree(struct nova_sb_info *sbi,
 	struct nova_range_node *new_node);
+inline int nova_insert_inodetree1(struct nova_sb_info *sbi,
+	struct nova_range_node *new_node, int cpu);
 int nova_find_free_slot(struct nova_sb_info *sbi,
 	struct rb_root *tree, unsigned long range_low,
 	unsigned long range_high, struct nova_range_node **prev,
