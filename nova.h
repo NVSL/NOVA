@@ -508,7 +508,7 @@ struct inode_table {
 };
 
 static inline
-struct inode_table *nova_get_inode_table1(struct super_block *sb, int cpu)
+struct inode_table *nova_get_inode_table(struct super_block *sb, int cpu)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
@@ -722,11 +722,6 @@ static inline struct nova_inode *nova_get_inode_by_ino(struct super_block *sb,
 		return NULL;
 
 	return nova_get_basic_inode(sb, ino);
-}
-
-static inline struct nova_inode *nova_get_inode_table(struct super_block *sb)
-{
-	return nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
 }
 
 static inline struct nova_inode *nova_get_inode(struct super_block *sb,

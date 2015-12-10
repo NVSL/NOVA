@@ -75,7 +75,7 @@ int nova_init_inode_table(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct inode_table *inode_table;
-	struct nova_inode *pi = nova_get_inode_table(sb);
+	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
 	unsigned long blocknr;
 	u64 block;
 	int allocated;
@@ -91,7 +91,7 @@ int nova_init_inode_table(struct super_block *sb)
 	pi->i_blk_type = NOVA_BLOCK_TYPE_2M;
 
 	for (i = 0; i < sbi->cpus; i++) {
-		inode_table = nova_get_inode_table1(sb, i);
+		inode_table = nova_get_inode_table(sb, i);
 		if (!inode_table)
 			return -EINVAL;
 
@@ -114,7 +114,7 @@ int nova_get_inode_address(struct super_block *sb, u64 ino,
 	u64 *pi_addr, int extendable)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_inode *pi = nova_get_inode_table(sb);
+	struct nova_inode *pi;
 	struct inode_table *inode_table;
 	unsigned int data_bits;
 	unsigned int num_inodes_bits;
@@ -128,13 +128,14 @@ int nova_get_inode_address(struct super_block *sb, u64 ino,
 	unsigned long curr_addr;
 	int allocated;
 
+	pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
 	data_bits = blk_type_to_shift[pi->i_blk_type];
 	num_inodes_bits = data_bits - NOVA_INODE_BITS;
 
 	cpuid = ino % sbi->cpus;
 	internal_ino = ino / sbi->cpus;
 
-	inode_table = nova_get_inode_table1(sb, cpuid);
+	inode_table = nova_get_inode_table(sb, cpuid);
 	superpage_count = internal_ino >> num_inodes_bits;
 	index = internal_ino & ((1 << num_inodes_bits) - 1);
 
