@@ -1080,142 +1080,63 @@ int nova_singlethread_recovery(struct super_block *sb)
 
 /*********************** Multithread recovery *************************/
 
-struct task_ring {
-	u64 tasks[512];
-	int id;
-	int enqueue;
-	int dequeue;
-	int processed;
-	wait_queue_head_t assign_wq;
-};
-
-static inline void init_ring(struct task_ring *ring, int id)
-{
-	ring->id = id;
-	ring->enqueue = ring->dequeue = 0;
-	ring->processed = 0;
-	init_waitqueue_head(&ring->assign_wq);
-}
-
-static inline bool task_ring_is_empty(struct task_ring *ring)
-{
-	return ring->enqueue == ring->dequeue;
-}
-
-static inline bool task_ring_is_full(struct task_ring *ring)
-{
-	return (ring->enqueue + 1) % 512 == ring->dequeue;
-}
-
-static inline void task_ring_enqueue(struct task_ring *ring, u64 pi_addr)
-{
-	nova_dbg_verbose("Enqueue at %d\n", ring->enqueue);
-	if (ring->tasks[ring->enqueue])
-		nova_dbg("%s: ERROR existing entry %llu\n", __func__,
-				ring->tasks[ring->enqueue]);
-	ring->tasks[ring->enqueue] = pi_addr;
-	ring->enqueue = (ring->enqueue + 1) % 512;
-}
-
-static inline u64 task_ring_dequeue(struct super_block *sb,
-	struct task_ring *ring)
-{
-	u64 pi_addr = 0;
-
-	pi_addr = ring->tasks[ring->dequeue];
-
-	if (pi_addr == 0)
-		NOVA_ASSERT(0);
-
-	ring->tasks[ring->dequeue] = 0;
-	ring->dequeue = (ring->dequeue + 1) % 512;
-	ring->processed++;
-
-	return pi_addr;
-}
-
 static struct task_struct **threads;
-static struct task_ring *task_rings;
 wait_queue_head_t finish_wq;
+int *finished;
 
 static int thread_func(void *data)
 {
 	struct super_block *sb = data;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct header_tree *header_tree;
+	struct rb_root *tree;
+	struct nova_range_node *curr;
+	struct rb_node *temp;
 	int cpuid = smp_processor_id();
-	struct task_ring *ring = &task_rings[cpuid];
+	unsigned long i;
+	unsigned long ino;
 	u64 pi_addr = 0;
+	int ret = 0;
 
-	while (!kthread_should_stop()) {
-		while(!task_ring_is_empty(ring)) {
-			pi_addr = task_ring_dequeue(sb, ring);
-			nova_recover_inode(sb, pi_addr, NULL,
-							cpuid, 1);
-			wake_up_interruptible(&finish_wq);
+	header_tree = &sbi->header_trees[cpuid];
+	tree = &header_tree->inode_inuse_tree;
+	temp = rb_first(tree);
+
+	while (temp) {
+		curr = container_of(temp, struct nova_range_node, node);
+		temp = rb_next(temp);
+
+		for (i = curr->range_low; i <= curr->range_high; i++) {
+			ino = i * sbi->cpus + cpuid;
+
+			if (ino >= NOVA_NORMAL_INODE_START) {
+				ret = nova_get_inode_address(sb, ino,
+							&pi_addr, 0);
+				if (ret) {
+					nova_err(sb, "%s: get inode %llu "
+							"address failed\n",
+							__func__, ino);
+					continue;
+				}
+				ret = nova_recover_inode(sb, pi_addr, NULL,
+							cpuid, 0);
+				processed[cpuid]++;
+			}
 		}
-		wait_event_interruptible_timeout(ring->assign_wq, false,
-							msecs_to_jiffies(1));
 	}
 
-	return 0;
-}
-
-static inline struct task_ring *get_free_ring(int cpus, struct task_ring *ring)
-{
-	int start;
-	int i = 0;
-
-	if (ring)
-		start = ring->id + 1;
-	else
-		start = 0;
-
-	while (i < cpus) {
-		start = start % cpus;
-		ring = &task_rings[start];
-		if (!task_ring_is_full(ring))
-			return ring;
-		start++;
-		i++;
-	}
-
-	return NULL;
+	finished[cpuid] = 1;
+	wake_up_interruptible(&finish_wq);
+	return ret;
 }
 
 static int nova_inode_table_multithread_crawl(struct super_block *sb,
 	int cpus)
 {
-	struct task_ring *ring = NULL;
 	u64 root_addr = NOVA_ROOT_INO_START;
-	u64 pi_addr;
-	u64 last_ino, i;
 	int ret = 0;
 
-	nova_dbg_verbose("%s: rebuild alive inodes\n", __func__);
-	last_ino = nova_get_last_ino(sb);
-
-	nova_dbg_verbose("Last inode %llu\n", last_ino);
-
-	/* First recover the root iode */
-	ring = &task_rings[0];
-	task_ring_enqueue(ring, root_addr);
-	wake_up_interruptible(&ring->assign_wq);
-
-	for (i = NOVA_NORMAL_INODE_START; i <= last_ino; i++) {
-		ret = nova_get_inode_address(sb, i, &pi_addr, 0);
-		if (ret) {
-			nova_err(sb, "%s: get inode %llu address failed\n",
-					__func__, i);
-			break;
-		}
-
-		while ((ring = get_free_ring(cpus, ring)) == NULL) {
-			wait_event_interruptible_timeout(finish_wq, false,
-							msecs_to_jiffies(1));
-		}
-
-		task_ring_enqueue(ring, pi_addr);
-		wake_up_interruptible(&ring->assign_wq);
-	}
+	ret = nova_recover_inode(sb, root_addr, NULL, smp_processor_id(), 0);
 
 	return ret;
 }
@@ -1223,7 +1144,8 @@ static int nova_inode_table_multithread_crawl(struct super_block *sb,
 static void free_resources(void)
 {
 	kfree(threads);
-	kfree(task_rings);
+	kfree(processed);
+	kfree(finished);
 }
 
 static int allocate_resources(struct super_block *sb, int cpus)
@@ -1234,34 +1156,38 @@ static int allocate_resources(struct super_block *sb, int cpus)
 	if (!threads)
 		return -ENOMEM;
 
-	task_rings = kzalloc(cpus * sizeof(struct task_ring), GFP_KERNEL);
-	if (!task_rings) {
+	processed = kzalloc(cpus * sizeof(int), GFP_KERNEL);
+	if (!processed) {
 		kfree(threads);
 		return -ENOMEM;
 	}
 
+	finished = kzalloc(cpus * sizeof(int), GFP_KERNEL);
+	if (!finished) {
+		kfree(threads);
+		kfree(processed);
+		return -ENOMEM;
+	}
+
+	init_waitqueue_head(&finish_wq);
+
 	for (i = 0; i < cpus; i++) {
-		init_ring(&task_rings[i], i);
 		threads[i] = kthread_create(thread_func,
 						sb, "recovery thread");
 		kthread_bind(threads[i], i);
 		wake_up_process(threads[i]);
 	}
 
-	init_waitqueue_head(&finish_wq);
-
 	return 0;
 }
 
 static void wait_to_finish(int cpus)
 {
-	struct task_ring *ring;
 	int total = 0;
 	int i;
 
 	for (i = 0; i < cpus; i++) {
-		ring = &task_rings[i];
-		while (!task_ring_is_empty(ring)) {
+		while (finished[i] == 0) {
 			wait_event_interruptible_timeout(finish_wq, false,
 							msecs_to_jiffies(1));
 		}
@@ -1271,11 +1197,11 @@ static void wait_to_finish(int cpus)
 		kthread_stop(threads[i]);
 
 	for (i = 0; i < cpus; i++) {
-		ring = &task_rings[i];
-		nova_dbg_verbose("Ring %d recovered %d\n", i, ring->processed);
-		total += ring->processed;
+		nova_dbgv("CPU %d processed %d\n", i, processed[i]);
+		total += processed[i];
 	}
 
+	total++; /* Root inode */
 	nova_dbg("Multithread total recovered %d\n", total);
 }
 
