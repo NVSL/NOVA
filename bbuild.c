@@ -737,10 +737,12 @@ unsigned int nova_free_header_trees(struct super_block *sb)
 
 	for (cpu = 0; cpu < sbi->cpus; cpu++) {
 		header_tree = &sbi->header_trees[cpu];
+		ino = 0;
 
 		do {
 			nr_sih = radix_tree_gang_lookup(&header_tree->root,
-					(void **)sih_array, ino, FREE_BATCH);
+					(void **)sih_array, ino / sbi->cpus,
+					FREE_BATCH);
 			for (i = 0; i < nr_sih; i++) {
 				sih = sih_array[i];
 				BUG_ON(!sih);
