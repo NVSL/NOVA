@@ -43,20 +43,7 @@ int nova_init_inode_inuse_list(struct super_block *sb)
 	int i;
 	int ret;
 
-	range_node = nova_alloc_inode_node(sb);
-	if (range_node == NULL)
-		return -ENOMEM;
-	range_node->range_low = 0;
-	range_node->range_high = NOVA_NORMAL_INODE_START - 1;
-	ret = nova_insert_inodetree(sbi, range_node);
-	if (ret) {
-		nova_err(sb, "%s failed\n", __func__);
-		nova_free_inode_node(sb, range_node);
-		return ret;
-	}
-	sbi->num_range_node_inode = 1;
 	sbi->s_inodes_used_count = NOVA_NORMAL_INODE_START;
-	sbi->first_inode_range = range_node;
 
 	range_high = NOVA_NORMAL_INODE_START / sbi->cpus;
 	if (NOVA_NORMAL_INODE_START % sbi->cpus)
@@ -71,7 +58,7 @@ int nova_init_inode_inuse_list(struct super_block *sb)
 
 		range_node->range_low = 0;
 		range_node->range_high = range_high;
-		ret = nova_insert_inodetree1(sbi, range_node, i);
+		ret = nova_insert_inodetree(sbi, range_node, i);
 		if (ret) {
 			nova_err(sb, "%s failed\n", __func__);
 			nova_free_inode_node(sb, range_node);
@@ -103,16 +90,6 @@ int nova_init_inode_table(struct super_block *sb)
 
 	pi->i_blk_type = NOVA_BLOCK_TYPE_2M;
 
-	/* Allocate superpage for inodes */
-	allocated = nova_new_log_blocks(sb, pi, &blocknr,
-					1, 1);
-
-	if (allocated != 1)
-		return -EINVAL;
-
-	pi->log_head = nova_get_block_off(sb, blocknr, NOVA_BLOCK_TYPE_2M);
-	nova_flush_buffer(&pi, NOVA_INODE_SIZE, 0);
-
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_table = nova_get_inode_table1(sb, i);
 		if (!inode_table)
@@ -134,61 +111,6 @@ int nova_init_inode_table(struct super_block *sb)
 }
 
 int nova_get_inode_address(struct super_block *sb, u64 ino,
-	u64 *pi_addr, int extendable)
-{
-	struct nova_inode *pi = nova_get_inode_table(sb);
-	unsigned int data_bits;
-	unsigned int num_inodes_bits;
-	u64 curr;
-	unsigned int superpage_count;
-	unsigned int index;
-	unsigned int i = 0;
-	unsigned long blocknr;
-	unsigned long curr_addr;
-	int allocated;
-
-	data_bits = blk_type_to_shift[pi->i_blk_type];
-	num_inodes_bits = data_bits - NOVA_INODE_BITS;
-	superpage_count = ino >> num_inodes_bits;
-	index = ino & ((1 << num_inodes_bits) - 1);
-
-	curr = pi->log_head;
-	if (curr == 0)
-		return -EINVAL;
-
-	for (i = 0; i < superpage_count; i++) {
-		if (curr == 0)
-			return -EINVAL;
-
-		curr_addr = (unsigned long)nova_get_block(sb, curr);
-		/* Next page pointer in the last 8 bytes of the superpage */
-		curr_addr += 2097152 - 8;
-		curr = *(u64 *)(curr_addr);
-
-		if (curr == 0) {
-			if (extendable == 0)
-				return -EINVAL;
-
-			allocated = nova_new_log_blocks(sb, pi, &blocknr,
-							1, 1);
-
-			if (allocated != 1)
-				return -EINVAL;
-
-			curr = nova_get_block_off(sb, blocknr,
-						NOVA_BLOCK_TYPE_2M);
-			*(u64 *)(curr_addr) = curr;
-			nova_flush_buffer((void *)curr_addr,
-						NOVA_INODE_SIZE, 1);
-		}
-	}
-
-	*pi_addr = curr + index * NOVA_INODE_SIZE;
-
-	return 0;
-}
-
-int nova_get_inode_address1(struct super_block *sb, u64 ino,
 	u64 *pi_addr, int extendable)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -624,53 +546,7 @@ static void nova_update_inode(struct inode *inode, struct nova_inode *pi)
 	nova_memlock_inode(inode->i_sb, pi);
 }
 
-static int nova_alloc_unused_inode(struct super_block *sb, unsigned long *ino)
-{
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_range_node *i, *next_i;
-	struct rb_node *temp, *next;
-	unsigned long next_range_low;
-	unsigned long new_ino;
-	unsigned long MAX_INODE = 1UL << 31;
-
-	i = sbi->first_inode_range;
-	NOVA_ASSERT(i);
-	temp = &i->node;
-	next = rb_next(temp);
-
-	if (!next) {
-		next_i = NULL;
-		next_range_low = MAX_INODE;
-	} else {
-		next_i = container_of(next, struct nova_range_node, node);
-		next_range_low = next_i->range_low;
-	}
-
-	new_ino = i->range_high + 1;
-
-	if (next_i && new_ino == (next_range_low - 1)) {
-		/* Fill the gap completely */
-		i->range_high = next_i->range_high;
-		rb_erase(&next_i->node, &sbi->inode_inuse_tree);
-		nova_free_inode_node(sb, next_i);
-		sbi->num_range_node_inode--;
-	} else if (new_ino < (next_range_low - 1)) {
-		/* Aligns to left */
-		i->range_high = new_ino;
-	} else {
-		nova_dbg("%s: ERROR: new ino %lu, next low %lu\n", __func__,
-			new_ino, next_range_low);
-		return -ENOSPC;
-	}
-
-	*ino = new_ino;
-	sbi->s_inodes_used_count++;
-
-	nova_dbg_verbose("Alloc ino %lu\n", *ino);
-	return 0;
-}
-
-static int nova_alloc_unused_inode1(struct super_block *sb, int cpuid,
+static int nova_alloc_unused_inode(struct super_block *sb, int cpuid,
 	unsigned long *ino)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -722,70 +598,6 @@ static int nova_alloc_unused_inode1(struct super_block *sb, int cpuid,
 static int nova_free_inuse_inode(struct super_block *sb, unsigned long ino)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_range_node *i = NULL;
-	struct nova_range_node *curr_node;
-	int found = 0;
-	int ret = 0;
-
-	nova_dbg_verbose("Free inuse ino: %lu\n", ino);
-
-	found = nova_search_inodetree(sbi, ino, &i);
-	if (!found) {
-		nova_dbg("%s ERROR: ino %lu not found\n", __func__, ino);
-		return -EINVAL;
-	}
-
-	if ((ino == i->range_low) && (ino == i->range_high)) {
-		/* fits entire node */
-		rb_erase(&i->node, &sbi->inode_inuse_tree);
-		nova_free_inode_node(sb, i);
-		sbi->num_range_node_inode--;
-		goto block_found;
-	}
-	if ((ino == i->range_low) && (ino < i->range_high)) {
-		/* Aligns left */
-		i->range_low = ino + 1;
-		goto block_found;
-	}
-	if ((ino > i->range_low) && (ino == i->range_high)) {
-		/* Aligns right */
-		i->range_high = ino - 1;
-		goto block_found;
-	}
-	if ((ino > i->range_low) && (ino < i->range_high)) {
-		/* Aligns somewhere in the middle */
-		curr_node = nova_alloc_inode_node(sb);
-		NOVA_ASSERT(curr_node);
-		if (curr_node == NULL) {
-			/* returning without freeing the block */
-			goto block_found;
-		}
-		curr_node->range_low = ino + 1;
-		curr_node->range_high = i->range_high;
-		i->range_high = ino - 1;
-		ret = nova_insert_inodetree(sbi, curr_node);
-		if (ret) {
-			nova_free_inode_node(sb, curr_node);
-			goto err;
-		}
-		sbi->num_range_node_inode++;
-		goto block_found;
-	}
-
-err:
-	nova_error_mng(sb, "Unable to free inode %lu\n", ino);
-	nova_error_mng(sb, "Found inuse block %lu - %lu\n",
-				 i->range_low, i->range_high);
-	return ret;
-
-block_found:
-	sbi->s_inodes_used_count--;
-	return ret;
-}
-
-static int nova_free_inuse_inode1(struct super_block *sb, unsigned long ino)
-{
-	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct header_tree *header_tree;
 	struct nova_range_node *i = NULL;
 	struct nova_range_node *curr_node;
@@ -797,9 +609,11 @@ static int nova_free_inuse_inode1(struct super_block *sb, unsigned long ino)
 	nova_dbg_verbose("Free inuse ino: %lu\n", ino);
 	header_tree = &sbi->header_trees[cpuid];
 
-	found = nova_search_inodetree1(sbi, ino, &i);
+	mutex_lock(&header_tree->inode_table_mutex);
+	found = nova_search_inodetree(sbi, ino, &i);
 	if (!found) {
 		nova_dbg("%s ERROR: ino %lu not found\n", __func__, ino);
+		mutex_unlock(&header_tree->inode_table_mutex);
 		return -EINVAL;
 	}
 
@@ -831,7 +645,7 @@ static int nova_free_inuse_inode1(struct super_block *sb, unsigned long ino)
 		curr_node->range_low = internal_ino + 1;
 		curr_node->range_high = i->range_high;
 		i->range_high = internal_ino - 1;
-		ret = nova_insert_inodetree1(sbi, curr_node, cpuid);
+		ret = nova_insert_inodetree(sbi, curr_node, cpuid);
 		if (ret) {
 			nova_free_inode_node(sb, curr_node);
 			goto err;
@@ -844,10 +658,12 @@ err:
 	nova_error_mng(sb, "Unable to free inode %lu\n", ino);
 	nova_error_mng(sb, "Found inuse block %lu - %lu\n",
 				 i->range_low, i->range_high);
+	mutex_unlock(&header_tree->inode_table_mutex);
 	return ret;
 
 block_found:
 	sbi->s_inodes_used_count--;
+	mutex_unlock(&header_tree->inode_table_mutex);
 	return ret;
 }
 
@@ -863,7 +679,6 @@ static int nova_free_inode(struct inode *inode,
 	struct nova_inode_info_header *sih)
 {
 	struct super_block *sb = inode->i_sb;
-	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi;
 	int err = 0;
 	timing_t free_time;
@@ -899,9 +714,8 @@ static int nova_free_inode(struct inode *inode,
 	sih->i_mode = 0;
 	sih->pi_addr = 0;
 
-	mutex_lock(&sbi->inode_table_mutex);
 	err = nova_free_inuse_inode(sb, pi->nova_ino);
-	mutex_unlock(&sbi->inode_table_mutex);
+
 	NOVA_END_TIMING(free_inode_t, free_time);
 	return err;
 }
@@ -1053,30 +867,34 @@ u64 nova_new_nova_inode(struct super_block *sb,
 {
 	struct nova_inode_info_header *sih;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct header_tree *header_tree;
 	unsigned long free_ino = 0;
+	int cpu;
 	u64 ino = 0;
 	int ret;
 	timing_t new_inode_time;
 
 	NOVA_START_TIMING(new_nova_inode_t, new_inode_time);
+	cpu = smp_processor_id();
+	header_tree = &sbi->header_trees[cpu];
 
-	mutex_lock(&sbi->inode_table_mutex);
-	ret = nova_alloc_unused_inode(sb, &free_ino);
+	mutex_lock(&header_tree->inode_table_mutex);
+	ret = nova_alloc_unused_inode(sb, cpu, &free_ino);
 	if (ret) {
 		nova_dbg("%s: alloc inode number failed %d\n", __func__, ret);
-		mutex_unlock(&sbi->inode_table_mutex);
+		mutex_unlock(&header_tree->inode_table_mutex);
 		return 0;
 	}
 
 	ret = nova_get_inode_address(sb, free_ino, pi_addr, 1);
 	if (ret) {
 		nova_dbg("%s: get inode address failed %d\n", __func__, ret);
-		mutex_unlock(&sbi->inode_table_mutex);
+		mutex_unlock(&header_tree->inode_table_mutex);
 		return 0;
 	}
 
 	nova_assign_info_header(sb, free_ino, &sih, 0, 0);
-	mutex_unlock(&sbi->inode_table_mutex);
+	mutex_unlock(&header_tree->inode_table_mutex);
 
 	ino = free_ino;
 	*return_sih = sih;

@@ -402,8 +402,6 @@ struct nova_sb_info {
 	umode_t		mode;   /* Mount mode for root directory */
 	atomic_t	next_generation;
 	/* inode tracking */
-	struct mutex inode_table_mutex;
-	unsigned long	num_range_node_inode;
 	unsigned long	s_inodes_used_count;
 	unsigned long	reserved_blocks;
 
@@ -413,12 +411,7 @@ struct nova_sb_info {
 	spinlock_t *journal_locks;
 
 	/* Header tree */
-	struct radix_tree_root	header_tree;
 	struct header_tree	*header_trees;
-
-	/* Track inuse inodes */
-	struct rb_root	inode_inuse_tree;
-	struct nova_range_node *first_inode_range;
 
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;
@@ -620,16 +613,6 @@ static inline void memset_nt(void *dest, uint32_t dword, size_t length)
 
 static inline struct nova_inode_info_header *
 nova_find_info_header(struct super_block *sb, unsigned long ino)
-{
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_inode_info_header *sih;
-
-	sih = radix_tree_lookup(&sbi->header_tree, ino);
-	return sih;
-}
-
-static inline struct nova_inode_info_header *
-nova_find_info_header1(struct super_block *sb, unsigned long ino)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode_info_header *sih;
@@ -878,13 +861,9 @@ extern int nova_new_log_blocks(struct super_block *sb, struct nova_inode *pi,
 extern unsigned long nova_count_free_blocks(struct super_block *sb);
 inline int nova_search_inodetree(struct nova_sb_info *sbi,
 	unsigned long ino, struct nova_range_node **ret_node);
-inline int nova_search_inodetree1(struct nova_sb_info *sbi,
-	unsigned long ino, struct nova_range_node **ret_node);
 inline int nova_insert_blocktree(struct nova_sb_info *sbi,
 	struct rb_root *tree, struct nova_range_node *new_node);
 inline int nova_insert_inodetree(struct nova_sb_info *sbi,
-	struct nova_range_node *new_node);
-inline int nova_insert_inodetree1(struct nova_sb_info *sbi,
 	struct nova_range_node *new_node, int cpu);
 int nova_find_free_slot(struct nova_sb_info *sbi,
 	struct rb_root *tree, unsigned long range_low,
@@ -898,7 +877,7 @@ int nova_recover_inode(struct super_block *sb, u64 pi_addr,
 	struct scan_bitmap *bm, int cpuid, int multithread);
 void nova_save_blocknode_mappings_to_log(struct super_block *sb);
 void nova_save_inode_list_to_log(struct super_block *sb);
-unsigned int nova_free_header_tree(struct super_block *sb);
+unsigned int nova_free_header_trees(struct super_block *sb);
 struct nova_inode_info_header *nova_alloc_header(struct super_block *sb,
 	u16 i_mode);
 int nova_assign_info_header(struct super_block *sb, unsigned long ino,

@@ -147,13 +147,6 @@ static int nova_find_range_node(struct nova_sb_info *sbi,
 inline int nova_search_inodetree(struct nova_sb_info *sbi,
 	unsigned long ino, struct nova_range_node **ret_node)
 {
-	return nova_find_range_node(sbi, &sbi->inode_inuse_tree,
-					ino, ret_node);
-}
-
-inline int nova_search_inodetree1(struct nova_sb_info *sbi,
-	unsigned long ino, struct nova_range_node **ret_node)
-{
 	struct rb_root *tree;
 	unsigned long internal_ino;
 	int cpu;
@@ -214,18 +207,6 @@ inline int nova_insert_blocktree(struct nova_sb_info *sbi,
 }
 
 inline int nova_insert_inodetree(struct nova_sb_info *sbi,
-	struct nova_range_node *new_node)
-{
-	int ret;
-
-	ret = nova_insert_range_node(sbi, &sbi->inode_inuse_tree, new_node);
-	if (ret)
-		nova_dbg("ERROR: %s failed %d\n", __func__, ret);
-
-	return ret;
-}
-
-inline int nova_insert_inodetree1(struct nova_sb_info *sbi,
 	struct nova_range_node *new_node, int cpu)
 {
 	struct rb_root *tree;

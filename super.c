@@ -495,7 +495,6 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	atomic_set(&sbi->next_generation, random);
 
 	/* Init with default values */
-	INIT_RADIX_TREE(&sbi->header_tree, GFP_ATOMIC);
 	sbi->shared_free_list.block_free_tree = RB_ROOT;
 	spin_lock_init(&sbi->shared_free_list.s_lock);
 	sbi->mode = (S_IRUGO | S_IXUGO | S_IWUSR);
@@ -505,7 +504,6 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	clear_opt(sbi->s_mount_opt, PROTECT);
 	set_opt(sbi->s_mount_opt, HUGEIOREMAP);
 
-	mutex_init(&sbi->inode_table_mutex);
 	sbi->header_trees = kzalloc(sbi->cpus * sizeof(struct header_tree),
 					GFP_KERNEL);
 	if (!sbi->header_trees) {
@@ -521,8 +519,6 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	mutex_init(&sbi->s_lock);
-
-	sbi->inode_inuse_tree = RB_ROOT;
 
 	sbi->zeroed_page = kzalloc(PAGE_SIZE, GFP_KERNEL);
 	if (!sbi->zeroed_page) {
@@ -755,7 +751,7 @@ static void nova_put_super(struct super_block *sb)
 	/* It's unmount time, so unmap the nova memory */
 //	nova_print_free_lists(sb);
 	if (sbi->virt_addr) {
-		nova_free_header_tree(sb);
+		nova_free_header_trees(sb);
 		nova_save_inode_list_to_log(sb);
 		/* Save everything before blocknode mapping! */
 		nova_save_blocknode_mappings_to_log(sb);
