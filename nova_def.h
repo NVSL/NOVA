@@ -167,6 +167,7 @@ struct nova_super_block {
 #define NOVA_BLOCKNODE_INO	(3)
 #define NOVA_INODELIST_INO	(4)
 #define NOVA_LITEJOURNAL_INO	(5)
+#define NOVA_INODELIST1_INO	(6)
 
 #define	NOVA_ROOT_INO_START	(NOVA_SB_SIZE * 2)
 
