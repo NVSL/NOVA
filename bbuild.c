@@ -951,9 +951,7 @@ static void wait_to_finish(int cpus, int failure)
 	}
 
 	total++; /* Root inode */
-	if (failure)
-		nova_dbg("Failure threads total recovered %d\n", total);
-	else
+	if (failure == 0)
 		nova_dbg("Multithread total recovered %d\n", total);
 }
 
