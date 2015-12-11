@@ -296,25 +296,22 @@ void nova_print_inode_log(struct super_block *sb, struct inode *inode)
 	}
 }
 
-void nova_print_inode_log_pages(struct super_block *sb, struct inode *inode)
+void nova_print_nova_log_pages(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_inode *pi)
 {
-	struct nova_inode *pi;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
 	struct nova_inode_log_page *curr_page;
 	u64 curr, next;
 	int count = 1;
 	int used = count;
 
-	pi = nova_get_inode(sb, inode);
 	if (pi->log_tail == 0) {
-		nova_dbg("Pi %lu has no log\n", inode->i_ino);
+		nova_dbg("Pi %lu has no log\n", sih->ino);
 		return;
 	}
 
 	curr = pi->log_head;
 	nova_dbg("Pi %lu: log head @ 0x%llx, tail @ 0x%llx\n",
-			inode->i_ino, curr, pi->log_tail);
+			sih->ino, curr, pi->log_tail);
 	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr);
 	while ((next = curr_page->page_tail.next_page) != 0) {
 		nova_dbg_verbose("Current page 0x%llx, next page 0x%llx\n",
@@ -329,8 +326,18 @@ void nova_print_inode_log_pages(struct super_block *sb, struct inode *inode)
 	if (pi->log_tail >> PAGE_SHIFT == curr >> PAGE_SHIFT)
 		used = count;
 	nova_dbg("Pi %lu: log used %d pages, has %d pages, "
-		"si reports %lu pages\n", inode->i_ino, used, count,
+		"si reports %lu pages\n", sih->ino, used, count,
 		sih->log_pages);
+}
+
+void nova_print_inode_log_pages(struct super_block *sb, struct inode *inode)
+{
+	struct nova_inode *pi;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
+
+	pi = nova_get_inode(sb, inode);
+	nova_print_nova_log_pages(sb, sih, pi);
 }
 
 void nova_print_free_lists(struct super_block *sb)
