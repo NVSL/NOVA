@@ -945,9 +945,6 @@ static void wait_to_finish(int cpus, int failure)
 		}
 	}
 
-	for (i = 0; i < cpus; i++)
-		kthread_stop(threads[i]);
-
 	for (i = 0; i < cpus; i++) {
 		nova_dbgv("CPU %d processed %d\n", i, processed[i]);
 		total += processed[i];
@@ -955,9 +952,9 @@ static void wait_to_finish(int cpus, int failure)
 
 	total++; /* Root inode */
 	if (failure)
-		nova_dbg("Multithread total recovered %d\n", total);
-	else
 		nova_dbg("Failure threads total recovered %d\n", total);
+	else
+		nova_dbg("Multithread total recovered %d\n", total);
 }
 
 /*********************** DFS recovery *************************/
@@ -1009,6 +1006,7 @@ static int failure_thread_func(void *data)
 
 	finished[cpuid] = 1;
 	wake_up_interruptible(&finish_wq);
+	do_exit(ret);
 	return ret;
 }
 
@@ -1195,6 +1193,7 @@ static int multithread_func(void *data)
 
 	finished[cpuid] = 1;
 	wake_up_interruptible(&finish_wq);
+	do_exit(ret);
 	return ret;
 }
 
