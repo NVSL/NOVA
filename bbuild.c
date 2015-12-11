@@ -887,6 +887,7 @@ wait_queue_head_t finish_wq;
 int *finished;
 
 static int multithread_func(void *data);
+static int failure_thread_func(void *data);
 
 static void free_resources(void)
 {
@@ -895,7 +896,7 @@ static void free_resources(void)
 	kfree(finished);
 }
 
-static int allocate_resources(struct super_block *sb, int cpus)
+static int allocate_resources(struct super_block *sb, int cpus, int failure)
 {
 	int i;
 
@@ -919,7 +920,11 @@ static int allocate_resources(struct super_block *sb, int cpus)
 	init_waitqueue_head(&finish_wq);
 
 	for (i = 0; i < cpus; i++) {
-		threads[i] = kthread_create(multithread_func,
+		if (failure)
+			threads[i] = kthread_create(failure_thread_func,
+						sb, "recovery thread");
+		else
+			threads[i] = kthread_create(multithread_func,
 						sb, "recovery thread");
 		kthread_bind(threads[i], i);
 		wake_up_process(threads[i]);
@@ -928,7 +933,7 @@ static int allocate_resources(struct super_block *sb, int cpus)
 	return 0;
 }
 
-static void wait_to_finish(int cpus)
+static void wait_to_finish(int cpus, int failure)
 {
 	int total = 0;
 	int i;
@@ -949,82 +954,72 @@ static void wait_to_finish(int cpus)
 	}
 
 	total++; /* Root inode */
-	nova_dbg("Multithread total recovered %d\n", total);
+	if (failure)
+		nova_dbg("Multithread total recovered %d\n", total);
+	else
+		nova_dbg("Failure threads total recovered %d\n", total);
 }
 
 /*********************** DFS recovery *************************/
 
-static int nova_dfs_recovery_crawl(struct super_block *sb,
-	struct scan_bitmap *bm)
+struct scan_bitmap *global_bm;
+
+static int failure_thread_func(void *data)
 {
-	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct super_block *sb = data;
 	struct nova_inode *pi;
 	struct inode_table *inode_table;
 	unsigned long curr_addr;
 	unsigned long num_inodes_per_page;
 	unsigned int data_bits;
 	u64 curr;
-	u64 root_addr = NOVA_ROOT_INO_START;
-	u64 pi_addr;
-	unsigned long i, cpu;
-	int ret;
+	int cpuid = smp_processor_id();
+	unsigned long i;
+	u64 pi_addr = 0;
+	int ret = 0;
 
-	nova_dbg_verbose("%s: rebuild alive inodes\n", __func__);
-
-	/* First recover the root iode */
-	ret = nova_recover_inode(sb, root_addr, bm, smp_processor_id(), 0);
+	inode_table = nova_get_inode_table(sb, cpuid);
+	if (!inode_table)
+		return -EINVAL;
 
 	pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
 	data_bits = blk_type_to_shift[pi->i_blk_type];
 	num_inodes_per_page = 1 << (data_bits - NOVA_INODE_BITS);
 
-	curr = pi->log_head;
+	curr = inode_table->log_head;
 	while (curr) {
 		/*
-		 * Note: The inode log page is allocated in 2MB granularity,
-		 * but not aligned on 2MB boundary
+		 * Note: The inode log page is allocated in 2MB
+		 * granularity, but not aligned on 2MB boundary.
 		 */
 		for (i = 0; i < 512; i++)
-			set_bm((curr >> PAGE_SHIFT) + i, bm, BM_4K);
+			set_bm((curr >> PAGE_SHIFT) + i, global_bm, BM_4K);
 
 		for (i = 0; i < num_inodes_per_page; i++) {
 			pi_addr = curr + i * NOVA_INODE_SIZE;
-			ret = nova_recover_inode(sb, pi_addr, bm,
-						smp_processor_id(), 0);
+			ret = nova_recover_inode(sb, pi_addr, global_bm,
+							cpuid, 0);
 		}
 
 		curr_addr = (unsigned long)nova_get_block(sb, curr);
-		/* Next page pointer in the last 8 bytes of the superpage */
+		/* Next page resides at the last 8 bytes */
 		curr_addr += 2097152 - 8;
 		curr = *(u64 *)(curr_addr);
 	}
 
-	for (cpu = 0; cpu < sbi->cpus; cpu++) {
-		inode_table = nova_get_inode_table(sb, cpu);
-		if (!inode_table)
-			return -EINVAL;
+	finished[cpuid] = 1;
+	wake_up_interruptible(&finish_wq);
+	return ret;
+}
 
-		curr = inode_table->log_head;
-		while (curr) {
-			/*
-			 * Note: The inode log page is allocated in 2MB
-			 * granularity, but not aligned on 2MB boundary.
-			 */
-			for (i = 0; i < 512; i++)
-				set_bm((curr >> PAGE_SHIFT) + i, bm, BM_4K);
-#if 0
-			for (i = 0; i < num_inodes_per_page; i++) {
-				pi_addr = curr + i * NOVA_INODE_SIZE;
-				ret = nova_recover_inode(sb, pi_addr, bm,
-							smp_processor_id(), 0);
-			}
-#endif
-			curr_addr = (unsigned long)nova_get_block(sb, curr);
-			/* Next page resides at the last 8 bytes */
-			curr_addr += 2097152 - 8;
-			curr = *(u64 *)(curr_addr);
-		}
-	}
+static int nova_dfs_recovery_crawl(struct super_block *sb,
+	struct scan_bitmap *bm)
+{
+	u64 root_addr = NOVA_ROOT_INO_START;
+	int ret;
+
+	/* Recover the root iode */
+	ret = nova_recover_inode(sb, root_addr, bm, smp_processor_id(), 0);
 
 	return ret;
 }
@@ -1038,6 +1033,7 @@ int nova_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	int i;
 
 	sbi->s_inodes_used_count = 0;
+	global_bm = bm;
 
 	/* Initialize inuse inode list */
 	if (nova_init_inode_inuse_list(sb) < 0)
@@ -1055,9 +1051,16 @@ int nova_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 
 		set_bm(pair->journal_head >> PAGE_SHIFT, bm, BM_4K);
 	}
-
 	PERSISTENT_BARRIER();
+
+	ret = allocate_resources(sb, sbi->cpus, 1);
+	if (ret)
+		return ret;
+
 	ret = nova_dfs_recovery_crawl(sb, bm);
+
+	wait_to_finish(sbi->cpus, 1);
+	free_resources();
 
 	nova_dbg("DFS recovery total recovered %lu\n",
 				sbi->s_inodes_used_count);
@@ -1214,13 +1217,13 @@ int nova_multithread_recovery(struct super_block *sb)
 	cpus = num_online_cpus();
 	nova_dbgv("%s: %d cpus\n", __func__, cpus);
 
-	ret = allocate_resources(sb, cpus);
+	ret = allocate_resources(sb, cpus, 0);
 	if (ret)
 		return ret;
 
 	ret = nova_inode_table_multithread_crawl(sb, cpus);
 
-	wait_to_finish(cpus);
+	wait_to_finish(cpus, 0);
 	free_resources();
 	return ret;
 }
