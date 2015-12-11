@@ -881,6 +881,77 @@ int nova_recover_inode(struct super_block *sb, u64 pi_addr,
 	return 0;
 }
 
+int *processed;
+static struct task_struct **threads;
+wait_queue_head_t finish_wq;
+int *finished;
+
+static int multithread_func(void *data);
+
+static void free_resources(void)
+{
+	kfree(threads);
+	kfree(processed);
+	kfree(finished);
+}
+
+static int allocate_resources(struct super_block *sb, int cpus)
+{
+	int i;
+
+	threads = kzalloc(cpus * sizeof(struct task_struct *), GFP_KERNEL);
+	if (!threads)
+		return -ENOMEM;
+
+	processed = kzalloc(cpus * sizeof(int), GFP_KERNEL);
+	if (!processed) {
+		kfree(threads);
+		return -ENOMEM;
+	}
+
+	finished = kzalloc(cpus * sizeof(int), GFP_KERNEL);
+	if (!finished) {
+		kfree(threads);
+		kfree(processed);
+		return -ENOMEM;
+	}
+
+	init_waitqueue_head(&finish_wq);
+
+	for (i = 0; i < cpus; i++) {
+		threads[i] = kthread_create(multithread_func,
+						sb, "recovery thread");
+		kthread_bind(threads[i], i);
+		wake_up_process(threads[i]);
+	}
+
+	return 0;
+}
+
+static void wait_to_finish(int cpus)
+{
+	int total = 0;
+	int i;
+
+	for (i = 0; i < cpus; i++) {
+		while (finished[i] == 0) {
+			wait_event_interruptible_timeout(finish_wq, false,
+							msecs_to_jiffies(1));
+		}
+	}
+
+	for (i = 0; i < cpus; i++)
+		kthread_stop(threads[i]);
+
+	for (i = 0; i < cpus; i++) {
+		nova_dbgv("CPU %d processed %d\n", i, processed[i]);
+		total += processed[i];
+	}
+
+	total++; /* Root inode */
+	nova_dbg("Multithread total recovered %d\n", total);
+}
+
 /*********************** DFS recovery *************************/
 
 static int nova_dfs_recovery_crawl(struct super_block *sb,
@@ -1023,8 +1094,6 @@ static u64 nova_get_last_ino(struct super_block *sb)
 	return max_ino;
 }
 
-int *processed;
-
 static int nova_inode_table_singlethread_crawl(struct super_block *sb)
 {
 	u64 root_addr = NOVA_ROOT_INO_START;
@@ -1080,11 +1149,7 @@ int nova_singlethread_recovery(struct super_block *sb)
 
 /*********************** Multithread recovery *************************/
 
-static struct task_struct **threads;
-wait_queue_head_t finish_wq;
-int *finished;
-
-static int thread_func(void *data)
+static int multithread_func(void *data)
 {
 	struct super_block *sb = data;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -1139,70 +1204,6 @@ static int nova_inode_table_multithread_crawl(struct super_block *sb,
 	ret = nova_recover_inode(sb, root_addr, NULL, smp_processor_id(), 0);
 
 	return ret;
-}
-
-static void free_resources(void)
-{
-	kfree(threads);
-	kfree(processed);
-	kfree(finished);
-}
-
-static int allocate_resources(struct super_block *sb, int cpus)
-{
-	int i;
-
-	threads = kzalloc(cpus * sizeof(struct task_struct *), GFP_KERNEL);
-	if (!threads)
-		return -ENOMEM;
-
-	processed = kzalloc(cpus * sizeof(int), GFP_KERNEL);
-	if (!processed) {
-		kfree(threads);
-		return -ENOMEM;
-	}
-
-	finished = kzalloc(cpus * sizeof(int), GFP_KERNEL);
-	if (!finished) {
-		kfree(threads);
-		kfree(processed);
-		return -ENOMEM;
-	}
-
-	init_waitqueue_head(&finish_wq);
-
-	for (i = 0; i < cpus; i++) {
-		threads[i] = kthread_create(thread_func,
-						sb, "recovery thread");
-		kthread_bind(threads[i], i);
-		wake_up_process(threads[i]);
-	}
-
-	return 0;
-}
-
-static void wait_to_finish(int cpus)
-{
-	int total = 0;
-	int i;
-
-	for (i = 0; i < cpus; i++) {
-		while (finished[i] == 0) {
-			wait_event_interruptible_timeout(finish_wq, false,
-							msecs_to_jiffies(1));
-		}
-	}
-
-	for (i = 0; i < cpus; i++)
-		kthread_stop(threads[i]);
-
-	for (i = 0; i < cpus; i++) {
-		nova_dbgv("CPU %d processed %d\n", i, processed[i]);
-		total += processed[i];
-	}
-
-	total++; /* Root inode */
-	nova_dbg("Multithread total recovered %d\n", total);
 }
 
 int nova_multithread_recovery(struct super_block *sb)
