@@ -641,6 +641,8 @@ nova_get_write_entry(struct super_block *sb,
 }
 
 void nova_print_curr_log_page(struct super_block *sb, u64 curr);
+void nova_print_nova_log(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_inode *pi);
 void nova_print_nova_log_pages(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_inode *pi);
 

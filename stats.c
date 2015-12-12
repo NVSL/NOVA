@@ -187,10 +187,10 @@ static inline void nova_print_file_write_entry(struct super_block *sb,
 	u64 curr, struct nova_file_write_entry *entry)
 {
 	nova_dbg("file write entry @ 0x%llx: offset %u, size %u, "
-			"blocknr %llu, invalid count %u\n",
+			"blocknr %llu, invalid count %u, size %llu\n",
 			curr, entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT,
-			entry->invalid_pages);
+			entry->invalid_pages, entry->size);
 }
 
 static inline void nova_print_set_attr_entry(struct super_block *sb,
@@ -271,18 +271,17 @@ void nova_print_curr_log_page(struct super_block *sb, u64 curr)
 			tail->next_page >> PAGE_SHIFT);
 }
 
-void nova_print_inode_log(struct super_block *sb, struct inode *inode)
+void nova_print_nova_log(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_inode *pi)
 {
-	struct nova_inode *pi;
 	u64 curr;
 
-	pi = nova_get_inode(sb, inode);
 	if (pi->log_tail == 0)
 		return;
 
 	curr = pi->log_head;
 	nova_dbg("Pi %lu: log head 0x%llx, tail 0x%llx\n",
-			inode->i_ino, curr, pi->log_tail);
+			sih->ino, curr, pi->log_tail);
 	while (curr != pi->log_tail) {
 		if ((curr & (PAGE_SIZE - 1)) == LAST_ENTRY) {
 			struct nova_inode_page_tail *tail =
@@ -294,6 +293,16 @@ void nova_print_inode_log(struct super_block *sb, struct inode *inode)
 			curr = nova_print_log_entry(sb, curr);
 		}
 	}
+}
+
+void nova_print_inode_log(struct super_block *sb, struct inode *inode)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode *pi;
+
+	pi = nova_get_inode(sb, inode);
+	nova_print_nova_log(sb, sih, pi);
 }
 
 void nova_print_nova_log_pages(struct super_block *sb,
