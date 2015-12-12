@@ -439,7 +439,7 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode *pi;
-	struct nova_inode_info_header *sih;
+	struct nova_inode_info_header *sih = si->header;
 	int ret = -EIO;
 	unsigned long ino;
 
@@ -483,7 +483,6 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 		inode->i_op = &nova_symlink_inode_operations;
 		break;
 	default:
-		inode->i_size = 0;
 		inode->i_op = &nova_special_inode_operations;
 		init_special_inode(inode, inode->i_mode,
 				   le32_to_cpu(pi->dev.rdev));
@@ -491,7 +490,7 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 	}
 
 	/* Update size and time after rebuild the tree */
-	inode->i_size = le64_to_cpu(pi->i_size);
+	inode->i_size = le64_to_cpu(sih->i_size);
 	inode->i_atime.tv_sec = le32_to_cpu(pi->i_atime);
 	inode->i_ctime.tv_sec = le32_to_cpu(pi->i_ctime);
 	inode->i_mtime.tv_sec = le32_to_cpu(pi->i_mtime);
@@ -714,6 +713,7 @@ static int nova_free_inode(struct inode *inode,
 	sih->log_pages = 0;
 	sih->i_mode = 0;
 	sih->pi_addr = 0;
+	sih->i_size = 0;
 
 	err = nova_free_inuse_inode(sb, pi->nova_ino);
 

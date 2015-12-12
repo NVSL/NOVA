@@ -662,7 +662,7 @@ static inline unsigned long get_nvmm(struct super_block *sb,
 			curr, pgoff, data->pgoff, data->num_pages);
 		pi = nova_get_block(sb, sih->pi_addr);
 		nova_print_nova_log_pages(sb, sih, pi);
-		nova_print_curr_log_page(sb, curr);
+		nova_print_nova_log(sb, sih, pi);
 		NOVA_ASSERT(0);
 	}
 
