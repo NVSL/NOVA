@@ -444,7 +444,7 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 	unsigned long ino;
 
 	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
-	inode->i_mode = le16_to_cpu(pi->i_mode);
+	inode->i_mode = sih->i_mode;
 	i_uid_write(inode, le32_to_cpu(pi->i_uid));
 	i_gid_write(inode, le32_to_cpu(pi->i_gid));
 //	set_nlink(inode, le16_to_cpu(pi->i_links_count));
@@ -1175,6 +1175,8 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = si->header;
 	int ret;
 	unsigned int ia_valid = attr->ia_valid, attr_mask;
 	loff_t oldsize = inode->i_size;
@@ -1191,6 +1193,9 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 
 	/* Update inode with attr except for size */
 	setattr_copy(inode, attr);
+
+	if (ia_valid & ATTR_MODE)
+		sih->i_mode = inode->i_mode;
 
 	attr_mask = ATTR_MODE | ATTR_UID | ATTR_GID | ATTR_SIZE | ATTR_ATIME
 			| ATTR_MTIME | ATTR_CTIME;
