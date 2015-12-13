@@ -435,7 +435,7 @@ out:
 }
 
 static int nova_read_inode(struct super_block *sb, struct inode *inode,
-	u64 pi_addr, int rebuild)
+	u64 pi_addr)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode *pi;
@@ -470,14 +470,6 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 	case S_IFDIR:
 		inode->i_op = &nova_dir_inode_operations;
 		inode->i_fop = &nova_dir_operations;
-		if (rebuild && inode->i_ino == NOVA_ROOT_INO) {
-			nova_assign_info_header(sb, ino, &sih,
-						inode->i_mode, 1);
-			nova_dbg_verbose("%s: rebuild root dir\n", __func__);
-			nova_rebuild_dir_inode_tree(sb, pi, pi_addr,
-					sih, NULL);
-			si->header = sih;
-		}
 		break;
 	case S_IFLNK:
 		inode->i_op = &nova_symlink_inode_operations;
@@ -725,8 +717,8 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 {
 	struct nova_inode_info *si;
 	struct nova_inode_info_header *sih = NULL;
+	struct nova_inode *pi;
 	struct inode *inode;
-	int rebuild = 0;
 	u64 pi_addr;
 	int err;
 
@@ -738,12 +730,15 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 
 	if (ino == NOVA_ROOT_INO) {
 		si = NOVA_I(inode);
-		sih = nova_find_info_header(sb, ino);
-		if (sih)
-			si->header = sih;
-		else
-			rebuild = 1;
 		pi_addr = NOVA_ROOT_INO_START;
+		pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
+		err = nova_assign_info_header(sb, ino, &sih,
+						le16_to_cpu(pi->i_mode), 1);
+		if (err)
+			goto fail;
+		nova_dbgv("%s: rebuild root dir\n", __func__);
+		nova_rebuild_dir_inode_tree(sb, pi, pi_addr,
+					sih, NULL);
 	} else {
 		si = NOVA_I(inode);
 		sih = nova_find_info_header(sb, ino);
@@ -754,13 +749,14 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 			goto fail;
 		}
 		pi_addr = sih->pi_addr;
-		si->header = sih;
 	}
+
+	si->header = sih;
 	if (pi_addr == 0) {
 		err = -EACCES;
 		goto fail;
 	}
-	err = nova_read_inode(sb, inode, pi_addr, rebuild);
+	err = nova_read_inode(sb, inode, pi_addr);
 	if (unlikely(err))
 		goto fail;
 	inode->i_ino = ino;
