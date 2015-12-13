@@ -373,11 +373,12 @@ struct header_tree {
  */
 struct nova_sb_info {
 	struct super_block *sb;
+	struct block_device *s_bdev;
+
 	/*
 	 * base physical and virtual address of NOVA (which is also
 	 * the pointer to the super block)
 	 */
-	struct block_device *s_bdev;
 	phys_addr_t	phys_addr;
 	void		*virt_addr;
 
@@ -407,16 +408,17 @@ struct nova_sb_info {
 
 	struct mutex 	s_lock;	/* protects the SB's buffer-head */
 
-	/* Journaling related structures */
-	spinlock_t *journal_locks;
-
-	/* Header tree */
-	struct header_tree	*header_trees;
+	int cpus;
 
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;
 
-	int cpus;
+	/* Per-CPU journal lock */
+	spinlock_t *journal_locks;
+
+	/* Per-CPU inode map */
+	struct header_tree	*header_trees;
+
 	/* Per-CPU free block list */
 	struct free_list *free_lists;
 
