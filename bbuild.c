@@ -1214,7 +1214,7 @@ int nova_inode_log_recovery(struct super_block *sb, int multithread)
 	unsigned long initsize = le64_to_cpu(super->s_size);
 	struct scan_bitmap *bm = NULL;
 	bool value = false;
-	int ret;
+	int ret = 0;
 	timing_t start, end;
 
 	/* Always check recovery time */
@@ -1243,14 +1243,6 @@ int nova_inode_log_recovery(struct super_block *sb, int multithread)
 	if (bm) {
 		sbi->s_inodes_used_count = 0;
 		ret = nova_dfs_recovery(sb, bm);
-	} else {
-		if (multithread)
-			ret = nova_multithread_recovery(sb);
-		else
-			ret = nova_singlethread_recovery(sb);
-	}
-
-	if (bm) {
 		nova_build_blocknode_map(sb, bm);
 		free_bm(bm);
 	}

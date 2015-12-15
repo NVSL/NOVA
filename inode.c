@@ -718,7 +718,6 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino,
 {
 	struct nova_inode_info *si;
 	struct nova_inode_info_header *sih = NULL;
-	struct nova_inode *pi;
 	struct inode *inode;
 	u64 pi_addr;
 	int err;
@@ -729,34 +728,33 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino,
 	if (!(inode->i_state & I_NEW))
 		return inode;
 
-	if (ino == NOVA_ROOT_INO && initialization == 1) {
-		si = NOVA_I(inode);
+	si = NOVA_I(inode);
+
+	nova_dbgv("%s: inode %lu\n", __func__, ino);
+
+	if (ino == NOVA_ROOT_INO) {
 		pi_addr = NOVA_ROOT_INO_START;
-		pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
-		err = nova_assign_info_header(sb, ino, &sih,
-						le16_to_cpu(pi->i_mode), 1);
-		if (err)
-			goto fail;
-		nova_dbgv("%s: rebuild root dir\n", __func__);
-		nova_rebuild_dir_inode_tree(sb, pi, pi_addr,
-					sih, NULL);
 	} else {
-		si = NOVA_I(inode);
-		sih = nova_find_info_header(sb, ino);
-		if (!sih) {
-			nova_dbg("%s: sih for ino %lu not found!\n",
-					__func__, ino);
-			err = -EACCES;
+		err = nova_get_inode_address(sb, ino, &pi_addr, 0);
+		if (err) {
+			nova_dbg("%s: get inode %lu address failed %d\n",
+					__func__, ino, err);
 			goto fail;
 		}
-		pi_addr = sih->pi_addr;
 	}
 
-	si->header = sih;
 	if (pi_addr == 0) {
 		err = -EACCES;
 		goto fail;
 	}
+
+	sih = nova_recover_inode(sb, pi_addr, NULL, 1);
+	if (!sih) {
+		err = -EINVAL;
+		goto fail;
+	}
+
+	si->header = sih;
 	err = nova_read_inode(sb, inode, pi_addr);
 	if (unlikely(err))
 		goto fail;
