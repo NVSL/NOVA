@@ -839,14 +839,15 @@ int nova_recover_inode(struct super_block *sb, u64 pi_addr,
 			__func__, nova_ino, pi_addr, pi->valid,
 			pi->log_head, pi->log_tail);
 
+	nova_assign_info_header(sb, nova_ino, &sih,
+				__le16_to_cpu(pi->i_mode), need_lock);
+
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:
 		nova_dbg_verbose("This is thread %d, processing file %p, "
 				"nova ino %lu, head 0x%llx, tail 0x%llx\n",
 				cpuid, pi, nova_ino, pi->log_head,
 				pi->log_tail);
-		nova_assign_info_header(sb, nova_ino, &sih,
-				__le16_to_cpu(pi->i_mode), need_lock);
 		nova_rebuild_file_inode_tree(sb, pi, pi_addr, sih, bm);
 		break;
 	case S_IFDIR:
@@ -854,8 +855,6 @@ int nova_recover_inode(struct super_block *sb, u64 pi_addr,
 				"nova ino %lu, head 0x%llx, tail 0x%llx\n",
 				cpuid, pi, nova_ino, pi->log_head,
 				pi->log_tail);
-		nova_assign_info_header(sb, nova_ino, &sih,
-				__le16_to_cpu(pi->i_mode), need_lock);
 		nova_rebuild_dir_inode_tree(sb, pi, pi_addr, sih, bm);
 		break;
 	case S_IFLNK:
@@ -864,13 +863,9 @@ int nova_recover_inode(struct super_block *sb, u64 pi_addr,
 				cpuid, pi, nova_ino, pi->log_head,
 				pi->log_tail);
 		/* Treat symlink files as normal files */
-		nova_assign_info_header(sb, nova_ino, &sih,
-				__le16_to_cpu(pi->i_mode), need_lock);
 		nova_rebuild_file_inode_tree(sb, pi, pi_addr, sih, bm);
 		break;
 	default:
-		nova_assign_info_header(sb, nova_ino, &sih,
-				__le16_to_cpu(pi->i_mode), need_lock);
 		/* In case of special inode, walk the log */
 		if (pi->log_head)
 			nova_rebuild_file_inode_tree(sb, pi, pi_addr, sih, bm);
