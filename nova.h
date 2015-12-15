@@ -941,7 +941,8 @@ int nova_get_inode_address(struct super_block *sb, u64 ino,
 	u64 *pi_addr, int extendable);
 int nova_set_blocksize_hint(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, loff_t new_size);
-extern struct inode *nova_iget(struct super_block *sb, unsigned long ino);
+extern struct inode *nova_iget(struct super_block *sb, unsigned long ino,
+	int initialization);
 extern void nova_evict_inode(struct inode *inode);
 extern int nova_write_inode(struct inode *inode, struct writeback_control *wbc);
 extern void nova_dirty_inode(struct inode *inode, int flags);

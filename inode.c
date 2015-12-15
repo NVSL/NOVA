@@ -713,7 +713,8 @@ static int nova_free_inode(struct inode *inode,
 	return err;
 }
 
-struct inode *nova_iget(struct super_block *sb, unsigned long ino)
+struct inode *nova_iget(struct super_block *sb, unsigned long ino,
+	int initialization)
 {
 	struct nova_inode_info *si;
 	struct nova_inode_info_header *sih = NULL;
@@ -728,7 +729,7 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 	if (!(inode->i_state & I_NEW))
 		return inode;
 
-	if (ino == NOVA_ROOT_INO) {
+	if (ino == NOVA_ROOT_INO && initialization == 1) {
 		si = NOVA_I(inode);
 		pi_addr = NOVA_ROOT_INO_START;
 		pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
