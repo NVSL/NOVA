@@ -234,7 +234,7 @@ static int nova_delete_cache_tree(struct super_block *sb,
 	return 0;
 }
 
-static int nova_delete_file_tree(struct super_block *sb,
+int nova_delete_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long start_blocknr,
 	unsigned long last_blocknr, bool delete_nvmm)
 {
@@ -766,7 +766,7 @@ fail:
 	return ERR_PTR(err);
 }
 
-static unsigned long nova_get_last_blocknr(struct super_block *sb,
+unsigned long nova_get_last_blocknr(struct super_block *sb,
 	struct nova_inode_info_header *sih)
 {
 	struct nova_inode *pi;

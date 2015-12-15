@@ -937,6 +937,8 @@ int nova_is_page_dirty(struct mm_struct *mm, unsigned long address,
 extern const struct address_space_operations nova_aops_dax;
 int nova_init_inode_inuse_list(struct super_block *sb);
 extern int nova_init_inode_table(struct super_block *sb);
+unsigned long nova_get_last_blocknr(struct super_block *sb,
+	struct nova_inode_info_header *sih);
 int nova_get_inode_address(struct super_block *sb, u64 ino,
 	u64 *pi_addr, int extendable);
 int nova_set_blocksize_hint(struct super_block *sb, struct inode *inode,
@@ -961,6 +963,9 @@ void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi);
 int nova_allocate_inode_log_pages(struct super_block *sb,
 	struct nova_inode *pi, unsigned long num_pages,
 	u64 *new_block);
+int nova_delete_file_tree(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long start_blocknr,
+	unsigned long last_blocknr, bool delete_nvmm);
 u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih, u64 tail, size_t size,
 	int is_file);

@@ -693,6 +693,18 @@ static struct scan_bitmap *alloc_bm(unsigned long initsize)
 
 struct kmem_cache *nova_header_cachep;
 
+static void nova_init_header(struct super_block *sb,
+	struct nova_inode_info_header *sih, u16 i_mode)
+{
+	sih->log_pages = 0;
+	sih->mmap_pages = 0;
+	sih->i_size = 0;
+	sih->pi_addr = 0;
+	INIT_RADIX_TREE(&sih->tree, GFP_ATOMIC);
+	INIT_RADIX_TREE(&sih->cache_tree, GFP_ATOMIC);
+	sih->i_mode = i_mode;
+}
+
 struct nova_inode_info_header *nova_alloc_header(struct super_block *sb,
 	u16 i_mode)
 {
@@ -703,13 +715,7 @@ struct nova_inode_info_header *nova_alloc_header(struct super_block *sb,
 	if (!p)
 		NOVA_ASSERT(0);
 
-	p->log_pages = 0;
-	p->mmap_pages = 0;
-	p->i_size = 0;
-	p->pi_addr = 0;
-	INIT_RADIX_TREE(&p->tree, GFP_ATOMIC);
-	INIT_RADIX_TREE(&p->cache_tree, GFP_ATOMIC);
-	p->i_mode = i_mode;
+	nova_init_header(sb, p, i_mode);
 
 	atomic64_inc(&header_alloc);
 	return p;
@@ -843,15 +849,14 @@ struct nova_inode_info_header * nova_recover_inode(struct super_block *sb,
 				__le16_to_cpu(pi->i_mode), need_lock);
 
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
+	case S_IFLNK:
+		/* Treat symlink files as normal files */
+		/* Fall through */
 	case S_IFREG:
 		nova_rebuild_file_inode_tree(sb, pi, pi_addr, sih, bm);
 		break;
 	case S_IFDIR:
 		nova_rebuild_dir_inode_tree(sb, pi, pi_addr, sih, bm);
-		break;
-	case S_IFLNK:
-		/* Treat symlink files as normal files */
-		nova_rebuild_file_inode_tree(sb, pi, pi_addr, sih, bm);
 		break;
 	default:
 		/* In case of special inode, walk the log */
@@ -864,17 +869,12 @@ struct nova_inode_info_header * nova_recover_inode(struct super_block *sb,
 	return sih;
 }
 
-int nova_traverse_dir_inode_log(struct super_block *sb,	u64 pi_addr,
-	struct scan_bitmap *bm)
+static int nova_traverse_dir_inode_log(struct super_block *sb,
+	struct nova_inode *pi, struct scan_bitmap *bm)
 {
-	struct nova_inode *pi;
 	struct nova_inode_log_page *curr_page;
 	u64 curr_p;
 	u64 next;
-
-	pi = nova_get_block(sb, pi_addr);
-	if (pi->valid == 0)
-		return 0;
 
 	curr_p = pi->log_head;
 	if (curr_p == 0) {
@@ -894,6 +894,55 @@ int nova_traverse_dir_inode_log(struct super_block *sb,	u64 pi_addr,
 		set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
 		curr_page = (struct nova_inode_log_page *)
 			nova_get_block(sb, curr_p);
+	}
+
+	return 0;
+}
+
+static int nova_recover_inode_pages(struct super_block *sb, u64 pi_addr,
+	struct scan_bitmap *bm)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_inode_info_header sih;
+	struct nova_inode *pi;
+	unsigned long nova_ino;
+	unsigned long last_blocknr;
+
+	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
+	if (!pi)
+		NOVA_ASSERT(0);
+
+	if (pi->valid == 0)
+		return 0;
+
+	nova_init_header(sb, &sih, __le16_to_cpu(pi->i_mode));
+
+	nova_ino = pi->nova_ino;
+	if (nova_ino >= NOVA_NORMAL_INODE_START) {
+		nova_dfs_insert_inodetree(sb, nova_ino);
+	}
+	sbi->s_inodes_used_count++;
+
+	nova_dbgv("%s: inode %lu, addr 0x%llx, head 0x%llx, tail 0x%llx\n",
+			__func__, nova_ino, pi_addr, pi->log_head,
+			pi->log_tail);
+
+	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
+	case S_IFDIR:
+		nova_traverse_dir_inode_log(sb, pi, bm);
+		break;
+	case S_IFLNK:
+		/* Treat symlink files as normal files */
+		/* Fall through */
+	case S_IFREG:
+		/* Fall through */
+	default:
+		/* In case of special inode, walk the log */
+		nova_rebuild_file_inode_tree(sb, pi, pi_addr, &sih, bm);
+		/* Free radix tree */
+		last_blocknr = nova_get_last_blocknr(sb, &sih);
+		nova_delete_file_tree(sb, &sih, 0, last_blocknr, false);
+		break;
 	}
 
 	return 0;
@@ -1005,7 +1054,7 @@ static int failure_thread_func(void *data)
 
 		for (i = 0; i < num_inodes_per_page; i++) {
 			pi_addr = curr + i * NOVA_INODE_SIZE;
-			nova_recover_inode(sb, pi_addr, global_bm, 0);
+			nova_recover_inode_pages(sb, pi_addr, global_bm);
 		}
 
 		curr_addr = (unsigned long)nova_get_block(sb, curr);
@@ -1027,7 +1076,7 @@ static int nova_dfs_recovery_crawl(struct super_block *sb,
 	int ret = 0;
 
 	/* Recover the root iode */
-	nova_recover_inode(sb, root_addr, bm, 0);
+	nova_recover_inode_pages(sb, root_addr, bm);
 
 	return ret;
 }
