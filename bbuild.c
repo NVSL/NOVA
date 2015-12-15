@@ -864,6 +864,41 @@ struct nova_inode_info_header * nova_recover_inode(struct super_block *sb,
 	return sih;
 }
 
+int nova_traverse_dir_inode_log(struct super_block *sb,	u64 pi_addr,
+	struct scan_bitmap *bm)
+{
+	struct nova_inode *pi;
+	struct nova_inode_log_page *curr_page;
+	u64 curr_p;
+	u64 next;
+
+	pi = nova_get_block(sb, pi_addr);
+	if (pi->valid == 0)
+		return 0;
+
+	curr_p = pi->log_head;
+	if (curr_p == 0) {
+		nova_err(sb, "Dir %llu log is NULL!\n", pi->nova_ino);
+		BUG();
+	}
+
+	nova_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
+				curr_p, pi->log_tail);
+	BUG_ON(curr_p & (PAGE_SIZE - 1));
+	set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
+
+	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr_p);
+	while ((next = curr_page->page_tail.next_page) != 0) {
+		curr_p = next;
+		BUG_ON(curr_p & (PAGE_SIZE - 1));
+		set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
+		curr_page = (struct nova_inode_log_page *)
+			nova_get_block(sb, curr_p);
+	}
+
+	return 0;
+}
+
 int *processed;
 static struct task_struct **threads;
 wait_queue_head_t finish_wq;
