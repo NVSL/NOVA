@@ -878,7 +878,7 @@ int nova_find_free_slot(struct nova_sb_info *sbi,
 inline void set_bm(unsigned long bit, struct scan_bitmap *bm,
 	enum bm_type type);
 int nova_recover_inode(struct super_block *sb, u64 pi_addr,
-	struct scan_bitmap *bm, int cpuid, int multithread);
+	struct scan_bitmap *bm, int multithread);
 void nova_save_blocknode_mappings_to_log(struct super_block *sb);
 void nova_save_inode_list_to_log(struct super_block *sb);
 unsigned int nova_free_header_trees(struct super_block *sb);
