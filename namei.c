@@ -51,7 +51,7 @@ static struct dentry *nova_lookup(struct inode *dir, struct dentry *dentry,
 	ino = nova_inode_by_name(dir, &dentry->d_name, &de);
 	nova_dbg_verbose("%s: ino %lu\n", __func__, ino);
 	if (ino) {
-		inode = nova_iget(dir->i_sb, ino, 0);
+		inode = nova_iget(dir->i_sb, ino);
 		if (inode == ERR_PTR(-ESTALE) || inode == ERR_PTR(-ENOMEM)
 				|| inode == ERR_PTR(-EACCES)) {
 			nova_err(dir->i_sb,
@@ -839,7 +839,7 @@ struct dentry *nova_get_parent(struct dentry *child)
 	ino = le64_to_cpu(de->ino);
 
 	if (ino)
-		inode = nova_iget(child->d_inode->i_sb, ino, 0);
+		inode = nova_iget(child->d_inode->i_sb, ino);
 	else
 		return ERR_PTR(-ENOENT);
 

@@ -713,8 +713,7 @@ static int nova_free_inode(struct inode *inode,
 	return err;
 }
 
-struct inode *nova_iget(struct super_block *sb, unsigned long ino,
-	int initialization)
+struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 {
 	struct nova_inode_info *si;
 	struct nova_inode_info_header *sih = NULL;

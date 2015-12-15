@@ -465,7 +465,6 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	u32 random = 0;
 	int retval = -EINVAL;
 	int i;
-	int init = 0;
 	timing_t mount_time;
 
 	NOVA_START_TIMING(mount_t, mount_time);
@@ -539,7 +538,6 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 
 	/* Init a new nova instance */
 	if (sbi->s_mount_opt & NOVA_MOUNT_FORMAT) {
-		init = 1;
 		root_pi = nova_init(sb, sbi->initsize);
 		if (IS_ERR(root_pi))
 			goto out;
@@ -590,7 +588,7 @@ setup_sb:
 	if ((sbi->s_mount_opt & NOVA_MOUNT_FORMAT) == 0)
 		nova_inode_log_recovery(sb, 1);
 
-	root_i = nova_iget(sb, NOVA_ROOT_INO, init);
+	root_i = nova_iget(sb, NOVA_ROOT_INO);
 	if (IS_ERR(root_i)) {
 		retval = PTR_ERR(root_i);
 		goto out;
@@ -946,7 +944,7 @@ static struct inode *nova_nfs_get_inode(struct super_block *sb,
 	if (ino > LONG_MAX)
 		return ERR_PTR(-ESTALE);
 
-	inode = nova_iget(sb, ino, 0);
+	inode = nova_iget(sb, ino);
 	if (IS_ERR(inode))
 		return ERR_CAST(inode);
 
