@@ -45,7 +45,7 @@ int nova_init_inode_inuse_list(struct super_block *sb)
 
 	sbi->s_inodes_used_count = NOVA_NORMAL_INODE_START;
 
-	range_high = NOVA_NORMAL_INODE_START / sbi->cpus;
+	range_high = (NOVA_NORMAL_INODE_START - 1) / sbi->cpus;
 	if (NOVA_NORMAL_INODE_START % sbi->cpus)
 		range_high++;
 
