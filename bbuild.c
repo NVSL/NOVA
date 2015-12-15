@@ -1052,6 +1052,8 @@ int nova_recovery(struct super_block *sb)
 	int ret = 0;
 	timing_t start, end;
 
+	nova_dbgv("%s\n", __func__);
+
 	/* Always check recovery time */
 	if (measure_timing == 0)
 		getrawmonotonic(&start);
@@ -1065,17 +1067,13 @@ int nova_recovery(struct super_block *sb)
 
 	value = nova_can_skip_full_scan(sb);
 	if (value) {
-		nova_dbg("NOVA: Skipping build blocknode map\n");
+		nova_dbg("NOVA: Normal shutdown\n");
 	} else {
-		nova_dbg("NOVA: build blocknode map\n");
+		nova_dbg("NOVA: Failure recovery\n");
 		bm = alloc_bm(initsize);
 		if (!bm)
 			return -ENOMEM;
-	}
 
-	nova_dbgv("%s\n", __func__);
-
-	if (bm) {
 		sbi->s_inodes_used_count = 0;
 		ret = nova_dfs_recovery(sb, bm);
 		nova_build_blocknode_map(sb, bm);
