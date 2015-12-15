@@ -454,13 +454,15 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 	struct nova_inode *pidir;
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = si->header;
-	struct nova_inode_info_header *child_sih;
+	struct nova_inode *child_pi;
 	struct nova_dir_logentry *entry;
 	struct nova_dir_logentry *entries[FREE_BATCH];
 	int nr_entries;
+	u64 pi_addr;
 	long pos = 0;
 	ino_t ino;
 	int i;
+	int ret;
 	timing_t readdir_time;
 
 	NOVA_START_TIMING(readdir_t, readdir_time);
@@ -490,20 +492,21 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 			if (ino == 0)
 				continue;
 
-			child_sih = nova_find_info_header(sb, ino);
+			ret = nova_get_inode_address(sb, ino, &pi_addr, 0);
+			if (ret) {
+				nova_dbg("%s: get child inode %lu address "
+					"failed %d\n", __func__, ino, ret);
+				ctx->pos = READDIR_END;
+				return ret;
+			}
+
+			child_pi = nova_get_block(sb, pi_addr);
 			nova_dbgv("ctx: ino %llu, name %*.s, "
 				"name_len %u, de_len %u\n",
 				(u64)ino, entry->name_len, entry->name,
 				entry->name_len, entry->de_len);
-			if (!child_sih) {
-				nova_dbg("%s: inode %lu, child inode %lu sih "
-					"does not exist!\n",
-					__func__, inode->i_ino, ino);
-				ctx->pos = READDIR_END;
-				return 0;
-			}
 			if (!dir_emit(ctx, entry->name, entry->name_len,
-				ino, IF2DT(le16_to_cpu(child_sih->i_mode)))) {
+				ino, IF2DT(le16_to_cpu(child_pi->i_mode)))) {
 				nova_dbgv("Here: pos %llu\n", ctx->pos);
 				ctx->pos = pos;
 				return 0;
