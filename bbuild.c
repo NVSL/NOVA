@@ -869,7 +869,6 @@ static struct task_struct **threads;
 wait_queue_head_t finish_wq;
 int *finished;
 
-static int multithread_func(void *data);
 static int failure_thread_func(void *data);
 
 static void free_resources(void)
@@ -879,7 +878,7 @@ static void free_resources(void)
 	kfree(finished);
 }
 
-static int allocate_resources(struct super_block *sb, int cpus, int failure)
+static int allocate_resources(struct super_block *sb, int cpus)
 {
 	int i;
 
@@ -903,11 +902,7 @@ static int allocate_resources(struct super_block *sb, int cpus, int failure)
 	init_waitqueue_head(&finish_wq);
 
 	for (i = 0; i < cpus; i++) {
-		if (failure)
-			threads[i] = kthread_create(failure_thread_func,
-						sb, "recovery thread");
-		else
-			threads[i] = kthread_create(multithread_func,
+		threads[i] = kthread_create(failure_thread_func,
 						sb, "recovery thread");
 		kthread_bind(threads[i], i);
 		wake_up_process(threads[i]);
@@ -1031,7 +1026,7 @@ int nova_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 	}
 	PERSISTENT_BARRIER();
 
-	ret = allocate_resources(sb, sbi->cpus, 1);
+	ret = allocate_resources(sb, sbi->cpus);
 	if (ret)
 		return ret;
 
@@ -1042,166 +1037,6 @@ int nova_dfs_recovery(struct super_block *sb, struct scan_bitmap *bm)
 
 	nova_dbg("DFS recovery total recovered %lu\n",
 				sbi->s_inodes_used_count);
-	return ret;
-}
-
-/*********************** Singlethread recovery *************************/
-
-static u64 nova_get_last_ino(struct super_block *sb)
-{
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct header_tree *header_tree;
-	struct nova_range_node *curr;
-	struct rb_node *temp;
-	u64 max_ino = 0;
-	u64 ino;
-	int cpu;
-
-	for (cpu = 0; cpu < sbi->cpus; cpu++) {
-		header_tree = &sbi->header_trees[cpu];
-		
-		/* Save in increasing order */
-		temp = rb_last(&header_tree->inode_inuse_tree);
-		if (!temp)
-			continue;
-
-		curr = container_of(temp, struct nova_range_node, node);
-		ino = le64_to_cpu(curr->range_high);
-		ino = ino * sbi->cpus + cpu;
-		if (ino > max_ino)
-			max_ino = ino;
-	}
-
-	return max_ino;
-}
-
-static int nova_inode_table_singlethread_crawl(struct super_block *sb)
-{
-	u64 root_addr = NOVA_ROOT_INO_START;
-	u64 pi_addr;
-	u64 last_ino, i;
-	int ret = 0;
-
-	nova_dbg_verbose("%s: rebuild alive inodes\n", __func__);
-	last_ino = nova_get_last_ino(sb);
-
-	nova_dbg_verbose("Last inode %llu\n", last_ino);
-
-	/* First recover the root iode */
-	nova_recover_inode(sb, root_addr, NULL, 0);
-	processed[smp_processor_id()]++;
-
-	for (i = NOVA_NORMAL_INODE_START; i <= last_ino; i++) {
-		ret = nova_get_inode_address(sb, i, &pi_addr, 0);
-		if (ret) {
-			nova_err(sb, "%s: get inode %llu address failed\n",
-					__func__, i);
-			break;
-		}
-		nova_recover_inode(sb, pi_addr, NULL, 0);
-		processed[smp_processor_id()]++;
-	}
-
-	return ret;
-}
-
-int nova_singlethread_recovery(struct super_block *sb)
-{
-	int cpus = num_online_cpus();
-	int i, total = 0;
-	int ret = 0;
-
-	processed = kzalloc(cpus * sizeof(int), GFP_KERNEL);
-	if (!processed)
-		return -ENOMEM;
-
-	ret = nova_inode_table_singlethread_crawl(sb);
-
-	for (i = 0; i < cpus; i++) {
-		total += processed[i];
-		nova_dbg_verbose("CPU %d: recovered %d\n", i, processed[i]);
-	}
-
-	kfree(processed);
-	nova_dbg("Singlethread total recovered %d\n", total);
-	return ret;
-}
-
-/*********************** Multithread recovery *************************/
-
-static int multithread_func(void *data)
-{
-	struct super_block *sb = data;
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct header_tree *header_tree;
-	struct rb_root *tree;
-	struct nova_range_node *curr;
-	struct rb_node *temp;
-	int cpuid = smp_processor_id();
-	unsigned long i;
-	unsigned long ino;
-	u64 pi_addr = 0;
-	int ret = 0;
-
-	header_tree = &sbi->header_trees[cpuid];
-	tree = &header_tree->inode_inuse_tree;
-	temp = rb_first(tree);
-
-	while (temp) {
-		curr = container_of(temp, struct nova_range_node, node);
-		temp = rb_next(temp);
-
-		for (i = curr->range_low; i <= curr->range_high; i++) {
-			ino = i * sbi->cpus + cpuid;
-
-			if (ino >= NOVA_NORMAL_INODE_START) {
-				ret = nova_get_inode_address(sb, ino,
-							&pi_addr, 0);
-				if (ret) {
-					nova_err(sb, "%s: get inode %llu "
-							"address failed\n",
-							__func__, ino);
-					continue;
-				}
-				nova_recover_inode(sb, pi_addr, NULL, 0);
-				processed[cpuid]++;
-			}
-		}
-	}
-
-	finished[cpuid] = 1;
-	wake_up_interruptible(&finish_wq);
-	do_exit(ret);
-	return ret;
-}
-
-static int nova_inode_table_multithread_crawl(struct super_block *sb,
-	int cpus)
-{
-	u64 root_addr = NOVA_ROOT_INO_START;
-	int ret = 0;
-
-	nova_recover_inode(sb, root_addr, NULL, 0);
-
-	return ret;
-}
-
-int nova_multithread_recovery(struct super_block *sb)
-{
-	int cpus;
-	int ret;
-
-	cpus = num_online_cpus();
-	nova_dbgv("%s: %d cpus\n", __func__, cpus);
-
-	ret = allocate_resources(sb, cpus, 0);
-	if (ret)
-		return ret;
-
-	ret = nova_inode_table_multithread_crawl(sb, cpus);
-
-	wait_to_finish(cpus, 0);
-	free_resources();
 	return ret;
 }
 
