@@ -1812,10 +1812,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	u8 type;
 
 	nova_dbg_verbose("Rebuild file inode %llu tree\n", ino);
-	/*
-	 * We will regenerate the tree during blocks assignment.
-	 * Set height to 0.
-	 */
+
 	sih->pi_addr = pi_addr;
 
 	curr_p = pi->log_head;
