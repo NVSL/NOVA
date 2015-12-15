@@ -341,7 +341,6 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 
 	nova_dbg_verbose("Rebuild dir %llu tree\n", ino);
 
-	INIT_RADIX_TREE(&sih->tree, GFP_ATOMIC);
 	sih->pi_addr = pi_addr;
 
 	curr_p = pi->log_head;
