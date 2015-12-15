@@ -809,11 +809,11 @@ out:
 	return ret;
 }
 
-int nova_recover_inode(struct super_block *sb, u64 pi_addr,
-	struct scan_bitmap *bm, int multithread)
+struct nova_inode_info_header * nova_recover_inode(struct super_block *sb,
+	u64 pi_addr, struct scan_bitmap *bm, int multithread)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_inode_info_header *sih;
+	struct nova_inode_info_header *sih = NULL;
 	struct nova_inode *pi;
 	unsigned long nova_ino;
 	int need_lock = multithread;
@@ -823,7 +823,7 @@ int nova_recover_inode(struct super_block *sb, u64 pi_addr,
 		NOVA_ASSERT(0);
 
 	if (pi->valid == 0)
-		return 0;
+		return NULL;
 
 	nova_ino = pi->nova_ino;
 	if (bm) {
@@ -861,7 +861,7 @@ int nova_recover_inode(struct super_block *sb, u64 pi_addr,
 		break;
 	}
 
-	return 0;
+	return sih;
 }
 
 int *processed;
@@ -975,7 +975,7 @@ static int failure_thread_func(void *data)
 
 		for (i = 0; i < num_inodes_per_page; i++) {
 			pi_addr = curr + i * NOVA_INODE_SIZE;
-			ret = nova_recover_inode(sb, pi_addr, global_bm, 0);
+			nova_recover_inode(sb, pi_addr, global_bm, 0);
 		}
 
 		curr_addr = (unsigned long)nova_get_block(sb, curr);
@@ -994,10 +994,10 @@ static int nova_dfs_recovery_crawl(struct super_block *sb,
 	struct scan_bitmap *bm)
 {
 	u64 root_addr = NOVA_ROOT_INO_START;
-	int ret;
+	int ret = 0;
 
 	/* Recover the root iode */
-	ret = nova_recover_inode(sb, root_addr, bm, 0);
+	nova_recover_inode(sb, root_addr, bm, 0);
 
 	return ret;
 }
@@ -1080,7 +1080,7 @@ static int nova_inode_table_singlethread_crawl(struct super_block *sb)
 	u64 root_addr = NOVA_ROOT_INO_START;
 	u64 pi_addr;
 	u64 last_ino, i;
-	int ret;
+	int ret = 0;
 
 	nova_dbg_verbose("%s: rebuild alive inodes\n", __func__);
 	last_ino = nova_get_last_ino(sb);
@@ -1088,7 +1088,7 @@ static int nova_inode_table_singlethread_crawl(struct super_block *sb)
 	nova_dbg_verbose("Last inode %llu\n", last_ino);
 
 	/* First recover the root iode */
-	ret = nova_recover_inode(sb, root_addr, NULL, 0);
+	nova_recover_inode(sb, root_addr, NULL, 0);
 	processed[smp_processor_id()]++;
 
 	for (i = NOVA_NORMAL_INODE_START; i <= last_ino; i++) {
@@ -1098,7 +1098,7 @@ static int nova_inode_table_singlethread_crawl(struct super_block *sb)
 					__func__, i);
 			break;
 		}
-		ret = nova_recover_inode(sb, pi_addr, NULL, 0);
+		nova_recover_inode(sb, pi_addr, NULL, 0);
 		processed[smp_processor_id()]++;
 	}
 
@@ -1163,7 +1163,7 @@ static int multithread_func(void *data)
 							__func__, ino);
 					continue;
 				}
-				ret = nova_recover_inode(sb, pi_addr, NULL, 0);
+				nova_recover_inode(sb, pi_addr, NULL, 0);
 				processed[cpuid]++;
 			}
 		}
@@ -1181,7 +1181,7 @@ static int nova_inode_table_multithread_crawl(struct super_block *sb,
 	u64 root_addr = NOVA_ROOT_INO_START;
 	int ret = 0;
 
-	ret = nova_recover_inode(sb, root_addr, NULL, 0);
+	nova_recover_inode(sb, root_addr, NULL, 0);
 
 	return ret;
 }
