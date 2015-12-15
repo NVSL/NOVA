@@ -586,7 +586,7 @@ setup_sb:
 	/* If the FS was not formatted on this mount, scan the meta-data after
 	 * truncate list has been processed */
 	if ((sbi->s_mount_opt & NOVA_MOUNT_FORMAT) == 0)
-		nova_inode_log_recovery(sb, 1);
+		nova_recovery(sb);
 
 	root_i = nova_iget(sb, NOVA_ROOT_INO);
 	if (IS_ERR(root_i)) {

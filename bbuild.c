@@ -1207,7 +1207,7 @@ int nova_multithread_recovery(struct super_block *sb)
 
 /*********************** Recovery entrance *************************/
 
-int nova_inode_log_recovery(struct super_block *sb, int multithread)
+int nova_recovery(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_super_block *super = nova_get_super(sb);

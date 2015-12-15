@@ -886,7 +886,7 @@ struct nova_inode_info_header *nova_alloc_header(struct super_block *sb,
 	u16 i_mode);
 int nova_assign_info_header(struct super_block *sb, unsigned long ino,
 	struct nova_inode_info_header **sih, u16 i_mode, int need_lock);
-int nova_inode_log_recovery(struct super_block *sb, int multithread);
+int nova_recovery(struct super_block *sb);
 
 /*
  * Inodes and files operations
