@@ -1159,17 +1159,13 @@ static int nova_failure_recovery_crawl(struct super_block *sb)
 	/* Recover the root iode */
 	nova_recover_inode_pages(sb, &task_rings[0], root_addr, global_bm[1]);
 
-	for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {
-		ring = &task_rings[cpuid];
-		sbi->s_inodes_used_count += ring->inodes_used_count;
-	}
-
 	return ret;
 }
 
 int nova_failure_recovery(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct task_ring *ring;
 	struct nova_inode *pi;
 	struct ptr_pair *pair;
 	int ret;
@@ -1202,6 +1198,12 @@ int nova_failure_recovery(struct super_block *sb)
 	ret = nova_failure_recovery_crawl(sb);
 
 	wait_to_finish(sbi->cpus);
+
+	for (i = 0; i < sbi->cpus; i++) {
+		ring = &task_rings[i];
+		sbi->s_inodes_used_count += ring->inodes_used_count;
+	}
+
 	free_resources();
 
 	nova_dbg("DFS recovery total recovered %lu\n",
