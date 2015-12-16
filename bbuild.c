@@ -879,10 +879,9 @@ out:
 	return ret;
 }
 
-struct nova_inode_info_header * nova_recover_inode(struct super_block *sb,
-	u64 pi_addr, struct scan_bitmap *bm, int multithread)
+struct nova_inode_info_header * nova_rebuild_inode(struct super_block *sb,
+	u64 pi_addr, int multithread)
 {
-	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode_info_header *sih = NULL;
 	struct nova_inode *pi;
 	unsigned long nova_ino;
@@ -896,13 +895,6 @@ struct nova_inode_info_header * nova_recover_inode(struct super_block *sb,
 		return NULL;
 
 	nova_ino = pi->nova_ino;
-	if (bm) {
-		pi->i_blocks = 0;
-		if (nova_ino >= NOVA_NORMAL_INODE_START) {
-			nova_failure_insert_inodetree(sb, nova_ino);
-		}
-		sbi->s_inodes_used_count++;
-	}
 
 	nova_dbgv("%s: inode %lu, addr 0x%llx, valid %d, "
 			"head 0x%llx, tail 0x%llx\n",
@@ -917,15 +909,16 @@ struct nova_inode_info_header * nova_recover_inode(struct super_block *sb,
 		/* Treat symlink files as normal files */
 		/* Fall through */
 	case S_IFREG:
-		nova_rebuild_file_inode_tree(sb, pi, pi_addr, sih, bm);
+		nova_rebuild_file_inode_tree(sb, pi, pi_addr, sih, NULL);
 		break;
 	case S_IFDIR:
-		nova_rebuild_dir_inode_tree(sb, pi, pi_addr, sih, bm);
+		nova_rebuild_dir_inode_tree(sb, pi, pi_addr, sih, NULL);
 		break;
 	default:
 		/* In case of special inode, walk the log */
 		if (pi->log_head)
-			nova_rebuild_file_inode_tree(sb, pi, pi_addr, sih, bm);
+			nova_rebuild_file_inode_tree(sb, pi,
+						pi_addr, sih, NULL);
 		sih->pi_addr = pi_addr;
 		break;
 	}

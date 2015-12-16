@@ -749,7 +749,7 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 		goto fail;
 	}
 
-	sih = nova_recover_inode(sb, pi_addr, NULL, 1);
+	sih = nova_rebuild_inode(sb, pi_addr, 1);
 	if (!sih) {
 		err = -EINVAL;
 		goto fail;
