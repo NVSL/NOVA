@@ -65,7 +65,7 @@ static int get_cpuid(struct nova_sb_info *sbi, unsigned long blocknr)
 	return cpuid;
 }
 
-static int nova_dfs_insert_inodetree(struct super_block *sb,
+static int nova_failure_insert_inodetree(struct super_block *sb,
 	unsigned long nova_ino)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -896,7 +896,7 @@ struct nova_inode_info_header * nova_recover_inode(struct super_block *sb,
 	if (bm) {
 		pi->i_blocks = 0;
 		if (nova_ino >= NOVA_NORMAL_INODE_START) {
-			nova_dfs_insert_inodetree(sb, nova_ino);
+			nova_failure_insert_inodetree(sb, nova_ino);
 		}
 		sbi->s_inodes_used_count++;
 	}
@@ -980,7 +980,7 @@ static int nova_recover_inode_pages(struct super_block *sb, u64 pi_addr,
 
 	nova_ino = pi->nova_ino;
 	if (nova_ino >= NOVA_NORMAL_INODE_START) {
-		nova_dfs_insert_inodetree(sb, nova_ino);
+		nova_failure_insert_inodetree(sb, nova_ino);
 	}
 	sbi->s_inodes_used_count++;
 
@@ -1130,7 +1130,7 @@ static int failure_thread_func(void *data)
 	return ret;
 }
 
-static int nova_dfs_recovery_crawl(struct super_block *sb)
+static int nova_failure_recovery_crawl(struct super_block *sb)
 {
 	u64 root_addr = NOVA_ROOT_INO_START;
 	int ret = 0;
@@ -1141,7 +1141,7 @@ static int nova_dfs_recovery_crawl(struct super_block *sb)
 	return ret;
 }
 
-int nova_dfs_recovery(struct super_block *sb)
+int nova_failure_recovery(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi;
@@ -1173,7 +1173,7 @@ int nova_dfs_recovery(struct super_block *sb)
 	if (ret)
 		return ret;
 
-	ret = nova_dfs_recovery_crawl(sb);
+	ret = nova_failure_recovery_crawl(sb);
 
 	wait_to_finish(sbi->cpus, 1);
 	free_resources();
@@ -1217,7 +1217,7 @@ int nova_recovery(struct super_block *sb)
 			goto out;
 
 		sbi->s_inodes_used_count = 0;
-		ret = nova_dfs_recovery(sb);
+		ret = nova_failure_recovery(sb);
 		if (ret)
 			goto out;
 
