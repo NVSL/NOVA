@@ -1050,7 +1050,6 @@ static int allocate_resources(struct super_block *sb, int cpus)
 		threads[i] = kthread_create(failure_thread_func,
 						sb, "recovery thread");
 		kthread_bind(threads[i], i);
-		wake_up_process(threads[i]);
 	}
 
 	return 0;
@@ -1077,9 +1076,8 @@ static void wait_to_finish(int cpus)
 static int failure_thread_func(void *data)
 {
 	struct super_block *sb = data;
+	struct task_ring *ring;
 	struct nova_inode *pi;
-	struct inode_table *inode_table;
-	unsigned long curr_addr;
 	unsigned long num_inodes_per_page;
 	unsigned int data_bits;
 	u64 curr;
@@ -1087,17 +1085,17 @@ static int failure_thread_func(void *data)
 	unsigned long i;
 	u64 pi_addr = 0;
 	int ret = 0;
-
-	inode_table = nova_get_inode_table(sb, cpuid);
-	if (!inode_table)
-		return -EINVAL;
+	int count;
 
 	pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
 	data_bits = blk_type_to_shift[pi->i_blk_type];
 	num_inodes_per_page = 1 << (data_bits - NOVA_INODE_BITS);
 
-	curr = inode_table->log_head;
-	while (curr) {
+	ring = &task_rings[cpuid];
+
+	for (count = 0; count < ring->num; count++) {
+		curr = ring->addr[count];
+
 		/*
 		 * Note: The inode log page is allocated in 2MB
 		 * granularity, but not aligned on 2MB boundary.
@@ -1111,11 +1109,6 @@ static int failure_thread_func(void *data)
 			nova_recover_inode_pages(sb, pi_addr,
 						global_bm[cpuid]);
 		}
-
-		curr_addr = (unsigned long)nova_get_block(sb, curr);
-		/* Next page resides at the last 8 bytes */
-		curr_addr += 2097152 - 8;
-		curr = *(u64 *)(curr_addr);
 	}
 
 	finished[cpuid] = 1;
@@ -1126,8 +1119,39 @@ static int failure_thread_func(void *data)
 
 static int nova_failure_recovery_crawl(struct super_block *sb)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct inode_table *inode_table;
+	struct task_ring *ring;
+	unsigned long curr_addr;
 	u64 root_addr = NOVA_ROOT_INO_START;
+	u64 curr;
 	int ret = 0;
+	int cpuid;
+	int ring_id;
+
+	ring_id = 0;
+	for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {
+		inode_table = nova_get_inode_table(sb, cpuid);
+		if (!inode_table)
+			return -EINVAL;
+
+		curr = inode_table->log_head;
+		while (curr) {
+			ring = &task_rings[ring_id];
+			ring->addr[ring->num] = curr;
+			ring->num++;
+
+			ring_id = (ring_id + 1) % sbi->cpus;
+
+			curr_addr = (unsigned long)nova_get_block(sb, curr);
+			/* Next page resides at the last 8 bytes */
+			curr_addr += 2097152 - 8;
+			curr = *(u64 *)(curr_addr);
+		}
+	}
+
+	for (cpuid = 0; cpuid < sbi->cpus; cpuid++)
+		wake_up_process(threads[cpuid]);
 
 	/* Recover the root iode */
 	nova_recover_inode_pages(sb, root_addr, global_bm[1]);
