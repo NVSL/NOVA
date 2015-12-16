@@ -1009,6 +1009,12 @@ static int nova_recover_inode_pages(struct super_block *sb, u64 pi_addr,
 	return 0;
 }
 
+struct task_ring {
+	u64 addr[512];
+	int num;
+};
+
+static struct task_ring *task_rings;
 static struct task_struct **threads;
 wait_queue_head_t finish_wq;
 int *finished;
@@ -1017,6 +1023,7 @@ static int failure_thread_func(void *data);
 
 static void free_resources(void)
 {
+	kfree(task_rings);
 	kfree(threads);
 	kfree(finished);
 }
@@ -1025,15 +1032,17 @@ static int allocate_resources(struct super_block *sb, int cpus)
 {
 	int i;
 
+	task_rings = kzalloc(cpus * sizeof(struct task_ring), GFP_KERNEL);
+	if (!task_rings)
+		goto fail;
+
 	threads = kzalloc(cpus * sizeof(struct task_struct *), GFP_KERNEL);
 	if (!threads)
-		return -ENOMEM;
+		goto fail;
 
 	finished = kzalloc(cpus * sizeof(int), GFP_KERNEL);
-	if (!finished) {
-		kfree(threads);
-		return -ENOMEM;
-	}
+	if (!finished)
+		goto fail;
 
 	init_waitqueue_head(&finish_wq);
 
@@ -1045,6 +1054,10 @@ static int allocate_resources(struct super_block *sb, int cpus)
 	}
 
 	return 0;
+
+fail:
+	free_resources();
+	return -ENOMEM;
 }
 
 static void wait_to_finish(int cpus)
