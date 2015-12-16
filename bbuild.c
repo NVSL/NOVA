@@ -340,14 +340,14 @@ static bool nova_can_skip_full_scan(struct super_block *sb)
 	ret = nova_init_blockmap_from_inode(sb);
 	if (ret) {
 		nova_err(sb, "init blockmap failed, "
-				"fall back to DFS recovery\n");
+				"fall back to failure recovery\n");
 		return false;
 	}
 
 	ret = nova_init_inode_list_from_inode(sb);
 	if (ret) {
 		nova_err(sb, "init inode list failed, "
-				"fall back to DFS recovery\n");
+				"fall back to failure recovery\n");
 		nova_destroy_blocknode_trees(sb);
 		return false;
 	}
@@ -509,7 +509,7 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 	 * save the total allocated blocknode mappings
 	 * in super block
 	 * No transaction is needed as we will recover the fields
-	 * via DFS recovery
+	 * via failure recovery
 	 */
 	super = nova_get_super(sb);
 
@@ -1166,7 +1166,7 @@ int nova_failure_recovery(struct super_block *sb)
 
 	free_resources();
 
-	nova_dbg("DFS recovery total recovered %lu\n",
+	nova_dbg("Failure recovery total recovered %lu\n",
 				sbi->s_inodes_used_count);
 	return ret;
 }
