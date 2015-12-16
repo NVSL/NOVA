@@ -749,7 +749,7 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 		goto fail;
 	}
 
-	sih = nova_rebuild_inode(sb, pi_addr, 1);
+	sih = nova_rebuild_inode(sb, pi_addr);
 	if (!sih) {
 		err = -EINVAL;
 		goto fail;
@@ -798,6 +798,7 @@ void nova_evict_inode(struct inode *inode)
 	timing_t evict_time;
 	int err = 0;
 	int freed = 0;
+	int destroy = 0;
 
 	if (!sih) {
 		nova_err(sb, "%s: ino %lu sih is NULL!\n",
@@ -812,6 +813,7 @@ void nova_evict_inode(struct inode *inode)
 		if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
 			goto out;
 
+		destroy = 1;
 		/* We need the log to free the blocks from the b-tree */
 		switch (inode->i_mode & S_IFMT) {
 		case S_IFREG:
@@ -850,6 +852,10 @@ void nova_evict_inode(struct inode *inode)
 		inode->i_size = 0;
 	}
 out:
+	if (destroy == 0)
+		nova_free_dram_resource(sb, sih);
+	nova_free_header(sb, sih);
+
 	/* TODO: Since we don't use page-cache, do we really need the following
 	 * call? */
 	truncate_inode_pages(&inode->i_data, 0);
@@ -872,6 +878,10 @@ u64 nova_new_nova_inode(struct super_block *sb,
 	timing_t new_inode_time;
 
 	NOVA_START_TIMING(new_nova_inode_t, new_inode_time);
+	sih = nova_alloc_header(sb, 0);
+	if (!sih)
+		return 0;
+
 	cpu = smp_processor_id();
 	header_tree = &sbi->header_trees[cpu];
 
@@ -890,7 +900,7 @@ u64 nova_new_nova_inode(struct super_block *sb,
 		return 0;
 	}
 
-	nova_assign_info_header(sb, free_ino, &sih, 0, 0);
+	sih->ino = free_ino;
 	mutex_unlock(&header_tree->inode_table_mutex);
 
 	ino = free_ino;

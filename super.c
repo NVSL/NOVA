@@ -514,7 +514,6 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	for (i = 0; i < sbi->cpus; i++) {
 		header_tree = &sbi->header_trees[i];
 		mutex_init(&header_tree->inode_table_mutex);
-		INIT_RADIX_TREE(&header_tree->root, GFP_ATOMIC);
 		header_tree->inode_inuse_tree = RB_ROOT;
 	}
 
@@ -753,7 +752,6 @@ static void nova_put_super(struct super_block *sb)
 	/* It's unmount time, so unmap the nova memory */
 //	nova_print_free_lists(sb);
 	if (sbi->virt_addr) {
-		nova_free_header_trees(sb);
 		nova_save_inode_list_to_log(sb);
 		/* Save everything before blocknode mapping! */
 		nova_save_blocknode_mappings_to_log(sb);
@@ -770,7 +768,7 @@ static void nova_put_super(struct super_block *sb)
 
 	for (i = 0; i < sbi->cpus; i++) {
 		header_tree = &sbi->header_trees[i];
-		nova_dbg("CPU %d: inode allocated %d, freed %d\n",
+		nova_dbgv("CPU %d: inode allocated %d, freed %d\n",
 			i, header_tree->allocated, header_tree->freed);
 	}
 
