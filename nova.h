@@ -420,6 +420,9 @@ struct nova_sb_info {
 	/* Per-CPU inode map */
 	struct inode_map	*inode_maps;
 
+	/* Decide new inode map id */
+	unsigned long map_id;
+
 	/* Per-CPU free block list */
 	struct free_list *free_lists;
 

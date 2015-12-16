@@ -838,7 +838,7 @@ u64 nova_new_nova_inode(struct super_block *sb,
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct inode_map *inode_map;
 	unsigned long free_ino = 0;
-	int cpu;
+	int map_id;
 	u64 ino = 0;
 	int ret;
 	timing_t new_inode_time;
@@ -848,11 +848,13 @@ u64 nova_new_nova_inode(struct super_block *sb,
 	if (!sih)
 		return 0;
 
-	cpu = smp_processor_id();
-	inode_map = &sbi->inode_maps[cpu];
+	map_id = sbi->map_id;
+	sbi->map_id = (sbi->map_id + 1) % sbi->cpus;
+
+	inode_map = &sbi->inode_maps[map_id];
 
 	mutex_lock(&inode_map->inode_table_mutex);
-	ret = nova_alloc_unused_inode(sb, cpu, &free_ino);
+	ret = nova_alloc_unused_inode(sb, map_id, &free_ino);
 	if (ret) {
 		nova_dbg("%s: alloc inode number failed %d\n", __func__, ret);
 		mutex_unlock(&inode_map->inode_table_mutex);

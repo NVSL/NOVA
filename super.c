@@ -375,6 +375,7 @@ static inline void set_default_opts(struct nova_sb_info *sbi)
 	set_opt(sbi->s_mount_opt, ERRORS_CONT);
 	sbi->reserved_blocks = RESERVED_BLOCKS;
 	sbi->cpus = num_online_cpus();
+	sbi->map_id = 0;
 }
 
 static void nova_root_check(struct super_block *sb, struct nova_inode *root_pi)
