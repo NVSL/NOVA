@@ -81,12 +81,14 @@ static int nova_failure_insert_inodetree(struct super_block *sb,
 	internal_ino = nova_ino / sbi->cpus;
 	header_tree = &sbi->header_trees[cpu];
 	tree = &header_tree->inode_inuse_tree;
+	mutex_lock(&header_tree->inode_table_mutex);
 
 	ret = nova_find_free_slot(sbi, tree, internal_ino, internal_ino,
 					&prev, &next);
 	if (ret) {
 		nova_dbg("%s: ino %lu already exists!: %d\n",
 					__func__, nova_ino, ret);
+		mutex_unlock(&header_tree->inode_table_mutex);
 		return ret;
 	}
 
@@ -123,6 +125,7 @@ static int nova_failure_insert_inodetree(struct super_block *sb,
 	header_tree->num_range_node_inode++;
 
 finish:
+	mutex_unlock(&header_tree->inode_table_mutex);
 	return ret;
 }
 
