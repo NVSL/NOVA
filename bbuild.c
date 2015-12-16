@@ -66,34 +66,38 @@ static int get_cpuid(struct nova_sb_info *sbi, unsigned long blocknr)
 }
 
 static int nova_failure_insert_inodetree(struct super_block *sb,
-	unsigned long nova_ino)
+	unsigned long ino_low, unsigned long ino_high)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct header_tree *header_tree;
 	struct nova_range_node *prev = NULL, *next = NULL;
 	struct nova_range_node *new_node;
-	unsigned long internal_ino;
+	unsigned long internal_low, internal_high;
 	int cpu;
 	struct rb_root *tree;
 	int ret;
 
-	cpu = nova_ino % sbi->cpus;
-	internal_ino = nova_ino / sbi->cpus;
+	cpu = ino_low % sbi->cpus;
+	if (ino_high % sbi->cpus != cpu)
+		BUG();
+
+	internal_low = ino_low / sbi->cpus;
+	internal_high = ino_high / sbi->cpus;
 	header_tree = &sbi->header_trees[cpu];
 	tree = &header_tree->inode_inuse_tree;
 	mutex_lock(&header_tree->inode_table_mutex);
 
-	ret = nova_find_free_slot(sbi, tree, internal_ino, internal_ino,
+	ret = nova_find_free_slot(sbi, tree, internal_low, internal_high,
 					&prev, &next);
 	if (ret) {
-		nova_dbg("%s: ino %lu already exists!: %d\n",
-					__func__, nova_ino, ret);
+		nova_dbg("%s: ino %lu - %lu already exists!: %d\n",
+					__func__, ino_low, ino_high, ret);
 		mutex_unlock(&header_tree->inode_table_mutex);
 		return ret;
 	}
 
-	if (prev && next && (internal_ino == prev->range_high + 1) &&
-			(internal_ino + 1 == next->range_low)) {
+	if (prev && next && (internal_low == prev->range_high + 1) &&
+			(internal_high + 1 == next->range_low)) {
 		/* fits the hole */
 		rb_erase(&next->node, tree);
 		header_tree->num_range_node_inode--;
@@ -101,21 +105,22 @@ static int nova_failure_insert_inodetree(struct super_block *sb,
 		nova_free_inode_node(sb, next);
 		goto finish;
 	}
-	if (prev && (internal_ino == prev->range_high + 1)) {
+	if (prev && (internal_low == prev->range_high + 1)) {
 		/* Aligns left */
-		prev->range_high++;
+		prev->range_high += internal_high - internal_low + 1;
 		goto finish;
 	}
-	if (next && (internal_ino + 1 == next->range_low)) {
+	if (next && (internal_high + 1 == next->range_low)) {
 		/* Aligns right */
-		next->range_low--;
+		next->range_low -= internal_high - internal_low + 1;
 		goto finish;
 	}
 
 	/* Aligns somewhere in the middle */
 	new_node = nova_alloc_inode_node(sb);
 	NOVA_ASSERT(new_node);
-	new_node->range_low = new_node->range_high = internal_ino;
+	new_node->range_low = internal_low;
+	new_node->range_high = internal_high;
 	ret = nova_insert_inodetree(sbi, new_node, cpu);
 	if (ret) {
 		nova_err(sb, "%s failed\n", __func__);
@@ -981,7 +986,7 @@ static int nova_recover_inode_pages(struct super_block *sb,
 
 	nova_ino = pi->nova_ino;
 	if (nova_ino >= NOVA_NORMAL_INODE_START) {
-		nova_failure_insert_inodetree(sb, nova_ino);
+		nova_failure_insert_inodetree(sb, nova_ino, nova_ino);
 	}
 	ring->inodes_used_count++;
 
