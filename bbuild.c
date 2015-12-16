@@ -963,10 +963,15 @@ static int nova_traverse_dir_inode_log(struct super_block *sb,
 	return 0;
 }
 
-static int nova_recover_inode_pages(struct super_block *sb, u64 pi_addr,
-	struct scan_bitmap *bm)
+struct task_ring {
+	u64 addr[512];
+	int num;
+	int inodes_used_count;
+};
+
+static int nova_recover_inode_pages(struct super_block *sb,
+	struct task_ring *ring, u64 pi_addr, struct scan_bitmap *bm)
 {
-	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode_info_header sih;
 	struct nova_inode *pi;
 	unsigned long nova_ino;
@@ -985,7 +990,7 @@ static int nova_recover_inode_pages(struct super_block *sb, u64 pi_addr,
 	if (nova_ino >= NOVA_NORMAL_INODE_START) {
 		nova_failure_insert_inodetree(sb, nova_ino);
 	}
-	sbi->s_inodes_used_count++;
+	ring->inodes_used_count++;
 
 	nova_dbgv("%s: inode %lu, addr 0x%llx, head 0x%llx, tail 0x%llx\n",
 			__func__, nova_ino, pi_addr, pi->log_head,
@@ -1011,11 +1016,6 @@ static int nova_recover_inode_pages(struct super_block *sb, u64 pi_addr,
 
 	return 0;
 }
-
-struct task_ring {
-	u64 addr[512];
-	int num;
-};
 
 static struct task_ring *task_rings;
 static struct task_struct **threads;
@@ -1074,7 +1074,7 @@ static void wait_to_finish(int cpus)
 	}
 }
 
-/*********************** DFS recovery *************************/
+/*********************** Failure recovery *************************/
 
 static int failure_thread_func(void *data)
 {
@@ -1109,7 +1109,7 @@ static int failure_thread_func(void *data)
 
 		for (i = 0; i < num_inodes_per_page; i++) {
 			pi_addr = curr + i * NOVA_INODE_SIZE;
-			nova_recover_inode_pages(sb, pi_addr,
+			nova_recover_inode_pages(sb, ring, pi_addr,
 						global_bm[cpuid]);
 		}
 	}
@@ -1157,7 +1157,12 @@ static int nova_failure_recovery_crawl(struct super_block *sb)
 		wake_up_process(threads[cpuid]);
 
 	/* Recover the root iode */
-	nova_recover_inode_pages(sb, root_addr, global_bm[1]);
+	nova_recover_inode_pages(sb, &task_rings[0], root_addr, global_bm[1]);
+
+	for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {
+		ring = &task_rings[cpuid];
+		sbi->s_inodes_used_count += ring->inodes_used_count;
+	}
 
 	return ret;
 }
