@@ -1009,7 +1009,6 @@ static int nova_recover_inode_pages(struct super_block *sb, u64 pi_addr,
 	return 0;
 }
 
-int *processed;
 static struct task_struct **threads;
 wait_queue_head_t finish_wq;
 int *finished;
@@ -1019,7 +1018,6 @@ static int failure_thread_func(void *data);
 static void free_resources(void)
 {
 	kfree(threads);
-	kfree(processed);
 	kfree(finished);
 }
 
@@ -1031,16 +1029,9 @@ static int allocate_resources(struct super_block *sb, int cpus)
 	if (!threads)
 		return -ENOMEM;
 
-	processed = kzalloc(cpus * sizeof(int), GFP_KERNEL);
-	if (!processed) {
-		kfree(threads);
-		return -ENOMEM;
-	}
-
 	finished = kzalloc(cpus * sizeof(int), GFP_KERNEL);
 	if (!finished) {
 		kfree(threads);
-		kfree(processed);
 		return -ENOMEM;
 	}
 
@@ -1056,9 +1047,8 @@ static int allocate_resources(struct super_block *sb, int cpus)
 	return 0;
 }
 
-static void wait_to_finish(int cpus, int failure)
+static void wait_to_finish(int cpus)
 {
-	int total = 0;
 	int i;
 
 	for (i = 0; i < cpus; i++) {
@@ -1067,15 +1057,6 @@ static void wait_to_finish(int cpus, int failure)
 							msecs_to_jiffies(1));
 		}
 	}
-
-	for (i = 0; i < cpus; i++) {
-		nova_dbgv("CPU %d processed %d\n", i, processed[i]);
-		total += processed[i];
-	}
-
-	total++; /* Root inode */
-	if (failure == 0)
-		nova_dbg("Multithread total recovered %d\n", total);
 }
 
 /*********************** DFS recovery *************************/
@@ -1175,7 +1156,7 @@ int nova_failure_recovery(struct super_block *sb)
 
 	ret = nova_failure_recovery_crawl(sb);
 
-	wait_to_finish(sbi->cpus, 1);
+	wait_to_finish(sbi->cpus);
 	free_resources();
 
 	nova_dbg("DFS recovery total recovered %lu\n",
