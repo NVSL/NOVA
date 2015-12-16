@@ -93,7 +93,7 @@ unsigned long alloc_data_pages;
 unsigned long free_data_pages;
 unsigned long alloc_log_pages;
 unsigned long free_log_pages;
-atomic64_t fsync_pages = ATOMIC_INIT(0);
+unsigned long fsync_pages;
 atomic64_t header_alloc = ATOMIC_INIT(0);
 atomic64_t header_free = ATOMIC_INIT(0);
 atomic64_t range_alloc = ATOMIC_INIT(0);
@@ -145,7 +145,7 @@ void nova_print_IO_stats(struct super_block *sb)
 		Countstats[copy_to_nvmm_t], fsync_bytes,
 		Countstats[copy_to_nvmm_t] ?
 			fsync_bytes / Countstats[copy_to_nvmm_t] : 0);
-	printk("Fsync %ld pages\n", atomic64_read(&fsync_pages));
+	printk("Fsync %lu pages\n", fsync_pages);
 }
 
 void nova_print_timing_stats(struct super_block *sb)

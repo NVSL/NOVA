@@ -223,7 +223,7 @@ static unsigned long nova_get_dirty_range(struct super_block *sb,
 			if (flush_bytes == 0)
 				dirty_start = temp;
 			flush_bytes += bytes;
-			atomic64_inc(&fsync_pages);
+			fsync_pages++;
 		} else {
 			if (flush_bytes)
 				break;
