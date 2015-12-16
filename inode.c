@@ -280,36 +280,6 @@ int nova_delete_file_tree(struct super_block *sb,
 	return freed;
 }
 
-static int nova_set_file_bm(struct super_block *sb, struct nova_inode *pi,
-	struct nova_inode_info_header *sih, struct scan_bitmap *bm)
-{
-	struct nova_file_write_entry *entry;
-	unsigned long start_blocknr = 0;
-	unsigned long last_blocknr;
-	unsigned long nvmm, pgoff;
-	unsigned int btype;
-	unsigned int data_bits;
-
-	btype = pi->i_blk_type;
-	data_bits = blk_type_to_shift[btype];
-
-	if (sih->i_size == 0)
-		goto out;
-
-	last_blocknr = (sih->i_size - 1) >> data_bits;
-
-	for (pgoff = start_blocknr; pgoff <= last_blocknr; pgoff++) {
-		entry = radix_tree_lookup(&sih->tree, pgoff);
-		if (entry) {
-			nvmm = get_nvmm(sb, sih, entry, pgoff);
-			set_bm(nvmm, bm, BM_4K);
-		}
-	}
-
-out:
-	return 0;
-}
-
 /*
  * Free data blocks from inode in the range start <=> end
  */
@@ -1802,7 +1772,7 @@ static inline void nova_rebuild_file_time_and_size(struct super_block *sb,
 
 int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
-	struct nova_inode_info_header *sih, struct scan_bitmap *bm)
+	struct nova_inode_info_header *sih)
 {
 	struct nova_file_write_entry *entry = NULL;
 	struct nova_setattr_logentry *attr_entry = NULL;
@@ -1826,19 +1796,12 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 		return 0;
 
 	sih->log_pages = 1;
-	if (bm) {
-		BUG_ON(curr_p & (PAGE_SIZE - 1));
-		set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
-	}
+
 	while (curr_p != pi->log_tail) {
 		if (is_last_entry(curr_p,
 				sizeof(struct nova_file_write_entry))) {
 			sih->log_pages++;
 			curr_p = next_log_page(sb, curr_p);
-			if (bm) {
-				BUG_ON(curr_p & (PAGE_SIZE - 1));
-				set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
-			}
 		}
 
 		if (curr_p == 0) {
@@ -1898,16 +1861,9 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	while ((next = curr_page->page_tail.next_page) != 0) {
 		sih->log_pages++;
 		curr_p = next;
-		if (bm) {
-			BUG_ON(curr_p & (PAGE_SIZE - 1));
-			set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
-		}
 		curr_page = (struct nova_inode_log_page *)
 			nova_get_block(sb, curr_p);
 	}
-
-	if (bm)
-		nova_set_file_bm(sb, pi, sih, bm);
 
 	pi->i_blocks = sih->log_pages + (sih->i_size >> data_bits);
 

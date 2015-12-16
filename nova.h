@@ -956,7 +956,7 @@ u64 nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data, u64 tail);
 int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
-	struct nova_inode_info_header *sih, struct scan_bitmap *bm);
+	struct nova_inode_info_header *sih);
 u64 nova_new_nova_inode(struct super_block *sb,
 	struct nova_inode_info_header **return_sih, u64 *pi_addr);
 extern struct inode *nova_new_vfs_inode(enum nova_new_inode_type,
