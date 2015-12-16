@@ -1129,7 +1129,10 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 
 		first_blocknr = (start + (1UL << data_bits) - 1) >> data_bits;
 
-		last_blocknr = (end - 1) >> data_bits;
+		if (end > 0)
+			last_blocknr = (end - 1) >> data_bits;
+		else
+			last_blocknr = 0;
 
 		if (first_blocknr > last_blocknr)
 			goto out;
