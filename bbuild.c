@@ -77,9 +77,18 @@ static int nova_failure_insert_inodetree(struct super_block *sb,
 	struct rb_root *tree;
 	int ret;
 
-	cpu = ino_low % sbi->cpus;
-	if (ino_high % sbi->cpus != cpu)
+	if (ino_low > ino_high) {
+		nova_err(sb, "%s: ino low %lu, ino high %lu\n",
+				__func__, ino_low, ino_high);
 		BUG();
+	}
+
+	cpu = ino_low % sbi->cpus;
+	if (ino_high % sbi->cpus != cpu) {
+		nova_err(sb, "%s: ino low %lu, ino high %lu\n",
+				__func__, ino_low, ino_high);
+		BUG();
+	}
 
 	internal_low = ino_low / sbi->cpus;
 	internal_high = ino_high / sbi->cpus;
@@ -985,9 +994,6 @@ static int nova_recover_inode_pages(struct super_block *sb,
 	nova_init_header(sb, &sih, __le16_to_cpu(pi->i_mode));
 
 	nova_ino = pi->nova_ino;
-	if (nova_ino >= NOVA_NORMAL_INODE_START) {
-		nova_failure_insert_inodetree(sb, nova_ino, nova_ino);
-	}
 	ring->inodes_used_count++;
 
 	nova_dbgv("%s: inode %lu, addr 0x%llx, head 0x%llx, tail 0x%llx\n",
@@ -1074,12 +1080,33 @@ static void wait_to_finish(int cpus)
 
 /*********************** Failure recovery *************************/
 
+static inline int nova_failure_update_inodetree(struct super_block *sb,
+	struct nova_inode *pi, unsigned long *ino_low, unsigned long *ino_high)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+
+	if (*ino_low == 0) {
+		*ino_low = *ino_high = pi->nova_ino;
+	} else {
+		if (pi->nova_ino == *ino_high + sbi->cpus) {
+			*ino_high = pi->nova_ino;
+		} else {
+			/* A new start */
+			nova_failure_insert_inodetree(sb, *ino_low, *ino_high);
+			*ino_low = *ino_high = pi->nova_ino;
+		}
+	}
+
+	return 0;
+}
+
 static int failure_thread_func(void *data)
 {
 	struct super_block *sb = data;
 	struct task_ring *ring;
 	struct nova_inode *pi;
 	unsigned long num_inodes_per_page;
+	unsigned long ino_low, ino_high;
 	unsigned int data_bits;
 	u64 curr;
 	int cpuid = smp_processor_id();
@@ -1096,6 +1123,7 @@ static int failure_thread_func(void *data)
 
 	for (count = 0; count < ring->num; count++) {
 		curr = ring->addr[count];
+		ino_low = ino_high = 0;
 
 		/*
 		 * Note: The inode log page is allocated in 2MB
@@ -1107,9 +1135,17 @@ static int failure_thread_func(void *data)
 
 		for (i = 0; i < num_inodes_per_page; i++) {
 			pi_addr = curr + i * NOVA_INODE_SIZE;
-			nova_recover_inode_pages(sb, ring, pi_addr,
+			pi = nova_get_block(sb, pi_addr);
+			if (pi->valid) {
+				nova_recover_inode_pages(sb, ring, pi_addr,
 						global_bm[cpuid]);
+				nova_failure_update_inodetree(sb, pi,
+						&ino_low, &ino_high);
+			}
 		}
+
+		if (ino_low && ino_high)
+			nova_failure_insert_inodetree(sb, ino_low, ino_high);
 	}
 
 	finished[cpuid] = 1;
