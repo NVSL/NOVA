@@ -747,6 +747,8 @@ restore_opt:
 static void nova_put_super(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct header_tree *header_tree;
+	int i;
 
 	/* It's unmount time, so unmap the nova memory */
 //	nova_print_free_lists(sb);
@@ -765,6 +767,13 @@ static void nova_put_super(struct super_block *sb)
 	nova_dbgmask = 0;
 	kfree(sbi->free_lists);
 	kfree(sbi->journal_locks);
+
+	for (i = 0; i < sbi->cpus; i++) {
+		header_tree = &sbi->header_trees[i];
+		nova_dbg("CPU %d: inode allocated %d, freed %d\n",
+			i, header_tree->allocated, header_tree->freed);
+	}
+
 	kfree(sbi->header_trees);
 
 	kfree(sbi);

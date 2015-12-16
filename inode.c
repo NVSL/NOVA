@@ -582,6 +582,7 @@ static int nova_alloc_unused_inode(struct super_block *sb, int cpuid,
 
 	*ino = new_ino * sbi->cpus + cpuid;
 	sbi->s_inodes_used_count++;
+	header_tree->allocated++;
 
 	nova_dbg_verbose("Alloc ino %lu\n", *ino);
 	return 0;
@@ -655,6 +656,7 @@ err:
 
 block_found:
 	sbi->s_inodes_used_count--;
+	header_tree->freed++;
 	mutex_unlock(&header_tree->inode_table_mutex);
 	return ret;
 }

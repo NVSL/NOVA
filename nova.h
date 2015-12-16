@@ -366,6 +366,8 @@ struct header_tree {
 	struct rb_root	inode_inuse_tree;
 	unsigned long	num_range_node_inode;
 	struct nova_range_node *first_inode_range;
+	int allocated;
+	int freed;
 };
 
 /*
