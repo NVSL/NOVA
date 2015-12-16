@@ -967,7 +967,7 @@ int nova_assign_nvmm_entry(struct super_block *sb,
 	struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
-	struct scan_bitmap *bm, bool free);
+	bool free);
 int nova_free_dram_resource(struct super_block *sb,
 	struct nova_inode_info_header *sih);
 

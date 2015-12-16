@@ -389,7 +389,7 @@ int nova_assign_nvmm_entry(struct super_block *sb,
 	struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
-	struct scan_bitmap *bm, bool free)
+	bool free)
 {
 	struct nova_file_write_entry *old_entry;
 	void **pentry;
@@ -412,9 +412,8 @@ int nova_assign_nvmm_entry(struct super_block *sb,
 			if (free) {
 				old_entry->invalid_pages++;
 				nova_free_data_blocks(sb, pi, old_nvmm, 1);
-			}
-			if (bm || free)
 				pi->i_blocks--;
+			}
 			radix_tree_replace_slot(pentry, entry);
 		} else {
 			ret = radix_tree_insert(&sih->tree, curr_pgoff, entry);
@@ -423,9 +422,6 @@ int nova_assign_nvmm_entry(struct super_block *sb,
 				goto out;
 			}
 		}
-
-		if (bm)
-			pi->i_blocks++;
 	}
 
 out:
@@ -1814,6 +1810,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_setattr_logentry *attr_entry = NULL;
 	struct nova_link_change_entry *link_change_entry = NULL;
 	struct nova_inode_log_page *curr_page;
+	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
 	u64 ino = pi->nova_ino;
 	void *addr;
 	u64 curr_p;
@@ -1884,8 +1881,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 			 * The overlaped blocks are already freed.
 			 * Don't double free them, just re-assign the pointers.
 			 */
-			nova_assign_nvmm_entry(sb, pi, sih, entry,
-						bm, false);
+			nova_assign_nvmm_entry(sb, pi, sih, entry, false);
 		}
 
 		nova_rebuild_file_time_and_size(sb, pi, entry);
@@ -1912,10 +1908,10 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 			nova_get_block(sb, curr_p);
 	}
 
-	if (bm) {
+	if (bm)
 		nova_set_file_bm(sb, pi, sih, bm);
-		pi->i_blocks += sih->log_pages;
-	}
+
+	pi->i_blocks = sih->log_pages + (sih->i_size >> data_bits);
 
 //	nova_print_inode_log_page(sb, inode);
 	return 0;
