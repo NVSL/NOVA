@@ -371,7 +371,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 				attr_entry =
 					(struct nova_setattr_logentry *)addr;
 				nova_apply_setattr_entry(sb, pi, sih,
-							attr_entry, NULL);
+								attr_entry);
 				curr_p += sizeof(struct nova_setattr_logentry);
 				continue;
 			case LINK_CHANGE:

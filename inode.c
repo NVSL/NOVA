@@ -1106,7 +1106,7 @@ static void nova_update_setattr_entry(struct inode *inode,
 
 void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
-	struct nova_setattr_logentry *entry, struct scan_bitmap *bm)
+	struct nova_setattr_logentry *entry)
 {
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
 	unsigned long first_blocknr, last_blocknr;
@@ -1136,11 +1136,6 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 
 		freed = nova_delete_file_tree(sb, sih, first_blocknr,
 						last_blocknr, 0);
-
-		if (bm)
-			pi->i_blocks -= (freed * (1 << (data_bits -
-					sb->s_blocksize_bits)));
-
 	}
 out:
 	pi->i_size	= entry->size;
@@ -1855,7 +1850,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 				attr_entry =
 					(struct nova_setattr_logentry *)addr;
 				nova_apply_setattr_entry(sb, pi, sih,
-							attr_entry, bm);
+								attr_entry);
 				curr_p += sizeof(struct nova_setattr_logentry);
 				continue;
 			case LINK_CHANGE:

@@ -939,7 +939,7 @@ extern unsigned long nova_find_region(struct inode *inode, loff_t *offset,
 		int hole);
 void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
-	struct nova_setattr_logentry *entry, struct scan_bitmap *bm);
+	struct nova_setattr_logentry *entry);
 u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih, u64 curr_p, int is_file);
 void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi);
