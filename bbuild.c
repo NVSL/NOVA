@@ -1099,6 +1099,12 @@ static int nova_failure_recovery_crawl(struct super_block *sb)
 		curr = inode_table->log_head;
 		while (curr) {
 			ring = &task_rings[ring_id];
+			if (ring->num >= 512) {
+				nova_err(sb, "%s: ring size too small\n",
+						__func__);
+				return -EINVAL;
+			}
+
 			ring->addr[ring->num] = curr;
 			ring->num++;
 
