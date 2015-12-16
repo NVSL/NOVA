@@ -152,7 +152,7 @@ inline int nova_search_inodetree(struct nova_sb_info *sbi,
 	int cpu;
 
 	cpu = ino % sbi->cpus;
-	tree = &sbi->header_trees[cpu].inode_inuse_tree;
+	tree = &sbi->inode_maps[cpu].inode_inuse_tree;
 	internal_ino = ino / sbi->cpus;
 	return nova_find_range_node(sbi, tree, internal_ino, ret_node);
 }
@@ -212,7 +212,7 @@ inline int nova_insert_inodetree(struct nova_sb_info *sbi,
 	struct rb_root *tree;
 	int ret;
 
-	tree = &sbi->header_trees[cpu].inode_inuse_tree;
+	tree = &sbi->inode_maps[cpu].inode_inuse_tree;
 	ret = nova_insert_range_node(sbi, tree, new_node);
 	if (ret)
 		nova_dbg("ERROR: %s failed %d\n", __func__, ret);

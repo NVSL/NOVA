@@ -360,7 +360,7 @@ struct free_list {
  */
 #define	RESERVED_BLOCKS	3
 
-struct header_tree {
+struct inode_map {
 	struct mutex inode_table_mutex;
 	struct rb_root	inode_inuse_tree;
 	unsigned long	num_range_node_inode;
@@ -418,7 +418,7 @@ struct nova_sb_info {
 	spinlock_t *journal_locks;
 
 	/* Per-CPU inode map */
-	struct header_tree	*header_trees;
+	struct inode_map	*inode_maps;
 
 	/* Per-CPU free block list */
 	struct free_list *free_lists;

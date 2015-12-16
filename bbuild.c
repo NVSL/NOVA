@@ -69,7 +69,7 @@ static int nova_failure_insert_inodetree(struct super_block *sb,
 	unsigned long ino_low, unsigned long ino_high)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct header_tree *header_tree;
+	struct inode_map *inode_map;
 	struct nova_range_node *prev = NULL, *next = NULL;
 	struct nova_range_node *new_node;
 	unsigned long internal_low, internal_high;
@@ -92,16 +92,16 @@ static int nova_failure_insert_inodetree(struct super_block *sb,
 
 	internal_low = ino_low / sbi->cpus;
 	internal_high = ino_high / sbi->cpus;
-	header_tree = &sbi->header_trees[cpu];
-	tree = &header_tree->inode_inuse_tree;
-	mutex_lock(&header_tree->inode_table_mutex);
+	inode_map = &sbi->inode_maps[cpu];
+	tree = &inode_map->inode_inuse_tree;
+	mutex_lock(&inode_map->inode_table_mutex);
 
 	ret = nova_find_free_slot(sbi, tree, internal_low, internal_high,
 					&prev, &next);
 	if (ret) {
 		nova_dbg("%s: ino %lu - %lu already exists!: %d\n",
 					__func__, ino_low, ino_high, ret);
-		mutex_unlock(&header_tree->inode_table_mutex);
+		mutex_unlock(&inode_map->inode_table_mutex);
 		return ret;
 	}
 
@@ -109,7 +109,7 @@ static int nova_failure_insert_inodetree(struct super_block *sb,
 			(internal_high + 1 == next->range_low)) {
 		/* fits the hole */
 		rb_erase(&next->node, tree);
-		header_tree->num_range_node_inode--;
+		inode_map->num_range_node_inode--;
 		prev->range_high = next->range_high;
 		nova_free_inode_node(sb, next);
 		goto finish;
@@ -136,10 +136,10 @@ static int nova_failure_insert_inodetree(struct super_block *sb,
 		nova_free_inode_node(sb, new_node);
 		goto finish;
 	}
-	header_tree->num_range_node_inode++;
+	inode_map->num_range_node_inode++;
 
 finish:
-	mutex_unlock(&header_tree->inode_table_mutex);
+	mutex_unlock(&inode_map->inode_table_mutex);
 	return ret;
 }
 
@@ -243,13 +243,13 @@ out:
 static void nova_destroy_inode_trees(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct header_tree *header_tree;
+	struct inode_map *inode_map;
 	int i;
 
 	for (i = 0; i < sbi->cpus; i++) {
-		header_tree = &sbi->header_trees[i];
+		inode_map = &sbi->inode_maps[i];
 		nova_destroy_range_node_tree(sb,
-					&header_tree->inode_inuse_tree);
+					&inode_map->inode_inuse_tree);
 	}
 }
 
@@ -261,7 +261,7 @@ static int nova_init_inode_list_from_inode(struct super_block *sb)
 	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODELIST1_INO);
 	struct nova_range_node_lowhigh *entry;
 	struct nova_range_node *range_node;
-	struct header_tree *header_tree;
+	struct inode_map *inode_map;
 	size_t size = sizeof(struct nova_range_node_lowhigh);
 	unsigned long num_inode_node = 0;
 	u64 curr_p;
@@ -315,10 +315,10 @@ static int nova_init_inode_list_from_inode(struct super_block *sb)
 			range_node->range_high - range_node->range_low + 1;
 		num_inode_node++;
 
-		header_tree = &sbi->header_trees[cpuid];
-		header_tree->num_range_node_inode++;
-		if (!header_tree->first_inode_range)
-			header_tree->first_inode_range = range_node;
+		inode_map = &sbi->inode_maps[cpuid];
+		inode_map->num_range_node_inode++;
+		if (!inode_map->first_inode_range)
+			inode_map->first_inode_range = range_node;
 
 		curr_p += sizeof(struct nova_range_node_lowhigh);
 	}
@@ -430,15 +430,15 @@ void nova_save_inode_list_to_log(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	unsigned long num_blocks;
 	unsigned long num_nodes = 0;
-	struct header_tree *header_tree;
+	struct inode_map *inode_map;
 	unsigned long i;
 	u64 temp_tail;
 	u64 new_block;
 	int allocated;
 
 	for (i = 0; i < sbi->cpus; i++) {
-		header_tree = &sbi->header_trees[i];
-		num_nodes += header_tree->num_range_node_inode;
+		inode_map = &sbi->inode_maps[i];
+		num_nodes += inode_map->num_range_node_inode;
 	}
 
 	num_blocks = num_nodes / RANGENODE_PER_PAGE;
@@ -457,9 +457,9 @@ void nova_save_inode_list_to_log(struct super_block *sb)
 
 	temp_tail = new_block;
 	for (i = 0; i < sbi->cpus; i++) {
-		header_tree = &sbi->header_trees[i];
+		inode_map = &sbi->inode_maps[i];
 		temp_tail = nova_save_range_nodes_to_log(sb,
-				&header_tree->inode_inuse_tree, temp_tail, i);
+				&inode_map->inode_inuse_tree, temp_tail, i);
 	}
 
 	nova_update_tail(pi, temp_tail);

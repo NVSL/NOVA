@@ -460,7 +460,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	struct nova_inode *root_pi;
 	struct nova_sb_info *sbi = NULL;
 	struct inode *root_i = NULL;
-	struct header_tree *header_tree;
+	struct inode_map *inode_map;
 	unsigned long blocksize;
 	u32 random = 0;
 	int retval = -EINVAL;
@@ -504,17 +504,17 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	clear_opt(sbi->s_mount_opt, PROTECT);
 	set_opt(sbi->s_mount_opt, HUGEIOREMAP);
 
-	sbi->header_trees = kzalloc(sbi->cpus * sizeof(struct header_tree),
+	sbi->inode_maps = kzalloc(sbi->cpus * sizeof(struct inode_map),
 					GFP_KERNEL);
-	if (!sbi->header_trees) {
+	if (!sbi->inode_maps) {
 		retval = -ENOMEM;
 		goto out;
 	}
 
 	for (i = 0; i < sbi->cpus; i++) {
-		header_tree = &sbi->header_trees[i];
-		mutex_init(&header_tree->inode_table_mutex);
-		header_tree->inode_inuse_tree = RB_ROOT;
+		inode_map = &sbi->inode_maps[i];
+		mutex_init(&inode_map->inode_table_mutex);
+		inode_map->inode_inuse_tree = RB_ROOT;
 	}
 
 	mutex_init(&sbi->s_lock);
@@ -636,9 +636,9 @@ out:
 		sbi->journal_locks = NULL;
 	}
 
-	if (sbi->header_trees) {
-		kfree(sbi->header_trees);
-		sbi->header_trees = NULL;
+	if (sbi->inode_maps) {
+		kfree(sbi->inode_maps);
+		sbi->inode_maps = NULL;
 	}
 
 	kfree(sbi);
@@ -746,7 +746,7 @@ restore_opt:
 static void nova_put_super(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct header_tree *header_tree;
+	struct inode_map *inode_map;
 	int i;
 
 	/* It's unmount time, so unmap the nova memory */
@@ -767,12 +767,12 @@ static void nova_put_super(struct super_block *sb)
 	kfree(sbi->journal_locks);
 
 	for (i = 0; i < sbi->cpus; i++) {
-		header_tree = &sbi->header_trees[i];
+		inode_map = &sbi->inode_maps[i];
 		nova_dbgv("CPU %d: inode allocated %d, freed %d\n",
-			i, header_tree->allocated, header_tree->freed);
+			i, inode_map->allocated, inode_map->freed);
 	}
 
-	kfree(sbi->header_trees);
+	kfree(sbi->inode_maps);
 
 	kfree(sbi);
 }
