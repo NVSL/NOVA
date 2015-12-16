@@ -325,7 +325,7 @@ static inline void nova_rebuild_dir_time_and_size(struct super_block *sb,
 
 int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
-	struct nova_inode_info_header *sih, struct scan_bitmap *bm)
+	struct nova_inode_info_header *sih)
 {
 	struct nova_dir_logentry *entry = NULL;
 	struct nova_setattr_logentry *attr_entry = NULL;
@@ -351,19 +351,12 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 
 	nova_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
 				curr_p, pi->log_tail);
-	if (bm) {
-		BUG_ON(curr_p & (PAGE_SIZE - 1));
-		set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
-	}
+
 	sih->log_pages = 1;
 	while (curr_p != pi->log_tail) {
 		if (is_last_dir_entry(sb, curr_p)) {
 			sih->log_pages++;
 			curr_p = next_log_page(sb, curr_p);
-			if (bm) {
-				BUG_ON(curr_p & (PAGE_SIZE - 1));
-				set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
-			}
 		}
 
 		if (curr_p == 0) {
@@ -378,7 +371,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 				attr_entry =
 					(struct nova_setattr_logentry *)addr;
 				nova_apply_setattr_entry(sb, pi, sih,
-							attr_entry, bm);
+							attr_entry, NULL);
 				curr_p += sizeof(struct nova_setattr_logentry);
 				continue;
 			case LINK_CHANGE:
@@ -432,16 +425,11 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	while ((next = curr_page->page_tail.next_page) != 0) {
 		sih->log_pages++;
 		curr_p = next;
-		if (bm) {
-			BUG_ON(curr_p & (PAGE_SIZE - 1));
-			set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
-		}
 		curr_page = (struct nova_inode_log_page *)
 			nova_get_block(sb, curr_p);
 	}
 
-	if (bm)
-		pi->i_blocks += sih->log_pages;
+	pi->i_blocks = sih->log_pages;
 
 //	nova_print_dir_tree(sb, sih, ino);
 	return 0;

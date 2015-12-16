@@ -907,7 +907,7 @@ struct nova_dir_logentry *nova_find_dir_logentry(struct super_block *sb,
 	unsigned long name_len);
 int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
-	struct nova_inode_info_header *sih, struct scan_bitmap *bm);
+	struct nova_inode_info_header *sih);
 
 /* file.c */
 extern const struct inode_operations nova_file_inode_operations;

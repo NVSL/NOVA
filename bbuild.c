@@ -852,7 +852,7 @@ struct nova_inode_info_header * nova_rebuild_inode(struct super_block *sb,
 		nova_rebuild_file_inode_tree(sb, pi, pi_addr, sih, NULL);
 		break;
 	case S_IFDIR:
-		nova_rebuild_dir_inode_tree(sb, pi, pi_addr, sih, NULL);
+		nova_rebuild_dir_inode_tree(sb, pi, pi_addr, sih);
 		break;
 	default:
 		/* In case of special inode, walk the log */
