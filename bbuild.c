@@ -1024,6 +1024,7 @@ static int failure_thread_func(void *data)
 	u64 curr;
 	int cpuid = smp_processor_id();
 	unsigned long i;
+	unsigned long max_size = 0;
 	u64 pi_addr = 0;
 	int ret = 0;
 	int count;
@@ -1055,6 +1056,8 @@ static int failure_thread_func(void *data)
 						pi_addr, global_bm[cpuid]);
 				nova_failure_update_inodetree(sb, pi,
 						&ino_low, &ino_high);
+				if (sih.i_size > max_size)
+					max_size = sih.i_size;
 			}
 		}
 
@@ -1063,8 +1066,8 @@ static int failure_thread_func(void *data)
 	}
 
 	/* Free radix tree */
-	if (sih.i_size && sih.pi_addr) {
-		last_blocknr = nova_get_last_blocknr(sb, &sih);
+	if (max_size) {
+		last_blocknr = (max_size - 1) >> PAGE_SHIFT;
 		nova_delete_file_tree(sb, &sih, 0, last_blocknr, false);
 	}
 
