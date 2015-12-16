@@ -769,6 +769,17 @@ static int alloc_bm(struct super_block *sb, unsigned long initsize)
 
 /************************** NOVA recovery ****************************/
 
+struct task_ring {
+	u64 addr[512];
+	int num;
+	int inodes_used_count;
+};
+
+static struct task_ring *task_rings;
+static struct task_struct **threads;
+wait_queue_head_t finish_wq;
+int *finished;
+
 struct kmem_cache *nova_header_cachep;
 
 static void nova_init_header(struct super_block *sb,
@@ -885,12 +896,6 @@ static int nova_traverse_dir_inode_log(struct super_block *sb,
 	return 0;
 }
 
-struct task_ring {
-	u64 addr[512];
-	int num;
-	int inodes_used_count;
-};
-
 static int nova_recover_inode_pages(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct task_ring *ring,
 	u64 pi_addr, struct scan_bitmap *bm)
@@ -932,19 +937,14 @@ static int nova_recover_inode_pages(struct super_block *sb,
 	return 0;
 }
 
-static struct task_ring *task_rings;
-static struct task_struct **threads;
-wait_queue_head_t finish_wq;
-int *finished;
-
-static int failure_thread_func(void *data);
-
 static void free_resources(void)
 {
 	kfree(task_rings);
 	kfree(threads);
 	kfree(finished);
 }
+
+static int failure_thread_func(void *data);
 
 static int allocate_resources(struct super_block *sb, int cpus)
 {
