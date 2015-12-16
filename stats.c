@@ -94,10 +94,6 @@ unsigned long free_data_pages;
 unsigned long alloc_log_pages;
 unsigned long free_log_pages;
 unsigned long fsync_pages;
-atomic64_t header_alloc = ATOMIC_INIT(0);
-atomic64_t header_free = ATOMIC_INIT(0);
-atomic64_t range_alloc = ATOMIC_INIT(0);
-atomic64_t range_free = ATOMIC_INIT(0);
 
 void nova_print_alloc_stats(struct super_block *sb)
 {
@@ -121,10 +117,6 @@ void nova_print_alloc_stats(struct super_block *sb)
 	printk("Freed %lu data pages\n", free_data_pages);
 	printk("Allocated %lu log pages\n", alloc_log_pages);
 	printk("Freed %lu log pages\n", free_log_pages);
-	printk("Allocated %ld info headers\n",
-			atomic64_read(&header_alloc));
-	printk("Allocated %ld range nodes\n",
-			atomic64_read(&range_alloc));
 }
 
 void nova_print_IO_stats(struct super_block *sb)
@@ -386,16 +378,3 @@ void nova_print_free_lists(struct super_block *sb)
 		free_list->allocated_blocks, free_list->freed_blocks);
 }
 
-void nova_detect_memory_leak(void)
-{
-	if (atomic64_read(&header_alloc) != atomic64_read(&header_free))
-		nova_dbg("%s: inode header memory leak! "
-			"allocated %ld, freed %ld\n", __func__,
-			atomic64_read(&header_alloc),
-			atomic64_read(&header_free));
-	if (atomic64_read(&range_alloc) != atomic64_read(&range_free))
-		nova_dbg("%s: range node memory leak! "
-			"allocated %ld, freed %ld\n", __func__,
-			atomic64_read(&range_alloc),
-			atomic64_read(&range_free));
-}

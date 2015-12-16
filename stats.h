@@ -100,10 +100,6 @@ extern unsigned long free_data_pages;
 extern unsigned long alloc_log_pages;
 extern unsigned long free_log_pages;
 extern unsigned long fsync_pages;
-extern atomic64_t header_alloc;
-extern atomic64_t header_free;
-extern atomic64_t range_alloc;
-extern atomic64_t range_free;
 
 typedef struct timespec timing_t;
 

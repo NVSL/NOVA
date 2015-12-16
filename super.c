@@ -781,7 +781,6 @@ static void nova_put_super(struct super_block *sb)
 inline void nova_free_range_node(struct nova_range_node *node)
 {
 	kmem_cache_free(nova_range_node_cachep, node);
-	atomic64_inc(&range_free);
 }
 
 inline void nova_free_blocknode(struct super_block *sb,
@@ -802,7 +801,6 @@ struct nova_range_node *nova_alloc_range_node(struct super_block *sb)
 	struct nova_range_node *p;
 	p = (struct nova_range_node *)
 		kmem_cache_alloc(nova_range_node_cachep, GFP_NOFS);
-	atomic64_inc(&range_alloc);
 	return p;
 }
 
@@ -1045,7 +1043,6 @@ out1:
 static void __exit exit_nova_fs(void)
 {
 	unregister_filesystem(&nova_fs_type);
-	nova_detect_memory_leak();
 	destroy_inodecache();
 	destroy_rangenode_cache();
 	destroy_header_cache();

@@ -809,7 +809,6 @@ struct nova_inode_info_header *nova_alloc_header(struct super_block *sb,
 
 	nova_init_header(sb, p, i_mode);
 
-	atomic64_inc(&header_alloc);
 	return p;
 }
 
@@ -817,7 +816,6 @@ void nova_free_header(struct super_block *sb,
 	struct nova_inode_info_header *sih)
 {
 	kmem_cache_free(nova_header_cachep, sih);
-	atomic64_inc(&header_free);
 }
 
 struct nova_inode_info_header * nova_rebuild_inode(struct super_block *sb,
