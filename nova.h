@@ -346,10 +346,15 @@ struct free_list {
 	unsigned long	num_blocknode;
 
 	/* Statistics */
-	unsigned long	alloc_count;
-	unsigned long	free_count;
-	unsigned long	allocated_blocks;
-	unsigned long	freed_blocks;
+	unsigned long	alloc_log_count;
+	unsigned long	alloc_data_count;
+	unsigned long	free_log_count;
+	unsigned long	free_data_count;
+	unsigned long	alloc_log_pages;
+	unsigned long	alloc_data_pages;
+	unsigned long	freed_log_pages;
+	unsigned long	freed_data_pages;
+
 	u64		padding[8];	/* Cache line break */
 };
 

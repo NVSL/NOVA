@@ -89,10 +89,6 @@ unsigned long long cow_write_bytes;
 unsigned long long fsync_bytes;
 unsigned long long checked_pages;
 unsigned long gc_pages;
-unsigned long alloc_data_pages;
-unsigned long free_data_pages;
-unsigned long alloc_log_pages;
-unsigned long free_log_pages;
 unsigned long fsync_pages;
 
 void nova_print_alloc_stats(struct super_block *sb)
@@ -113,10 +109,7 @@ void nova_print_alloc_stats(struct super_block *sb)
 			checked_pages / Countstats[log_gc_t] : 0,
 		gc_pages, Countstats[log_gc_t] ?
 			gc_pages / Countstats[log_gc_t] : 0);
-	printk("Allocated %lu data pages\n", alloc_data_pages);
-	printk("Freed %lu data pages\n", free_data_pages);
-	printk("Allocated %lu log pages\n", alloc_log_pages);
-	printk("Freed %lu log pages\n", free_log_pages);
+	nova_print_free_lists(sb);
 }
 
 void nova_print_IO_stats(struct super_block *sb)
@@ -356,11 +349,19 @@ void nova_print_free_lists(struct super_block *sb)
 			free_list->block_end - free_list->block_start + 1,
 			free_list->num_free_blocks, free_list->num_blocknode);
 
-		nova_dbg("Free list %d: alloc count %lu, "
-			"free count %lu, allocated blocks %lu, "
-			"freed blocks %lu\n", i,
-			free_list->alloc_count,	free_list->free_count,
-			free_list->allocated_blocks, free_list->freed_blocks);
+		nova_dbg("Free list %d: alloc log count %lu, "
+			"allocated log pages %lu, alloc data count %lu, "
+			"allocated data pages %lu, free log count %lu, "
+			"freed log pages %lu, free data count %lu, "
+			"freed data pages %lu\n", i,
+			free_list->alloc_log_count,
+			free_list->alloc_log_pages,
+			free_list->alloc_data_count,
+			free_list->alloc_data_pages,
+			free_list->free_log_count,
+			free_list->freed_log_pages,
+			free_list->free_data_count,
+			free_list->freed_data_pages);
 	}
 
 	i = SHARED_CPU;
@@ -371,10 +372,14 @@ void nova_print_free_lists(struct super_block *sb)
 		free_list->block_end - free_list->block_start + 1,
 		free_list->num_free_blocks, free_list->num_blocknode);
 
-	nova_dbg("Free list %d: alloc count %lu, "
-		"free count %lu, allocated blocks %lu, "
-		"freed blocks %lu\n", i,
-		free_list->alloc_count,	free_list->free_count,
-		free_list->allocated_blocks, free_list->freed_blocks);
+	nova_dbg("Free list %d: alloc log count %lu, "
+		"allocated log pages %lu, alloc data count %lu, "
+		"allocated data pages %lu, free log count %lu, "
+		"freed log pages %lu, free data count %lu, "
+		"freed data pages %lu\n", i,
+		free_list->alloc_log_count, free_list->alloc_log_pages,
+		free_list->alloc_data_count, free_list->alloc_data_pages,
+		free_list->free_log_count, free_list->freed_log_pages,
+		free_list->free_data_count, free_list->freed_data_pages);
 }
 
