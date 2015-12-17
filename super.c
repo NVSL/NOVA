@@ -99,7 +99,7 @@ static int nova_get_block_info(struct super_block *sb,
 	sbi->s_bdev = sb->s_bdev;
 
 	size = sb->s_bdev->bd_disk->fops->direct_access(sb->s_bdev,
-					0, &virt_addr, &pfn, 0);
+					0, &virt_addr, &pfn);
 
 	sbi->virt_addr = virt_addr;
 	sbi->phys_addr = pfn << PAGE_SHIFT;
