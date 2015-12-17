@@ -188,7 +188,7 @@ static int nova_init_blockmap_from_inode(struct super_block *sb)
 	size_t size = sizeof(struct nova_range_node_lowhigh);
 	u64 curr_p;
 	u64 cpuid;
-	int ret;
+	int ret = 0;
 
 	curr_p = pi->log_head;
 	if (curr_p == 0) {
