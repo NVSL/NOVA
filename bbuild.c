@@ -920,12 +920,15 @@ static int nova_set_ring_array(struct super_block *sb,
 
 static int nova_set_file_bm(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct task_ring *ring,
-	struct scan_bitmap *bm, unsigned long last_blocknr)
+	struct scan_bitmap *bm, unsigned long base, unsigned long last_blocknr)
 {
 	unsigned long start_blocknr = 0;
 	unsigned long nvmm, pgoff;
 
-	last_blocknr = last_blocknr % MAX_PGOFF;
+	if (last_blocknr >= base + MAX_PGOFF)
+		last_blocknr = MAX_PGOFF - 1;
+	else
+		last_blocknr -= base;
 
 	for (pgoff = start_blocknr; pgoff <= last_blocknr; pgoff++) {
 		nvmm = ring->array[pgoff];
@@ -1072,7 +1075,7 @@ again:
 		return 0;
 
 	last_blocknr = (sih->i_size - 1) >> data_bits;
-	nova_set_file_bm(sb, sih, ring, bm, last_blocknr);
+	nova_set_file_bm(sb, sih, ring, bm, base, last_blocknr);
 	if (last_blocknr >= base + MAX_PGOFF) {
 		base += MAX_PGOFF;
 		goto again;
