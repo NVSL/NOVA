@@ -1002,13 +1002,13 @@ static int __init init_nova_fs(void)
 			support_pcommit ? "YES" : "NO",
 			support_clwb ? "YES" : "NO");
 
-	nova_dbg("Data structure size: inode %lu, log_page %lu, "
-		"file_write_entry %lu, dir_entry(max) %lu, "
+	nova_dbgv("Data structure size: inode %lu, log_page %lu, "
+		"file_write_entry %lu, dir_entry(max) %d, "
 		"setattr_entry %lu, link_change_entry %lu\n",
 		sizeof(struct nova_inode),
 		sizeof(struct nova_inode_log_page),
 		sizeof(struct nova_file_write_entry),
-		sizeof(struct nova_dir_logentry),
+		NOVA_DIR_LOG_REC_LEN(NOVA_NAME_LEN),
 		sizeof(struct nova_setattr_logentry),
 		sizeof(struct nova_link_change_entry));
 
