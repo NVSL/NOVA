@@ -27,7 +27,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 {
 	struct nova_file_write_entry *entry;
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	u64 block;
 	u32 time;
 	char *blockp;

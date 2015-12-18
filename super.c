@@ -822,7 +822,6 @@ static struct inode *nova_alloc_inode(struct super_block *sb)
 	if (!vi)
 		return NULL;
 
-	vi->header = NULL;
 	vi->low_mmap = ULONG_MAX;
 	vi->high_mmap = 0;
 	vi->vfs_inode.i_version = 1;
@@ -849,7 +848,6 @@ static void init_once(void *foo)
 {
 	struct nova_inode_info *vi = foo;
 
-	vi->header = NULL;
 	vi->i_dir_start_lookup = 0;
 	inode_init_once(&vi->vfs_inode);
 }
@@ -878,17 +876,6 @@ static int __init init_inodecache(void)
 	return 0;
 }
 
-static int __init init_header_cache(void)
-{
-	nova_header_cachep = kmem_cache_create("nova_header_cache",
-					sizeof(struct nova_inode_info_header),
-					0, (SLAB_RECLAIM_ACCOUNT |
-					SLAB_MEM_SPREAD), NULL);
-	if (nova_header_cachep == NULL)
-		return -ENOMEM;
-	return 0;
-}
-
 static void destroy_inodecache(void)
 {
 	/*
@@ -897,11 +884,6 @@ static void destroy_inodecache(void)
 	 */
 	rcu_barrier();
 	kmem_cache_destroy(nova_inode_cachep);
-}
-
-static void destroy_header_cache(void)
-{
-	kmem_cache_destroy(nova_header_cachep);
 }
 
 static void destroy_rangenode_cache(void)
@@ -1020,19 +1002,13 @@ static int __init init_nova_fs(void)
 	if (rc)
 		goto out1;
 
-	rc = init_header_cache();
-	if (rc)
-		goto out2;
-
 	rc = register_filesystem(&nova_fs_type);
 	if (rc)
-		goto out3;
+		goto out2;
 
 	NOVA_END_TIMING(init_t, init_time);
 	return 0;
 
-out3:
-	destroy_header_cache();
 out2:
 	destroy_inodecache();
 out1:
@@ -1045,7 +1021,6 @@ static void __exit exit_nova_fs(void)
 	unregister_filesystem(&nova_fs_type);
 	destroy_inodecache();
 	destroy_rangenode_cache();
-	destroy_header_cache();
 }
 
 MODULE_AUTHOR("Andiry Xu <jix024@cs.ucsd.edu>");

@@ -321,7 +321,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, u64 tail, u64 *new_tail)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_link_change_entry *entry;
 	u64 curr_p;
 	size_t size = sizeof(struct nova_link_change_entry);
@@ -514,7 +514,7 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	/* Build the dir tree */
 	si = NOVA_I(inode);
-	sih = si->header;
+	sih = &si->header;
 	nova_rebuild_dir_inode_tree(sb, pi, pi_addr, sih);
 
 	pidir = nova_get_inode(sb, dir);
@@ -541,7 +541,7 @@ static int nova_empty_dir(struct inode *inode)
 {
 	struct super_block *sb;
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_dir_logentry *entry;
 	unsigned long pos = 0;
 	struct nova_dir_logentry *entries[4];
@@ -571,7 +571,7 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 	struct nova_inode *pi = nova_get_inode(sb, inode), *pidir;
 	u64 pidir_tail = 0, pi_tail = 0;
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	int err = -ENOTEMPTY;
 	timing_t rmdir_time;
 

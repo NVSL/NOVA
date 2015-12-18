@@ -24,7 +24,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	struct inode *inode = filp->f_mapping->host;
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_file_write_entry *entry;
 	pgoff_t index, end_index;
 	unsigned long offset;
@@ -187,7 +187,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 	void *kmem)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	size_t offset, eblk_offset;
 	unsigned long start_blk, end_blk, num_blocks;
 	unsigned long file_end_blk;
@@ -295,7 +295,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	struct address_space *mapping = filp->f_mapping;
 	struct inode    *inode = mapping->host;
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi;
 	struct nova_file_write_entry entry_data;
@@ -478,7 +478,7 @@ static ssize_t nova_flush_mmap_to_nvmm(struct super_block *sb,
 	size_t count, void *kmem)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	unsigned long start_blk;
 	unsigned long cache_addr;
 	u64 nvmm_block;
@@ -667,7 +667,7 @@ static int nova_get_nvmm_pfn(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info *si, u64 nvmm, pgoff_t pgoff,
 	vm_flags_t vm_flags, void **kmem, unsigned long *pfn)
 {
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	u64 mmap_block;
 	unsigned long cache_addr = 0;
 	unsigned long blocknr = 0;

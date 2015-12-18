@@ -783,9 +783,7 @@ static struct task_struct **threads;
 wait_queue_head_t finish_wq;
 int *finished;
 
-struct kmem_cache *nova_header_cachep;
-
-static void nova_init_header(struct super_block *sb,
+void nova_init_header(struct super_block *sb,
 	struct nova_inode_info_header *sih, u16 i_mode)
 {
 	sih->log_pages = 0;
@@ -797,31 +795,10 @@ static void nova_init_header(struct super_block *sb,
 	sih->i_mode = i_mode;
 }
 
-struct nova_inode_info_header *nova_alloc_header(struct super_block *sb,
-	u16 i_mode)
-{
-	struct nova_inode_info_header *p;
-	p = (struct nova_inode_info_header *)
-		kmem_cache_alloc(nova_header_cachep, GFP_NOFS);
-
-	if (!p)
-		NOVA_ASSERT(0);
-
-	nova_init_header(sb, p, i_mode);
-
-	return p;
-}
-
-void nova_free_header(struct super_block *sb,
-	struct nova_inode_info_header *sih)
-{
-	kmem_cache_free(nova_header_cachep, sih);
-}
-
 int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	u64 pi_addr)
 {
-	struct nova_inode_info_header *sih = NULL;
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode *pi;
 	unsigned long nova_ino;
 
@@ -839,10 +816,7 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 			__func__, nova_ino, pi_addr, pi->valid,
 			pi->log_head, pi->log_tail);
 
-	sih = nova_alloc_header(sb, __le16_to_cpu(pi->i_mode));
-	if (!sih)
-		return -ENOMEM;
-
+	nova_init_header(sb, sih, __le16_to_cpu(pi->i_mode));
 	sih->ino = nova_ino;
 
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
@@ -863,7 +837,6 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 		break;
 	}
 
-	si->header = sih;
 	return 0;
 }
 

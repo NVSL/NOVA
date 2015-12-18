@@ -298,8 +298,6 @@ struct nova_range_node {
 	unsigned long range_high;
 };
 
-extern struct kmem_cache *nova_header_cachep;
-
 struct nova_inode_info_header {
 	struct radix_tree_root tree;	/* Dir name entry tree root */
 	struct radix_tree_root cache_tree;	/* Mmap cache tree root */
@@ -312,7 +310,7 @@ struct nova_inode_info_header {
 };
 
 struct nova_inode_info {
-	struct nova_inode_info_header *header;
+	struct nova_inode_info_header header;
 	__u32   i_dir_start_lookup;
 	struct inode vfs_inode;
 	unsigned long low_mmap;		/* Mmap low range */
@@ -626,7 +624,7 @@ static inline struct nova_file_write_entry *
 nova_get_write_entry(struct super_block *sb,
 	struct nova_inode_info *si, unsigned long blocknr)
 {
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_file_write_entry *entry;
 
 	entry = radix_tree_lookup(&sih->tree, blocknr);
@@ -676,14 +674,14 @@ static inline u64 nova_find_nvmm_block(struct super_block *sb,
 			return 0;
 	}
 
-	nvmm = get_nvmm(sb, si->header, entry, blocknr);
+	nvmm = get_nvmm(sb, &si->header, entry, blocknr);
 	return nvmm << PAGE_SHIFT;
 }
 
 static inline unsigned long nova_get_cache_addr(struct super_block *sb,
 	struct nova_inode_info *si, unsigned long blocknr)
 {
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	unsigned long addr;
 
 	addr = (unsigned long)radix_tree_lookup(&sih->cache_tree, blocknr);
@@ -729,7 +727,7 @@ static inline struct nova_inode *nova_get_inode(struct super_block *sb,
 	struct inode *inode)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 
 	return (struct nova_inode *)nova_get_block(sb, sih->pi_addr);
 }
@@ -873,10 +871,8 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	u64 pi_addr);
 void nova_save_blocknode_mappings_to_log(struct super_block *sb);
 void nova_save_inode_list_to_log(struct super_block *sb);
-struct nova_inode_info_header *nova_alloc_header(struct super_block *sb,
-	u16 i_mode);
-void nova_free_header(struct super_block *sb,
-	struct nova_inode_info_header *sih);
+void nova_init_header(struct super_block *sb,
+	struct nova_inode_info_header *sih, u16 i_mode);
 int nova_recovery(struct super_block *sb);
 
 /*

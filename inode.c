@@ -289,7 +289,7 @@ static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
 	unsigned long first_blocknr, last_blocknr;
 	int freed = 0;
@@ -405,7 +405,7 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode *pi;
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	int ret = -EIO;
 	unsigned long ino;
 
@@ -755,7 +755,7 @@ void nova_evict_inode(struct inode *inode)
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	unsigned long last_blocknr;
 	timing_t evict_time;
 	int err = 0;
@@ -816,7 +816,6 @@ void nova_evict_inode(struct inode *inode)
 out:
 	if (destroy == 0)
 		nova_free_dram_resource(sb, sih);
-	nova_free_header(sb, sih);
 
 	/* TODO: Since we don't use page-cache, do we really need the following
 	 * call? */
@@ -889,12 +888,6 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 		goto fail2;
 	}
 
-	sih = nova_alloc_header(sb, 0);
-	if (!sih) {
-		errval = -ENOMEM;
-		goto fail1;
-	}
-
 	inode_init_owner(inode, dir, mode);
 	inode->i_blocks = inode->i_size = 0;
 	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
@@ -953,10 +946,10 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	nova_memlock_inode(sb, pi);
 
 	si = NOVA_I(inode);
-	sih->i_mode = inode->i_mode;
+	sih = &si->header;
+	nova_init_header(sb, sih, inode->i_mode);
 	sih->pi_addr = pi_addr;
 	sih->ino = ino;
-	si->header = sih;
 
 	nova_update_inode(inode, pi);
 
@@ -1010,7 +1003,7 @@ void nova_dirty_inode(struct inode *inode, int flags)
 static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 
 	/* We only support truncate regular file */
 	if (!(S_ISREG(inode->i_mode))) {
@@ -1118,7 +1111,7 @@ u64 nova_append_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct iattr *attr, u64 tail)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_setattr_logentry *entry;
 	u64 curr_p, new_tail = 0;
 	size_t size = sizeof(struct nova_setattr_logentry);
@@ -1147,7 +1140,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	int ret;
 	unsigned int ia_valid = attr->ia_valid, attr_mask;
 	loff_t oldsize = inode->i_size;
@@ -1654,7 +1647,7 @@ u64 nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data, u64 tail)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_file_write_entry *entry;
 	u64 curr_p;
 	size_t size = sizeof(struct nova_file_write_entry);
@@ -1879,7 +1872,7 @@ unsigned long nova_find_region(struct inode *inode, loff_t *offset, int hole)
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
 	unsigned long first_blocknr, last_blocknr;
 	unsigned long blocks = 0, offset_in_block;

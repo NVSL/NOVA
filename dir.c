@@ -26,7 +26,7 @@ struct nova_dir_logentry *nova_find_dir_logentry(struct super_block *sb,
 	unsigned long name_len)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_dir_logentry *direntry;
 	unsigned int hash;
 
@@ -106,7 +106,7 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 	int link_change, u64 *curr_tail)
 {
 	struct nova_inode_info *si = NOVA_I(dir);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_dir_logentry *entry;
 	u64 curr_p;
 	size_t size = de_len;
@@ -217,7 +217,7 @@ int nova_add_entry(struct dentry *dentry, u64 ino, int inc_link,
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
 	struct nova_inode_info *si = NOVA_I(dir);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode *pidir;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
@@ -264,7 +264,7 @@ int nova_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
 	struct nova_inode_info *si = NOVA_I(dir);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode *pidir;
 	struct qstr *entry = &dentry->d_name;
 	unsigned short loglen;
@@ -444,7 +444,7 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pidir;
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = si->header;
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode *child_pi;
 	struct nova_dir_logentry *entry;
 	struct nova_dir_logentry *entries[FREE_BATCH];
