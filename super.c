@@ -822,8 +822,6 @@ static struct inode *nova_alloc_inode(struct super_block *sb)
 	if (!vi)
 		return NULL;
 
-	vi->low_mmap = ULONG_MAX;
-	vi->high_mmap = 0;
 	vi->vfs_inode.i_version = 1;
 
 	return &vi->vfs_inode;
@@ -848,7 +846,6 @@ static void init_once(void *foo)
 {
 	struct nova_inode_info *vi = foo;
 
-	vi->i_dir_start_lookup = 0;
 	inode_init_once(&vi->vfs_inode);
 }
 

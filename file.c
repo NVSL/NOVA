@@ -239,7 +239,7 @@ static unsigned long nova_get_dirty_range(struct super_block *sb,
 	return flush_bytes;
 }
 
-static void nova_get_sync_range(struct nova_inode_info *si,
+static void nova_get_sync_range(struct nova_inode_info_header *sih,
 	loff_t *start, loff_t *end)
 {
 	unsigned long start_blk, end_blk;
@@ -248,8 +248,8 @@ static void nova_get_sync_range(struct nova_inode_info *si,
 	start_blk = *start >> PAGE_SHIFT;
 	end_blk = *end >> PAGE_SHIFT;
 
-	low_blk = si->low_mmap;
-	high_blk = si->high_mmap;
+	low_blk = sih->low_mmap;
+	high_blk = sih->high_mmap;
 
 	if (start_blk < low_blk)
 		*start = low_blk << PAGE_SHIFT;
@@ -302,7 +302,7 @@ int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		return 0;
 	}
 
-	nova_get_sync_range(si, &start, &end);
+	nova_get_sync_range(sih, &start, &end);
 	start_blk = start >> PAGE_SHIFT;
 	end_blk = end >> PAGE_SHIFT;
 

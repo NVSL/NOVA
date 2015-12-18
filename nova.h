@@ -303,18 +303,17 @@ struct nova_inode_info_header {
 	struct radix_tree_root cache_tree;	/* Mmap cache tree root */
 	unsigned short i_mode;		/* Dir or file? */
 	unsigned long log_pages;		/* Num of log pages */
-	unsigned long mmap_pages;	/* Num of mmap pages */
 	unsigned long i_size;
 	unsigned long ino;
 	unsigned long pi_addr;
+	unsigned long mmap_pages;	/* Num of mmap pages */
+	unsigned long low_mmap;		/* Mmap low range */
+	unsigned long high_mmap;	/* Mmap high range */
 };
 
 struct nova_inode_info {
 	struct nova_inode_info_header header;
-	__u32   i_dir_start_lookup;
 	struct inode vfs_inode;
-	unsigned long low_mmap;		/* Mmap low range */
-	unsigned long high_mmap;	/* Mmap high range */
 };
 
 enum bm_type {

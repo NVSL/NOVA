@@ -723,6 +723,7 @@ static int nova_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 {
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode *pi;
 	u64 nvmm;
 	vm_flags_t vm_flags = vma->vm_flags;
@@ -741,10 +742,10 @@ static int nova_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 						kmem, pfn);
 
 	if (vm_flags & VM_WRITE) {
-		if (pgoff < si->low_mmap)
-			si->low_mmap = pgoff;
-		if (pgoff > si->high_mmap)
-			si->high_mmap = pgoff;
+		if (pgoff < sih->low_mmap)
+			sih->low_mmap = pgoff;
+		if (pgoff > sih->high_mmap)
+			sih->high_mmap = pgoff;
 	}
 
 	return ret;
