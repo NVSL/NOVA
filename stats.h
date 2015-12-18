@@ -83,6 +83,9 @@ enum timing_category {
 	evict_inode_t,
 	mmap_fault_t,
 
+	rebuild_dir_t,
+	rebuild_file_t,
+
 	/* Sentinel */
 	TIMING_NUM,
 };

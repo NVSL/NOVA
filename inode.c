@@ -1782,11 +1782,13 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode_log_page *curr_page;
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
 	u64 ino = pi->nova_ino;
+	timing_t rebuild_time;
 	void *addr;
 	u64 curr_p;
 	u64 next;
 	u8 type;
 
+	NOVA_START_TIMING(rebuild_file_t, rebuild_time);
 	nova_dbg_verbose("Rebuild file inode %llu tree\n", ino);
 
 	sih->pi_addr = pi_addr;
@@ -1870,6 +1872,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	pi->i_blocks = sih->log_pages + (sih->i_size >> data_bits);
 
 //	nova_print_inode_log_page(sb, inode);
+	NOVA_END_TIMING(rebuild_file_t, rebuild_time);
 	return 0;
 }
 

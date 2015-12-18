@@ -333,12 +333,14 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	struct nova_inode_log_page *curr_page;
 	u64 ino = pi->nova_ino;
 	unsigned short de_len;
+	timing_t rebuild_time;
 	void *addr;
 	u64 curr_p;
 	u64 next;
 	u8 type;
 	int ret;
 
+	NOVA_START_TIMING(rebuild_dir_t, rebuild_time);
 	nova_dbg_verbose("Rebuild dir %llu tree\n", ino);
 
 	sih->pi_addr = pi_addr;
@@ -432,6 +434,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	pi->i_blocks = sih->log_pages;
 
 //	nova_print_dir_tree(sb, sih, ino);
+	NOVA_END_TIMING(rebuild_dir_t, rebuild_time);
 	return 0;
 }
 
