@@ -827,10 +827,8 @@ out:
 }
 
 /* Returns 0 on failure */
-u64 nova_new_nova_inode(struct super_block *sb,
-	struct nova_inode_info_header **return_sih, u64 *pi_addr)
+u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr)
 {
-	struct nova_inode_info_header *sih;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct inode_map *inode_map;
 	unsigned long free_ino = 0;
@@ -840,10 +838,6 @@ u64 nova_new_nova_inode(struct super_block *sb,
 	timing_t new_inode_time;
 
 	NOVA_START_TIMING(new_nova_inode_t, new_inode_time);
-	sih = nova_alloc_header(sb, 0);
-	if (!sih)
-		return 0;
-
 	map_id = sbi->map_id;
 	sbi->map_id = (sbi->map_id + 1) % sbi->cpus;
 
@@ -864,19 +858,16 @@ u64 nova_new_nova_inode(struct super_block *sb,
 		return 0;
 	}
 
-	sih->ino = free_ino;
 	mutex_unlock(&inode_map->inode_table_mutex);
 
 	ino = free_ino;
-	*return_sih = sih;
 
 	NOVA_END_TIMING(new_nova_inode_t, new_inode_time);
 	return ino;
 }
 
 struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
-	struct inode *dir, u64 pi_addr,
-	struct nova_inode_info_header *sih, u64 ino, umode_t mode,
+	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
 	size_t size, dev_t rdev, const struct qstr *qstr)
 {
 	struct super_block *sb;
@@ -884,6 +875,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	struct inode *inode;
 	struct nova_inode *diri = NULL;
 	struct nova_inode_info *si;
+	struct nova_inode_info_header *sih = NULL;
 	struct nova_inode *pi;
 	int errval;
 	timing_t new_inode_time;
@@ -897,6 +889,12 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 		goto fail2;
 	}
 
+	sih = nova_alloc_header(sb, 0);
+	if (!sih) {
+		errval = -ENOMEM;
+		goto fail1;
+	}
+
 	inode_init_owner(inode, dir, mode);
 	inode->i_blocks = inode->i_size = 0;
 	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
@@ -907,7 +905,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	diri = nova_get_inode(sb, dir);
 	if (!diri) {
 		errval = -EACCES;
-		goto fail2;
+		goto fail1;
 	}
 
 	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
@@ -957,6 +955,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	si = NOVA_I(inode);
 	sih->i_mode = inode->i_mode;
 	sih->pi_addr = pi_addr;
+	sih->ino = ino;
 	si->header = sih;
 
 	nova_update_inode(inode, pi);

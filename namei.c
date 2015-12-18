@@ -114,7 +114,6 @@ static int nova_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	struct super_block *sb = dir->i_sb;
 	struct nova_inode *pidir, *pi;
 	u64 pi_addr = 0;
-	struct nova_inode_info_header *sih;
 	u64 tail = 0;
 	u64 ino;
 	timing_t create_time;
@@ -125,7 +124,7 @@ static int nova_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (!pidir)
 		goto out_err;
 
-	ino = nova_new_nova_inode(sb, &sih, &pi_addr);
+	ino = nova_new_nova_inode(sb, &pi_addr);
 	if (ino == 0)
 		goto out_err;
 
@@ -135,7 +134,7 @@ static int nova_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	nova_dbgv("%s: %s\n", __func__, dentry->d_name.name);
 	nova_dbgv("%s: inode %llu, dir %lu\n", __func__, ino, dir->i_ino);
-	inode = nova_new_vfs_inode(TYPE_CREATE, dir, pi_addr, sih, ino, mode,
+	inode = nova_new_vfs_inode(TYPE_CREATE, dir, pi_addr, ino, mode,
 					0, 0, &dentry->d_name);
 	if (IS_ERR(inode))
 		goto out_err;
@@ -161,7 +160,6 @@ static int nova_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	struct super_block *sb = dir->i_sb;
 	u64 pi_addr = 0;
 	struct nova_inode *pidir, *pi;
-	struct nova_inode_info_header *sih;
 	u64 tail = 0;
 	u64 ino;
 	timing_t mknod_time;
@@ -172,7 +170,7 @@ static int nova_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (!pidir)
 		goto out_err;
 
-	ino = nova_new_nova_inode(sb, &sih, &pi_addr);
+	ino = nova_new_nova_inode(sb, &pi_addr);
 	if (ino == 0)
 		goto out_err;
 
@@ -182,7 +180,7 @@ static int nova_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (err)
 		goto out_err;
 
-	inode = nova_new_vfs_inode(TYPE_MKNOD, dir, pi_addr, sih, ino, mode,
+	inode = nova_new_vfs_inode(TYPE_MKNOD, dir, pi_addr, ino, mode,
 					0, rdev, &dentry->d_name);
 	if (IS_ERR(inode))
 		goto out_err;
@@ -209,7 +207,6 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	struct inode *inode;
 	u64 pi_addr = 0;
 	struct nova_inode *pidir, *pi;
-	struct nova_inode_info_header *sih;
 	unsigned long log_blocknr = 0;
 	unsigned long name_blocknr = 0;
 	int allocated;
@@ -225,7 +222,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	if (!pidir)
 		goto out_fail1;
 
-	ino = nova_new_nova_inode(sb, &sih, &pi_addr);
+	ino = nova_new_nova_inode(sb, &pi_addr);
 	if (ino == 0)
 		goto out_fail1;
 
@@ -236,7 +233,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	if (err)
 		goto out_fail1;
 
-	inode = nova_new_vfs_inode(TYPE_SYMLINK, dir, pi_addr, sih, ino,
+	inode = nova_new_vfs_inode(TYPE_SYMLINK, dir, pi_addr, ino,
 					S_IFLNK|S_IRWXUGO, len, 0,
 					&dentry->d_name);
 	if (IS_ERR(inode)) {
@@ -476,11 +473,12 @@ out:
 
 static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 {
-	struct inode *inode;
-	struct nova_inode_info_header *sih;
-	struct nova_inode *pidir, *pi;
-	u64 pi_addr = 0;
 	struct super_block *sb = dir->i_sb;
+	struct inode *inode;
+	struct nova_inode *pidir, *pi;
+	struct nova_inode_info *si;
+	struct nova_inode_info_header *sih = NULL;
+	u64 pi_addr = 0;
 	u64 tail = 0;
 	u64 ino;
 	int err = -EMLINK;
@@ -490,7 +488,7 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	if (dir->i_nlink >= NOVA_LINK_MAX)
 		goto out;
 
-	ino = nova_new_nova_inode(sb, &sih, &pi_addr);
+	ino = nova_new_nova_inode(sb, &pi_addr);
 	if (ino == 0)
 		goto out_err;
 
@@ -503,7 +501,7 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		goto out_err;
 	}
 
-	inode = nova_new_vfs_inode(TYPE_MKDIR, dir, pi_addr, sih, ino,
+	inode = nova_new_vfs_inode(TYPE_MKDIR, dir, pi_addr, ino,
 					S_IFDIR | mode, sb->s_blocksize,
 					0, &dentry->d_name);
 	if (IS_ERR(inode)) {
@@ -515,6 +513,8 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	nova_append_dir_init_entries(sb, pi, inode->i_ino, dir->i_ino);
 
 	/* Build the dir tree */
+	si = NOVA_I(inode);
+	sih = si->header;
 	nova_rebuild_dir_inode_tree(sb, pi, pi_addr, sih);
 
 	pidir = nova_get_inode(sb, dir);
