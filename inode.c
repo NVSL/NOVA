@@ -684,7 +684,6 @@ static int nova_free_inode(struct inode *inode,
 struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 {
 	struct nova_inode_info *si;
-	struct nova_inode_info_header *sih = NULL;
 	struct inode *inode;
 	u64 pi_addr;
 	int err;
@@ -715,13 +714,10 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 		goto fail;
 	}
 
-	sih = nova_rebuild_inode(sb, pi_addr);
-	if (!sih) {
-		err = -EINVAL;
+	err = nova_rebuild_inode(sb, si, pi_addr);
+	if (err)
 		goto fail;
-	}
 
-	si->header = sih;
 	err = nova_read_inode(sb, inode, pi_addr);
 	if (unlikely(err))
 		goto fail;

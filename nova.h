@@ -869,7 +869,7 @@ int nova_find_free_slot(struct nova_sb_info *sbi,
 /* bbuild.c */
 inline void set_bm(unsigned long bit, struct scan_bitmap *bm,
 	enum bm_type type);
-struct nova_inode_info_header * nova_rebuild_inode(struct super_block *sb,
+int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	u64 pi_addr);
 void nova_save_blocknode_mappings_to_log(struct super_block *sb);
 void nova_save_inode_list_to_log(struct super_block *sb);

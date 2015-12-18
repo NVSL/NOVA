@@ -818,7 +818,7 @@ void nova_free_header(struct super_block *sb,
 	kmem_cache_free(nova_header_cachep, sih);
 }
 
-struct nova_inode_info_header * nova_rebuild_inode(struct super_block *sb,
+int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	u64 pi_addr)
 {
 	struct nova_inode_info_header *sih = NULL;
@@ -830,7 +830,7 @@ struct nova_inode_info_header * nova_rebuild_inode(struct super_block *sb,
 		NOVA_ASSERT(0);
 
 	if (pi->valid == 0)
-		return NULL;
+		return -EINVAL;
 
 	nova_ino = pi->nova_ino;
 
@@ -841,7 +841,7 @@ struct nova_inode_info_header * nova_rebuild_inode(struct super_block *sb,
 
 	sih = nova_alloc_header(sb, __le16_to_cpu(pi->i_mode));
 	if (!sih)
-		return NULL;
+		return -ENOMEM;
 
 	sih->ino = nova_ino;
 
@@ -863,7 +863,8 @@ struct nova_inode_info_header * nova_rebuild_inode(struct super_block *sb,
 		break;
 	}
 
-	return sih;
+	si->header = sih;
+	return 0;
 }
 
 static int nova_traverse_dir_inode_log(struct super_block *sb,
