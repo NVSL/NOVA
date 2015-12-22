@@ -1653,7 +1653,7 @@ u64 nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	size_t size = sizeof(struct nova_file_write_entry);
 	timing_t append_time;
 
-	NOVA_START_TIMING(append_entry_t, append_time);
+	NOVA_START_TIMING(append_file_entry_t, append_time);
 
 	curr_p = nova_get_append_head(sb, pi, sih, tail, size, 1);
 	if (curr_p == 0)
@@ -1668,7 +1668,7 @@ u64 nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 			entry->block >> PAGE_SHIFT, entry->size);
 	/* entry->invalid is set to 0 */
 
-	NOVA_END_TIMING(append_entry_t, append_time);
+	NOVA_END_TIMING(append_file_entry_t, append_time);
 	return curr_p;
 }
 

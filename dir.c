@@ -113,7 +113,7 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 	unsigned short links_count;
 	timing_t append_time;
 
-	NOVA_START_TIMING(append_entry_t, append_time);
+	NOVA_START_TIMING(append_dir_entry_t, append_time);
 
 	curr_p = nova_get_append_head(sb, pidir, sih, tail,
 						size, 0);
@@ -149,7 +149,7 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 	*curr_tail = curr_p + de_len;
 
 	dir->i_blocks = pidir->i_blocks;
-	NOVA_END_TIMING(append_entry_t, append_time);
+	NOVA_END_TIMING(append_dir_entry_t, append_time);
 	return curr_p;
 }
 

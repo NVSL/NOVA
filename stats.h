@@ -66,6 +66,8 @@ enum timing_category {
 	/* Logging and journaling */
 	logging_t,
 	append_entry_t,
+	append_dir_entry_t,
+	append_file_entry_t,
 	log_gc_t,
 	check_invalid_t,
 
