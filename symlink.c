@@ -22,7 +22,7 @@
 #include "nova.h"
 
 int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
-	struct inode *inode, unsigned long log_blocknr,
+	struct inode *inode, u64 log_block,
 	unsigned long name_blocknr, const char *symname, int len)
 {
 	struct nova_file_write_entry *entry;
@@ -42,7 +42,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	nova_memlock_block(sb, blockp);
 
 	/* Apply a write entry to the start of log page */
-	block = nova_get_block_off(sb, log_blocknr, NOVA_BLOCK_TYPE_4K);
+	block = log_block;
 	entry = (struct nova_file_write_entry *)nova_get_block(sb, block);
 
 	entry->pgoff = 0;
