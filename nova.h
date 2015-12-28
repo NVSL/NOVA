@@ -167,8 +167,7 @@ struct nova_file_write_entry {
 } __attribute((__packed__));
 
 struct nova_inode_page_tail {
-	/* Record the link inodes count on this page */
-	__le64	num_links;
+	__le64	padding1;
 	__le64	padding2;
 	__le64	padding3;
 	__le64	next_page;

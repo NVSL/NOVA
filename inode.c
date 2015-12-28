@@ -1697,10 +1697,6 @@ void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi)
 		}
 		curr_page = (struct nova_inode_log_page *)nova_get_block(sb,
 							curr_block);
-		if (curr_page->page_tail.num_links) {
-			curr_block = curr_page->page_tail.next_page;
-			continue;
-		}
 
 		blocknr = nova_get_blocknr(sb, le64_to_cpu(curr_block),
 				    btype);

@@ -370,7 +370,6 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 	struct inode *inode = dest_dentry->d_inode;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode *pidir;
-	struct nova_inode_page_tail *page_tail;
 	u64 pidir_tail = 0, pi_tail = 0;
 	int err = -ENOMEM;
 	timing_t link_time;
@@ -412,13 +411,6 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 	nova_lite_transaction_for_time_and_link(sb, pi, pidir,
 						pi_tail, pidir_tail, 0);
 
-	/*
-	 * Do not free the dir log page which contains a hard linked inode.
-	 * FIXME: Make this atomic with the above transaction.
-	 */
-	page_tail = (struct nova_inode_page_tail *)
-			PAGE_TAIL(((unsigned long)pi));
-	page_tail->num_links++;
 out:
 	NOVA_END_TIMING(link_t, link_time);
 	return err;
