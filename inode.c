@@ -1331,6 +1331,8 @@ static int nova_coalesce_log_pages(struct super_block *sb,
 		next_blocknr++;
 	}
 
+	/* Last page */
+	curr_page->page_tail.next_page = 0;
 	return 0;
 }
 
