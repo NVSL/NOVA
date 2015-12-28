@@ -235,9 +235,8 @@ struct nova_link_change_entry {
 } __attribute((__packed__));
 
 enum alloc_type {
-	KMALLOC = 1,
-	VMALLOC,
-	GETPAGE,
+	LOG = 1,
+	DATA,
 };
 
 #define	MMAP_WRITE_BIT	0x20UL	// mmaped for write
