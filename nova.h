@@ -142,6 +142,7 @@ enum nova_entry_type {
 	DIR_LOG,
 	SET_ATTR,
 	LINK_CHANGE,
+	NEXT_PAGE,
 };
 
 static inline u8 nova_get_entry_type(void *p)
@@ -151,7 +152,7 @@ static inline u8 nova_get_entry_type(void *p)
 
 static inline void nova_set_entry_type(void *p, enum nova_entry_type type)
 {
-	*(u8 *)p |= type;
+	*(u8 *)p = type;
 }
 
 /* Make sure this is 32 bytes */
@@ -805,9 +806,9 @@ static inline bool is_last_dir_entry(struct super_block *sb, u64 curr_p)
 	if (ENTRY_LOC(curr_p) + NOVA_DIR_LOG_REC_LEN(0) > LAST_ENTRY)
 		return true;
 
-	addr = (void *)nova_get_block(sb, curr_p);
+	addr = nova_get_block(sb, curr_p);
 	type = nova_get_entry_type(addr);
-	if (type == 0)
+	if (type == NEXT_PAGE)
 		return true;
 
 	return false;

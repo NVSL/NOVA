@@ -1615,6 +1615,17 @@ u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 	return new_block;
 }
 
+static void nova_set_next_page_flag(struct super_block *sb, u64 curr_p)
+{
+	void *p;
+
+	if (ENTRY_LOC(curr_p) >= LAST_ENTRY)
+		return;
+
+	p = nova_get_block(sb, curr_p);
+	nova_set_entry_type(p, NEXT_PAGE);
+}
+
 u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih, u64 tail, size_t size,
 	int is_file)
@@ -1628,13 +1639,17 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 
 	if (curr_p == 0 || (is_last_entry(curr_p, size) &&
 				next_log_page(sb, curr_p) == 0)) {
+		if (is_last_entry(curr_p, size))
+			nova_set_next_page_flag(sb, curr_p);
 		curr_p = nova_extend_inode_log(sb, pi, sih, curr_p, is_file);
 		if (curr_p == 0)
 			return 0;
 	}
 
-	if (is_last_entry(curr_p, size))
+	if (is_last_entry(curr_p, size)) {
+		nova_set_next_page_flag(sb, curr_p);
 		curr_p = next_log_page(sb, curr_p);
+	}
 
 	return  curr_p;
 }
