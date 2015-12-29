@@ -62,6 +62,7 @@ const char *Timingstring[TIMING_NUM] =
 
 	"transaction_new_inode",
 	"transaction_link_change",
+	"update_tail",
 
 	"append_dir_entry",
 	"append_file_entry",

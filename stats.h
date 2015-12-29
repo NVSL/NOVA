@@ -66,6 +66,7 @@ enum timing_category {
 	/* Transaction */
 	create_trans_t,
 	link_trans_t,
+	update_tail_t,
 
 	/* Logging */
 	append_dir_entry_t,
