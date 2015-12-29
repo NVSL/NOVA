@@ -63,8 +63,11 @@ enum timing_category {
 	free_data_t,
 	free_log_t,
 
-	/* Logging and journaling */
-	logging_t,
+	/* Transaction */
+	create_trans_t,
+	link_trans_t,
+
+	/* Logging */
 	append_dir_entry_t,
 	append_file_entry_t,
 	append_link_change_t,

@@ -72,6 +72,9 @@ static void nova_lite_transaction_for_new_inode(struct super_block *sb,
 	struct nova_lite_journal_entry entry;
 	int cpu;
 	u64 journal_tail;
+	timing_t trans_time;
+
+	NOVA_START_TIMING(create_trans_t, trans_time);
 
 	/* Commit a lite transaction */
 	memset(&entry, 0, sizeof(struct nova_lite_journal_entry));
@@ -95,6 +98,7 @@ static void nova_lite_transaction_for_new_inode(struct super_block *sb,
 
 	nova_commit_lite_transaction(sb, journal_tail, cpu);
 	spin_unlock(&sbi->journal_locks[cpu]);
+	NOVA_END_TIMING(create_trans_t, trans_time);
 }
 
 /* Returns new tail after append */
@@ -282,6 +286,9 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	struct nova_lite_journal_entry entry;
 	u64 journal_tail;
 	int cpu;
+	timing_t trans_time;
+
+	NOVA_START_TIMING(link_trans_t, trans_time);
 
 	/* Commit a lite transaction */
 	memset(&entry, 0, sizeof(struct nova_lite_journal_entry));
@@ -315,6 +322,7 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 
 	nova_commit_lite_transaction(sb, journal_tail, cpu);
 	spin_unlock(&sbi->journal_locks[cpu]);
+	NOVA_END_TIMING(link_trans_t, trans_time);
 }
 
 /* Returns new tail after append */

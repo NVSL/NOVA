@@ -60,7 +60,9 @@ const char *Timingstring[TIMING_NUM] =
 	"free_data_blocks",
 	"free_log_blocks",
 
-	"logging",
+	"transaction_new_inode",
+	"transaction_link_change",
+
 	"append_dir_entry",
 	"append_file_entry",
 	"append_link_change",
