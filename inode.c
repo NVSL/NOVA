@@ -1213,7 +1213,6 @@ static ssize_t nova_direct_IO(int rw, struct kiocb *iocb,
 	struct iov_iter *iter, loff_t offset)
 {
 	struct file *filp = iocb->ki_filp;
-	struct inode *inode = filp->f_mapping->host;
 	loff_t end = offset;
 	ssize_t err = -EINVAL;
 	unsigned long seg;
