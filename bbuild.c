@@ -361,9 +361,6 @@ static u64 nova_append_range_node_entry(struct super_block *sb,
 	u64 curr_p;
 	size_t size = sizeof(struct nova_range_node_lowhigh);
 	struct nova_range_node_lowhigh *entry;
-	timing_t append_time;
-
-	NOVA_START_TIMING(append_entry_t, append_time);
 
 	curr_p = tail;
 
@@ -386,7 +383,6 @@ static u64 nova_append_range_node_entry(struct super_block *sb,
 
 	nova_flush_buffer(entry, sizeof(struct nova_range_node_lowhigh), 0);
 out:
-	NOVA_END_TIMING(append_entry_t, append_time);
 	return curr_p;
 }
 

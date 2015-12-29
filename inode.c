@@ -1117,7 +1117,7 @@ u64 nova_append_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	size_t size = sizeof(struct nova_setattr_logentry);
 	timing_t append_time;
 
-	NOVA_START_TIMING(append_entry_t, append_time);
+	NOVA_START_TIMING(append_setattr_t, append_time);
 	nova_dbg_verbose("%s: inode %lu attr change\n",
 				__func__, inode->i_ino);
 
@@ -1130,7 +1130,7 @@ u64 nova_append_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	nova_update_setattr_entry(inode, entry, attr);
 	new_tail = curr_p + size;
 
-	NOVA_END_TIMING(append_entry_t, append_time);
+	NOVA_END_TIMING(append_setattr_t, append_time);
 	return new_tail;
 }
 

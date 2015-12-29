@@ -328,7 +328,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	size_t size = sizeof(struct nova_link_change_entry);
 	timing_t append_time;
 
-	NOVA_START_TIMING(append_entry_t, append_time);
+	NOVA_START_TIMING(append_link_change_t, append_time);
 	nova_dbg_verbose("%s: inode %lu attr change\n",
 				__func__, inode->i_ino);
 
@@ -345,7 +345,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	nova_flush_buffer(entry, size, 0);
 	*new_tail = curr_p + size;
 
-	NOVA_END_TIMING(append_entry_t, append_time);
+	NOVA_END_TIMING(append_link_change_t, append_time);
 	return 0;
 }
 
