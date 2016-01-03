@@ -193,7 +193,7 @@ struct nova_dir_logentry {
 	u8	entry_type;
 	u8	name_len;               /* length of the directory entry name */
 	u8	file_type;              /* file type */
-	u8	new_inode;		/* Followed by a new inode? */
+	u8	invalid;		/* Invalid now? */
 	__le16	de_len;                 /* length of this directory entry */
 	__le16	links_count;
 	__le32	mtime;			/* For both mtime and ctime */

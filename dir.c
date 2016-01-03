@@ -132,6 +132,7 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 	memcpy_to_pmem_nocache(entry->name, dentry->d_name.name,
 				dentry->d_name.len);
 	entry->file_type = 0;
+	entry->invalid = 0;
 	entry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
 	entry->size = cpu_to_le64(dir->i_size);
 
