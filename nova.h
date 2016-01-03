@@ -119,7 +119,7 @@ extern unsigned int nova_dbgmask;
 #define	NOVA_PRINT_FREE_LISTS		0xBCD00018
 
 
-#define	READDIR_END			(LONG_MAX)
+#define	READDIR_END			(ULONG_MAX)
 #define	INVALID_CPU			(-1)
 #define	SHARED_CPU			(65536)
 #define FREE_BATCH			(16)
@@ -533,17 +533,17 @@ struct inode_table *nova_get_inode_table(struct super_block *sb, int cpu)
 }
 
 // BKDR String Hash Function
-static inline unsigned int BKDRHash(const char *str, int length)
+static inline unsigned long BKDRHash(const char *str, int length)
 {
 	unsigned int seed = 131; // 31 131 1313 13131 131313 etc..
-	unsigned int hash = 0;
+	unsigned long hash = 0;
 	int i;
 
 	for (i = 0; i < length; i++) {
 		hash = hash * seed + (*str++);
 	}
 
-	return (hash & 0x7FFFFFFF);
+	return hash;
 }
 
 /* uses CPU instructions to atomically write up to 8 bytes */

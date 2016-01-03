@@ -28,7 +28,7 @@ struct nova_dir_logentry *nova_find_dir_logentry(struct super_block *sb,
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_dir_logentry *direntry;
-	unsigned int hash;
+	unsigned long hash;
 
 	hash = BKDRHash(name, name_len);
 	direntry = radix_tree_lookup(&sih->tree, hash);
@@ -40,11 +40,11 @@ static int nova_insert_dir_radix_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, const char *name,
 	int namelen, struct nova_dir_logentry *direntry)
 {
-	unsigned int hash;
+	unsigned long hash;
 	int ret;
 
 	hash = BKDRHash(name, namelen);
-	nova_dbgv("%s: insert %s hash %u\n", __func__, name, hash);
+	nova_dbgv("%s: insert %s hash %lu\n", __func__, name, hash);
 
 	/* FIXME: hash collision ignored here */
 	ret = radix_tree_insert(&sih->tree, hash, direntry);
@@ -57,14 +57,14 @@ static int nova_insert_dir_radix_tree(struct super_block *sb,
 void nova_remove_dir_radix_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, const char *name, int namelen)
 {
-	unsigned int hash;
+	unsigned long hash;
 	void *ret;
 
 	hash = BKDRHash(name, namelen);
 	ret = radix_tree_delete(&sih->tree, hash);
 
 	if (!ret)
-		nova_dbg("%s ERROR: %s, length %d, hash %u\n",
+		nova_dbg("%s ERROR: %s, length %d, hash %lu\n",
 				__func__, name, namelen, hash);
 }
 
@@ -455,7 +455,7 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 	struct nova_dir_logentry *entries[FREE_BATCH];
 	int nr_entries;
 	u64 pi_addr;
-	long pos = 0;
+	unsigned long pos = 0;
 	ino_t ino;
 	int i;
 	int ret;
