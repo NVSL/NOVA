@@ -54,18 +54,52 @@ static int nova_insert_dir_radix_tree(struct super_block *sb,
 	return ret;
 }
 
-void nova_remove_dir_radix_tree(struct super_block *sb,
-	struct nova_inode_info_header *sih, const char *name, int namelen)
+static int nova_check_dentry_match(struct super_block *sb,
+	struct nova_dir_logentry *dentry, const char *name, int namelen)
 {
+	if (dentry->name_len != namelen)
+		return -EINVAL;
+
+	return strncmp(dentry->name, name, namelen);
+}
+
+static int nova_remove_dir_radix_tree(struct super_block *sb,
+	struct nova_inode_info_header *sih, const char *name, int namelen,
+	int replay)
+{
+	struct nova_dir_logentry *entry;
 	unsigned long hash;
-	void *ret;
 
 	hash = BKDRHash(name, namelen);
-	ret = radix_tree_delete(&sih->tree, hash);
+	entry = radix_tree_delete(&sih->tree, hash);
 
-	if (!ret)
-		nova_dbg("%s ERROR: %s, length %d, hash %lu\n",
-				__func__, name, namelen, hash);
+	if (replay == 0) {
+		if (!entry) {
+			nova_dbg("%s ERROR: %s, length %d, hash %lu\n",
+					__func__, name, namelen, hash);
+			return -EINVAL;
+		}
+
+		if (entry->ino == 0 || entry->invalid ||
+		    nova_check_dentry_match(sb, entry, name, namelen)) {
+			nova_dbg("%s dentry not match: %s, length %d, "
+					"hash %lu\n", __func__, name,
+					namelen, hash);
+			nova_dbg("dentry: type %d, inode %llu, name %*.s, "
+					"namelen %u, rec len %u\n",
+					entry->entry_type,
+					le64_to_cpu(entry->ino),
+					entry->name_len, entry->name,
+					entry->name_len,
+					le16_to_cpu(entry->de_len));
+			return -EINVAL;
+		}
+
+		/* No need to flush */
+		entry->invalid = 1;
+	}
+
+	return 0;
 }
 
 void nova_delete_dir_tree(struct super_block *sb,
@@ -291,7 +325,7 @@ int nova_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
 				dentry, loglen, tail, dec_link, &curr_tail);
 	*new_tail = curr_tail;
 
-	nova_remove_dir_radix_tree(sb, sih, entry->name, entry->len);
+	nova_remove_dir_radix_tree(sb, sih, entry->name, entry->len, 0);
 	NOVA_END_TIMING(remove_entry_t, remove_entry_time);
 	return 0;
 }
@@ -313,7 +347,7 @@ inline int nova_replay_remove_entry(struct super_block *sb,
 {
 	nova_dbg_verbose("%s: remove %s\n", __func__, entry->name);
 	nova_remove_dir_radix_tree(sb, sih, entry->name,
-					entry->name_len);
+					entry->name_len, 1);
 	return 0;
 }
 
