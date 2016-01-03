@@ -1436,29 +1436,65 @@ update:
 }
 #endif
 
-static bool curr_page_invalid(struct super_block *sb, struct nova_inode *pi,
-	struct nova_inode_log_page *curr_page)
+static bool curr_page_invalid(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	u64 page_head)
 {
 	struct nova_file_write_entry *entry;
-	int i;
+	void *addr;
+	u64 curr_p = page_head;
+	u8 type;
+	bool ret = true;
 	timing_t check_time;
 
 	NOVA_START_TIMING(check_invalid_t, check_time);
-	for (i = 0; i < ENTRIES_PER_PAGE; i++) {
-		entry = &curr_page->entries[i];
-		/* Do not recycle inode change entry */
-		if (nova_get_entry_type(entry) != FILE_WRITE) {
-			NOVA_END_TIMING(check_invalid_t, check_time);
-			return false;
+	while (curr_p < page_head + LAST_ENTRY) {
+		if (curr_p == 0) {
+			nova_err(sb, "File inode %lu log is NULL!\n",
+					sih->ino);
+			BUG();
 		}
-		if (entry->num_pages != entry->invalid_pages) {
-			NOVA_END_TIMING(check_invalid_t, check_time);
-			return false;
+
+		addr = (void *)nova_get_block(sb, curr_p);
+		type = nova_get_entry_type(addr);
+		switch (type) {
+			case SET_ATTR:
+				if (sih->last_setattr == curr_p) {
+					ret = false;
+					goto out;
+				}
+				curr_p += sizeof(struct nova_setattr_logentry);
+				break;
+			case LINK_CHANGE:
+				if (sih->last_link_change == curr_p) {
+					ret = false;
+					goto out;
+				}
+				curr_p += sizeof(struct nova_link_change_entry);
+				break;
+			case FILE_WRITE:
+				entry = (struct nova_file_write_entry *)addr;
+				if (entry->num_pages != entry->invalid_pages) {
+					ret = false;
+					goto out;
+				}
+				curr_p += sizeof(struct nova_file_write_entry);
+				break;
+			case NEXT_PAGE:
+				/* No more entries in this page */
+				goto out;
+			default:
+				nova_dbg("%s: unknown type %d, 0x%llx\n",
+							__func__, type, curr_p);
+				NOVA_ASSERT(0);
+				curr_p += sizeof(struct nova_file_write_entry);
+				break;
 		}
 	}
 
+out:
 	NOVA_END_TIMING(check_invalid_t, check_time);
-	return true;
+	return ret;
 }
 
 static void free_curr_page(struct super_block *sb, struct nova_inode *pi,
@@ -1473,7 +1509,7 @@ static void free_curr_page(struct super_block *sb, struct nova_inode *pi,
 			nova_get_blocknr(sb, curr_head, btype), 1);
 }
 
-int nova_inode_log_garbage_collection(struct super_block *sb,
+static int nova_inode_log_fast_gc(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 curr_tail, u64 new_block, int num_pages)
 {
@@ -1504,7 +1540,7 @@ int nova_inode_log_garbage_collection(struct super_block *sb,
 					nova_get_block(sb, curr);
 		next = curr_page->page_tail.next_page;
 		nova_dbg_verbose("curr 0x%llx, next 0x%llx\n", curr, next);
-		if (curr_page_invalid(sb, pi, curr_page)) {
+		if (curr_page_invalid(sb, pi, sih, curr)) {
 			nova_dbg_verbose("curr page %p invalid\n", curr_page);
 			if (curr == pi->log_head) {
 				/* Free first page later */
@@ -1596,7 +1632,7 @@ u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 		}
 
 		if (is_file) {
-			nova_inode_log_garbage_collection(sb, pi, sih, curr_p,
+			nova_inode_log_fast_gc(sb, pi, sih, curr_p,
 						new_block, allocated);
 		} else {
 			/* TODO: Disable GC for dir inode by now */
