@@ -352,6 +352,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	entry->generation = cpu_to_le32(inode->i_generation);
 	nova_flush_buffer(entry, size, 0);
 	*new_tail = curr_p + size;
+	sih->last_link_change = curr_p;
 
 	NOVA_END_TIMING(append_link_change_t, append_time);
 	return 0;

@@ -1107,8 +1107,9 @@ out:
 }
 
 /* Returns new tail after append */
-u64 nova_append_setattr_entry(struct super_block *sb, struct nova_inode *pi,
-	struct inode *inode, struct iattr *attr, u64 tail)
+static u64 nova_append_setattr_entry(struct super_block *sb,
+	struct nova_inode *pi, struct inode *inode, struct iattr *attr,
+	u64 tail)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -1129,6 +1130,7 @@ u64 nova_append_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	/* inode is already updated with attr */
 	nova_update_setattr_entry(inode, entry, attr);
 	new_tail = curr_p + size;
+	sih->last_setattr = curr_p;
 
 	NOVA_END_TIMING(append_setattr_t, append_time);
 	return new_tail;
@@ -1821,6 +1823,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 					(struct nova_setattr_logentry *)addr;
 				nova_apply_setattr_entry(sb, pi, sih,
 								attr_entry);
+				sih->last_setattr = curr_p;
 				curr_p += sizeof(struct nova_setattr_logentry);
 				continue;
 			case LINK_CHANGE:
@@ -1828,6 +1831,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 					(struct nova_link_change_entry *)addr;
 				nova_apply_link_change_entry(pi,
 							link_change_entry);
+				sih->last_link_change = curr_p;
 				curr_p += sizeof(struct nova_link_change_entry);
 				continue;
 			case FILE_WRITE:
