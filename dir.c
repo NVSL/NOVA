@@ -123,7 +123,17 @@ void nova_delete_dir_tree(struct super_block *sb,
 			BUG_ON(!direntry);
 			pos = BKDRHash(direntry->name, direntry->name_len);
 			ret = radix_tree_delete(&sih->tree, pos);
-			BUG_ON(!ret || ret != direntry);
+			if (!ret || ret != direntry) {
+				nova_err(sb, "dentry: type %d, inode %llu, "
+					"name %*.s, namelen %u, rec len %u\n",
+					direntry->entry_type,
+					le64_to_cpu(direntry->ino),
+					direntry->name_len, direntry->name,
+					direntry->name_len,
+					le16_to_cpu(direntry->de_len));
+				if (!ret)
+					nova_dbg("ret is NULL\n");
+			}
 		}
 		pos++;
 	} while (nr_entries == FREE_BATCH);
@@ -441,8 +451,10 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 			entry->name_len, le16_to_cpu(entry->de_len));
 
 		if (entry->ino > 0) {
-			/* A valid entry to add */
-			ret = nova_replay_add_entry(sb, sih, entry);
+			if (entry->invalid == 0) {
+				/* A valid entry to add */
+				ret = nova_replay_add_entry(sb, sih, entry);
+			}
 		} else {
 			/* Delete the entry */
 			ret = nova_replay_remove_entry(sb, sih, entry);

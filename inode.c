@@ -1608,7 +1608,6 @@ u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 	u64 new_block;
 	int allocated;
 	unsigned long num_pages;
-	u64 page_tail;
 
 	if (curr_p == 0) {
 		allocated = nova_allocate_inode_log_pages(sb, pi,
@@ -1640,18 +1639,8 @@ u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 			return 0;
 		}
 
-		if (is_file) {
-			nova_inode_log_fast_gc(sb, pi, sih, curr_p,
+		nova_inode_log_fast_gc(sb, pi, sih, curr_p,
 						new_block, allocated);
-		} else {
-			/* TODO: Disable GC for dir inode by now */
-			page_tail = PAGE_TAIL(curr_p);
-			((struct nova_inode_page_tail *)
-				nova_get_block(sb, page_tail))->next_page
-								= new_block;
-			sih->log_pages += num_pages;
-			pi->i_blocks += num_pages;
-		}
 
 //		nova_dbg("After append log pages:\n");
 //		nova_print_inode_log_page(sb, inode);
