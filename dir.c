@@ -44,7 +44,7 @@ static int nova_insert_dir_radix_tree(struct super_block *sb,
 	int ret;
 
 	hash = BKDRHash(name, namelen);
-	nova_dbgv("%s: insert %s @ %p\n", __func__, name, direntry);
+	nova_dbgv("%s: insert %s hash %u\n", __func__, name, hash);
 
 	/* FIXME: hash collision ignored here */
 	ret = radix_tree_insert(&sih->tree, hash, direntry);
@@ -58,9 +58,14 @@ void nova_remove_dir_radix_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, const char *name, int namelen)
 {
 	unsigned int hash;
+	void *ret;
 
 	hash = BKDRHash(name, namelen);
-	radix_tree_delete(&sih->tree, hash);
+	ret = radix_tree_delete(&sih->tree, hash);
+
+	if (!ret)
+		nova_dbg("%s ERROR: %s, length %d, hash %u\n",
+				__func__, name, namelen, hash);
 }
 
 void nova_delete_dir_tree(struct super_block *sb,
