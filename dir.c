@@ -85,12 +85,11 @@ static int nova_remove_dir_radix_tree(struct super_block *sb,
 			nova_dbg("%s dentry not match: %s, length %d, "
 					"hash %lu\n", __func__, name,
 					namelen, hash);
-			nova_dbg("dentry: type %d, inode %llu, name %*.s, "
+			nova_dbg("dentry: type %d, inode %llu, name %s, "
 					"namelen %u, rec len %u\n",
 					entry->entry_type,
 					le64_to_cpu(entry->ino),
-					entry->name_len, entry->name,
-					entry->name_len,
+					entry->name, entry->name_len,
 					le16_to_cpu(entry->de_len));
 			return -EINVAL;
 		}
@@ -125,11 +124,10 @@ void nova_delete_dir_tree(struct super_block *sb,
 			ret = radix_tree_delete(&sih->tree, pos);
 			if (!ret || ret != direntry) {
 				nova_err(sb, "dentry: type %d, inode %llu, "
-					"name %*.s, namelen %u, rec len %u\n",
+					"name %s, namelen %u, rec len %u\n",
 					direntry->entry_type,
 					le64_to_cpu(direntry->ino),
-					direntry->name_len, direntry->name,
-					direntry->name_len,
+					direntry->name, direntry->name_len,
 					le16_to_cpu(direntry->de_len));
 				if (!ret)
 					nova_dbg("ret is NULL\n");
@@ -175,6 +173,7 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 	entry->name_len = dentry->d_name.len;
 	memcpy_to_pmem_nocache(entry->name, dentry->d_name.name,
 				dentry->d_name.len);
+	entry->name[dentry->d_name.len] = '\0';
 	entry->file_type = 0;
 	entry->invalid = 0;
 	entry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
@@ -235,7 +234,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 1;
-	strncpy(de_entry->name, ".", 1);
+	strncpy(de_entry->name, ".\0", 2);
 	nova_flush_buffer(de_entry, NOVA_DIR_LOG_REC_LEN(1), 0);
 
 	curr_p = new_block + NOVA_DIR_LOG_REC_LEN(1);
@@ -249,7 +248,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 2;
-	strncpy(de_entry->name, "..", 2);
+	strncpy(de_entry->name, "..\0", 3);
 	nova_flush_buffer(de_entry, NOVA_DIR_LOG_REC_LEN(2), 0);
 
 	curr_p += NOVA_DIR_LOG_REC_LEN(2);
@@ -444,11 +443,11 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 		}
 
 		entry = (struct nova_dir_logentry *)nova_get_block(sb, curr_p);
-		nova_dbg_verbose("curr_p: 0x%llx, type %d, ino %llu, "
-			"name %*.s, namelen %u, rec len %u\n", curr_p,
+		nova_dbgv("curr_p: 0x%llx, type %d, ino %llu, "
+			"name %s, namelen %u, rec len %u\n", curr_p,
 			entry->entry_type, le64_to_cpu(entry->ino),
-			entry->name_len, entry->name,
-			entry->name_len, le16_to_cpu(entry->de_len));
+			entry->name, entry->name_len,
+			le16_to_cpu(entry->de_len));
 
 		if (entry->ino > 0) {
 			if (entry->invalid == 0) {
@@ -546,10 +545,10 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 			}
 
 			child_pi = nova_get_block(sb, pi_addr);
-			nova_dbgv("ctx: ino %llu, name %*.s, "
+			nova_dbgv("ctx: ino %llu, name %s, "
 				"name_len %u, de_len %u\n",
-				(u64)ino, entry->name_len, entry->name,
-				entry->name_len, entry->de_len);
+				(u64)ino, entry->name, entry->name_len,
+				entry->de_len);
 			if (!dir_emit(ctx, entry->name, entry->name_len,
 				ino, IF2DT(le16_to_cpu(child_pi->i_mode)))) {
 				nova_dbgv("Here: pos %llu\n", ctx->pos);
