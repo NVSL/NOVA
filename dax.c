@@ -560,6 +560,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	offset = pos & (sb->s_blocksize - 1);
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
 	total_blocks = num_blocks;
+	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	time = CURRENT_TIME_SEC.tv_sec;
 
 	nova_dbgv("%s: ino %lu, block %llu, offset %lu, count %lu\n",
