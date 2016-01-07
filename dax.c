@@ -45,9 +45,8 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	if (!isize)
 		goto out;
 
-	nova_dbg_verbose("%s: inode %lu, block %llu, offset %lu, count %lu, "
-		"size %lld\n", __func__, inode->i_ino,
-		pos >> sb->s_blocksize_bits, offset, len, isize);
+	nova_dbgv("%s: inode %lu, offset %lld, count %lu, size %lld\n",
+		__func__, inode->i_ino,	pos, len, isize);
 
 	if (len > isize - pos)
 		len = isize - pos;
@@ -190,7 +189,6 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih = &si->header;
 	size_t offset, eblk_offset;
 	unsigned long start_blk, end_blk, num_blocks;
-	unsigned long file_end_blk;
 	struct nova_file_write_entry *entry;
 	timing_t partial_time;
 
@@ -201,12 +199,6 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 	offset = pos & (nova_inode_blk_size(pi) - 1);
 	start_blk = pos >> sb->s_blocksize_bits;
 	end_blk = start_blk + num_blocks - 1;
-
-	file_end_blk = inode->i_size >> PAGE_SHIFT;
-	if (start_blk > file_end_blk) {
-		NOVA_END_TIMING(partial_block_t, partial_time);
-		return;
-	}
 
 	nova_dbg_verbose("%s: %lu blocks\n", __func__, num_blocks);
 	/* We avoid zeroing the alloc'd range, which is going to be overwritten
@@ -224,11 +216,6 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 					offset, kmem, false);
 		}
 		nova_flush_buffer(kmem, offset, 0);
-	}
-
-	if (pos + count >= inode->i_size) {
-		NOVA_END_TIMING(partial_block_t, partial_time);
-		return;
 	}
 
 	kmem = (void *)((char *)kmem +
@@ -353,9 +340,8 @@ ssize_t nova_cow_file_write(struct file *filp,
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	time = CURRENT_TIME_SEC.tv_sec;
 
-	nova_dbgv("%s: inode %lu, block %llu, offset %lu, count %lu\n",
-			__func__, inode->i_ino,	pos >> sb->s_blocksize_bits,
-			offset, count);
+	nova_dbgv("%s: inode %lu, offset %lld, count %lu\n",
+			__func__, inode->i_ino,	pos, count);
 
 	temp_tail = pi->log_tail;
 	while (num_blocks > 0) {
