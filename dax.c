@@ -720,8 +720,9 @@ static int nova_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 
 	nvmm = nova_find_nvmm_block(sb, si, NULL, pgoff);
 	if (nvmm == 0) {
-		/* This should not happen. NVMM must exist! */
-		nova_dbg("%s: nvmm page does not exist\n", __func__);
+		/* We do not support fallocate, so NVMM must exist. */
+		nova_dbg("%s: inode %lu nvmm page %lu does not exist\n",
+				__func__, inode->i_ino, pgoff);
 		return -EINVAL;
 	}
 
@@ -774,9 +775,10 @@ static int __nova_dax_file_fault(struct vm_area_struct *vma,
 			__func__, vma->vm_flags, vmf->flags);
 
 	nova_dbgv("DAX mmap: inode %lu, vm_start(0x%lx), vm_end(0x%lx), "
-			"pgoff(0x%lx), BlockSz(%lu), VA(0x%lx)->PA(0x%lx)\n",
+			"pgoff(0x%lx), vma pgoff(0x%lx), "
+			"VA(0x%lx)->PA(0x%lx)\n",
 			inode->i_ino, vma->vm_start, vma->vm_end, vmf->pgoff,
-			PAGE_SIZE, (unsigned long)vmf->virtual_address,
+			vma->vm_pgoff, (unsigned long)vmf->virtual_address,
 			(unsigned long)dax_pfn << PAGE_SHIFT);
 
 	if (dax_pfn == 0)
