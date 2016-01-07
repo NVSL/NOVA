@@ -1000,8 +1000,37 @@ void nova_dirty_inode(struct inode *inode, int flags)
 	nova_flush_buffer(&pi->i_atime, sizeof(pi->i_atime), 0);
 }
 
+/*
+ * Zero the tail page. Used in resize request
+ * to avoid to keep data in case the file grows again.
+ */
+static void nova_clear_last_page_tail(struct super_block *sb,
+	struct inode *inode, loff_t newsize)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	unsigned long offset = newsize & (sb->s_blocksize - 1);
+	unsigned long pgoff, length;
+	u64 nvmm;
+	char *nvmm_addr;
+
+	if (offset == 0 || newsize > inode->i_size)
+		return;
+
+	length = sb->s_blocksize - offset;
+	pgoff = newsize >> sb->s_blocksize_bits;
+
+	nvmm = nova_find_nvmm_block(sb, si, NULL, pgoff);
+	if (nvmm == 0)
+		return;
+
+	nvmm_addr = (char *)nova_get_block(sb, nvmm);
+	memset(nvmm_addr + offset, 0, length);
+	nova_flush_buffer(nvmm_addr + offset, length, 0);
+}
+
 static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 {
+	struct super_block *sb = inode->i_sb;
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 
@@ -1015,6 +1044,7 @@ static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 		__func__, inode->i_ino, oldsize, newsize);
 
 	if (newsize != oldsize) {
+		nova_clear_last_page_tail(sb, inode, newsize);
 		i_size_write(inode, newsize);
 		sih->i_size = newsize;
 	}
@@ -1272,7 +1302,7 @@ static ssize_t nova_direct_IO(struct kiocb *iocb,
 	NOVA_START_TIMING(direct_IO_t, dio_time);
 	end = offset + count;
 
-	nova_dbg_verbose("%s\n", __func__);
+	nova_dbgv("%s: %lu segs\n", __func__, nr_segs);
 	iv = iter->iov;
 	for (seg = 0; seg < nr_segs; seg++) {
 		if (iov_iter_rw(iter) == READ) {
