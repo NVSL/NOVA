@@ -1247,7 +1247,7 @@ static int failure_thread_func(void *data)
 	/* Free radix tree */
 	if (max_size) {
 		last_blocknr = (max_size - 1) >> PAGE_SHIFT;
-		nova_delete_file_tree(sb, &sih, 0, last_blocknr, false);
+		nova_delete_file_tree(sb, &sih, 0, last_blocknr, false, false);
 	}
 
 	finished[cpuid] = 1;

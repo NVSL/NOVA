@@ -958,7 +958,7 @@ int nova_allocate_inode_log_pages(struct super_block *sb,
 	u64 *new_block);
 int nova_delete_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long start_blocknr,
-	unsigned long last_blocknr, bool delete_nvmm);
+	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap);
 u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih, u64 tail, size_t size,
 	int is_file);
@@ -976,8 +976,6 @@ int nova_assign_nvmm_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
 	bool free);
-int nova_free_dram_resource(struct super_block *sb,
-	struct nova_inode_info_header *sih);
 
 /* ioctl.c */
 extern long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
