@@ -314,6 +314,10 @@ ssize_t nova_cow_file_write(struct file *filp,
 		goto out;
 	}
 	pos = *ppos;
+
+	if (filp->f_flags & O_APPEND)
+		pos = i_size_read(inode);
+
 	count = len;
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(4,0,9)
