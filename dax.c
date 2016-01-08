@@ -698,9 +698,13 @@ static int nova_get_nvmm_pfn(struct super_block *sb, struct nova_inode *pi,
 		}
 
 		sih->mmap_pages++;
-		/* Copy from NVMM to dram */
-		nvmm_addr = nova_get_block(sb, nvmm);
-		memcpy(mmap_addr, nvmm_addr, PAGE_SIZE);
+		if (nvmm) {
+			/* Copy from NVMM to dram */
+			nvmm_addr = nova_get_block(sb, nvmm);
+			memcpy(mmap_addr, nvmm_addr, PAGE_SIZE);
+		} else {
+			memset(mmap_addr, 0, PAGE_SIZE);
+		}
 	}
 
 	*kmem = mmap_addr;
@@ -723,12 +727,6 @@ static int nova_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 	pi = nova_get_inode(sb, inode);
 
 	nvmm = nova_find_nvmm_block(sb, si, NULL, pgoff);
-	if (nvmm == 0) {
-		/* We do not support fallocate, so NVMM must exist. */
-		nova_dbg("%s: inode %lu nvmm page %lu does not exist\n",
-				__func__, inode->i_ino, pgoff);
-		return -EINVAL;
-	}
 
 	ret = nova_get_nvmm_pfn(sb, pi, si, nvmm, pgoff, vm_flags,
 						kmem, pfn);
