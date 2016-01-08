@@ -107,6 +107,7 @@ static loff_t nova_llseek(struct file *file, loff_t offset, int origin)
 	return offset;
 }
 
+#if 0
 int nova_is_page_dirty(struct mm_struct *mm, unsigned long address,
 	int category, int set_clean)
 {
@@ -178,21 +179,12 @@ static inline int nova_set_page_clean(struct mm_struct *mm,
 
 	return 0;
 }
+#endif
 
 static inline int nova_check_page_dirty(struct super_block *sb,
 	unsigned long addr)
 {
-	int ret;
-
-//	u64 nvmm_block;
-//	unsigned long nvmm_addr;
-
-//	nvmm_block = pair->nvmm_mmap << PAGE_SHIFT;
-//	nvmm_addr = (unsigned long)nova_get_block(sb, nvmm_block);
-//	ret = nova_is_page_dirty(&init_mm, nvmm_addr, TEST_NVMM, 1);
-	ret = IS_MAP_WRITE(addr);
-
-	return ret;
+	return IS_MAP_WRITE(addr);
 }
 
 static unsigned long nova_get_dirty_range(struct super_block *sb,

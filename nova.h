@@ -923,8 +923,6 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 extern const struct inode_operations nova_file_inode_operations;
 extern const struct file_operations nova_dax_file_operations;
 int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync);
-int nova_is_page_dirty(struct mm_struct *mm, unsigned long address,
-	int category, int set_clean);
 
 /* inode.c */
 extern const struct address_space_operations nova_aops_dax;
