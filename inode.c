@@ -362,7 +362,7 @@ static int nova_lookup_hole_in_range(struct super_block *sb,
 {
 	struct nova_file_write_entry *entry;
 	unsigned long blocks = 0;
-	int i;
+	unsigned long i;
 
 	for (i = first_blocknr; i <= last_blocknr; i++) {
 		entry = radix_tree_lookup(&sih->tree, i);
