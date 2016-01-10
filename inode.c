@@ -244,11 +244,13 @@ int nova_delete_file_tree(struct super_block *sb,
 	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap)
 {
 	struct nova_file_write_entry *entry;
+	struct nova_file_write_entry *entries[1];
 	struct nova_inode *pi;
 	unsigned long free_blocknr = 0, num_free = 0;
 	unsigned long pgoff = start_blocknr;
 	timing_t delete_time;
 	int freed = 0;
+	int nr_entries;
 	void *ret;
 
 	pi = (struct nova_inode *)nova_get_block(sb, sih->pi_addr);
@@ -259,7 +261,8 @@ int nova_delete_file_tree(struct super_block *sb,
 		nova_delete_cache_tree(sb, pi, sih, sih->low_mmap,
 						sih->high_mmap);
 
-	for (pgoff = start_blocknr; pgoff <= last_blocknr; pgoff++) {
+	pgoff = start_blocknr;
+	while (pgoff <= last_blocknr) {
 		entry = radix_tree_lookup(&sih->tree, pgoff);
 		if (entry) {
 			ret = radix_tree_delete(&sih->tree, pgoff);
@@ -268,6 +271,15 @@ int nova_delete_file_tree(struct super_block *sb,
 				freed += nova_free_contiguous_blocks(sb, sih,
 						pi, entry, pgoff, &free_blocknr,
 						&num_free);
+			pgoff++;
+		} else {
+			/* We are finding a hole. Jump to the next entry. */
+			nr_entries = radix_tree_gang_lookup(&sih->tree,
+						(void **)entries, pgoff, 1);
+			if (nr_entries != 1)
+				break;
+			entry = entries[0];
+			pgoff = pgoff > entry->pgoff ? pgoff : entry->pgoff;
 		}
 	}
 
