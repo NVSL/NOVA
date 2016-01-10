@@ -405,7 +405,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 
 	sih->log_pages = 1;
 	while (curr_p != pi->log_tail) {
-		if (is_last_dir_entry(sb, curr_p)) {
+		if (goto_next_page(sb, curr_p)) {
 			sih->log_pages++;
 			curr_p = next_log_page(sb, curr_p);
 		}

@@ -804,12 +804,13 @@ static inline bool is_last_entry(u64 curr_p, size_t size)
 	return entry_end > LAST_ENTRY;
 }
 
-static inline bool is_last_dir_entry(struct super_block *sb, u64 curr_p)
+static inline bool goto_next_page(struct super_block *sb, u64 curr_p)
 {
 	void *addr;
 	u8 type;
 
-	if (ENTRY_LOC(curr_p) + NOVA_DIR_LOG_REC_LEN(0) > LAST_ENTRY)
+	/* Each kind of entry takes at least 32 bytes */
+	if (ENTRY_LOC(curr_p) + 32 > LAST_ENTRY)
 		return true;
 
 	addr = nova_get_block(sb, curr_p);
