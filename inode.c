@@ -272,6 +272,7 @@ int nova_delete_file_tree(struct super_block *sb,
 			if (nr_entries != 1)
 				break;
 			entry = entries[0];
+			pgoff++;
 			pgoff = pgoff > entry->pgoff ? pgoff : entry->pgoff;
 		}
 	}
