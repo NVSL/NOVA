@@ -552,18 +552,13 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 			if (!dir_emit(ctx, entry->name, entry->name_len,
 				ino, IF2DT(le16_to_cpu(child_pi->i_mode)))) {
 				nova_dbgv("Here: pos %llu\n", ctx->pos);
-				ctx->pos = pos;
 				return 0;
 			}
+			ctx->pos = pos + 1;
 		}
 		pos++;
 	} while (nr_entries == FREE_BATCH);
 
-	/*
-	 * We have reach the end. To let readdir be aware of that, we assign
-	 * a bogus end offset to ctx.
-	 */
-	ctx->pos = READDIR_END;
 out:
 	NOVA_END_TIMING(readdir_t, readdir_time);
 	return 0;
