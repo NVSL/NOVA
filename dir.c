@@ -570,6 +570,7 @@ out:
 }
 
 const struct file_operations nova_dir_operations = {
+	.llseek		= generic_file_llseek,
 	.read		= generic_read_dir,
 	.iterate	= nova_readdir,
 	.fsync		= noop_fsync,
