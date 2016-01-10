@@ -115,7 +115,7 @@ static loff_t nova_max_size(int bits)
 {
 	loff_t res;
 
-	res = (1ULL << (3 * 9 + bits)) - 1;
+	res = (1ULL << 63) - 1;
 
 	if (res > MAX_LFS_FILESIZE)
 		res = MAX_LFS_FILESIZE;
