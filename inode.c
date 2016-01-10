@@ -232,6 +232,30 @@ static int nova_delete_cache_tree(struct super_block *sb,
 	return 0;
 }
 
+static int nova_zero_cache_tree(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	unsigned long start_blocknr)
+{
+	unsigned long block;
+	unsigned long i;
+	void *addr;
+
+	nova_dbg("%s: inode %lu, mmap pages %lu, start %lu, last %lu, size %lu",
+			__func__, sih->ino, sih->mmap_pages,
+			start_blocknr, sih->high_mmap, sih->i_size);
+
+	for (i = start_blocknr; i <= sih->high_mmap; i++) {
+		block = (unsigned long)radix_tree_lookup(&sih->cache_tree, i);
+		if (block) {
+			addr = nova_get_block(sb, block);
+			memset(addr, 0, PAGE_SIZE);
+		}
+	}
+
+	return 0;
+}
+
+
 int nova_delete_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long start_blocknr,
 	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap)
@@ -253,6 +277,9 @@ int nova_delete_file_tree(struct super_block *sb,
 	if (delete_mmap && sih->mmap_pages)
 		nova_delete_cache_tree(sb, pi, sih, sih->low_mmap,
 						sih->high_mmap);
+
+	if (sih->mmap_pages && start_blocknr <= sih->high_mmap)
+		nova_zero_cache_tree(sb, pi, sih, start_blocknr);
 
 	pgoff = start_blocknr;
 	while (pgoff <= last_blocknr) {
@@ -1056,6 +1083,7 @@ static void nova_clear_last_page_tail(struct super_block *sb,
 	struct inode *inode, loff_t newsize)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
 	unsigned long offset = newsize & (sb->s_blocksize - 1);
 	unsigned long pgoff, length;
 	u64 nvmm;
@@ -1074,6 +1102,17 @@ static void nova_clear_last_page_tail(struct super_block *sb,
 	nvmm_addr = (char *)nova_get_block(sb, nvmm);
 	memset(nvmm_addr + offset, 0, length);
 	nova_flush_buffer(nvmm_addr + offset, length, 0);
+
+	/* Clear mmap page */
+	if (sih->mmap_pages && pgoff <= sih->high_mmap &&
+			pgoff >= sih->low_mmap) {
+		nvmm = (unsigned long)radix_tree_lookup(&sih->cache_tree,
+							pgoff);
+		if (nvmm) {
+			nvmm_addr = nova_get_block(sb, nvmm);
+			memset(nvmm_addr + offset, 0, length);
+		}
+	}
 }
 
 static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
