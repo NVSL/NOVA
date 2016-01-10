@@ -240,8 +240,8 @@ static int nova_zero_cache_tree(struct super_block *sb,
 	unsigned long i;
 	void *addr;
 
-	nova_dbg("%s: inode %lu, mmap pages %lu, start %lu, last %lu, size %lu",
-			__func__, sih->ino, sih->mmap_pages,
+	nova_dbgv("%s: inode %lu, mmap pages %lu, start %lu, last %lu, "
+			"size %lu", __func__, sih->ino, sih->mmap_pages,
 			start_blocknr, sih->high_mmap, sih->i_size);
 
 	for (i = start_blocknr; i <= sih->high_mmap; i++) {
