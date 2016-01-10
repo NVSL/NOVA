@@ -373,17 +373,27 @@ static int nova_lookup_hole_in_range(struct super_block *sb,
 	int *data_found, int *hole_found, int hole)
 {
 	struct nova_file_write_entry *entry;
+	struct nova_file_write_entry *entries[1];
 	unsigned long blocks = 0;
-	unsigned long i;
+	unsigned long pgoff;
+	int nr_entries;
 
-	for (i = first_blocknr; i <= last_blocknr; i++) {
-		entry = radix_tree_lookup(&sih->tree, i);
+	pgoff = first_blocknr;
+	while (pgoff <= last_blocknr) {
+		entry = radix_tree_lookup(&sih->tree, pgoff);
 		if (entry) {
 			*data_found = 1;
 			if (!hole)
 				goto done;
+			pgoff++;
 		} else {
 			*hole_found = 1;
+			nr_entries = radix_tree_gang_lookup(&sih->tree,
+						(void **)entries, pgoff, 1);
+			if (nr_entries != 1)
+				break;
+			entry = entries[0];
+			pgoff = pgoff > entry->pgoff ? pgoff : entry->pgoff;
 		}
 
 		if (!*hole_found || !hole)
