@@ -83,7 +83,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 		/* Find contiguous blocks */
 		if (index < entry->pgoff ||
 			index - entry->pgoff >= entry->num_pages) {
-			nova_err(sb, "%s ERROR: %lu, entry pgoff %u, num %u, "
+			nova_err(sb, "%s ERROR: %lu, entry pgoff %llu, num %u, "
 				"blocknr %llu\n", __func__, index, entry->pgoff,
 				entry->num_pages, entry->block >> PAGE_SHIFT);
 			return -EINVAL;
@@ -384,7 +384,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 						buf, bytes);
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
-		entry_data.pgoff = cpu_to_le32(start_blk);
+		entry_data.pgoff = cpu_to_le64(start_blk);
 		entry_data.num_pages = cpu_to_le32(allocated);
 		entry_data.invalid_pages = 0;
 		entry_data.block = cpu_to_le64(nova_get_block_off(sb, blocknr,
@@ -586,7 +586,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 							kmem);
 		NOVA_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
-		entry_data.pgoff = cpu_to_le32(start_blk);
+		entry_data.pgoff = cpu_to_le64(start_blk);
 		entry_data.num_pages = cpu_to_le32(allocated);
 		entry_data.invalid_pages = 0;
 		entry_data.block = cpu_to_le64(nova_get_block_off(sb, blocknr,

@@ -213,7 +213,7 @@ void nova_clear_stats(void)
 static inline void nova_print_file_write_entry(struct super_block *sb,
 	u64 curr, struct nova_file_write_entry *entry)
 {
-	nova_dbg("file write entry @ 0x%llx: page offset %u, pages %u, "
+	nova_dbg("file write entry @ 0x%llx: paoff %llu, pages %u, "
 			"blocknr %llu, invalid count %u, size %llu\n",
 			curr, entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT,

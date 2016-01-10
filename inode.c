@@ -27,13 +27,6 @@
 unsigned int blk_type_to_shift[NOVA_BLOCK_TYPE_MAX] = {12, 21, 30};
 uint32_t blk_type_to_size[NOVA_BLOCK_TYPE_MAX] = {0x1000, 0x200000, 0x40000000};
 
-void nova_print_inode_entry(struct nova_file_write_entry *entry)
-{
-	nova_dbg("entry @%p: pgoff %u, num_pages %u, block 0x%llx, "
-		"size %llu\n", entry, entry->pgoff, entry->num_pages,
-		entry->block, entry->size);
-}
-
 int nova_init_inode_inuse_list(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -417,7 +410,7 @@ int nova_assign_nvmm_entry(struct super_block *sb,
 	struct nova_file_write_entry *old_entry;
 	void **pentry;
 	unsigned long old_nvmm;
-	unsigned int start_pgoff = entry->pgoff;
+	unsigned long start_pgoff = entry->pgoff;
 	unsigned int num = entry->num_pages;
 	unsigned long curr_pgoff;
 	int i;
@@ -1798,7 +1791,7 @@ u64 nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	entry = (struct nova_file_write_entry *)nova_get_block(sb, curr_p);
 	memcpy_to_pmem_nocache(entry, data,
 			sizeof(struct nova_file_write_entry));
-	nova_dbg_verbose("file %lu entry @ 0x%llx: pgoff %u, num %u, "
+	nova_dbg_verbose("file %lu entry @ 0x%llx: pgoff %llu, num %u, "
 			"block %llu, size %llu\n", inode->i_ino,
 			curr_p, entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT, entry->size);
@@ -1902,8 +1895,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	sih->log_pages = 1;
 
 	while (curr_p != pi->log_tail) {
-		if (is_last_entry(curr_p,
-				sizeof(struct nova_file_write_entry))) {
+		if (goto_next_page(sb, curr_p)) {
 			sih->log_pages++;
 			curr_p = next_log_page(sb, curr_p);
 		}
@@ -1941,8 +1933,6 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 		}
 
 		entry = (struct nova_file_write_entry *)addr;
-//		nova_print_inode_entry(entry);
-
 		if (entry->num_pages != entry->invalid_pages) {
 			/*
 			 * The overlaped blocks are already freed.

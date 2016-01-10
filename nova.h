@@ -155,11 +155,10 @@ static inline void nova_set_entry_type(void *p, enum nova_entry_type type)
 	*(u8 *)p = type;
 }
 
-/* Make sure this is 32 bytes */
 struct nova_file_write_entry {
 	/* ret of find_nvmm_block, the lowest byte is entry type */
 	__le64	block;
-	__le32	pgoff;
+	__le64	pgoff;
 	__le32	num_pages;
 	__le32	invalid_pages;
 	/* For both ctime and mtime */
@@ -205,10 +204,7 @@ struct nova_dir_logentry {
 #define NOVA_DIR_LOG_REC_LEN(name_len)  (((name_len) + 29 + NOVA_DIR_ROUND) & \
 				      ~NOVA_DIR_ROUND)
 
-/*
- * Struct of inode attributes change log (setattr)
- * Make sure it is 32 bytes.
- */
+/* Struct of inode attributes change log (setattr) */
 struct nova_setattr_logentry {
 	u8	entry_type;
 	u8	attr;
@@ -654,7 +650,7 @@ static inline unsigned long get_nvmm(struct super_block *sb,
 
 		curr = nova_get_addr_off(sbi, data);
 		nova_dbg("Entry ERROR: inode %lu, curr 0x%llx, pgoff %lu, "
-			"entry pgoff %u, num %u\n", sih->ino,
+			"entry pgoff %llu, num %u\n", sih->ino,
 			curr, pgoff, data->pgoff, data->num_pages);
 		pi = nova_get_block(sb, sih->pi_addr);
 		nova_print_nova_log_pages(sb, sih, pi);
