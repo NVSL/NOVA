@@ -174,16 +174,14 @@ struct nova_inode_page_tail {
 	__le64	next_page;
 } __attribute((__packed__));
 
-#define	ENTRIES_PER_PAGE	127
+#define	LAST_ENTRY	4064
+#define	PAGE_TAIL(p)	(((p) & ~INVALID_MASK) + LAST_ENTRY)
 
 /* Fit in PAGE_SIZE */
 struct	nova_inode_log_page {
-	struct nova_file_write_entry entries[ENTRIES_PER_PAGE];
+	char padding[LAST_ENTRY];
 	struct nova_inode_page_tail page_tail;
 } __attribute((__packed__));
-
-#define	LAST_ENTRY	4064
-#define	PAGE_TAIL(p)	(((p) & ~INVALID_MASK) + LAST_ENTRY)
 
 /*
  * Structure of a directory log entry in NOVA.
