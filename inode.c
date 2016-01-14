@@ -1774,6 +1774,33 @@ static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 	return new_block;
 }
 
+static u64 nova_append_one_log_page(struct super_block *sb,
+	struct nova_inode *pi, u64 curr_p)
+{
+	struct nova_inode_log_page *curr_page;
+	u64 new_block;
+	u64 curr_block;
+	int allocated;
+
+	allocated = nova_allocate_inode_log_pages(sb, pi, 1, &new_block);
+	if (allocated != 1) {
+		nova_err(sb, "ERROR: no inode log page available\n");
+		return 0;
+	}
+
+	if (curr_p == 0) {
+		curr_p = new_block;
+	} else {
+		/* Link prev block and newly allocated head block */
+		curr_block = BLOCK_OFF(curr_p);
+		curr_page = (struct nova_inode_log_page *)
+				nova_get_block(sb, curr_block);
+		curr_page->page_tail.next_page = new_block;
+	}
+
+	return curr_p;
+}
+
 static void nova_set_next_page_flag(struct super_block *sb, u64 curr_p)
 {
 	void *p;
@@ -1799,7 +1826,12 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 				next_log_page(sb, curr_p) == 0)) {
 		if (is_last_entry(curr_p, size))
 			nova_set_next_page_flag(sb, curr_p);
-		curr_p = nova_extend_inode_log(sb, pi, sih, curr_p);
+
+		if (sih)
+			curr_p = nova_extend_inode_log(sb, pi, sih, curr_p);
+		else
+			curr_p = nova_append_one_log_page(sb, pi, curr_p);
+
 		if (curr_p == 0)
 			return 0;
 	}
