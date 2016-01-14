@@ -188,10 +188,10 @@ struct	nova_inode_log_page {
  */
 struct nova_dir_logentry {
 	u8	entry_type;
-	u8	name_len;               /* length of the directory entry name */
+	u8	name_len;               /* length of the dentry name */
 	u8	file_type;              /* file type */
 	u8	invalid;		/* Invalid now? */
-	__le16	de_len;                 /* length of this directory entry */
+	__le16	de_len;                 /* length of this dentry */
 	__le16	links_count;
 	__le32	mtime;			/* For both mtime and ctime */
 	__le64	ino;                    /* inode no pointed to by this entry */
@@ -199,9 +199,9 @@ struct nova_dir_logentry {
 	char	name[NOVA_NAME_LEN + 1];	/* File name */
 } __attribute((__packed__));
 
-#define NOVA_DIR_PAD            32	/* Align to log entry size */
-#define NOVA_DIR_ROUND          (NOVA_DIR_PAD - 1)
-#define NOVA_DIR_LOG_REC_LEN(name_len)  (((name_len) + 29 + NOVA_DIR_ROUND) & \
+#define NOVA_DIR_PAD			4	/* Align to 4 bytes boundary */
+#define NOVA_DIR_ROUND			(NOVA_DIR_PAD - 1)
+#define NOVA_DIR_LOG_REC_LEN(name_len)	(((name_len) + 29 + NOVA_DIR_ROUND) & \
 				      ~NOVA_DIR_ROUND)
 
 /* Struct of inode attributes change log (setattr) */
