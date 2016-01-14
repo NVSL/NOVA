@@ -14,7 +14,7 @@ With atomicity guarantees, NOVA is able to recover from system failures and rest
 ## Building NOVA
 NOVA works on x86-64 Linux kernel 4.3, and relies on the NVDIMM support.
 
-To build NOVA, first build up your 64bit 4.3 kernel with NVDIMM support(`CONFIG_BLK_DEV_PMEM`), then build NOVA with a simple
+To build NOVA, first build up your 64bit 4.3 kernel with NVDIMM support (`CONFIG_BLK_DEV_PMEM`), then build NOVA with a simple
 
 ~~~
 #make
@@ -49,4 +49,4 @@ There are two scripts provided in the source code, `setup-nova.sh` and `remount-
 
 * NOVA only works on x86-64 kernels.
 * NOVA does not currently support extended attributes or ACL.
-* NOVA requires the underlying block device to support DAX(Direct Access) feature.
+* NOVA requires the underlying block device to support DAX (Direct Access) feature.
