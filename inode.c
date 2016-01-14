@@ -1558,7 +1558,7 @@ static bool curr_page_invalid(struct super_block *sb,
 	u64 page_head)
 {
 	struct nova_file_write_entry *entry;
-	struct nova_dir_logentry *dentry;
+	struct nova_dentry *dentry;
 	void *addr;
 	u64 curr_p = page_head;
 	u8 type;
@@ -1599,7 +1599,7 @@ static bool curr_page_invalid(struct super_block *sb,
 				curr_p += sizeof(struct nova_file_write_entry);
 				break;
 			case DIR_LOG:
-				dentry = (struct nova_dir_logentry *)addr;
+				dentry = (struct nova_dentry *)addr;
 				if (dentry->ino && dentry->invalid == 0) {
 					ret = false;
 					goto out;

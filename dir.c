@@ -21,13 +21,13 @@
 #define DT2IF(dt) (((dt) << 12) & S_IFMT)
 #define IF2DT(sif) (((sif) & S_IFMT) >> 12)
 
-struct nova_dir_logentry *nova_find_dir_logentry(struct super_block *sb,
+struct nova_dentry *nova_find_dentry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, const char *name,
 	unsigned long name_len)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	struct nova_dir_logentry *direntry;
+	struct nova_dentry *direntry;
 	unsigned long hash;
 
 	hash = BKDRHash(name, name_len);
@@ -38,7 +38,7 @@ struct nova_dir_logentry *nova_find_dir_logentry(struct super_block *sb,
 
 static int nova_insert_dir_radix_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, const char *name,
-	int namelen, struct nova_dir_logentry *direntry)
+	int namelen, struct nova_dentry *direntry)
 {
 	unsigned long hash;
 	int ret;
@@ -55,7 +55,7 @@ static int nova_insert_dir_radix_tree(struct super_block *sb,
 }
 
 static int nova_check_dentry_match(struct super_block *sb,
-	struct nova_dir_logentry *dentry, const char *name, int namelen)
+	struct nova_dentry *dentry, const char *name, int namelen)
 {
 	if (dentry->name_len != namelen)
 		return -EINVAL;
@@ -67,7 +67,7 @@ static int nova_remove_dir_radix_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, const char *name, int namelen,
 	int replay)
 {
-	struct nova_dir_logentry *entry;
+	struct nova_dentry *entry;
 	unsigned long hash;
 
 	hash = BKDRHash(name, namelen);
@@ -104,9 +104,9 @@ static int nova_remove_dir_radix_tree(struct super_block *sb,
 void nova_delete_dir_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih)
 {
-	struct nova_dir_logentry *direntry;
+	struct nova_dentry *direntry;
 	unsigned long pos = 0;
-	struct nova_dir_logentry *entries[FREE_BATCH];
+	struct nova_dentry *entries[FREE_BATCH];
 	timing_t delete_time;
 	int nr_entries;
 	int i;
@@ -143,7 +143,7 @@ void nova_delete_dir_tree(struct super_block *sb,
 /* ========================= Entry operations ============================= */
 
 /*
- * Append a nova_dir_logentry to the current nova_inode_log_page.
+ * Append a nova_dentry to the current nova_inode_log_page.
  * Note unlike append_file_write_entry(), this method returns the tail pointer
  * after append.
  */
@@ -154,7 +154,7 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 {
 	struct nova_inode_info *si = NOVA_I(dir);
 	struct nova_inode_info_header *sih = &si->header;
-	struct nova_dir_logentry *entry;
+	struct nova_dentry *entry;
 	u64 curr_p;
 	size_t size = de_len;
 	unsigned short links_count;
@@ -167,7 +167,7 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 	if (curr_p == 0)
 		BUG();
 
-	entry = (struct nova_dir_logentry *)nova_get_block(sb, curr_p);
+	entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
 	entry->entry_type = DIR_LOG;
 	entry->ino = cpu_to_le64(ino);
 	entry->name_len = dentry->d_name.len;
@@ -209,7 +209,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	int allocated;
 	u64 new_block;
 	u64 curr_p;
-	struct nova_dir_logentry *de_entry;
+	struct nova_dentry *de_entry;
 
 	if (pi->log_head) {
 		nova_dbg("%s: log head exists @ 0x%llx!\n",
@@ -226,7 +226,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	pi->i_blocks = 1;
 	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
 
-	de_entry = (struct nova_dir_logentry *)nova_get_block(sb, new_block);
+	de_entry = (struct nova_dentry *)nova_get_block(sb, new_block);
 	de_entry->entry_type = DIR_LOG;
 	de_entry->ino = cpu_to_le64(self_ino);
 	de_entry->name_len = 1;
@@ -239,7 +239,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 
 	curr_p = new_block + NOVA_DIR_LOG_REC_LEN(1);
 
-	de_entry = (struct nova_dir_logentry *)((char *)de_entry +
+	de_entry = (struct nova_dentry *)((char *)de_entry +
 					le16_to_cpu(de_entry->de_len));
 	de_entry->entry_type = DIR_LOG;
 	de_entry->ino = cpu_to_le64(parent_ino);
@@ -270,7 +270,7 @@ int nova_add_entry(struct dentry *dentry, u64 ino, int inc_link,
 	struct nova_inode *pidir;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
-	struct nova_dir_logentry *direntry;
+	struct nova_dentry *direntry;
 	unsigned short loglen;
 	int ret;
 	u64 curr_entry, curr_tail;
@@ -297,7 +297,7 @@ int nova_add_entry(struct dentry *dentry, u64 ino, int inc_link,
 				dentry,	loglen, tail, inc_link,
 				&curr_tail);
 
-	direntry = (struct nova_dir_logentry *)nova_get_block(sb, curr_entry);
+	direntry = (struct nova_dentry *)nova_get_block(sb, curr_entry);
 	ret = nova_insert_dir_radix_tree(sb, sih, name, namelen, direntry);
 	*new_tail = curr_tail;
 	NOVA_END_TIMING(add_entry_t, add_entry_time);
@@ -340,7 +340,7 @@ int nova_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
 }
 
 inline int nova_replay_add_entry(struct super_block *sb,
-	struct nova_inode_info_header *sih, struct nova_dir_logentry *entry)
+	struct nova_inode_info_header *sih, struct nova_dentry *entry)
 {
 	if (!entry->name_len)
 		return -EINVAL;
@@ -352,7 +352,7 @@ inline int nova_replay_add_entry(struct super_block *sb,
 
 inline int nova_replay_remove_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih,
-	struct nova_dir_logentry *entry)
+	struct nova_dentry *entry)
 {
 	nova_dbg_verbose("%s: remove %s\n", __func__, entry->name);
 	nova_remove_dir_radix_tree(sb, sih, entry->name,
@@ -361,7 +361,7 @@ inline int nova_replay_remove_entry(struct super_block *sb,
 }
 
 static inline void nova_rebuild_dir_time_and_size(struct super_block *sb,
-	struct nova_inode *pi, struct nova_dir_logentry *entry)
+	struct nova_inode *pi, struct nova_dentry *entry)
 {
 	if (!entry || !pi)
 		return;
@@ -376,7 +376,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
 	struct nova_inode_info_header *sih)
 {
-	struct nova_dir_logentry *entry = NULL;
+	struct nova_dentry *entry = NULL;
 	struct nova_setattr_logentry *attr_entry = NULL;
 	struct nova_link_change_entry *link_change_entry = NULL;
 	struct nova_inode_log_page *curr_page;
@@ -442,7 +442,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 				NOVA_ASSERT(0);
 		}
 
-		entry = (struct nova_dir_logentry *)nova_get_block(sb, curr_p);
+		entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
 		nova_dbgv("curr_p: 0x%llx, type %d, ino %llu, "
 			"name %s, namelen %u, rec len %u\n", curr_p,
 			entry->entry_type, le64_to_cpu(entry->ino),
@@ -499,8 +499,8 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode *child_pi;
-	struct nova_dir_logentry *entry;
-	struct nova_dir_logentry *entries[FREE_BATCH];
+	struct nova_dentry *entry;
+	struct nova_dentry *entries[FREE_BATCH];
 	int nr_entries;
 	u64 pi_addr;
 	unsigned long pos = 0;

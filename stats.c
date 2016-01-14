@@ -234,8 +234,8 @@ static inline void nova_print_link_change_entry(struct super_block *sb,
 			curr, entry->links, entry->flags);
 }
 
-static inline size_t nova_print_dir_logentry(struct super_block *sb,
-	u64 curr, struct nova_dir_logentry *entry)
+static inline size_t nova_print_dentry(struct super_block *sb,
+	u64 curr, struct nova_dentry *entry)
 {
 	nova_dbg("dir logentry @ 0x%llx: inode %llu, "
 			"namelen %u, rec len %u\n", curr,
@@ -267,7 +267,7 @@ static u64 nova_print_log_entry(struct super_block *sb, u64 curr)
 			curr += sizeof(struct nova_file_write_entry);
 			break;
 		case DIR_LOG:
-			size = nova_print_dir_logentry(sb, curr, addr);
+			size = nova_print_dentry(sb, curr, addr);
 			curr += size;
 			break;
 		default:

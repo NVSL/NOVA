@@ -18,12 +18,12 @@
 #include "nova.h"
 
 static ino_t nova_inode_by_name(struct inode *dir, struct qstr *entry,
-				 struct nova_dir_logentry **res_entry)
+				 struct nova_dentry **res_entry)
 {
 	struct super_block *sb = dir->i_sb;
-	struct nova_dir_logentry *direntry;
+	struct nova_dentry *direntry;
 
-	direntry = nova_find_dir_logentry(sb, NULL, dir,
+	direntry = nova_find_dentry(sb, NULL, dir,
 					entry->name, entry->len);
 	if (direntry == NULL)
 		return 0;
@@ -36,7 +36,7 @@ static struct dentry *nova_lookup(struct inode *dir, struct dentry *dentry,
 				   unsigned int flags)
 {
 	struct inode *inode = NULL;
-	struct nova_dir_logentry *de;
+	struct nova_dentry *de;
 	ino_t ino;
 	timing_t lookup_time;
 
@@ -544,9 +544,9 @@ static int nova_empty_dir(struct inode *inode)
 	struct super_block *sb;
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	struct nova_dir_logentry *entry;
+	struct nova_dentry *entry;
 	unsigned long pos = 0;
-	struct nova_dir_logentry *entries[4];
+	struct nova_dentry *entries[4];
 	int nr_entries;
 	int i;
 
@@ -568,7 +568,7 @@ static int nova_empty_dir(struct inode *inode)
 static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
-	struct nova_dir_logentry *de;
+	struct nova_dentry *de;
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode), *pidir;
 	u64 pidir_tail = 0, pi_tail = 0;
@@ -639,7 +639,7 @@ static int nova_rename(struct inode *old_dir,
 	struct nova_inode *old_pi = NULL, *new_pi = NULL;
 	struct nova_inode *new_pidir = NULL, *old_pidir = NULL;
 	struct nova_lite_journal_entry entry, entry1;
-	struct nova_dir_logentry *father_entry = NULL;
+	struct nova_dentry *father_entry = NULL;
 	char *head_addr = NULL;
 	u64 old_tail = 0, new_tail = 0, new_pi_tail = 0, old_pi_tail = 0;
 	int err = -ENOENT;
@@ -691,7 +691,7 @@ static int nova_rename(struct inode *old_dir,
 		/* For simplicity, we use in-place update and journal it */
 		change_parent = 1;
 		head_addr = (char *)nova_get_block(sb, old_pi->log_head);
-		father_entry = (struct nova_dir_logentry *)(head_addr +
+		father_entry = (struct nova_dentry *)(head_addr +
 					NOVA_DIR_LOG_REC_LEN(1));
 		if (le64_to_cpu(father_entry->ino) != old_dir->i_ino)
 			nova_err(sb, "%s: dir %lu parent should be %lu, "
@@ -832,7 +832,7 @@ struct dentry *nova_get_parent(struct dentry *child)
 {
 	struct inode *inode;
 	struct qstr dotdot = QSTR_INIT("..", 2);
-	struct nova_dir_logentry *de = NULL;
+	struct nova_dentry *de = NULL;
 	ino_t ino;
 
 	nova_inode_by_name(child->d_inode, &dotdot, &de);

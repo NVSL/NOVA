@@ -186,7 +186,7 @@ struct	nova_inode_log_page {
  * Structure of a directory log entry in NOVA.
  * Update DIR_LOG_REC_LEN if modify this struct!
  */
-struct nova_dir_logentry {
+struct nova_dentry {
 	u8	entry_type;
 	u8	name_len;               /* length of the dentry name */
 	u8	file_type;              /* file type */
@@ -818,7 +818,7 @@ static inline bool goto_next_page(struct super_block *sb, u64 curr_p)
 }
 
 static inline int is_dir_init_entry(struct super_block *sb,
-	struct nova_dir_logentry *entry)
+	struct nova_dentry *entry)
 {
 	if (entry->name_len == 1 && strncmp(entry->name, ".", 1) == 0)
 		return 1;
@@ -907,7 +907,7 @@ void nova_print_dir_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long ino);
 void nova_delete_dir_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih);
-struct nova_dir_logentry *nova_find_dir_logentry(struct super_block *sb,
+struct nova_dentry *nova_find_dentry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, const char *name,
 	unsigned long name_len);
 int nova_rebuild_dir_inode_tree(struct super_block *sb,
