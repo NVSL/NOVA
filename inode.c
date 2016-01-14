@@ -1553,16 +1553,63 @@ update:
 }
 #endif
 
-static bool curr_page_invalid(struct super_block *sb,
+static bool curr_log_entry_invalid(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
-	u64 page_head)
+	u64 curr_p, size_t *length)
 {
 	struct nova_file_write_entry *entry;
 	struct nova_dentry *dentry;
 	void *addr;
-	u64 curr_p = page_head;
 	u8 type;
 	bool ret = true;
+
+	addr = (void *)nova_get_block(sb, curr_p);
+	type = nova_get_entry_type(addr);
+	switch (type) {
+		case SET_ATTR:
+			if (sih->last_setattr == curr_p)
+				ret = false;
+			*length = sizeof(struct nova_setattr_logentry);
+			break;
+		case LINK_CHANGE:
+			if (sih->last_link_change == curr_p)
+				ret = false;
+			*length = sizeof(struct nova_link_change_entry);
+			break;
+		case FILE_WRITE:
+			entry = (struct nova_file_write_entry *)addr;
+			if (entry->num_pages != entry->invalid_pages)
+				ret = false;
+			*length = sizeof(struct nova_file_write_entry);
+			break;
+		case DIR_LOG:
+			dentry = (struct nova_dentry *)addr;
+			if (dentry->ino && dentry->invalid == 0)
+				ret = false;
+			*length = le16_to_cpu(dentry->de_len);
+			break;
+		case NEXT_PAGE:
+			/* No more entries in this page */
+			*length = PAGE_SIZE - ENTRY_LOC(curr_p);;
+			break;
+		default:
+			nova_dbg("%s: unknown type %d, 0x%llx\n",
+						__func__, type, curr_p);
+			NOVA_ASSERT(0);
+			*length = PAGE_SIZE - ENTRY_LOC(curr_p);;
+			break;
+	}
+
+	return ret;
+}
+
+static bool curr_page_invalid(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	u64 page_head)
+{
+	u64 curr_p = page_head;
+	bool ret = true;
+	size_t length;
 	timing_t check_time;
 
 	NOVA_START_TIMING(check_invalid_t, check_time);
@@ -1573,49 +1620,12 @@ static bool curr_page_invalid(struct super_block *sb,
 			BUG();
 		}
 
-		addr = (void *)nova_get_block(sb, curr_p);
-		type = nova_get_entry_type(addr);
-		switch (type) {
-			case SET_ATTR:
-				if (sih->last_setattr == curr_p) {
-					ret = false;
-					goto out;
-				}
-				curr_p += sizeof(struct nova_setattr_logentry);
-				break;
-			case LINK_CHANGE:
-				if (sih->last_link_change == curr_p) {
-					ret = false;
-					goto out;
-				}
-				curr_p += sizeof(struct nova_link_change_entry);
-				break;
-			case FILE_WRITE:
-				entry = (struct nova_file_write_entry *)addr;
-				if (entry->num_pages != entry->invalid_pages) {
-					ret = false;
-					goto out;
-				}
-				curr_p += sizeof(struct nova_file_write_entry);
-				break;
-			case DIR_LOG:
-				dentry = (struct nova_dentry *)addr;
-				if (dentry->ino && dentry->invalid == 0) {
-					ret = false;
-					goto out;
-				}
-				curr_p += le16_to_cpu(dentry->de_len);
-				break;
-			case NEXT_PAGE:
-				/* No more entries in this page */
-				goto out;
-			default:
-				nova_dbg("%s: unknown type %d, 0x%llx\n",
-							__func__, type, curr_p);
-				NOVA_ASSERT(0);
-				curr_p += sizeof(struct nova_file_write_entry);
-				break;
-		}
+		length = 0;
+		ret = curr_log_entry_invalid(sb, pi, sih, curr_p, &length);
+		if (!ret)
+			goto out;
+
+		curr_p += length;
 	}
 
 out:
