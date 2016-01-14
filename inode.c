@@ -1508,12 +1508,9 @@ int nova_allocate_inode_log_pages(struct super_block *sb,
 	return ret_pages;
 }
 
-/*
- * Copy alive log entries to the new log,
- * merge entries if possible
- */
+/* Copy alive log entries to the new log and atomically replace the old log */
 #if 0
-int nova_inode_log_gabbage_collection(struct super_block *sb,
+int nova_inode_log_thorough_gc(struct super_block *sb,
 	struct nova_inode *pi, u64 new_block, unsigned long num_pages)
 {
 	struct nova_file_write_entry *curr_entry, *new_entry;
