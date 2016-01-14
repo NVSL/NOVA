@@ -1239,7 +1239,7 @@ static u64 nova_append_setattr_entry(struct super_block *sb,
 	nova_dbg_verbose("%s: inode %lu attr change\n",
 				__func__, inode->i_ino);
 
-	curr_p = nova_get_append_head(sb, pi, sih, tail, size, 1);
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size);
 	if (curr_p == 0)
 		BUG();
 
@@ -1726,8 +1726,8 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 	return 0;
 }
 
-u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
-	struct nova_inode_info_header *sih, u64 curr_p, int is_file)
+static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_info_header *sih, u64 curr_p)
 {
 	u64 new_block;
 	int allocated;
@@ -1786,8 +1786,7 @@ static void nova_set_next_page_flag(struct super_block *sb, u64 curr_p)
 }
 
 u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
-	struct nova_inode_info_header *sih, u64 tail, size_t size,
-	int is_file)
+	struct nova_inode_info_header *sih, u64 tail, size_t size)
 {
 	u64 curr_p;
 
@@ -1800,7 +1799,7 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 				next_log_page(sb, curr_p) == 0)) {
 		if (is_last_entry(curr_p, size))
 			nova_set_next_page_flag(sb, curr_p);
-		curr_p = nova_extend_inode_log(sb, pi, sih, curr_p, is_file);
+		curr_p = nova_extend_inode_log(sb, pi, sih, curr_p);
 		if (curr_p == 0)
 			return 0;
 	}
@@ -1831,7 +1830,7 @@ u64 nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 
 	NOVA_START_TIMING(append_file_entry_t, append_time);
 
-	curr_p = nova_get_append_head(sb, pi, sih, tail, size, 1);
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size);
 	if (curr_p == 0)
 		return curr_p;
 

@@ -162,8 +162,7 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 
 	NOVA_START_TIMING(append_dir_entry_t, append_time);
 
-	curr_p = nova_get_append_head(sb, pidir, sih, tail,
-						size, 0);
+	curr_p = nova_get_append_head(sb, pidir, sih, tail, size);
 	if (curr_p == 0)
 		BUG();
 

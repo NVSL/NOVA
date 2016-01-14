@@ -340,7 +340,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	nova_dbg_verbose("%s: inode %lu attr change\n",
 				__func__, inode->i_ino);
 
-	curr_p = nova_get_append_head(sb, pi, sih, tail, size, 1);
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size);
 	if (curr_p == 0)
 		return -ENOMEM;
 
