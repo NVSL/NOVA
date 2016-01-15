@@ -168,7 +168,7 @@ int nova_get_inode_address(struct super_block *sb, u64 ino,
 	return 0;
 }
 
-static inline int nova_free_contiguous_blocks(struct super_block *sb,
+static inline int nova_free_contiguous_data_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_inode *pi,
 	struct nova_file_write_entry *entry, unsigned long pgoff,
 	unsigned long *start_blocknr, unsigned long *num_free)
@@ -288,9 +288,9 @@ int nova_delete_file_tree(struct super_block *sb,
 			ret = radix_tree_delete(&sih->tree, pgoff);
 			BUG_ON(!ret || ret != entry);
 			if (delete_nvmm)
-				freed += nova_free_contiguous_blocks(sb, sih,
-						pi, entry, pgoff, &free_blocknr,
-						&num_free);
+				freed += nova_free_contiguous_data_blocks(sb,
+						sih, pi, entry, pgoff,
+						&free_blocknr, &num_free);
 			pgoff++;
 		} else {
 			/* We are finding a hole. Jump to the next entry. */
@@ -2030,21 +2030,16 @@ u64 nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	return curr_p;
 }
 
-void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi)
+static int nova_free_contiguous_log_blocks(struct super_block *sb,
+	struct nova_inode *pi, u64 head)
 {
 	struct nova_inode_log_page *curr_page;
-	u64 curr_block;
 	unsigned long blocknr, start_blocknr = 0;
-	int num_free = 0;
+	u64 curr_block = head;
 	u32 btype = pi->i_blk_type;
-	timing_t free_time;
+	int num_free = 0;
+	int freed = 0;
 
-	if (pi->log_head == 0 || pi->log_tail == 0)
-		return;
-
-	NOVA_START_TIMING(free_inode_log_t, free_time);
-
-	curr_block = pi->log_head;
 	while (curr_block) {
 		if (curr_block & INVALID_MASK) {
 			nova_dbg("%s: ERROR: invalid block %llu\n",
@@ -2069,17 +2064,40 @@ void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi)
 				/* A new start */
 				nova_free_log_blocks(sb, pi, start_blocknr,
 							num_free);
+				freed += num_free;
 				start_blocknr = blocknr;
 				num_free = 1;
 			}
 		}
 	}
-	if (start_blocknr)
+	if (start_blocknr) {
 		nova_free_log_blocks(sb, pi, start_blocknr, num_free);
+		freed += num_free;
+	}
 
+	return freed;
+}
+
+void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi)
+{
+	u64 curr_block;
+	int freed = 0;
+	timing_t free_time;
+
+	if (pi->log_head == 0 || pi->log_tail == 0)
+		return;
+
+	NOVA_START_TIMING(free_inode_log_t, free_time);
+
+	curr_block = pi->log_head;
+
+	/* Update head before freeing the log */
 	pi->log_head = 0;
 	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
 	nova_update_tail(pi, 0);
+
+	freed = nova_free_contiguous_log_blocks(sb, pi, curr_block);
+
 	NOVA_END_TIMING(free_inode_log_t, free_time);
 }
 
