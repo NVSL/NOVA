@@ -1642,6 +1642,156 @@ static void free_curr_page(struct super_block *sb, struct nova_inode *pi,
 			nova_get_blocknr(sb, curr_head, btype), 1);
 }
 
+int nova_gc_assign_file_entry(struct super_block *sb,
+	struct nova_inode_info_header *sih,
+	struct nova_file_write_entry *old_entry,
+	struct nova_file_write_entry *new_entry)
+{
+	struct nova_file_write_entry *temp;
+	void **pentry;
+	unsigned long start_pgoff = old_entry->pgoff;
+	unsigned int num = old_entry->num_pages;
+	unsigned long curr_pgoff;
+	int i;
+	int ret = 0;
+
+	for (i = 0; i < num; i++) {
+		curr_pgoff = start_pgoff + i;
+
+		pentry = radix_tree_lookup_slot(&sih->tree, curr_pgoff);
+		if (pentry) {
+			temp = radix_tree_deref_slot(pentry);
+			if (temp == old_entry)
+				radix_tree_replace_slot(pentry, new_entry);
+		}
+	}
+
+	return ret;
+}
+
+static int nova_gc_assign_dentry(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_dentry *old_dentry,
+	struct nova_dentry *new_dentry)
+{
+	struct nova_dentry *temp;
+	void **pentry;
+	unsigned long hash;
+	int ret = 0;
+
+	hash = BKDRHash(old_dentry->name, old_dentry->name_len);
+	nova_dbgv("%s: assign %s hash %lu\n", __func__,
+			old_dentry->name, hash);
+
+	/* FIXME: hash collision ignored here */
+	pentry = radix_tree_lookup_slot(&sih->tree, hash);
+	if (pentry) {
+		temp = radix_tree_deref_slot(pentry);
+		if (temp == old_dentry)
+			radix_tree_replace_slot(pentry, new_dentry);
+	}
+
+	return ret;
+}
+
+static int nova_gc_assign_new_entry(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	u64 curr_p, u64 new_curr)
+{
+	struct nova_file_write_entry *old_entry, *new_entry;
+	struct nova_dentry *old_dentry, *new_dentry;
+	void *addr, *new_addr;
+	u8 type;
+	int ret = 0;
+
+	addr = (void *)nova_get_block(sb, curr_p);
+	type = nova_get_entry_type(addr);
+	switch (type) {
+		case SET_ATTR:
+			sih->last_setattr = new_curr;
+			break;
+		case LINK_CHANGE:
+			sih->last_link_change = new_curr;
+			break;
+		case FILE_WRITE:
+			new_addr = (void *)nova_get_block(sb, new_curr);
+			old_entry = (struct nova_file_write_entry *)addr;
+			new_entry = (struct nova_file_write_entry *)new_addr;
+			ret = nova_gc_assign_file_entry(sb, sih, old_entry,
+							new_entry);
+			break;
+		case DIR_LOG:
+			new_addr = (void *)nova_get_block(sb, new_curr);
+			old_dentry = (struct nova_dentry *)addr;
+			new_dentry = (struct nova_dentry *)new_addr;
+			ret = nova_gc_assign_dentry(sb, sih, old_dentry,
+							new_dentry);
+			break;
+		default:
+			nova_dbg("%s: unknown type %d, 0x%llx\n",
+						__func__, type, curr_p);
+			NOVA_ASSERT(0);
+			break;
+	}
+
+	return ret;
+}
+
+/* Copy alive log entries to the new log and atomically replace the old log */
+static int nova_inode_log_thorough_gc(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	u64 new_head)
+{
+	size_t length;
+	u64 ino = pi->nova_ino;
+	u64 curr_p, new_curr;
+	u64 old_curr_p;
+	int ret;
+
+	curr_p = pi->log_head;
+	nova_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
+				curr_p, pi->log_tail);
+	if (curr_p == 0 && pi->log_tail == 0)
+		return 0;
+
+	if (curr_p >> PAGE_SHIFT == pi->log_tail >> PAGE_SHIFT)
+		return 0;
+
+	new_curr = new_head;
+	while (curr_p != pi->log_tail) {
+		old_curr_p = curr_p;
+		if (goto_next_page(sb, curr_p))
+			curr_p = next_log_page(sb, curr_p);
+
+		if (curr_p >> PAGE_SHIFT == pi->log_tail >> PAGE_SHIFT) {
+			/* Don't recycle tail page */
+			break;
+		}
+
+		if (curr_p == 0) {
+			nova_err(sb, "File inode %llu log is NULL!\n", ino);
+			BUG();
+		}
+
+		length = 0;
+		ret = curr_log_entry_invalid(sb, pi, sih, curr_p, &length);
+		if (!ret) {
+			new_curr = nova_get_append_head(sb, pi, NULL,
+							new_curr, length);
+			/* Copy entry to the new log */
+			memcpy(nova_get_block(sb, new_curr),
+				nova_get_block(sb, curr_p), length);
+			nova_gc_assign_new_entry(sb, pi, sih, curr_p, new_curr);
+			new_curr += length;
+		}
+
+		curr_p += length;
+	}
+
+	nova_flush_buffer(pi, sizeof(struct nova_inode), 0);
+
+	return 0;
+}
+
 static int nova_inode_log_fast_gc(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 curr_tail, u64 new_block, int num_pages)
@@ -1774,6 +1924,7 @@ static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 	return new_block;
 }
 
+/* For thorough GC, simply append one more page */
 static u64 nova_append_one_log_page(struct super_block *sb,
 	struct nova_inode *pi, u64 curr_p)
 {
