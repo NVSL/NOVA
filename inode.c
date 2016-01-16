@@ -1859,7 +1859,7 @@ static int need_thorough_gc(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long blocks,
 	unsigned long checked_pages)
 {
-	if (blocks * 2 < checked_pages)
+	if (blocks && blocks * 2 < checked_pages)
 		return 1;
 
 	return 0;
@@ -1928,6 +1928,7 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 	}
 
 	total_checked_pages += checked_pages;
+	checked_pages -= freed_pages;
 
 	page_tail = PAGE_TAIL(curr_tail);
 	((struct nova_inode_page_tail *)
