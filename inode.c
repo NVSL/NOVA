@@ -1756,7 +1756,7 @@ static int nova_gc_assign_new_entry(struct super_block *sb,
 /* Copy alive log entries to the new log and atomically replace the old log */
 static int nova_inode_log_thorough_gc(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
-	unsigned long blocks)
+	unsigned long blocks, unsigned long checked_pages)
 {
 	struct nova_inode_log_page *curr_page = NULL;
 	size_t length;
@@ -1850,7 +1850,7 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 	/* Step 4: Free the old log */
 	nova_free_contiguous_log_blocks(sb, pi, old_head);
 
-	sih->log_pages = blocks + 1;
+	sih->log_pages = sih->log_pages + blocks - checked_pages;
 
 	return 0;
 }
@@ -1876,6 +1876,7 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 	int first_need_free = 0;
 	unsigned short btype = pi->i_blk_type;
 	unsigned long blocks;
+	unsigned long checked_pages = 0;
 	int freed_pages = 0;
 	timing_t gc_time;
 
@@ -1925,6 +1926,8 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 			break;
 	}
 
+	total_checked_pages += checked_pages;
+
 	page_tail = PAGE_TAIL(curr_tail);
 	((struct nova_inode_page_tail *)
 		nova_get_block(sb, page_tail))->next_page = new_block;
@@ -1953,7 +1956,7 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 		blocks++;
 
 	if (need_thorough_gc(sb, sih, blocks))
-		nova_inode_log_thorough_gc(sb, pi, sih, blocks);
+		nova_inode_log_thorough_gc(sb, pi, sih, blocks, checked_pages);
 
 	return 0;
 }

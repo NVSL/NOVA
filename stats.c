@@ -96,7 +96,7 @@ unsigned long write_breaks;
 unsigned long long read_bytes;
 unsigned long long cow_write_bytes;
 unsigned long long fsync_bytes;
-unsigned long long checked_pages;
+unsigned long long total_checked_pages;
 unsigned long gc_pages;
 unsigned long fsync_pages;
 
@@ -125,9 +125,9 @@ void nova_print_alloc_stats(struct super_block *sb)
 			free_steps / Countstats[free_data_t] : 0);
 	printk("Garbage collection %llu, check pages %llu, average %llu,\n"
 		"free pages %lu, average %llu\n",
-		Countstats[log_gc_t], checked_pages,
+		Countstats[log_gc_t], total_checked_pages,
 		Countstats[log_gc_t] ?
-			checked_pages / Countstats[log_gc_t] : 0,
+			total_checked_pages / Countstats[log_gc_t] : 0,
 		gc_pages, Countstats[log_gc_t] ?
 			gc_pages / Countstats[log_gc_t] : 0);
 
