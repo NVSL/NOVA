@@ -73,7 +73,8 @@ enum timing_category {
 	append_file_entry_t,
 	append_link_change_t,
 	append_setattr_t,
-	log_gc_t,
+	fast_gc_t,
+	thorough_gc_t,
 	check_invalid_t,
 
 	/* Others */

@@ -68,7 +68,8 @@ const char *Timingstring[TIMING_NUM] =
 	"append_file_entry",
 	"append_link_change",
 	"append_setattr",
-	"inode_log_gc",
+	"log_fast_gc",
+	"log_thorough_gc",
 	"check_invalid_log",
 
 	"find_cache_page",
@@ -123,13 +124,13 @@ void nova_print_alloc_stats(struct super_block *sb)
 		Countstats[free_data_t], free_steps,
 		Countstats[free_data_t] ?
 			free_steps / Countstats[free_data_t] : 0);
-	printk("Garbage collection %llu, check pages %llu, average %llu,\n"
+	printk("Fast GC %llu, check pages %llu, average %llu,\n"
 		"free pages %lu, average %llu\n",
-		Countstats[log_gc_t], total_checked_pages,
-		Countstats[log_gc_t] ?
-			total_checked_pages / Countstats[log_gc_t] : 0,
-		gc_pages, Countstats[log_gc_t] ?
-			gc_pages / Countstats[log_gc_t] : 0);
+		Countstats[fast_gc_t], total_checked_pages,
+		Countstats[fast_gc_t] ?
+			total_checked_pages / Countstats[fast_gc_t] : 0,
+		gc_pages, Countstats[fast_gc_t] ?
+			gc_pages / Countstats[fast_gc_t] : 0);
 
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = nova_get_free_list(sb, i);

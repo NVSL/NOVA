@@ -1769,6 +1769,9 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 	u64 next;
 	int allocated;
 	int ret;
+	timing_t gc_time;
+
+	NOVA_START_TIMING(thorough_gc_t, gc_time);
 
 	curr_p = pi->log_head;
 	old_curr_p = curr_p;
@@ -1776,17 +1779,17 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 	nova_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
 				curr_p, pi->log_tail);
 	if (curr_p == 0 && pi->log_tail == 0)
-		return 0;
+		goto out;
 
 	if (curr_p >> PAGE_SHIFT == pi->log_tail >> PAGE_SHIFT)
-		return 0;
+		goto out;
 
 	allocated = nova_allocate_inode_log_pages(sb, pi, blocks,
 					&new_head);
 	if (allocated != blocks) {
 		nova_err(sb, "ERROR: no inode log page "
 					"available\n");
-		return 0;
+		goto out;
 	}
 
 	new_curr = new_head;
@@ -1851,7 +1854,8 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 	nova_free_contiguous_log_blocks(sb, pi, old_head);
 
 	sih->log_pages = sih->log_pages + blocks - checked_pages;
-
+out:
+	NOVA_END_TIMING(thorough_gc_t, gc_time);
 	return 0;
 }
 
@@ -1881,7 +1885,7 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 	int freed_pages = 0;
 	timing_t gc_time;
 
-	NOVA_START_TIMING(log_gc_t, gc_time);
+	NOVA_START_TIMING(fast_gc_t, gc_time);
 	curr = pi->log_head;
 	sih->valid_bytes = 0;
 
@@ -1951,11 +1955,12 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 		nova_free_log_blocks(sb, pi,
 				nova_get_blocknr(sb, curr, btype), 1);
 	}
-	NOVA_END_TIMING(log_gc_t, gc_time);
 
 	blocks = sih->valid_bytes / LAST_ENTRY;
 	if (sih->valid_bytes % LAST_ENTRY)
 		blocks++;
+
+	NOVA_END_TIMING(fast_gc_t, gc_time);
 
 	if (need_thorough_gc(sb, sih, blocks, checked_pages)) {
 		nova_dbgv("Thorough GC for inode %lu: checked pages %lu, "
