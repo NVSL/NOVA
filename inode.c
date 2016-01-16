@@ -1756,7 +1756,7 @@ static int nova_gc_assign_new_entry(struct super_block *sb,
 /* Copy alive log entries to the new log and atomically replace the old log */
 static int nova_inode_log_thorough_gc(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
-	u64 new_head)
+	unsigned long blocks)
 {
 	struct nova_inode_log_page *curr_page = NULL;
 	size_t length;
@@ -1765,7 +1765,9 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 	u64 old_curr_p;
 	u64 tail_block;
 	u64 old_head;
+	u64 new_head = 0;
 	u64 next;
+	int allocated;
 	int ret;
 
 	curr_p = pi->log_head;
@@ -1777,6 +1779,14 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 
 	if (curr_p >> PAGE_SHIFT == pi->log_tail >> PAGE_SHIFT)
 		return 0;
+
+	allocated = nova_allocate_inode_log_pages(sb, pi, blocks,
+					&new_head);
+	if (allocated != blocks) {
+		nova_err(sb, "ERROR: no inode log page "
+					"available\n");
+		return 0;
+	}
 
 	new_curr = new_head;
 	while (curr_p != pi->log_tail) {
@@ -1838,6 +1848,8 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 
 	/* Step 4: Free the old log */
 	nova_free_contiguous_log_blocks(sb, pi, old_head);
+
+	sih->log_pages = blocks + 1;
 
 	return 0;
 }
