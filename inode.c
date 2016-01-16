@@ -477,7 +477,7 @@ done:
 	return blocks;
 }
 
-int nova_assign_nvmm_entry(struct super_block *sb,
+int nova_assign_write_entry(struct super_block *sb,
 	struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
@@ -2208,7 +2208,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 			 * The overlaped blocks are already freed.
 			 * Don't double free them, just re-assign the pointers.
 			 */
-			nova_assign_nvmm_entry(sb, pi, sih, entry, false);
+			nova_assign_write_entry(sb, pi, sih, entry, false);
 		}
 
 		nova_rebuild_file_time_and_size(sb, pi, entry);

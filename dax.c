@@ -269,7 +269,7 @@ int nova_reassign_file_btree(struct super_block *sb,
 			continue;
 		}
 
-		nova_assign_nvmm_entry(sb, pi, sih, entry_data, true);
+		nova_assign_write_entry(sb, pi, sih, entry_data, true);
 		curr_p += entry_size;
 	}
 
