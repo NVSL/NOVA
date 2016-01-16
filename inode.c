@@ -1624,14 +1624,14 @@ static bool curr_page_invalid(struct super_block *sb,
 		}
 
 		length = 0;
-		ret = curr_log_entry_invalid(sb, pi, sih, curr_p, &length);
-		if (!ret)
-			goto out;
+		if (!curr_log_entry_invalid(sb, pi, sih, curr_p, &length)) {
+			sih->valid_bytes += length;
+			ret = false;
+		}
 
 		curr_p += length;
 	}
 
-out:
 	NOVA_END_TIMING(check_invalid_t, check_time);
 	return ret;
 }
@@ -1771,6 +1771,7 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 	int ret;
 
 	curr_p = pi->log_head;
+	old_curr_p = curr_p;
 	old_head = pi->log_head;
 	nova_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
 				curr_p, pi->log_tail);
@@ -1854,6 +1855,15 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 	return 0;
 }
 
+static int need_thorough_gc(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long blocks)
+{
+	if (blocks * 2 + 1 < sih->log_pages)
+		return 1;
+
+	return 0;
+}
+
 static int nova_inode_log_fast_gc(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 curr_tail, u64 new_block, int num_pages)
@@ -1865,11 +1875,13 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 	struct nova_inode_log_page *curr_page = NULL;
 	int first_need_free = 0;
 	unsigned short btype = pi->i_blk_type;
+	unsigned long blocks;
 	int freed_pages = 0;
 	timing_t gc_time;
 
 	NOVA_START_TIMING(log_gc_t, gc_time);
 	curr = pi->log_head;
+	sih->valid_bytes = 0;
 
 	nova_dbg_verbose("%s: log head 0x%llx, tail 0x%llx\n",
 				__func__, curr, curr_tail);
@@ -1935,6 +1947,14 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 				nova_get_blocknr(sb, curr, btype), 1);
 	}
 	NOVA_END_TIMING(log_gc_t, gc_time);
+
+	blocks = sih->valid_bytes / LAST_ENTRY;
+	if (sih->valid_bytes % LAST_ENTRY)
+		blocks++;
+
+	if (need_thorough_gc(sb, sih, blocks))
+		nova_inode_log_thorough_gc(sb, pi, sih, blocks);
+
 	return 0;
 }
 

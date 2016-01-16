@@ -308,6 +308,7 @@ struct nova_inode_info_header {
 	unsigned long mmap_pages;	/* Num of mmap pages */
 	unsigned long low_mmap;		/* Mmap low range */
 	unsigned long high_mmap;	/* Mmap high range */
+	unsigned long valid_bytes;	/* For thorough GC */
 	u64 last_setattr;		/* Last setattr entry */
 	u64 last_link_change;		/* Last link change entry */
 };
