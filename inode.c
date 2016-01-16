@@ -1856,9 +1856,10 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 }
 
 static int need_thorough_gc(struct super_block *sb,
-	struct nova_inode_info_header *sih, unsigned long blocks)
+	struct nova_inode_info_header *sih, unsigned long blocks,
+	unsigned long checked_pages)
 {
-	if (blocks * 2 + 1 < sih->log_pages)
+	if (blocks * 2 < checked_pages)
 		return 1;
 
 	return 0;
@@ -1955,8 +1956,12 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 	if (sih->valid_bytes % LAST_ENTRY)
 		blocks++;
 
-	if (need_thorough_gc(sb, sih, blocks))
+	if (need_thorough_gc(sb, sih, blocks, checked_pages)) {
+		nova_dbgv("Thorough GC for inode %lu: checked pages %lu, "
+				"valid pages %lu\n", sih->ino,
+				checked_pages, blocks);
 		nova_inode_log_thorough_gc(sb, pi, sih, blocks, checked_pages);
+	}
 
 	return 0;
 }
