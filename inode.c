@@ -1996,8 +1996,8 @@ static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 		pi->i_blocks++;
 		nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
 	} else {
-		num_pages = sih->log_pages >= 256 ?
-				256 : sih->log_pages;
+		num_pages = sih->log_pages >= EXTEND_THRESHOLD ?
+				EXTEND_THRESHOLD : sih->log_pages;
 //		nova_dbg("Before append log pages:\n");
 //		nova_print_inode_log_page(sb, inode);
 		allocated = nova_allocate_inode_log_pages(sb, pi,

@@ -182,6 +182,8 @@ struct	nova_inode_log_page {
 	struct nova_inode_page_tail page_tail;
 } __attribute((__packed__));
 
+#define	EXTEND_THRESHOLD	256
+
 /*
  * Structure of a directory log entry in NOVA.
  * Update DIR_LOG_REC_LEN if modify this struct!
