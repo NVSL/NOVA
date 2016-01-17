@@ -97,7 +97,8 @@ unsigned long write_breaks;
 unsigned long long read_bytes;
 unsigned long long cow_write_bytes;
 unsigned long long fsync_bytes;
-unsigned long long total_checked_pages;
+unsigned long long fast_checked_pages;
+unsigned long long thorough_checked_pages;
 unsigned long fast_gc_pages;
 unsigned long thorough_gc_pages;
 unsigned long fsync_pages;
@@ -125,15 +126,13 @@ void nova_print_alloc_stats(struct super_block *sb)
 		Countstats[free_data_t], free_steps,
 		Countstats[free_data_t] ?
 			free_steps / Countstats[free_data_t] : 0);
-	printk("Fast GC %llu, check pages %llu, average %llu, "
-		"free pages %lu, average %llu\n",
-		Countstats[fast_gc_t], total_checked_pages,
-		Countstats[fast_gc_t] ?
-			total_checked_pages / Countstats[fast_gc_t] : 0,
+	printk("Fast GC %llu, check pages %llu, free pages %lu, average %llu\n",
+		Countstats[fast_gc_t], fast_checked_pages,
 		fast_gc_pages, Countstats[fast_gc_t] ?
 			fast_gc_pages / Countstats[fast_gc_t] : 0);
-	printk("Thorough GC %llu, free pages %lu, average %llu\n",
-		Countstats[thorough_gc_t], thorough_gc_pages,
+	printk("Thorough GC %llu, checked pages %llu, free pages %lu, "
+		"average %llu\n", Countstats[thorough_gc_t],
+		thorough_checked_pages, thorough_gc_pages,
 		Countstats[thorough_gc_t] ?
 			thorough_gc_pages / Countstats[thorough_gc_t] : 0);
 

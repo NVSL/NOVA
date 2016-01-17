@@ -1855,6 +1855,7 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 
 	sih->log_pages = sih->log_pages + blocks - checked_pages;
 	thorough_gc_pages += checked_pages - blocks;
+	thorough_checked_pages += checked_pages;
 out:
 	NOVA_END_TIMING(thorough_gc_t, gc_time);
 	return 0;
@@ -1932,7 +1933,7 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 			break;
 	}
 
-	total_checked_pages += checked_pages;
+	fast_checked_pages += checked_pages;
 	checked_pages -= freed_pages;
 
 	page_tail = PAGE_TAIL(curr_tail);
