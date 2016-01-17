@@ -105,7 +105,8 @@ extern unsigned long long read_bytes;
 extern unsigned long long cow_write_bytes;
 extern unsigned long long fsync_bytes;
 extern unsigned long long total_checked_pages;
-extern unsigned long gc_pages;
+extern unsigned long fast_gc_pages;
+extern unsigned long thorough_gc_pages;
 extern unsigned long fsync_pages;
 
 typedef struct timespec timing_t;
