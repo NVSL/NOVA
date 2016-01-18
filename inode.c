@@ -171,27 +171,37 @@ int nova_get_inode_address(struct super_block *sb, u64 ino,
 static inline int nova_free_contiguous_data_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_inode *pi,
 	struct nova_file_write_entry *entry, unsigned long pgoff,
-	unsigned long *start_blocknr, unsigned long *num_free)
+	unsigned long num_pages, unsigned long *start_blocknr,
+	unsigned long *num_free)
 {
 	int freed = 0;
 	unsigned long nvmm;
 
-	entry->invalid_pages++;
+	if (entry->num_pages < entry->invalid_pages + num_pages) {
+		nova_err(sb, "%s: inode %lu, entry pgoff %llu, %llu pages, "
+				"invalid %llu, try to free %lu, pgoff %lu\n",
+				__func__, sih->ino, entry->pgoff,
+				entry->num_pages, entry->invalid_pages,
+				num_pages, pgoff);
+		return freed;
+	}
+
+	entry->invalid_pages += num_pages;
 	nvmm = get_nvmm(sb, sih, entry, pgoff);
 
 	if (*start_blocknr == 0) {
 		*start_blocknr = nvmm;
-		*num_free = 1;
+		*num_free = num_pages;
 	} else {
 		if (nvmm == *start_blocknr + *num_free) {
-			(*num_free)++;
+			(*num_free) += num_pages;
 		} else {
 			/* A new start */
 			nova_free_data_blocks(sb, pi, *start_blocknr,
 						*num_free);
 			freed = *num_free;
 			*start_blocknr = nvmm;
-			*num_free = 1;
+			*num_free = num_pages;
 		}
 	}
 
@@ -337,7 +347,7 @@ int nova_delete_file_tree(struct super_block *sb,
 			BUG_ON(!ret || ret != entry);
 			if (delete_nvmm)
 				freed += nova_free_contiguous_data_blocks(sb,
-						sih, pi, entry, pgoff,
+						sih, pi, entry, pgoff, 1,
 						&free_blocknr, &num_free);
 			pgoff++;
 		} else {
