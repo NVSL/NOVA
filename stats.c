@@ -42,8 +42,8 @@ const char *Timingstring[TIMING_NUM] =
 	"mknod",
 	"rename",
 	"readdir",
-	"add_entry",
-	"remove_entry",
+	"add_dentry",
+	"remove_dentry",
 	"setattr",
 
 	"dax_read",

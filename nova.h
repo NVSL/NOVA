@@ -902,9 +902,9 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma);
 extern const struct file_operations nova_dir_operations;
 int nova_append_dir_init_entries(struct super_block *sb,
 	struct nova_inode *pi, u64 self_ino, u64 parent_ino);
-extern int nova_add_entry(struct dentry *dentry, u64 ino,
+extern int nova_add_dentry(struct dentry *dentry, u64 ino,
 	int inc_link, u64 tail, u64 *new_tail);
-extern int nova_remove_entry(struct dentry *dentry, int dec_link, u64 tail,
+extern int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 	u64 *new_tail);
 void nova_print_dir_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long ino);

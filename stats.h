@@ -42,8 +42,8 @@ enum timing_category {
 	mknod_t,
 	rename_t,
 	readdir_t,
-	add_entry_t,
-	remove_entry_t,
+	add_dentry_t,
+	remove_dentry_t,
 	setattr_t,
 
 	/* I/O operations */
