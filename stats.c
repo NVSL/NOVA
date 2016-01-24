@@ -102,6 +102,7 @@ unsigned long long thorough_checked_pages;
 unsigned long fast_gc_pages;
 unsigned long thorough_gc_pages;
 unsigned long fsync_pages;
+unsigned long barriers;
 
 void nova_print_alloc_stats(struct super_block *sb)
 {
@@ -157,6 +158,8 @@ void nova_print_alloc_stats(struct super_block *sb)
 		alloc_data_count, alloc_data_pages,
 		free_log_count, freed_log_pages,
 		free_data_count, freed_data_pages);
+
+	printk("Persistent barriers %lu\n", barriers);
 }
 
 void nova_print_IO_stats(struct super_block *sb)
@@ -213,6 +216,19 @@ void nova_clear_stats(void)
 		Countstats[i] = 0;
 		Timingstats[i] = 0;
 	}
+
+	alloc_steps = 0;
+	free_steps = 0;
+	write_breaks = 0;
+	read_bytes = 0;
+	cow_write_bytes = 0;
+	fsync_bytes = 0;
+	fast_checked_pages = 0;
+	thorough_checked_pages = 0;
+	fast_gc_pages = 0;
+	thorough_gc_pages = 0;
+	fsync_pages = 0;
+	barriers = 0;
 }
 
 static inline void nova_print_file_write_entry(struct super_block *sb,
