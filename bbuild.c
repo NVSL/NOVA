@@ -514,7 +514,7 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 	super->s_wtime = cpu_to_le32(get_seconds());
 
 	nova_memlock_range(sb, &super->s_wtime, NOVA_FAST_MOUNT_FIELD_SIZE);
-	nova_flush_buffer(super, NOVA_SB_SIZE, 1);
+	nova_flush_buffer(super, NOVA_SB_SIZE, 0);
 
 	/* Finally update log head and tail */
 	pi->log_head = new_block;

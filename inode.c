@@ -2140,10 +2140,9 @@ void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi)
 
 	curr_block = pi->log_head;
 
-	/* Update head before freeing the log */
-	pi->log_head = 0;
+	/* The inode is invalid now, no need to call PCOMMIT */
+	pi->log_head = pi->log_tail = 0;
 	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
-	nova_update_tail(pi, 0);
 
 	freed = nova_free_contiguous_log_blocks(sb, pi, curr_block);
 
