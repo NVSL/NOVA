@@ -801,7 +801,6 @@ static int nova_free_inode(struct inode *inode,
 	nova_free_inode_log(sb, pi);
 	pi->i_blocks = 0;
 
-	/* Clear the si header, but not free it - leave for future use */
 	sih->log_pages = 0;
 	sih->i_mode = 0;
 	sih->pi_addr = 0;
