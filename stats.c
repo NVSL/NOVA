@@ -1,12 +1,8 @@
 /*
  * NOVA File System statistics
  *
- * Copyright 2015 NVSL, UC San Diego
- * Copyright 2012-2013 Intel Corporation
- * Copyright 2009-2011 Marco Stornelli <marco.stornelli@gmail.com>
- * Copyright 2003 Sony Corporation
- * Copyright 2003 Matsushita Electric Industrial Co., Ltd.
- * 2003-2004 (c) MontaVista Software, Inc. , Steve Longerbeam
+ * Copyright 2015-2016 Regents of the University of California,
+ * UCSD Non-Volatile Systems Lab, Andiry Xu <jix024@cs.ucsd.edu>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,

@@ -3,7 +3,8 @@
  *
  * DAX file operations.
  *
- * Copyright 2015 NVSL, UC San Diego
+ * Copyright 2015-2016 Regents of the University of California,
+ * UCSD Non-Volatile Systems Lab, Andiry Xu <jix024@cs.ucsd.edu>
  * Copyright 2012-2013 Intel Corporation
  * Copyright 2009-2011 Marco Stornelli <marco.stornelli@gmail.com>
  *
