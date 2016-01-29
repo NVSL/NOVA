@@ -381,20 +381,8 @@ static inline void set_default_opts(struct nova_sb_info *sbi)
 
 static void nova_root_check(struct super_block *sb, struct nova_inode *root_pi)
 {
-/*
- *      if (root_pi->i_d.d_next) {
- *              nova_warn("root->next not NULL, trying to fix\n");
- *              goto fail1;
- *      }
- */
 	if (!S_ISDIR(le16_to_cpu(root_pi->i_mode)))
 		nova_warn("root is not a directory!\n");
-#if 0
-	if (nova_calc_checksum((u8 *)root_pi, NOVA_INODE_SIZE)) {
-		nova_dbg("checksum error in root inode, trying to fix\n");
-		goto fail3;
-	}
-#endif
 }
 
 int nova_check_integrity(struct super_block *sb,

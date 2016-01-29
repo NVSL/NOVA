@@ -1384,54 +1384,6 @@ void nova_set_inode_flags(struct inode *inode, struct nova_inode *pi,
 	inode->i_flags |= S_DAX;
 }
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,0,9)
-
-static ssize_t nova_direct_IO(int rw, struct kiocb *iocb,
-	struct iov_iter *iter, loff_t offset)
-{
-	struct file *filp = iocb->ki_filp;
-	loff_t end = offset;
-	ssize_t err = -EINVAL;
-	unsigned long seg;
-	unsigned long nr_segs = iter->nr_segs;
-	const struct iovec *iv = iter->iov;
-	timing_t dio_time;
-
-	NOVA_START_TIMING(direct_IO_t, dio_time);
-	for (seg = 0; seg < nr_segs; seg++) {
-		end += iv->iov_len;
-		iv++;
-	}
-
-	nova_dbg_verbose("%s\n", __func__);
-	iv = iter->iov;
-	for (seg = 0; seg < nr_segs; seg++) {
-		if (rw == READ) {
-			err = nova_dax_file_read(filp, iv->iov_base,
-					iv->iov_len, &offset);
-		} else if (rw == WRITE) {
-			err = nova_cow_file_write(filp, iv->iov_base,
-					iv->iov_len, &offset, false);
-		}
-		if (err <= 0)
-			goto err;
-		if (iter->count > iv->iov_len)
-			iter->count -= iv->iov_len;
-		else
-			iter->count = 0;
-		iter->nr_segs--;
-		iv++;
-	}
-	if (offset != end)
-		printk(KERN_ERR "nova: direct_IO: end = %lld"
-			"but offset = %lld\n", end, offset);
-err:
-	NOVA_END_TIMING(direct_IO_t, dio_time);
-	return err;
-}
-
-#else
-
 static ssize_t nova_direct_IO(struct kiocb *iocb,
 	struct iov_iter *iter, loff_t offset)
 {
@@ -1473,8 +1425,6 @@ err:
 	NOVA_END_TIMING(direct_IO_t, dio_time);
 	return err;
 }
-
-#endif
 
 static int nova_coalesce_log_pages(struct super_block *sb,
 	unsigned long prev_blocknr, unsigned long first_blocknr,

@@ -108,80 +108,6 @@ static loff_t nova_llseek(struct file *file, loff_t offset, int origin)
 	return offset;
 }
 
-#if 0
-int nova_is_page_dirty(struct mm_struct *mm, unsigned long address,
-	int category, int set_clean)
-{
-	pgd_t *pgd;
-	pud_t *pud;
-	pmd_t *pmd;
-	pte_t *ptep, pte;
-	int ret = 0;
-
-	if (!mm) {
-		nova_dbg("%s: mm is NULL\n", __func__);
-		return 0;
-	}
-
-	spin_lock(&mm->page_table_lock);
-
-	pgd = pgd_offset(mm, address);
-	if (!pgd_present(*pgd)) {
-		nova_dbg("%s: pgd not found for 0x%lx\n", __func__, address);
-		goto out;
-	}
-
-	pud = pud_offset(pgd, address);
-	if (!pud_present(*pud)) {
-		nova_dbg("%s: pud not found for 0x%lx\n", __func__, address);
-		goto out;
-	}
-
-	pmd = pmd_offset(pud, address);
-	if (!pmd_present(*pmd)) {
-		nova_dbg("%s: pmd not found for 0x%lx\n", __func__, address);
-		goto out;
-	}
-
-	ptep = pte_offset_map(pmd, address);
-	if (!pte_present(*ptep)) {
-		nova_dbg("%s: pte not found for 0x%lx\n", __func__, address);
-		goto out;
-	}
-
-	if (pte_dirty(*ptep)) {
-		nova_dbg("%s: page is dirty: 0x%lx\n", __func__, address);
-		ret = 1;
-		if (set_clean) {
-			pte = *ptep;
-			pte = pte_mkclean(pte);
-			set_pte_at(mm, address, ptep, pte);
-			__flush_tlb_one(address);
-		}
-	} else {
-		nova_dbg("%s: page is clean: 0x%lx\n", __func__, address);
-	}
-
-out:
-	spin_unlock(&mm->page_table_lock);
-	return ret;
-}
-
-static inline int nova_set_page_clean(struct mm_struct *mm,
-	unsigned long address, pte_t *ptep)
-{
-	pte_t pte;
-
-	spin_lock(&mm->page_table_lock);
-	pte = *ptep;
-	pte = pte_mkclean(pte);
-	set_pte_at(mm, address, ptep, pte);
-	spin_unlock(&mm->page_table_lock);
-
-	return 0;
-}
-#endif
-
 static inline int nova_check_page_dirty(struct super_block *sb,
 	unsigned long addr)
 {
@@ -361,60 +287,6 @@ static int nova_open(struct inode *inode, struct file *filp)
 	return generic_file_open(inode, filp);
 }
 
-#if 0
-static unsigned long
-nova_get_unmapped_area(struct file *file, unsigned long addr,
-			unsigned long len, unsigned long pgoff,
-			unsigned long flags)
-{
-	unsigned long align_size;
-	struct vm_area_struct *vma;
-	struct mm_struct *mm = current->mm;
-	struct inode *inode = file->f_mapping->host;
-	struct nova_inode *pi = nova_get_inode(inode->i_sb, inode);
-	struct vm_unmapped_area_info info;
-
-	if (len > TASK_SIZE)
-		return -ENOMEM;
-
-	if (pi->i_blk_type == NOVA_BLOCK_TYPE_1G)
-		align_size = PUD_SIZE;
-	else if (pi->i_blk_type == NOVA_BLOCK_TYPE_2M)
-		align_size = PMD_SIZE;
-	else
-		align_size = PAGE_SIZE;
-
-	if (flags & MAP_FIXED) {
-		/* FIXME: We could use 4K mappings as fallback. */
-		if (len & (align_size - 1))
-			return -EINVAL;
-		if (addr & (align_size - 1))
-			return -EINVAL;
-		return addr;
-	}
-
-	if (addr) {
-		addr = ALIGN(addr, align_size);
-		vma = find_vma(mm, addr);
-		if (TASK_SIZE - len >= addr &&
-		    (!vma || addr + len <= vma->vm_start))
-			return addr;
-	}
-
-	/*
-	 * FIXME: Using the following values for low_limit and high_limit
-	 * implicitly disables ASLR. Awaiting a better way to have this fixed.
-	 */
-	info.flags = 0;
-	info.length = len;
-	info.low_limit = TASK_UNMAPPED_BASE;
-	info.high_limit = TASK_SIZE;
-	info.align_mask = align_size - 1;
-	info.align_offset = 0;
-	return vm_unmapped_area(&info);
-}
-#endif
-
 const struct file_operations nova_dax_file_operations = {
 	.llseek			= nova_llseek,
 	.read			= nova_dax_file_read,
@@ -425,7 +297,6 @@ const struct file_operations nova_dax_file_operations = {
 	.open			= nova_open,
 	.fsync			= nova_fsync,
 	.flush			= nova_flush,
-//	.get_unmapped_area	= nova_get_unmapped_area,
 	.unlocked_ioctl		= nova_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl		= nova_compat_ioctl,

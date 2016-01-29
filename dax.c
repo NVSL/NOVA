@@ -321,12 +321,6 @@ ssize_t nova_cow_file_write(struct file *filp,
 
 	count = len;
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,0,9)
-	ret = generic_write_checks(filp, &pos, &count, S_ISBLK(inode->i_mode));
-	if (ret || count == 0)
-		goto out;
-#endif
-
 	pi = nova_get_inode(sb, inode);
 
 	offset = pos & (sb->s_blocksize - 1);
@@ -334,11 +328,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	total_blocks = num_blocks;
 	/* offset in the actual block size block */
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,1,0)
-	ret = file_remove_suid(filp);
-#else
 	ret = file_remove_privs(filp);
-#endif
 	if (ret) {
 		goto out;
 	}
