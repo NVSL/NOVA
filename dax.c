@@ -304,6 +304,9 @@ ssize_t nova_cow_file_write(struct file *filp,
 	u64 temp_tail, begin_tail = 0;
 	u32 time;
 
+	if (len == 0)
+		return 0;
+
 	NOVA_START_TIMING(cow_write_t, cow_write_time);
 
 	sb_start_write(inode->i_sb);
