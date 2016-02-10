@@ -23,9 +23,9 @@ For more details about the design and implementation of NOVA, please see this pa
 Published in FAST 2016
 
 ## Building NOVA
-NOVA works on x86-64 Linux kernel 4.3, and relies on the NVDIMM support.
+NOVA works on the 4.3 or higher versions of x86-64 Linux kernel, and relies on the NVDIMM support.
 
-To build NOVA, first build up your 64bit 4.3 kernel with NVDIMM support (`CONFIG_BLK_DEV_PMEM`), then build NOVA with a simple
+To build NOVA, first build up your kernel with NVDIMM support (`CONFIG_BLK_DEV_PMEM`), then build NOVA with a simple
 
 ~~~
 #make
