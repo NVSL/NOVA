@@ -1,7 +1,11 @@
 # NOVA: NOn-Volatile memory Accelerated log-structured file system
 
 ## Introduction
-NOVA is a log-structured file system designed for byte-addressable, non-volatile memories. NOVA is fully POSIX compliant so that existing applications need not be modified to run on NOVA. NOVA bypasses the block layer and OS page cache, writes to NVM directly and reduces the software overhead. 
+NOVA is a log-structured file system designed for byte-addressable non-volatile memories, developed by
+the [Non-Volatile Systems Laboratory][NVSL], University of California, San Diego.
+
+NOVA extends ideas of LFS to leverage NVMM, yielding a simpler, high-performance file system that supports fast and efficient garbage collection and quick recovery from system failures.
+NOVA has passed the [Linux POSIX test suite][POSIXtest], and existing applications need not be modified to run on NOVA. NOVA bypasses the block layer and OS page cache, writes to NVM directly and reduces the software overhead.
 
 NOVA provides strong data consistency guanrantees:
 
@@ -50,3 +54,8 @@ There are two scripts provided in the source code, `setup-nova.sh` and `remount-
 * NOVA only works on x86-64 kernels.
 * NOVA does not currently support extended attributes or ACL.
 * NOVA requires the underlying block device to support DAX (Direct Access) feature.
+
+### References
+
+[NVSL]: http://nvsl.ucsd.edu/
+[POSIXtest]: http://www.tuxera.com/community/posix-test-suite/
