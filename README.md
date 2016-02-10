@@ -15,6 +15,13 @@ NOVA provides strong data consistency guanrantees:
 
 With atomicity guarantees, NOVA is able to recover from system failures and restore to a consistent state.
 
+For more details about the design and implementation of NOVA, please see this paper:
+
+**NOVA: A Log-structured File system for Hybrid Volatile/Non-volatile Main Memories**<br>
+[PDF](http://cseweb.ucsd.edu/~swanson/papers/FAST2016NOVA.pdf)<br>
+*Jian Xu and Steven Swanson, University of California, San Diego*<br>
+Published in FAST 2016
+
 ## Building NOVA
 NOVA works on x86-64 Linux kernel 4.3, and relies on the NVDIMM support.
 
@@ -57,5 +64,4 @@ There are two scripts provided in the source code, `setup-nova.sh` and `remount-
 
 ### References
 
-[NVSL]: http://nvsl.ucsd.edu/
-[POSIXtest]: http://www.tuxera.com/community/posix-test-suite/
+[NVSL]: http://nvsl.ucsd.edu/ "http://nvsl.ucsd.edu"
