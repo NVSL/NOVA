@@ -62,6 +62,5 @@ There are two scripts provided in the source code, `setup-nova.sh` and `remount-
 * NOVA does not currently support extended attributes or ACL.
 * NOVA requires the underlying block device to support DAX (Direct Access) feature.
 
-### References
-
 [NVSL]: http://nvsl.ucsd.edu/ "http://nvsl.ucsd.edu"
+[POSIXtest]: http://www.tuxera.com/community/posix-test-suite/ 
