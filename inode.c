@@ -334,8 +334,8 @@ int nova_delete_file_tree(struct super_block *sb,
 	NOVA_START_TIMING(delete_file_tree_t, delete_time);
 
 	if (delete_mmap && sih->mmap_pages)
-		nova_delete_cache_tree(sb, pi, sih, sih->low_dirty,
-						sih->high_dirty);
+		nova_delete_cache_tree(sb, pi, sih, start_blocknr,
+						last_blocknr);
 
 	if (sih->mmap_pages && start_blocknr <= sih->high_dirty)
 		nova_zero_cache_tree(sb, pi, sih, start_blocknr);
