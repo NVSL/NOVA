@@ -284,8 +284,8 @@ static int nova_delete_cache_tree(struct super_block *sb,
 			__func__, sih->ino, deleted);
 
 	if (sih->mmap_pages == 0) {
-		sih->low_mmap = ULONG_MAX;
-		sih->high_mmap = 0;
+		sih->low_dirty = ULONG_MAX;
+		sih->high_dirty = 0;
 	}
 
 	return 0;
@@ -301,9 +301,9 @@ static int nova_zero_cache_tree(struct super_block *sb,
 
 	nova_dbgv("%s: inode %lu, mmap pages %lu, start %lu, last %lu, "
 			"size %lu", __func__, sih->ino, sih->mmap_pages,
-			start_blocknr, sih->high_mmap, sih->i_size);
+			start_blocknr, sih->high_dirty, sih->i_size);
 
-	for (i = start_blocknr; i <= sih->high_mmap; i++) {
+	for (i = start_blocknr; i <= sih->high_dirty; i++) {
 		block = (unsigned long)radix_tree_lookup(&sih->cache_tree, i);
 		if (block) {
 			addr = nova_get_block(sb, block);
@@ -334,10 +334,10 @@ int nova_delete_file_tree(struct super_block *sb,
 	NOVA_START_TIMING(delete_file_tree_t, delete_time);
 
 	if (delete_mmap && sih->mmap_pages)
-		nova_delete_cache_tree(sb, pi, sih, sih->low_mmap,
-						sih->high_mmap);
+		nova_delete_cache_tree(sb, pi, sih, sih->low_dirty,
+						sih->high_dirty);
 
-	if (sih->mmap_pages && start_blocknr <= sih->high_mmap)
+	if (sih->mmap_pages && start_blocknr <= sih->high_dirty)
 		nova_zero_cache_tree(sb, pi, sih, start_blocknr);
 
 	pgoff = start_blocknr;
@@ -1162,8 +1162,8 @@ static void nova_clear_last_page_tail(struct super_block *sb,
 	nova_flush_buffer(nvmm_addr + offset, length, 0);
 
 	/* Clear mmap page */
-	if (sih->mmap_pages && pgoff <= sih->high_mmap &&
-			pgoff >= sih->low_mmap) {
+	if (sih->mmap_pages && pgoff <= sih->high_dirty &&
+			pgoff >= sih->low_dirty) {
 		nvmm = (unsigned long)radix_tree_lookup(&sih->cache_tree,
 							pgoff);
 		if (nvmm) {

@@ -167,8 +167,8 @@ static void nova_get_sync_range(struct nova_inode_info_header *sih,
 	start_blk = *start >> PAGE_SHIFT;
 	end_blk = *end >> PAGE_SHIFT;
 
-	low_blk = sih->low_mmap;
-	high_blk = sih->high_mmap;
+	low_blk = sih->low_dirty;
+	high_blk = sih->high_dirty;
 
 	if (start_blk < low_blk)
 		*start = low_blk << PAGE_SHIFT;

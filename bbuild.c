@@ -785,8 +785,8 @@ void nova_init_header(struct super_block *sb,
 {
 	sih->log_pages = 0;
 	sih->mmap_pages = 0;
-	sih->low_mmap = ULONG_MAX;
-	sih->high_mmap = 0;
+	sih->low_dirty = ULONG_MAX;
+	sih->high_dirty = 0;
 	sih->i_size = 0;
 	sih->pi_addr = 0;
 	INIT_RADIX_TREE(&sih->tree, GFP_ATOMIC);

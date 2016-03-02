@@ -726,10 +726,10 @@ static int nova_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 						kmem, pfn);
 
 	if (vm_flags & VM_WRITE) {
-		if (pgoff < sih->low_mmap)
-			sih->low_mmap = pgoff;
-		if (pgoff > sih->high_mmap)
-			sih->high_mmap = pgoff;
+		if (pgoff < sih->low_dirty)
+			sih->low_dirty = pgoff;
+		if (pgoff > sih->high_dirty)
+			sih->high_dirty = pgoff;
 	}
 
 	return ret;
