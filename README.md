@@ -41,7 +41,7 @@ reserve the memory space by booting the kernel with `memmap` command line option
 
 For instance, adding `memmap=16G!8G` to the kernel boot parameters will reserve 16GB memory starting from 8GB address, and the kernel will create a `pmem0` block device under the `/dev` directory.
 
-After the OS has booted, you can initialize a NOVA instance with the following command:
+After the OS has booted, you can initialize a NOVA instance with the following commands:
 
 
 ~~~
@@ -49,7 +49,7 @@ After the OS has booted, you can initialize a NOVA instance with the following c
 #mount -t NOVA -o init /dev/pmem0 /mnt/ramdisk 
 ~~~
 
-The above commands create a NOVA instance on pmem0 device.
+The above commands create a NOVA instance on pmem0 device, and mount on `/mnt/ramdisk`.
 
 To recover an existing NOVA instance, mount NOVA without the init option, for example:
 
