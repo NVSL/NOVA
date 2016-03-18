@@ -288,10 +288,6 @@ struct nova_range_node_lowhigh {
 	__le64 range_high;
 };
 
-struct nova_alive_inode_entry {
-	__le64 pi_addr;
-};
-
 #define	RANGENODE_PER_PAGE	254
 
 struct nova_range_node {
