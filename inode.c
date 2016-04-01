@@ -1747,8 +1747,8 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 	allocated = nova_allocate_inode_log_pages(sb, pi, blocks,
 					&new_head);
 	if (allocated != blocks) {
-		nova_err(sb, "ERROR: no inode log page "
-					"available\n");
+		nova_err(sb, "%s: ERROR: no inode log page "
+					"available\n", __func__);
 		goto out;
 	}
 
@@ -1945,8 +1945,8 @@ static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 		allocated = nova_allocate_inode_log_pages(sb, pi,
 					1, &new_block);
 		if (allocated != 1) {
-			nova_err(sb, "ERROR: no inode log page "
-					"available\n");
+			nova_err(sb, "%s ERROR: no inode log page "
+					"available\n", __func__);
 			return 0;
 		}
 		pi->log_tail = new_block;
@@ -1966,8 +1966,10 @@ static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 					curr_p >> PAGE_SHIFT,
 					new_block >> PAGE_SHIFT);
 		if (allocated <= 0) {
-			nova_err(sb, "ERROR: no inode log page "
-					"available\n");
+			nova_err(sb, "%s ERROR: no inode log page "
+					"available\n", __func__);
+			nova_dbg("curr_p 0x%llx, %lu pages\n", curr_p,
+					sih->log_pages);
 			return 0;
 		}
 
@@ -1993,7 +1995,8 @@ static u64 nova_append_one_log_page(struct super_block *sb,
 
 	allocated = nova_allocate_inode_log_pages(sb, pi, 1, &new_block);
 	if (allocated != 1) {
-		nova_err(sb, "ERROR: no inode log page available\n");
+		nova_err(sb, "%s: ERROR: no inode log page available\n",
+				__func__);
 		return 0;
 	}
 
