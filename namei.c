@@ -334,6 +334,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_link_change_entry *entry;
 	u64 curr_p;
+	int extended = 0;
 	size_t size = sizeof(struct nova_link_change_entry);
 	timing_t append_time;
 
@@ -341,7 +342,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	nova_dbg_verbose("%s: inode %lu attr change\n",
 				__func__, inode->i_ino);
 
-	curr_p = nova_get_append_head(sb, pi, sih, tail, size);
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size, &extended);
 	if (curr_p == 0)
 		return -ENOMEM;
 

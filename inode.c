@@ -1290,6 +1290,7 @@ static u64 nova_append_setattr_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_setattr_logentry *entry;
 	u64 curr_p, new_tail = 0;
+	int extended = 0;
 	size_t size = sizeof(struct nova_setattr_logentry);
 	timing_t append_time;
 
@@ -1297,7 +1298,7 @@ static u64 nova_append_setattr_entry(struct super_block *sb,
 	nova_dbg_verbose("%s: inode %lu attr change\n",
 				__func__, inode->i_ino);
 
-	curr_p = nova_get_append_head(sb, pi, sih, tail, size);
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size, &extended);
 	if (curr_p == 0)
 		BUG();
 
@@ -1728,6 +1729,7 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 	u64 new_head = 0;
 	u64 next;
 	int allocated;
+	int extended = 0;
 	int ret;
 	timing_t gc_time;
 
@@ -1771,8 +1773,11 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 		length = 0;
 		ret = curr_log_entry_invalid(sb, pi, sih, curr_p, &length);
 		if (!ret) {
+			extended = 0;
 			new_curr = nova_get_append_head(sb, pi, NULL,
-							new_curr, length);
+						new_curr, length, &extended);
+			if (extended)
+				blocks++;
 			/* Copy entry to the new log */
 			memcpy_to_pmem_nocache(nova_get_block(sb, new_curr),
 				nova_get_block(sb, curr_p), length);
@@ -2014,7 +2019,7 @@ static u64 nova_append_one_log_page(struct super_block *sb,
 }
 
 u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
-	struct nova_inode_info_header *sih, u64 tail, size_t size)
+	struct nova_inode_info_header *sih, u64 tail, size_t size, int *extended)
 {
 	u64 curr_p;
 
@@ -2028,10 +2033,13 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 		if (is_last_entry(curr_p, size))
 			nova_set_next_page_flag(sb, curr_p);
 
-		if (sih)
+		if (sih) {
 			curr_p = nova_extend_inode_log(sb, pi, sih, curr_p);
-		else
+		} else {
 			curr_p = nova_append_one_log_page(sb, pi, curr_p);
+			/* For thorough GC */
+			*extended = 1;
+		}
 
 		if (curr_p == 0)
 			return 0;
@@ -2058,12 +2066,13 @@ u64 nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_file_write_entry *entry;
 	u64 curr_p;
+	int extended = 0;
 	size_t size = sizeof(struct nova_file_write_entry);
 	timing_t append_time;
 
 	NOVA_START_TIMING(append_file_entry_t, append_time);
 
-	curr_p = nova_get_append_head(sb, pi, sih, tail, size);
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size, &extended);
 	if (curr_p == 0)
 		return curr_p;
 
