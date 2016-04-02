@@ -349,6 +349,30 @@ void nova_print_inode_log(struct super_block *sb, struct inode *inode)
 	nova_print_nova_log(sb, sih, pi);
 }
 
+int nova_get_nova_log_pages(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_inode *pi)
+{
+	struct nova_inode_log_page *curr_page;
+	u64 curr, next;
+	int count = 1;
+
+	if (pi->log_head == 0 || pi->log_tail == 0) {
+		nova_dbg("Pi %lu has no log\n", sih->ino);
+		return 0;
+	}
+
+	curr = pi->log_head;
+	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr);
+	while ((next = curr_page->page_tail.next_page) != 0) {
+		curr = next;
+		curr_page = (struct nova_inode_log_page *)
+			nova_get_block(sb, curr);
+		count++;
+	}
+
+	return count;
+}
+
 void nova_print_nova_log_pages(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_inode *pi)
 {
@@ -357,7 +381,7 @@ void nova_print_nova_log_pages(struct super_block *sb,
 	int count = 1;
 	int used = count;
 
-	if (pi->log_tail == 0) {
+	if (pi->log_head == 0 || pi->log_tail == 0) {
 		nova_dbg("Pi %lu has no log\n", sih->ino);
 		return;
 	}
