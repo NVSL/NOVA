@@ -242,7 +242,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 	NOVA_END_TIMING(partial_block_t, partial_time);
 }
 
-int nova_reassign_file_btree(struct super_block *sb,
+int nova_reassign_file_tree(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 begin_tail)
 {
@@ -432,7 +432,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	nova_update_tail(pi, temp_tail);
 
 	/* Free the overlap blocks after the write is committed */
-	ret = nova_reassign_file_btree(sb, pi, sih, begin_tail);
+	ret = nova_reassign_file_tree(sb, pi, sih, begin_tail);
 	if (ret)
 		goto out;
 

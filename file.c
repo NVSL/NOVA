@@ -256,7 +256,7 @@ int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		nova_update_tail(pi, end_tail);
 
 		/* Free the overlap blocks after the write is committed */
-		ret = nova_reassign_file_btree(sb, pi, sih, begin_tail);
+		ret = nova_reassign_file_tree(sb, pi, sih, begin_tail);
 
 		inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	}

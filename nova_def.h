@@ -72,15 +72,9 @@
 #define NOVA_DEFAULT_BLOCK_TYPE NOVA_BLOCK_TYPE_4K
 
 /*
- * Structure of an inode in NOVA. Things to keep in mind when modifying it.
- * 1) Keep the inode size to within 96 bytes if possible. This is because
- *    a 64 byte log-entry can store 48 bytes of data and we would like
- *    to log an inode using only 2 log-entries
- * 2) root must be immediately after the qw containing height because we update
- *    root and height atomically using cmpxchg16b in nova_decrease_btree_height
- * 3) i_size, i_ctime, and i_mtime must be in that order and i_size must be at
- *    16 byte aligned offset from the start of the inode. We use cmpxchg16b to
- *    update these three fields atomically.
+ * Structure of an inode in NOVA.
+ * Keep the inode size to within 120 bytes: We use the last eight bytes
+ * as inode table tail pointer.
  */
 struct nova_inode {
 	/* first 48 bytes */

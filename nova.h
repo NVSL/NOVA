@@ -883,7 +883,7 @@ int nova_recovery(struct super_block *sb);
  */
 
 /* dax.c */
-int nova_reassign_file_btree(struct super_block *sb,
+int nova_reassign_file_tree(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 begin_tail);
 ssize_t nova_cow_file_write(struct file *filp, const char __user *buf,
