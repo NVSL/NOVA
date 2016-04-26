@@ -1375,7 +1375,6 @@ int nova_recovery(struct super_block *sb)
 		getrawmonotonic(&start);
 
 	NOVA_START_TIMING(recovery_t, start);
-	sbi->block_start = (unsigned long)0;
 	sbi->block_end = ((unsigned long)(initsize) >> PAGE_SHIFT);
 
 	/* initialize free list info */

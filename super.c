@@ -271,7 +271,6 @@ static struct nova_inode *nova_init(struct super_block *sb,
 
 	NOVA_START_TIMING(new_init_t, init_time);
 	nova_info("creating an empty nova of size %lu\n", size);
-	sbi->block_start = (unsigned long)0;
 	sbi->block_end = ((unsigned long)(size) >> PAGE_SHIFT);
 
 	if (!sbi->virt_addr) {
