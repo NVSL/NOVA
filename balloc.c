@@ -71,7 +71,7 @@ void nova_init_blockmap(struct super_block *sb, int recovery)
 	num_used_block = sbi->reserved_blocks;
 
 	/* Divide the block range among per-CPU free lists */
-	per_list_blocks = sbi->block_end / sbi->cpus;
+	per_list_blocks = sbi->num_blocks / sbi->cpus;
 	sbi->per_list_blocks = per_list_blocks;
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = nova_get_free_list(sb, i);

@@ -271,7 +271,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 
 	NOVA_START_TIMING(new_init_t, init_time);
 	nova_info("creating an empty nova of size %lu\n", size);
-	sbi->block_end = ((unsigned long)(size) >> PAGE_SHIFT);
+	sbi->num_blocks = ((unsigned long)(size) >> PAGE_SHIFT);
 
 	if (!sbi->virt_addr) {
 		printk(KERN_ERR "ioremap of the nova image failed(1)\n");
@@ -637,14 +637,12 @@ out:
 int nova_statfs(struct dentry *d, struct kstatfs *buf)
 {
 	struct super_block *sb = d->d_sb;
-	unsigned long count = 0;
 	struct nova_sb_info *sbi = (struct nova_sb_info *)sb->s_fs_info;
 
 	buf->f_type = NOVA_SUPER_MAGIC;
 	buf->f_bsize = sb->s_blocksize;
 
-	count = sbi->block_end;
-	buf->f_blocks = sbi->block_end;
+	buf->f_blocks = sbi->num_blocks;
 	buf->f_bfree = buf->f_bavail = nova_count_free_blocks(sb);
 	buf->f_files = LONG_MAX;
 	buf->f_ffree = LONG_MAX - sbi->s_inodes_used_count;

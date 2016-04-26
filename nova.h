@@ -386,7 +386,7 @@ struct nova_sb_info {
 	phys_addr_t	phys_addr;
 	void		*virt_addr;
 
-	unsigned long	block_end;
+	unsigned long	num_blocks;
 
 	/*
 	 * Backing store option:
