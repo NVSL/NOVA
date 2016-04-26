@@ -2013,6 +2013,8 @@ static u64 nova_append_one_log_page(struct super_block *sb,
 		curr_page = (struct nova_inode_log_page *)
 				nova_get_block(sb, curr_block);
 		curr_page->page_tail.next_page = new_block;
+		nova_flush_buffer(&curr_page->page_tail,
+				sizeof(struct nova_inode_page_tail), 1);
 	}
 
 	return curr_p;
