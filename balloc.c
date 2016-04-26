@@ -103,6 +103,13 @@ void nova_init_blockmap(struct super_block *sb, int recovery)
 			free_list->num_blocknode = 1;
 		}
 	}
+
+	free_list = nova_get_free_list(sb, (sbi->cpus - 1));
+	if (free_list->block_end + 1 < sbi->num_blocks) {
+		/* Shared free list gets any remaining blocks */
+		sbi->shared_free_list.block_start = free_list->block_end + 1;
+		sbi->shared_free_list.block_end = sbi->num_blocks - 1;
+	}
 }
 
 static inline int nova_rbtree_compare_rangenode(struct nova_range_node *curr,
