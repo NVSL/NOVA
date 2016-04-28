@@ -1074,6 +1074,7 @@ static int nova_recover_inode_pages(struct super_block *sb,
 	ring->inodes_used_count++;
 
 	sih->i_mode = __le16_to_cpu(pi->i_mode);
+	sih->ino = nova_ino;
 
 	nova_dbgv("%s: inode %lu, addr 0x%llx, head 0x%llx, tail 0x%llx\n",
 			__func__, nova_ino, pi_addr, pi->log_head,
