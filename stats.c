@@ -287,6 +287,11 @@ static u64 nova_print_log_entry(struct super_block *sb, u64 curr)
 			size = nova_print_dentry(sb, curr, addr);
 			curr += size;
 			break;
+		case NEXT_PAGE:
+			nova_dbg("%s: next page sign @ 0x%llx\n",
+						__func__, curr);
+			curr = PAGE_TAIL(curr);
+			break;
 		default:
 			nova_dbg("%s: unknown type %d, 0x%llx\n",
 						__func__, type, curr);
@@ -311,8 +316,8 @@ void nova_print_curr_log_page(struct super_block *sb, u64 curr)
 	}
 
 	tail = nova_get_block(sb, end);
-	nova_dbg("Page tail. Next page @ block 0x%llx\n",
-			tail->next_page >> PAGE_SHIFT);
+	nova_dbg("Page tail. curr 0x%llx, next page 0x%llx\n",
+			start, tail->next_page);
 }
 
 void nova_print_nova_log(struct super_block *sb,
@@ -330,8 +335,8 @@ void nova_print_nova_log(struct super_block *sb,
 		if ((curr & (PAGE_SIZE - 1)) == LAST_ENTRY) {
 			struct nova_inode_page_tail *tail =
 					nova_get_block(sb, curr);
-			nova_dbg("Log tail. Next page 0x%llx\n",
-					tail->next_page);
+			nova_dbg("Log tail, curr 0x%llx, next page 0x%llx\n",
+					curr, tail->next_page);
 			curr = tail->next_page;
 		} else {
 			curr = nova_print_log_entry(sb, curr);
