@@ -286,6 +286,12 @@ static u64 nova_print_log_entry(struct super_block *sb, u64 curr)
 		case DIR_LOG:
 			size = nova_print_dentry(sb, curr, addr);
 			curr += size;
+			if (size == 0) {
+				nova_dbg("%s: dentry with size 0 @ 0x%llx\n",
+						__func__, curr);
+				curr += sizeof(struct nova_file_write_entry);
+				NOVA_ASSERT(0);
+			}
 			break;
 		case NEXT_PAGE:
 			nova_dbg("%s: next page sign @ 0x%llx\n",
