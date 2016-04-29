@@ -20,6 +20,7 @@
 
 #include <linux/fs.h>
 #include <linux/namei.h>
+#include <linux/version.h>
 #include "nova.h"
 
 int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
@@ -80,10 +81,16 @@ static int nova_readlink(struct dentry *dentry, char __user *buffer, int buflen)
 	return readlink_copy(buffer, buflen, blockp);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+static const char *nova_get_link(struct dentry *dentry, struct inode *inode, void **cookie)
+#else
 static const char *nova_follow_link(struct dentry *dentry, void **cookie)
+#endif
 {
 	struct nova_file_write_entry *entry;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
 	struct inode *inode = dentry->d_inode;
+#endif
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	char *blockp;
@@ -97,6 +104,10 @@ static const char *nova_follow_link(struct dentry *dentry, void **cookie)
 
 const struct inode_operations nova_symlink_inode_operations = {
 	.readlink	= nova_readlink,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+	.get_link	= nova_get_link,
+#else
 	.follow_link	= nova_follow_link,
+#endif
 	.setattr	= nova_notify_change,
 };
