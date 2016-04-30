@@ -95,11 +95,13 @@ static const char *nova_get_link(struct dentry *dentry, struct inode *inode, voi
 	return blockp;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
 static const char *nova_follow_link(struct dentry *dentry, void **cookie)
 {
 	struct inode *inode = dentry->d_inode;
 	return nova_get_link(dentry, inode, cookie);
 }
+#endif
 
 const struct inode_operations nova_symlink_inode_operations = {
 	.readlink	= nova_readlink,
