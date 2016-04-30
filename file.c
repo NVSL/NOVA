@@ -131,8 +131,8 @@ static unsigned long nova_get_dirty_range(struct super_block *sb,
 
 	dirty_start = temp;
 	while (temp < end) {
-		pgoff = temp >> PAGE_CACHE_SHIFT;
-		offset = temp & ~PAGE_CACHE_MASK;
+		pgoff = temp >> PAGE_SHIFT;
+		offset = temp & ~PAGE_MASK;
 		bytes = sb->s_blocksize - offset;
 		if (bytes > (end - temp))
 			bytes = end - temp;

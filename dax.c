@@ -35,8 +35,8 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	timing_t memcpy_time;
 
 	pos = *ppos;
-	index = pos >> PAGE_CACHE_SHIFT;
-	offset = pos & ~PAGE_CACHE_MASK;
+	index = pos >> PAGE_SHIFT;
+	offset = pos & ~PAGE_MASK;
 
 	if (!access_ok(VERIFY_WRITE, buf, len)) {
 		error = -EFAULT;
@@ -56,7 +56,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	if (len <= 0)
 		goto out;
 
-	end_index = (isize - 1) >> PAGE_CACHE_SHIFT;
+	end_index = (isize - 1) >> PAGE_SHIFT;
 	do {
 		unsigned long nr, left;
 		unsigned long nvmm;
@@ -67,7 +67,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 		if (index >= end_index) {
 			if (index > end_index)
 				goto out;
-			nr = ((isize - 1) & ~PAGE_CACHE_MASK) + 1;
+			nr = ((isize - 1) & ~PAGE_MASK) + 1;
 			if (nr <= offset) {
 				goto out;
 			}
@@ -124,8 +124,8 @@ memcpy:
 
 		copied += (nr - left);
 		offset += (nr - left);
-		index += offset >> PAGE_CACHE_SHIFT;
-		offset &= ~PAGE_CACHE_MASK;
+		index += offset >> PAGE_SHIFT;
+		offset &= ~PAGE_MASK;
 	} while (copied < len);
 
 out:
@@ -749,7 +749,7 @@ static int __nova_dax_file_fault(struct vm_area_struct *vma,
 	unsigned long dax_pfn = 0;
 	int err;
 
-	size = (i_size_read(inode) + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
+	size = (i_size_read(inode) + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	if (vmf->pgoff >= size) {
 		nova_dbg("[%s:%d] pgoff >= size(SIGBUS). vm_start(0x%lx),"
 			" vm_end(0x%lx), pgoff(0x%lx), VA(%lx), size 0x%lx\n",
