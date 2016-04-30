@@ -16,6 +16,7 @@
 #include <linux/buffer_head.h>
 #include <asm/cpufeature.h>
 #include <asm/pgtable.h>
+#include <linux/version.h>
 #include "nova.h"
 
 static ssize_t
@@ -780,7 +781,12 @@ static int __nova_dax_file_fault(struct vm_area_struct *vma,
 	if (dax_pfn == 0)
 		return VM_FAULT_SIGBUS;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+	err = vm_insert_mixed(vma, (unsigned long)vmf->virtual_address,
+		__pfn_to_pfn_t(dax_pfn, PFN_DEV));
+#else
 	err = vm_insert_mixed(vma, (unsigned long)vmf->virtual_address, dax_pfn);
+#endif
 
 	if (err == -ENOMEM)
 		return VM_FAULT_SIGBUS;

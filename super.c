@@ -89,7 +89,11 @@ static int nova_get_block_info(struct super_block *sb,
 	struct nova_sb_info *sbi)
 {
 	void *virt_addr = NULL;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+	pfn_t __pfn_t;
+#else
 	unsigned long pfn;
+#endif
 	long size;
 
 	if (!sb->s_bdev->bd_disk->fops->direct_access) {
@@ -99,11 +103,20 @@ static int nova_get_block_info(struct super_block *sb,
 
 	sbi->s_bdev = sb->s_bdev;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+	size = sb->s_bdev->bd_disk->fops->direct_access(sb->s_bdev,
+					0, &virt_addr, &__pfn_t);
+#else
 	size = sb->s_bdev->bd_disk->fops->direct_access(sb->s_bdev,
 					0, &virt_addr, &pfn);
+#endif
 
 	sbi->virt_addr = virt_addr;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+	sbi->phys_addr = pfn_t_to_pfn(__pfn_t) << PAGE_SHIFT;
+#else
 	sbi->phys_addr = pfn << PAGE_SHIFT;
+#endif
 	sbi->initsize = size;
 
 	nova_dbg("%s: phys_addr 0x%llx, virt_addr %p, size %ld\n",
