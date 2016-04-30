@@ -33,6 +33,10 @@
 #include <linux/kthread.h>
 #include <linux/uio.h>
 #include <asm/tlbflush.h>
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+#include <linux/pfn_t.h>
+#endif
 
 #include "nova_def.h"
 #include "journal.h"

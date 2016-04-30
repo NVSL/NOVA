@@ -37,10 +37,6 @@
 #include <linux/cred.h>
 #include <linux/backing-dev.h>
 #include <linux/list.h>
-#include <linux/version.h>
-#if LINUX_KERNEL_VERSION >= KERNEL_VERSION(4, 5, 0)
-#include <linux/pfn_t.h>
-#endif
 #include "nova.h"
 
 int measure_timing = 0;
@@ -93,7 +89,7 @@ static int nova_get_block_info(struct super_block *sb,
 	struct nova_sb_info *sbi)
 {
 	void *virt_addr = NULL;
-#if LINUX_KERNEL_VERSION >= KERNEL_VERSION(4, 5, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
 	pfn_t __pfn_t;
 #else
 	unsigned long pfn;
@@ -107,7 +103,7 @@ static int nova_get_block_info(struct super_block *sb,
 
 	sbi->s_bdev = sb->s_bdev;
 
-#if LINUX_KERNEL_VERSION >= KERNEL_VERSION(4, 5, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
 	size = sb->s_bdev->bd_disk->fops->direct_access(sb->s_bdev,
 					0, &virt_addr, &__pfn_t);
 #else
@@ -116,8 +112,8 @@ static int nova_get_block_info(struct super_block *sb,
 #endif
 
 	sbi->virt_addr = virt_addr;
-#if LINUX_KERNEL_VERSION >= KERNEL_VERSION(4, 5, 0)
-	sbi->phys_addr = __pfn_t.val << PAGE_SHIFT;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+	sbi->phys_addr = pfn_t_to_pfn(__pfn_t) << PAGE_SHIFT;
 #else
 	sbi->phys_addr = pfn << PAGE_SHIFT;
 #endif

@@ -17,9 +17,6 @@
 #include <asm/cpufeature.h>
 #include <asm/pgtable.h>
 #include <linux/version.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
-#include <linux/pfn_t.h>
-#endif
 #include "nova.h"
 
 static ssize_t
