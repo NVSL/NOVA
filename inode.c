@@ -2186,9 +2186,11 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 			case FILE_WRITE:
 				break;
 			default:
-				nova_dbg("%s: unknown type %d, 0x%llx\n",
-							__func__, type, curr_p);
+				nova_err(sb, "unknown type %d, 0x%llx\n",
+							type, curr_p);
 				NOVA_ASSERT(0);
+				curr_p += sizeof(struct nova_file_write_entry);
+				continue;
 		}
 
 		entry = (struct nova_file_write_entry *)addr;
