@@ -168,6 +168,7 @@ struct nova_file_write_entry {
 	__le32	invalid_pages;
 	/* For both ctime and mtime */
 	__le32	mtime;
+	__le32	padding;
 	__le64	size;
 } __attribute((__packed__));
 
