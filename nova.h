@@ -206,7 +206,7 @@ struct nova_dentry {
 	char	name[NOVA_NAME_LEN + 1];	/* File name */
 } __attribute((__packed__));
 
-#define NOVA_DIR_PAD			4	/* Align to 4 bytes boundary */
+#define NOVA_DIR_PAD			8	/* Align to 8 bytes boundary */
 #define NOVA_DIR_ROUND			(NOVA_DIR_PAD - 1)
 #define NOVA_DIR_LOG_REC_LEN(name_len)	(((name_len) + 29 + NOVA_DIR_ROUND) & \
 				      ~NOVA_DIR_ROUND)
