@@ -795,6 +795,12 @@ static inline u64 next_log_page(struct super_block *sb, u64 curr_p)
 	return ((struct nova_inode_page_tail *)page_tail)->next_page;
 }
 
+static inline void nova_set_next_page_address(struct super_block *sb,
+	struct nova_inode_log_page *curr_page, u64 next_page)
+{
+	curr_page->page_tail.next_page = next_page;
+}
+
 #define	CACHE_ALIGN(p)	((p) & ~(CACHELINE_SIZE - 1))
 
 static inline bool is_last_entry(u64 curr_p, size_t size)

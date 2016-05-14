@@ -1432,7 +1432,7 @@ static int nova_coalesce_log_pages(struct super_block *sb,
 	unsigned long num_pages)
 {
 	unsigned long next_blocknr;
-	u64 curr_block;
+	u64 curr_block, next_page;
 	struct nova_inode_log_page *curr_page;
 	int i;
 
@@ -1442,8 +1442,9 @@ static int nova_coalesce_log_pages(struct super_block *sb,
 						NOVA_BLOCK_TYPE_4K);
 		curr_page = (struct nova_inode_log_page *)
 				nova_get_block(sb, curr_block);
-		curr_page->page_tail.next_page = nova_get_block_off(sb,
-				first_blocknr, NOVA_BLOCK_TYPE_4K);
+		next_page = nova_get_block_off(sb, first_blocknr,
+				NOVA_BLOCK_TYPE_4K);
+		nova_set_next_page_address(sb, curr_page, next_page);
 	}
 
 	next_blocknr = first_blocknr + 1;
@@ -1452,14 +1453,15 @@ static int nova_coalesce_log_pages(struct super_block *sb,
 	curr_page = (struct nova_inode_log_page *)
 				nova_get_block(sb, curr_block);
 	for (i = 0; i < num_pages - 1; i++) {
-		curr_page->page_tail.next_page = nova_get_block_off(sb,
-				next_blocknr, NOVA_BLOCK_TYPE_4K);
+		next_page = nova_get_block_off(sb, next_blocknr,
+				NOVA_BLOCK_TYPE_4K);
+		nova_set_next_page_address(sb, curr_page, next_page);
 		curr_page++;
 		next_blocknr++;
 	}
 
 	/* Last page */
-	curr_page->page_tail.next_page = 0;
+	nova_set_next_page_address(sb, curr_page, 0);
 	return 0;
 }
 
@@ -1614,7 +1616,8 @@ static void free_curr_page(struct super_block *sb, struct nova_inode *pi,
 {
 	unsigned short btype = pi->i_blk_type;
 
-	last_page->page_tail.next_page = curr_page->page_tail.next_page;
+	nova_set_next_page_address(sb, last_page,
+			curr_page->page_tail.next_page);
 	nova_flush_buffer(&last_page->page_tail.next_page, CACHELINE_SIZE, 1);
 	nova_free_log_blocks(sb, pi,
 			nova_get_blocknr(sb, curr_head, btype), 1);
@@ -1796,7 +1799,7 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 	if (next)
 		nova_free_contiguous_log_blocks(sb, pi, next);
 	nova_set_next_page_flag(sb, new_curr);
-	curr_page->page_tail.next_page = tail_block;
+	nova_set_next_page_address(sb, curr_page, tail_block);
 	nova_flush_buffer(curr_page, PAGE_SIZE, 0);
 
 	/* Step 2: Atomically switch to the new log */
@@ -1813,7 +1816,7 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 			next, curr_p, tail_block);
 		BUG();
 	}
-	curr_page->page_tail.next_page = 0;
+	nova_set_next_page_address(sb, curr_page, 0);
 
 	/* Step 4: Free the old log */
 	nova_free_contiguous_log_blocks(sb, pi, old_head);
@@ -1841,7 +1844,6 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 	u64 curr_tail, u64 new_block, int num_pages)
 {
 	u64 curr, next, possible_head = 0;
-	u64 page_tail;
 	int found_head = 0;
 	struct nova_inode_log_page *last_page = NULL;
 	struct nova_inode_log_page *curr_page = NULL;
@@ -1901,9 +1903,9 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 	fast_checked_pages += checked_pages;
 	checked_pages -= freed_pages;
 
-	page_tail = PAGE_TAIL(curr_tail);
-	((struct nova_inode_page_tail *)
-		nova_get_block(sb, page_tail))->next_page = new_block;
+	curr = BLOCK_OFF(curr_tail);
+	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr);
+	nova_set_next_page_address(sb, curr_page, new_block);
 
 	curr = pi->log_head;
 
@@ -2012,7 +2014,7 @@ static u64 nova_append_one_log_page(struct super_block *sb,
 		curr_block = BLOCK_OFF(curr_p);
 		curr_page = (struct nova_inode_log_page *)
 				nova_get_block(sb, curr_block);
-		curr_page->page_tail.next_page = new_block;
+		nova_set_next_page_address(sb, curr_page, new_block);
 		nova_flush_buffer(&curr_page->page_tail,
 				sizeof(struct nova_inode_page_tail), 1);
 	}
