@@ -584,7 +584,12 @@ static inline void nova_memcpy_atomic (void *dst, const void *src, u8 size)
 static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
 	unsigned int size)
 {
-	return __copy_from_user_inatomic_nocache(dst, src, size);
+	int ret;
+
+	ret = __copy_from_user_inatomic_nocache(dst, src, size);
+	nova_flush_buffer(dst, size, 0);
+
+	return ret;
 }
 
 /* assumes the length to be 4-byte aligned */
