@@ -983,8 +983,7 @@ again:
 	}
 
 	while (curr_p != pi->log_tail) {
-		if (is_last_entry(curr_p,
-				sizeof(struct nova_file_write_entry))) {
+		if (goto_next_page(sb, curr_p)) {
 			curr_p = next_log_page(sb, curr_p);
 			if (base == 0) {
 				BUG_ON(curr_p & (PAGE_SIZE - 1));
