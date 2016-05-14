@@ -796,9 +796,13 @@ static inline u64 next_log_page(struct super_block *sb, u64 curr_p)
 }
 
 static inline void nova_set_next_page_address(struct super_block *sb,
-	struct nova_inode_log_page *curr_page, u64 next_page)
+	struct nova_inode_log_page *curr_page, u64 next_page, int fence)
 {
 	curr_page->page_tail.next_page = next_page;
+	nova_flush_buffer(&curr_page->page_tail,
+				sizeof(struct nova_inode_page_tail), 0);
+	if (fence)
+		PERSISTENT_BARRIER();
 }
 
 #define	CACHE_ALIGN(p)	((p) & ~(CACHELINE_SIZE - 1))
