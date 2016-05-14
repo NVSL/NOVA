@@ -1608,6 +1608,7 @@ static void nova_set_next_page_flag(struct super_block *sb, u64 curr_p)
 
 	p = nova_get_block(sb, curr_p);
 	nova_set_entry_type(p, NEXT_PAGE);
+	nova_flush_buffer(p, CACHELINE_SIZE, 1);
 }
 
 static void free_curr_page(struct super_block *sb, struct nova_inode *pi,
