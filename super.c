@@ -35,7 +35,6 @@
 #include <linux/exportfs.h>
 #include <linux/random.h>
 #include <linux/cred.h>
-#include <linux/backing-dev.h>
 #include <linux/list.h>
 #include "nova.h"
 
@@ -119,8 +118,9 @@ static int nova_get_block_info(struct super_block *sb,
 #endif
 	sbi->initsize = size;
 
-	nova_dbg("%s: phys_addr 0x%llx, virt_addr %p, size %ld\n",
-		__func__, sbi->phys_addr, sbi->virt_addr, sbi->initsize);
+	nova_dbg("%s: dev %s, phys_addr 0x%llx, virt_addr %p, size %ld\n",
+		__func__, sbi->s_bdev->bd_disk->disk_name,
+		sbi->phys_addr, sbi->virt_addr, sbi->initsize);
 
 	return 0;
 }

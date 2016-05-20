@@ -25,6 +25,8 @@
 #include <linux/crc16.h>
 #include <linux/mutex.h>
 #include <linux/pagemap.h>
+#include <linux/backing-dev.h>
+#include <linux/proc_fs.h>
 #include <linux/rcupdate.h>
 #include <linux/types.h>
 #include <linux/rbtree.h>
@@ -417,6 +419,7 @@ struct nova_sb_info {
 	struct mutex 	s_lock;	/* protects the SB's buffer-head */
 
 	int cpus;
+	struct proc_dir_entry *s_proc;
 
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;
@@ -1017,6 +1020,11 @@ void *nova_ioremap(struct super_block *sb, phys_addr_t phys_addr,
 
 /* symlink.c */
 extern const struct inode_operations nova_symlink_inode_operations;
+
+/* sysfs.c */
+extern struct proc_dir_entry *nova_proc_root;
+void nova_sysfs_init(struct super_block *sb);
+void nova_sysfs_exit(struct super_block *sb);
 
 /* nova_stats.c */
 void nova_print_timing_stats(struct super_block *sb);
