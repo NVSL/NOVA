@@ -984,6 +984,8 @@ static int __init init_nova_fs(void)
 			support_pcommit ? "YES" : "NO",
 			support_clwb ? "YES" : "NO");
 
+	nova_proc_root = proc_mkdir(proc_dirname, NULL);
+
 	nova_dbgv("Data structure size: inode %lu, log_page %lu, "
 		"file_write_entry %lu, dir_entry(max) %d, "
 		"setattr_entry %lu, link_change_entry %lu\n",

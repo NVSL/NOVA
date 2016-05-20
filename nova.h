@@ -1023,6 +1023,7 @@ extern const struct inode_operations nova_symlink_inode_operations;
 
 /* sysfs.c */
 extern const char *proc_dirname;
+extern struct proc_dir_entry *nova_proc_root;
 void nova_sysfs_init(struct super_block *sb);
 void nova_sysfs_exit(struct super_block *sb);
 

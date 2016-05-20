@@ -21,14 +21,12 @@
 #include "nova.h"
 
 const char *proc_dirname = "fs/NOVA";
-static struct proc_dir_entry *nova_proc_root;
+struct proc_dir_entry *nova_proc_root;
 
 void nova_sysfs_init(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	nova_dbg("%s\n", __func__);
-	nova_proc_root = proc_mkdir(proc_dirname, NULL);
 	if (nova_proc_root)
 		sbi->s_proc = proc_mkdir(sbi->s_bdev->bd_disk->disk_name,
 					 nova_proc_root);
@@ -43,6 +41,5 @@ void nova_sysfs_exit(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	nova_dbg("%s\n", __func__);
 	remove_proc_entry(sbi->s_bdev->bd_disk->disk_name, nova_proc_root);
 }
