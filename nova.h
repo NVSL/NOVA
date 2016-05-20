@@ -1022,7 +1022,7 @@ void *nova_ioremap(struct super_block *sb, phys_addr_t phys_addr,
 extern const struct inode_operations nova_symlink_inode_operations;
 
 /* sysfs.c */
-extern struct proc_dir_entry *nova_proc_root;
+extern const char *proc_dirname;
 void nova_sysfs_init(struct super_block *sb);
 void nova_sysfs_exit(struct super_block *sb);
 

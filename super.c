@@ -513,6 +513,8 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
+	nova_sysfs_init(sb);
+
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
 		mutex_init(&inode_map->inode_table_mutex);
@@ -761,7 +763,6 @@ static void nova_put_super(struct super_block *sb)
 	nova_delete_free_lists(sb);
 
 	kfree(sbi->zeroed_page);
-	sb->s_fs_info = NULL;
 	nova_dbgmask = 0;
 	kfree(sbi->free_lists);
 	kfree(sbi->journal_locks);
@@ -774,7 +775,10 @@ static void nova_put_super(struct super_block *sb)
 
 	kfree(sbi->inode_maps);
 
+	nova_sysfs_exit(sb);
+
 	kfree(sbi);
+	sb->s_fs_info = NULL;
 }
 
 inline void nova_free_range_node(struct nova_range_node *node)
@@ -1015,6 +1019,7 @@ out1:
 static void __exit exit_nova_fs(void)
 {
 	unregister_filesystem(&nova_fs_type);
+	remove_proc_entry(proc_dirname, NULL);
 	destroy_inodecache();
 	destroy_rangenode_cache();
 }
