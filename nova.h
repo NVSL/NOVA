@@ -27,6 +27,7 @@
 #include <linux/pagemap.h>
 #include <linux/backing-dev.h>
 #include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 #include <linux/rcupdate.h>
 #include <linux/types.h>
 #include <linux/rbtree.h>

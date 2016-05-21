@@ -23,6 +23,43 @@
 const char *proc_dirname = "fs/NOVA";
 struct proc_dir_entry *nova_proc_root;
 
+static int nova_seq_timing_show(struct seq_file *seq, void *v)
+{
+	int i;
+
+	seq_printf(seq, "======== NOVA kernel timing stats ========\n");
+	for (i = 0; i < TIMING_NUM; i++) {
+		if (measure_timing || Timingstats[i]) {
+			seq_printf(seq, "%s: count %llu, timing %llu, "
+				"average %llu\n",
+				Timingstring[i],
+				Countstats[i],
+				Timingstats[i],
+				Countstats[i] ?
+				Timingstats[i] / Countstats[i] : 0);
+		} else {
+			seq_printf(seq, "%s: count %llu\n",
+				Timingstring[i],
+				Countstats[i]);
+		}
+	}
+
+	return 0;
+}
+
+static int nova_seq_timing_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, nova_seq_timing_show, PDE_DATA(inode));
+}
+
+static const struct file_operations nova_seq_timing_fops = {
+	.owner		= THIS_MODULE,
+	.open		= nova_seq_timing_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
 void nova_sysfs_init(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -32,8 +69,8 @@ void nova_sysfs_init(struct super_block *sb)
 					 nova_proc_root);
 
 	if (sbi->s_proc) {
-//		proc_create_data("info", S_IRUGO, journal->j_proc_entry,
-//				 &jbd2_seq_info_fops, journal);
+		proc_create_data("timing_stats", S_IRUGO, sbi->s_proc,
+				 &nova_seq_timing_fops, sb);
 	}
 }
 
@@ -41,5 +78,6 @@ void nova_sysfs_exit(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
+	remove_proc_entry("timing_stats", sbi->s_proc);
 	remove_proc_entry(sbi->s_bdev->bd_disk->disk_name, nova_proc_root);
 }
