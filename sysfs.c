@@ -52,10 +52,18 @@ static int nova_seq_timing_open(struct inode *inode, struct file *file)
 	return single_open(file, nova_seq_timing_show, PDE_DATA(inode));
 }
 
+ssize_t nova_seq_clear_stats(struct file *filp, const char __user *buf,
+	size_t len, loff_t *ppos)
+{
+	nova_clear_stats();
+	return len;
+}
+
 static const struct file_operations nova_seq_timing_fops = {
 	.owner		= THIS_MODULE,
 	.open		= nova_seq_timing_open,
 	.read		= seq_read,
+	.write		= nova_seq_clear_stats,
 	.llseek		= seq_lseek,
 	.release	= single_release,
 };
