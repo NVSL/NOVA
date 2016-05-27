@@ -10,4 +10,4 @@ all:
 	make -C /lib/modules/$(shell uname -r)/build M=`pwd`
 
 clean:
-	rm -rf *.o *.mod.c modules.* Module.* *.ko
+	make -C /lib/modules/$(shell uname -r)/build M=`pwd` clean
