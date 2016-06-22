@@ -748,14 +748,16 @@ static int __nova_dax_file_fault(struct vm_area_struct *vma,
 	void *dax_mem;
 	unsigned long dax_pfn = 0;
 	int err;
+	int ret = VM_FAULT_SIGBUS;
 
+	mutex_lock(&inode->i_mutex);
 	size = (i_size_read(inode) + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	if (vmf->pgoff >= size) {
 		nova_dbg("[%s:%d] pgoff >= size(SIGBUS). vm_start(0x%lx),"
 			" vm_end(0x%lx), pgoff(0x%lx), VA(%lx), size 0x%lx\n",
 			__func__, __LINE__, vma->vm_start, vma->vm_end,
 			vmf->pgoff, (unsigned long)vmf->virtual_address, size);
-		return VM_FAULT_SIGBUS;
+		goto out;
 	}
 
 	err = nova_get_mmap_addr(inode, vma, vmf->pgoff, 1,
@@ -765,7 +767,7 @@ static int __nova_dax_file_fault(struct vm_area_struct *vma,
 			" vm_end(0x%lx), pgoff(0x%lx), VA(%lx)\n",
 			__func__, __LINE__, vma->vm_start, vma->vm_end,
 			vmf->pgoff, (unsigned long)vmf->virtual_address);
-		return VM_FAULT_SIGBUS;
+		goto out;
 	}
 
 	nova_dbgv("%s flags: vma 0x%lx, vmf 0x%x\n",
@@ -779,7 +781,7 @@ static int __nova_dax_file_fault(struct vm_area_struct *vma,
 			(unsigned long)dax_pfn << PAGE_SHIFT);
 
 	if (dax_pfn == 0)
-		return VM_FAULT_SIGBUS;
+		goto out;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
 	err = vm_insert_mixed(vma, (unsigned long)vmf->virtual_address,
@@ -789,14 +791,19 @@ static int __nova_dax_file_fault(struct vm_area_struct *vma,
 #endif
 
 	if (err == -ENOMEM)
-		return VM_FAULT_SIGBUS;
+		goto out;
 	/*
 	 * err == -EBUSY is fine, we've raced against another thread
 	 * that faulted-in the same page
 	 */
 	if (err != -EBUSY)
 		BUG_ON(err);
-	return VM_FAULT_NOPAGE;
+
+	ret = VM_FAULT_NOPAGE;
+
+out:
+	mutex_unlock(&inode->i_mutex);
+	return ret;
 }
 
 static int nova_dax_file_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
@@ -805,9 +812,7 @@ static int nova_dax_file_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	timing_t fault_time;
 
 	NOVA_START_TIMING(mmap_fault_t, fault_time);
-	rcu_read_lock();
 	ret = __nova_dax_file_fault(vma, vmf);
-	rcu_read_unlock();
 	NOVA_END_TIMING(mmap_fault_t, fault_time);
 	return ret;
 }
