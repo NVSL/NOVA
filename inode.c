@@ -1391,7 +1391,8 @@ static ssize_t nova_direct_IO(struct kiocb *iocb,
 	struct file *filp = iocb->ki_filp;
 	loff_t end = offset;
 	size_t count = iov_iter_count(iter);
-	ssize_t err = -EINVAL;
+	ssize_t ret = -EINVAL;
+	ssize_t written = 0;
 	unsigned long seg;
 	unsigned long nr_segs = iter->nr_segs;
 	const struct iovec *iv = iter->iov;
@@ -1404,27 +1405,31 @@ static ssize_t nova_direct_IO(struct kiocb *iocb,
 	iv = iter->iov;
 	for (seg = 0; seg < nr_segs; seg++) {
 		if (iov_iter_rw(iter) == READ) {
-			err = nova_dax_file_read(filp, iv->iov_base,
+			ret = nova_dax_file_read(filp, iv->iov_base,
 					iv->iov_len, &offset);
 		} else if (iov_iter_rw(iter) == WRITE) {
-			err = nova_cow_file_write(filp, iv->iov_base,
+			ret = nova_cow_file_write(filp, iv->iov_base,
 					iv->iov_len, &offset, false);
 		}
-		if (err <= 0)
+		if (ret < 0)
 			goto err;
+
 		if (iter->count > iv->iov_len)
 			iter->count -= iv->iov_len;
 		else
 			iter->count = 0;
+
+		written += ret;
 		iter->nr_segs--;
 		iv++;
 	}
 	if (offset != end)
 		printk(KERN_ERR "nova: direct_IO: end = %lld"
 			"but offset = %lld\n", end, offset);
+	ret = written;
 err:
 	NOVA_END_TIMING(direct_IO_t, dio_time);
-	return err;
+	return ret;
 }
 
 static int nova_coalesce_log_pages(struct super_block *sb,
