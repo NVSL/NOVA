@@ -570,18 +570,9 @@ retry:
 		return -ENOSPC;
 
 	if (zero) {
-		size_t size;
 		bp = nova_get_block(sb, nova_get_block_off(sb,
 						new_blocknr, btype));
-		nova_memunlock_block(sb, bp); //TBDTBD: Need to fix this
-		if (btype == NOVA_BLOCK_TYPE_4K)
-			size = 0x1 << 12;
-		else if (btype == NOVA_BLOCK_TYPE_2M)
-			size = 0x1 << 21;
-		else
-			size = 0x1 << 30;
 		memset_nt(bp, 0, PAGE_SIZE * ret_blocks);
-		nova_memlock_block(sb, bp);
 	}
 	*blocknr = new_blocknr;
 
