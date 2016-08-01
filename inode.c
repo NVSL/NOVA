@@ -1528,6 +1528,7 @@ static bool curr_log_entry_invalid(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 curr_p, size_t *length)
 {
+	struct nova_setattr_logentry *setattr_entry;
 	struct nova_file_write_entry *entry;
 	struct nova_dentry *dentry;
 	void *addr;
@@ -1539,6 +1540,10 @@ static bool curr_log_entry_invalid(struct super_block *sb,
 	switch (type) {
 		case SET_ATTR:
 			if (sih->last_setattr == curr_p)
+				ret = false;
+			/* Do not invalidate setsize entries */
+			setattr_entry = (struct nova_setattr_logentry *)addr;
+			if (setattr_entry->attr & ATTR_SIZE)
 				ret = false;
 			*length = sizeof(struct nova_setattr_logentry);
 			break;
