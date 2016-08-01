@@ -489,6 +489,9 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	if (max_blocks == 0)
 		return 0;
 
+	nova_dbgv("%s: pgoff %lu, num %lu, create %d\n",
+				__func__, iblock, max_blocks, create);
+
 	entry = nova_get_write_entry(sb, si, iblock);
 	if (entry) {
 		/* Find contiguous blocks */
@@ -502,6 +505,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 
 		nvmm = get_nvmm(sb, sih, entry, iblock);
 		clear_buffer_new(bh);
+		nova_dbgv("%s: pgoff %lu, block %lu\n", __func__, iblock, nvmm);
 		goto out;
 	}
 
