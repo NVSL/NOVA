@@ -110,6 +110,11 @@ static int nova_get_block_info(struct super_block *sb,
 					0, &virt_addr, &pfn);
 #endif
 
+	if (size <= 0) {
+		nova_err(sb, "direct_access failed\n");
+		return -EINVAL;
+	}
+
 	sbi->virt_addr = virt_addr;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
 	sbi->phys_addr = pfn_t_to_pfn(__pfn_t) << PAGE_SHIFT;
