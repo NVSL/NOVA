@@ -591,7 +591,6 @@ static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
 	int ret;
 
 	ret = __copy_from_user_inatomic_nocache(dst, src, size);
-	nova_flush_buffer(dst, size, 0);
 
 	return ret;
 }
