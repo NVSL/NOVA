@@ -970,15 +970,65 @@ static int nova_dax_file_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	return ret;
 }
 
+static int nova_dax_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+{
+	int ret = 0;
+	timing_t fault_time;
+
+	NOVA_START_TIMING(mmap_fault_t, fault_time);
+
+	ret = dax_fault(vma, vmf, nova_dax_get_block, NULL);
+
+	NOVA_END_TIMING(mmap_fault_t, fault_time);
+	return ret;
+}
+
+static int nova_dax_pmd_fault(struct vm_area_struct *vma, unsigned long addr,
+	pmd_t *pmd, unsigned int flags)
+{
+	int ret = 0;
+	timing_t fault_time;
+
+	NOVA_START_TIMING(mmap_fault_t, fault_time);
+
+	ret = dax_pmd_fault(vma, addr, pmd, flags, nova_dax_get_block, NULL);
+
+	NOVA_END_TIMING(mmap_fault_t, fault_time);
+	return ret;
+}
+
+static int nova_dax_pfn_mkwrite(struct vm_area_struct *vma,
+	struct vm_fault *vmf)
+{
+	struct inode *inode = file_inode(vma->vm_file);
+	loff_t size;
+	int ret = 0;
+	timing_t fault_time;
+
+	NOVA_START_TIMING(mmap_fault_t, fault_time);
+
+	size = (i_size_read(inode) + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	if (vmf->pgoff >= size)
+		ret = VM_FAULT_SIGBUS;
+	else
+		ret = dax_pfn_mkwrite(vma, vmf);
+
+	NOVA_END_TIMING(mmap_fault_t, fault_time);
+	return ret;
+}
+
 static const struct vm_operations_struct nova_dax_vm_ops = {
-	.fault	= nova_dax_file_fault,
+	.fault	= nova_dax_fault,
+	.pmd_fault = nova_dax_pmd_fault,
+	.page_mkwrite = nova_dax_fault,
+	.pfn_mkwrite = nova_dax_pfn_mkwrite,
 };
 
 int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	file_accessed(file);
 
-	vma->vm_flags |= VM_MIXEDMAP;
+	vma->vm_flags |= VM_MIXEDMAP | VM_HUGEPAGE;
 
 	vma->vm_ops = &nova_dax_vm_ops;
 	nova_dbg_mmap4k("[%s:%d] MMAP 4KPAGE vm_start(0x%lx),"
