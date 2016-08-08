@@ -438,6 +438,21 @@ static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
 	return;
 }
 
+struct nova_file_write_entry *nova_find_next_entry(struct super_block *sb,
+	struct nova_inode_info_header *sih, pgoff_t pgoff)
+{
+	struct nova_file_write_entry *entry = NULL;
+	struct nova_file_write_entry *entries[1];
+	int nr_entries;
+
+	nr_entries = radix_tree_gang_lookup(&sih->tree,
+					(void **)entries, pgoff, 1);
+	if (nr_entries == 1)
+		entry = entries[0];
+
+	return entry;
+}
+
 /* search the radix tree to find hole or data
  * in the specified range
  * Input:

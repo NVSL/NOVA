@@ -910,17 +910,12 @@ int nova_recovery(struct super_block *sb);
 int nova_reassign_file_tree(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 begin_tail);
-ssize_t nova_cow_file_write(struct file *filp, const char __user *buf,
-          size_t len, loff_t *ppos, bool need_mutex);
-int nova_dax_get_block(struct inode *inode, sector_t iblock,
-	struct buffer_head *bh, int create);
-ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
-	struct nova_inode *pi, loff_t pos, size_t count, u64 *begin,
-	u64 *end);
 ssize_t nova_dax_file_read(struct file *filp, char __user *buf, size_t len,
 			    loff_t *ppos);
 ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
 		size_t len, loff_t *ppos);
+int nova_dax_get_block(struct inode *inode, sector_t iblock,
+	struct buffer_head *bh, int create);
 int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma);
 
 /* dir.c */
@@ -957,6 +952,8 @@ int nova_get_inode_address(struct super_block *sb, u64 ino,
 	u64 *pi_addr, int extendable);
 int nova_set_blocksize_hint(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, loff_t new_size);
+struct nova_file_write_entry *nova_find_next_entry(struct super_block *sb,
+	struct nova_inode_info_header *sih, pgoff_t pgoff);
 extern struct inode *nova_iget(struct super_block *sb, unsigned long ino);
 extern void nova_evict_inode(struct inode *inode);
 extern int nova_write_inode(struct inode *inode, struct writeback_control *wbc);

@@ -108,6 +108,7 @@ static loff_t nova_llseek(struct file *file, loff_t offset, int origin)
 	return offset;
 }
 
+#if 0
 static inline int nova_check_page_dirty(struct super_block *sb,
 	unsigned long addr)
 {
@@ -268,17 +269,120 @@ out:
 
 	return ret;
 }
+#endif
+
+/* This function is called by both msync() and fsync().
+ * TODO: Check if we can avoid calling nova_flush_buffer() for fsync. We use
+ * movnti to write data to files, so we may want to avoid doing unnecessary
+ * nova_flush_buffer() on fsync() */
+int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
+{
+	/* Sync from start to end[inclusive] */
+	struct address_space *mapping = file->f_mapping;
+	struct inode *inode = mapping->host;
+	struct super_block *sb = inode->i_sb;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	struct nova_file_write_entry *entry;
+	int ret = 0;
+	loff_t isize;
+	timing_t fsync_time;
+
+	NOVA_START_TIMING(fsync_t, fsync_time);
+
+	/* No need to flush if the file is not mmaped */
+	if (!mapping_mapped(mapping))
+		goto persist;
+
+	end += 1; /* end is inclusive. We like our indices normal please! */
+
+	isize = i_size_read(inode);
+
+	if ((unsigned long)end > (unsigned long)isize)
+		end = isize;
+	if (!isize || (start >= end))
+	{
+		nova_dbgv("[%s:%d] : (ERR) isize(%llx), start(%llx),"
+			" end(%llx)\n", __func__, __LINE__, isize, start, end);
+		NOVA_END_TIMING(fsync_t, fsync_time);
+		return -ENODATA;
+	}
+
+	/* Align start and end to cacheline boundaries */
+	start = start & CACHELINE_MASK;
+	end = CACHELINE_ALIGN(end);
+	do {
+		unsigned long nvmm;
+		unsigned long nr_flush_bytes = 0;
+		unsigned long avail_bytes = 0;
+		void *dax_mem;
+		pgoff_t pgoff;
+		loff_t offset;
+
+		pgoff = start >> PAGE_SHIFT;
+		offset = start & ~PAGE_MASK;
+
+		entry = nova_get_write_entry(sb, si, pgoff);
+		if (unlikely(entry == NULL)) {
+			nova_dbgv("Found hole: pgoff %lu, inode size %lld\n",
+					pgoff, isize);
+
+			/* Jump the hole */
+			entry = nova_find_next_entry(sb, sih, pgoff);
+			if (!entry)
+				goto persist;
+
+			pgoff = entry->pgoff;
+			start = pgoff << PAGE_SHIFT;
+			offset = 0;
+
+			if (start >= end)
+				goto persist;
+		}
+
+		nr_flush_bytes = end - start;
+
+		if (pgoff < entry->pgoff ||
+				pgoff - entry->pgoff >= entry->num_pages) {
+			nova_err(sb, "%s ERROR: %lu, entry pgoff %llu, num %u, "
+				"blocknr %llu\n", __func__, pgoff, entry->pgoff,
+				entry->num_pages, entry->block >> PAGE_SHIFT);
+			NOVA_END_TIMING(fsync_t, fsync_time);
+			return -EINVAL;
+		}
+
+		/* Find contiguous blocks */
+		if (entry->invalid_pages == 0)
+			avail_bytes = (entry->num_pages - (pgoff - entry->pgoff))
+				* PAGE_SIZE - offset;
+		else
+			avail_bytes = PAGE_SIZE - offset;
+
+		if (nr_flush_bytes > avail_bytes)
+			nr_flush_bytes = avail_bytes;
+
+		nvmm = get_nvmm(sb, sih, entry, pgoff);
+		dax_mem = nova_get_block(sb, (nvmm << PAGE_SHIFT));
+
+		nova_dbgv("start %llu, flush bytes %lu\n",
+				start, nr_flush_bytes);
+		if (nr_flush_bytes)
+			nova_flush_buffer(dax_mem + offset, nr_flush_bytes, 0);
+
+		start += nr_flush_bytes;
+	} while (start < end);
+
+persist:
+	PERSISTENT_BARRIER();
+	NOVA_END_TIMING(fsync_t, fsync_time);
+
+	return ret;
+}
 
 /* This callback is called when a file is closed */
 static int nova_flush(struct file *file, fl_owner_t id)
 {
-	struct address_space *mapping = file->f_mapping;
-	struct inode *inode = mapping->host;
-
-	 /* Issue a msync() on close */
-	if (mapping_mapped(mapping))
-		nova_fsync(file, 0, i_size_read(inode), 0);
-
+	PERSISTENT_BARRIER();
 	return 0;
 }
 
