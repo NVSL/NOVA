@@ -964,12 +964,15 @@ static int nova_dax_file_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 
 static int nova_dax_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
+	struct inode *inode = file_inode(vma->vm_file);
 	int ret = 0;
 	timing_t fault_time;
 
 	NOVA_START_TIMING(mmap_fault_t, fault_time);
 
+	mutex_lock(&inode->i_mutex);
 	ret = dax_fault(vma, vmf, nova_dax_get_block, NULL);
+	mutex_unlock(&inode->i_mutex);
 
 	NOVA_END_TIMING(mmap_fault_t, fault_time);
 	return ret;
@@ -978,12 +981,15 @@ static int nova_dax_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 static int nova_dax_pmd_fault(struct vm_area_struct *vma, unsigned long addr,
 	pmd_t *pmd, unsigned int flags)
 {
+	struct inode *inode = file_inode(vma->vm_file);
 	int ret = 0;
 	timing_t fault_time;
 
 	NOVA_START_TIMING(mmap_fault_t, fault_time);
 
+	mutex_lock(&inode->i_mutex);
 	ret = dax_pmd_fault(vma, addr, pmd, flags, nova_dax_get_block, NULL);
+	mutex_unlock(&inode->i_mutex);
 
 	NOVA_END_TIMING(mmap_fault_t, fault_time);
 	return ret;
@@ -999,11 +1005,13 @@ static int nova_dax_pfn_mkwrite(struct vm_area_struct *vma,
 
 	NOVA_START_TIMING(mmap_fault_t, fault_time);
 
+	mutex_lock(&inode->i_mutex);
 	size = (i_size_read(inode) + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	if (vmf->pgoff >= size)
 		ret = VM_FAULT_SIGBUS;
 	else
 		ret = dax_pfn_mkwrite(vma, vmf);
+	mutex_unlock(&inode->i_mutex);
 
 	NOVA_END_TIMING(mmap_fault_t, fault_time);
 	return ret;
