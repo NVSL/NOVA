@@ -34,6 +34,7 @@
 #include <linux/radix-tree.h>
 #include <linux/version.h>
 #include <linux/kthread.h>
+#include <linux/buffer_head.h>
 #include <linux/uio.h>
 #include <asm/tlbflush.h>
 #include <linux/version.h>

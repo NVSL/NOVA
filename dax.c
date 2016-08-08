@@ -458,6 +458,159 @@ out:
 	return ret;
 }
 
+/*
+ * return > 0, # of blocks mapped or allocated.
+ * return = 0, if plain lookup failed.
+ * return < 0, error case.
+ */
+static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
+	unsigned long max_blocks, struct buffer_head *bh, int create)
+{
+	struct super_block *sb = inode->i_sb;
+	struct nova_inode *pi;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	struct nova_file_write_entry *entry = NULL;
+	struct nova_file_write_entry entry_data;
+	struct nova_file_write_entry *entries[1];
+	int nr_entries;
+	u64 temp_tail;
+	u64 curr_entry;
+	u32 time;
+	loff_t new_size;
+	unsigned int data_bits;
+	unsigned long nvmm = 0;
+	unsigned long next_pgoff;
+	unsigned long blocknr = 0;
+	int num_blocks = 0;
+	int allocated;
+	int ret = 0;
+
+	if (max_blocks == 0)
+		return 0;
+
+	entry = nova_get_write_entry(sb, si, iblock);
+	if (entry) {
+		/* Find contiguous blocks */
+		if (entry->invalid_pages == 0)
+			num_blocks = entry->num_pages - (iblock - entry->pgoff);
+		else
+			num_blocks = 1;
+
+		if (num_blocks > max_blocks)
+			num_blocks = max_blocks;
+
+		nvmm = get_nvmm(sb, sih, entry, iblock);
+		clear_buffer_new(bh);
+		goto out;
+	}
+
+	if (create == 0)
+		return 0;
+
+	pi = nova_get_inode(sb, inode);
+	num_blocks = max_blocks;
+	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
+	time = CURRENT_TIME_SEC.tv_sec;
+
+	/* Fill the hole */
+	nr_entries = radix_tree_gang_lookup(&sih->tree,
+					(void **)entries, iblock, 1);
+	if (nr_entries == 1) {
+		entry = entries[0];
+		next_pgoff = entry->pgoff;
+		if (next_pgoff <= iblock) {
+			BUG();
+			ret = -EINVAL;
+			goto out;
+		}
+
+		num_blocks = next_pgoff - iblock;
+		if (num_blocks > max_blocks)
+			num_blocks = max_blocks;
+	}
+
+	/* don't zero-out the allocated blocks */
+	allocated = nova_new_data_blocks(sb, pi, &blocknr, num_blocks,
+						iblock, 0, 1);
+	if (allocated <= 0) {
+		nova_err(sb, "%s alloc blocks failed!, %d\n", __func__,
+							allocated);
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	num_blocks = allocated;
+	entry_data.pgoff = cpu_to_le64(iblock);
+	entry_data.num_pages = cpu_to_le32(num_blocks);
+	entry_data.invalid_pages = 0;
+	entry_data.block = cpu_to_le64(nova_get_block_off(sb, blocknr,
+							pi->i_blk_type));
+	/* Set entry type after set block */
+	nova_set_entry_type((void *)&entry_data, FILE_WRITE);
+	entry_data.mtime = cpu_to_le32(time);
+
+	new_size = (iblock + num_blocks) * PAGE_SIZE;
+	if (new_size > inode->i_size)
+		entry_data.size = cpu_to_le64(new_size);
+	else
+		entry_data.size = cpu_to_le64(inode->i_size);
+
+	curr_entry = nova_append_file_write_entry(sb, pi, inode,
+						&entry_data, pi->log_tail);
+	if (curr_entry == 0) {
+		nova_err(sb, "ERROR: append inode entry failed\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
+	nvmm = blocknr;
+	data_bits = blk_type_to_shift[pi->i_blk_type];
+	le64_add_cpu(&pi->i_blocks,
+			(num_blocks << (data_bits - sb->s_blocksize_bits)));
+
+	temp_tail = curr_entry + sizeof(struct nova_file_write_entry);
+	nova_update_tail(pi, temp_tail);
+
+	ret = nova_reassign_file_tree(sb, pi, sih, curr_entry);
+	if (ret)
+		goto out;
+
+	inode->i_blocks = le64_to_cpu(pi->i_blocks);
+	if (new_size > inode->i_size) {
+		i_size_write(inode, new_size);
+		sih->i_size = new_size;
+	}
+
+	set_buffer_new(bh);
+
+out:
+	if (ret < 0)
+		return ret;
+
+	map_bh(bh, inode->i_sb, nvmm);
+	if (num_blocks > 1)
+		bh->b_size = sb->s_blocksize * num_blocks;
+
+	return num_blocks;
+}
+
+int nova_dax_get_block(struct inode *inode, sector_t iblock,
+	struct buffer_head *bh, int create)
+{
+	unsigned long max_blocks = bh->b_size >> inode->i_blkbits;
+	int ret;
+
+	mutex_lock(&inode->i_mutex);
+	ret = nova_dax_get_blocks(inode, iblock, max_blocks, bh, create);
+	if (ret > 0) {
+		bh->b_size = ret << inode->i_blkbits;
+		ret = 0;
+	}
+	mutex_unlock(&inode->i_mutex);
+	return ret;
+}
+
 static ssize_t nova_flush_mmap_to_nvmm(struct super_block *sb,
 	struct inode *inode, struct nova_inode *pi, loff_t pos,
 	size_t count, void *kmem)
