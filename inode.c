@@ -1192,6 +1192,8 @@ static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 		return;
 	}
 
+	inode_dio_wait(inode);
+
 	nova_dbgv("%s: inode %lu, old size %llu, new size %llu\n",
 		__func__, inode->i_ino, oldsize, newsize);
 
@@ -1205,6 +1207,11 @@ static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 	 * before truncating it. Also we need to munmap the truncated range
 	 * from application address space, if mmapped. */
 	/* synchronize_rcu(); */
+
+	/* FIXME: Do we need to clear truncated DAX pages? */
+//	dax_truncate_page(inode, newsize, nova_dax_get_block);
+
+	truncate_pagecache(inode, newsize);
 	nova_truncate_file_blocks(inode, newsize, oldsize);
 }
 
