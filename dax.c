@@ -308,6 +308,13 @@ ssize_t nova_cow_file_write(struct file *filp,
 	if (len == 0)
 		return 0;
 
+	/*
+	 * We disallow writing to a mmaped file,
+	 * since write is copy-on-write while mmap is DAX (in-place).
+	 */
+	if (mapping_mapped(mapping))
+		return -EACCES;
+
 	NOVA_START_TIMING(cow_write_t, cow_write_time);
 
 	sb_start_write(inode->i_sb);
