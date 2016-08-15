@@ -11,7 +11,7 @@ NOVA provides strong data consistency guanrantees:
 
 * Atomic metadata update: each directory operation is atomic.
 * Atomic data update; for each `write` operation, the file data and the inode are updated in a transactional way.
-* Atomic `msync`: NOVA supports `mmap` operation, and modified data is committed to NVM atomically on each `msync` operation.
+* DAX-mmap: NOVA supports DAX-mmap which maps NVMM pages directly to the user space.
 
 With atomicity guarantees, NOVA is able to recover from system failures and restore to a consistent state.
 
@@ -64,6 +64,7 @@ There are two scripts provided in the source code, `setup-nova.sh` and `remount-
 * NOVA only works on x86-64 kernels.
 * NOVA does not currently support extended attributes or ACL.
 * NOVA requires the underlying block device to support DAX (Direct Access) feature.
+* Applications can write to a file, or mmap a file and load/store the file directly, but not at the same time, i.e. writing to a mmaped file is disallowed, because write is copy-on-write (out-of-place) while mmap is DAX (in-place).
 
 [NVSL]: http://nvsl.ucsd.edu/ "http://nvsl.ucsd.edu"
 [POSIXtest]: http://www.tuxera.com/community/posix-test-suite/ 
