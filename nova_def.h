@@ -213,8 +213,7 @@ static inline void PERSISTENT_BARRIER(void)
 	barriers++;
 	asm volatile ("sfence\n" : : );
 	if (support_pcommit) {
-		_mm_pcommit();
-		asm volatile ("sfence\n" : : );
+		/* Do nothing */
 	}
 }
 
