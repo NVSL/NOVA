@@ -548,7 +548,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	if (allocated <= 0) {
 		nova_err(sb, "%s alloc blocks failed!, %d\n", __func__,
 							allocated);
-		ret = -ENOMEM;
+		ret = allocated;
 		goto out;
 	}
 

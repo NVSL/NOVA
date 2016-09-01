@@ -546,7 +546,7 @@ retry:
 		} else {
 			spin_unlock(&free_list->s_lock);
 			if (retried >= 3)
-				return -ENOMEM;
+				return -ENOSPC;
 			cpuid = nova_get_candidate_free_list(sb);
 			retried++;
 			goto retry;

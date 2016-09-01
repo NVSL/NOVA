@@ -154,7 +154,7 @@ int nova_get_inode_address(struct super_block *sb, u64 ino,
 							1, 1);
 
 			if (allocated != 1)
-				return -EINVAL;
+				return allocated;
 
 			curr = nova_get_block_off(sb, blocknr,
 						NOVA_BLOCK_TYPE_2M);
