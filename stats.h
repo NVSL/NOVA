@@ -97,6 +97,7 @@ enum timing_category {
 extern const char *Timingstring[TIMING_NUM];
 extern unsigned long long Timingstats[TIMING_NUM];
 extern u64 Countstats[TIMING_NUM];
+DECLARE_PER_CPU(u64[TIMING_NUM], Countstats_percpu);
 extern unsigned long long read_bytes;
 extern unsigned long long cow_write_bytes;
 extern unsigned long long fsync_bytes;
@@ -119,7 +120,7 @@ typedef struct timespec timing_t;
 			(end.tv_sec - start.tv_sec) * 1000000000 + \
 			(end.tv_nsec - start.tv_nsec); \
 	} \
-	Countstats[name]++; \
+	this_cpu_add(Countstats_percpu[name], 1); \
 	}
 
 extern unsigned long alloc_steps;

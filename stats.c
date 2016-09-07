@@ -180,9 +180,23 @@ static void nova_print_IO_stats(struct super_block *sb)
 	printk("Fsync %lu pages\n", fsync_pages);
 }
 
+void nova_get_timing_stats(void)
+{
+	int i;
+	int cpu;
+
+	for (i = 0; i < TIMING_NUM; i++) {
+		Countstats[i] = 0;
+		for_each_possible_cpu(cpu)
+			Countstats[i] += per_cpu(Countstats_percpu[i], cpu);
+	}
+}
+
 void nova_print_timing_stats(struct super_block *sb)
 {
 	int i;
+
+	nova_get_timing_stats();
 
 	printk("======== NOVA kernel timing stats ========\n");
 	for (i = 0; i < TIMING_NUM; i++) {
@@ -204,9 +218,22 @@ void nova_print_timing_stats(struct super_block *sb)
 	nova_print_IO_stats(sb);
 }
 
+static void nova_clear_timing_stats(void)
+{
+	int i;
+	int cpu;
+
+	for (i = 0; i < TIMING_NUM; i++) {
+		for_each_possible_cpu(cpu)
+			per_cpu(Countstats_percpu[i], cpu) = 0;
+	}
+}
+
 void nova_clear_stats(void)
 {
 	int i;
+
+	nova_clear_timing_stats();
 
 	printk("======== Clear NOVA kernel timing stats ========\n");
 	for (i = 0; i < TIMING_NUM; i++) {

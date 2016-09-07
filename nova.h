@@ -1029,6 +1029,7 @@ void nova_sysfs_init(struct super_block *sb);
 void nova_sysfs_exit(struct super_block *sb);
 
 /* nova_stats.c */
+void nova_get_timing_stats(void);
 void nova_print_timing_stats(struct super_block *sb);
 void nova_clear_stats(void);
 void nova_print_inode_log(struct super_block *sb, struct inode *inode);
