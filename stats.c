@@ -87,6 +87,7 @@ const char *Timingstring[TIMING_NUM] =
 
 unsigned long long Timingstats[TIMING_NUM];
 u64 Countstats[TIMING_NUM];
+DEFINE_PER_CPU(u64[TIMING_NUM], Countstats_percpu);
 unsigned long alloc_steps;
 unsigned long free_steps;
 unsigned long write_breaks;
@@ -100,7 +101,7 @@ unsigned long thorough_gc_pages;
 unsigned long fsync_pages;
 unsigned long barriers;
 
-void nova_print_alloc_stats(struct super_block *sb)
+static void nova_print_alloc_stats(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct free_list *free_list;
@@ -158,7 +159,7 @@ void nova_print_alloc_stats(struct super_block *sb)
 	printk("Persistent barriers %lu\n", barriers);
 }
 
-void nova_print_IO_stats(struct super_block *sb)
+static void nova_print_IO_stats(struct super_block *sb)
 {
 	printk("=========== NOVA I/O stats ===========\n");
 	printk("Read %llu, bytes %llu, average %llu\n",
