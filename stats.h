@@ -101,12 +101,12 @@ extern u64 Countstats[TIMING_NUM];
 DECLARE_PER_CPU(u64[TIMING_NUM], Countstats_percpu);
 extern unsigned long long read_bytes;
 extern unsigned long long cow_write_bytes;
-extern unsigned long long fsync_bytes;
 extern unsigned long long fast_checked_pages;
 extern unsigned long long thorough_checked_pages;
 extern unsigned long fast_gc_pages;
 extern unsigned long thorough_gc_pages;
-extern unsigned long fsync_pages;
+extern unsigned long alloc_steps;
+extern unsigned long write_breaks;
 
 typedef struct timespec timing_t;
 
@@ -123,8 +123,4 @@ typedef struct timespec timing_t;
 	} \
 	this_cpu_add(Countstats_percpu[name], 1); \
 	}
-
-extern unsigned long alloc_steps;
-extern unsigned long free_steps;
-extern unsigned long write_breaks;
 

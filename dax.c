@@ -796,7 +796,6 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 out:
 	sb_end_write(inode->i_sb);
 	NOVA_END_TIMING(copy_to_nvmm_t, copy_to_nvmm_time);
-	fsync_bytes += written;
 	return ret;
 }
 

@@ -90,17 +90,13 @@ DEFINE_PER_CPU(u64[TIMING_NUM], Timingstats_percpu);
 u64 Countstats[TIMING_NUM];
 DEFINE_PER_CPU(u64[TIMING_NUM], Countstats_percpu);
 unsigned long alloc_steps;
-unsigned long free_steps;
 unsigned long write_breaks;
 unsigned long long read_bytes;
 unsigned long long cow_write_bytes;
-unsigned long long fsync_bytes;
 unsigned long long fast_checked_pages;
 unsigned long long thorough_checked_pages;
 unsigned long fast_gc_pages;
 unsigned long thorough_gc_pages;
-unsigned long fsync_pages;
-unsigned long barriers;
 
 static void nova_print_alloc_stats(struct super_block *sb)
 {
@@ -121,10 +117,7 @@ static void nova_print_alloc_stats(struct super_block *sb)
 		Countstats[new_data_blocks_t], alloc_steps,
 		Countstats[new_data_blocks_t] ?
 			alloc_steps / Countstats[new_data_blocks_t] : 0);
-	printk("Free %llu, free steps %lu, average %llu\n",
-		Countstats[free_data_t], free_steps,
-		Countstats[free_data_t] ?
-			free_steps / Countstats[free_data_t] : 0);
+	printk("Free %llu\n", Countstats[free_data_t]);
 	printk("Fast GC %llu, check pages %llu, free pages %lu, average %llu\n",
 		Countstats[fast_gc_t], fast_checked_pages,
 		fast_gc_pages, Countstats[fast_gc_t] ?
@@ -156,8 +149,6 @@ static void nova_print_alloc_stats(struct super_block *sb)
 		alloc_data_count, alloc_data_pages,
 		free_log_count, freed_log_pages,
 		free_data_count, freed_data_pages);
-
-	printk("Persistent barriers %lu\n", barriers);
 }
 
 static void nova_print_IO_stats(struct super_block *sb)
@@ -174,11 +165,6 @@ static void nova_print_IO_stats(struct super_block *sb)
 			cow_write_bytes / Countstats[cow_write_t] : 0,
 		write_breaks, Countstats[cow_write_t] ?
 			write_breaks / Countstats[cow_write_t] : 0);
-	printk("Copy to NVMM %llu, bytes %llu, average %llu\n",
-		Countstats[copy_to_nvmm_t], fsync_bytes,
-		Countstats[copy_to_nvmm_t] ?
-			fsync_bytes / Countstats[copy_to_nvmm_t] : 0);
-	printk("Fsync %lu pages\n", fsync_pages);
 }
 
 void nova_get_timing_stats(void)
@@ -248,17 +234,13 @@ void nova_clear_stats(void)
 	}
 
 	alloc_steps = 0;
-	free_steps = 0;
 	write_breaks = 0;
 	read_bytes = 0;
 	cow_write_bytes = 0;
-	fsync_bytes = 0;
 	fast_checked_pages = 0;
 	thorough_checked_pages = 0;
 	fast_gc_pages = 0;
 	thorough_gc_pages = 0;
-	fsync_pages = 0;
-	barriers = 0;
 }
 
 static inline void nova_print_file_write_entry(struct super_block *sb,

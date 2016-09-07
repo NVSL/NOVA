@@ -284,7 +284,6 @@ static int nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 	struct nova_range_node *next = NULL;
 	struct nova_range_node *curr_node;
 	struct free_list *free_list;
-	unsigned long step = 0;
 	int cpuid;
 	int new_node_used = 0;
 	int ret;
@@ -374,7 +373,6 @@ out:
 	spin_unlock(&free_list->s_lock);
 	if (new_node_used == 0)
 		nova_free_blocknode(sb, curr_node);
-	free_steps += step;
 
 	return ret;
 }

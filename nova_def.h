@@ -191,7 +191,6 @@ static inline bool arch_has_clwb(void)
 
 extern int support_clwb;
 extern int support_pcommit;
-extern unsigned long barriers;
 
 #define _mm_clflush(addr)\
 	asm volatile("clflush %0" : "+m" (*(volatile char *)(addr)))
@@ -210,7 +209,6 @@ static inline void PERSISTENT_MARK(void)
 
 static inline void PERSISTENT_BARRIER(void)
 {
-	barriers++;
 	asm volatile ("sfence\n" : : );
 	if (support_pcommit) {
 		/* Do nothing */
