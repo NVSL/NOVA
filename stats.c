@@ -85,7 +85,8 @@ const char *Timingstring[TIMING_NUM] =
 	"rebuild_file",
 };
 
-unsigned long long Timingstats[TIMING_NUM];
+u64 Timingstats[TIMING_NUM];
+DEFINE_PER_CPU(u64[TIMING_NUM], Timingstats_percpu);
 u64 Countstats[TIMING_NUM];
 DEFINE_PER_CPU(u64[TIMING_NUM], Countstats_percpu);
 unsigned long alloc_steps;
@@ -186,9 +187,12 @@ void nova_get_timing_stats(void)
 	int cpu;
 
 	for (i = 0; i < TIMING_NUM; i++) {
+		Timingstats[i] = 0;
 		Countstats[i] = 0;
-		for_each_possible_cpu(cpu)
+		for_each_possible_cpu(cpu) {
+			Timingstats[i] += per_cpu(Timingstats_percpu[i], cpu);
 			Countstats[i] += per_cpu(Countstats_percpu[i], cpu);
+		}
 	}
 }
 
@@ -224,8 +228,10 @@ static void nova_clear_timing_stats(void)
 	int cpu;
 
 	for (i = 0; i < TIMING_NUM; i++) {
-		for_each_possible_cpu(cpu)
+		for_each_possible_cpu(cpu) {
+			per_cpu(Timingstats_percpu[i], cpu) = 0;
 			per_cpu(Countstats_percpu[i], cpu) = 0;
+		}
 	}
 }
 

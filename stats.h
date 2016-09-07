@@ -95,7 +95,8 @@ enum timing_category {
 };
 
 extern const char *Timingstring[TIMING_NUM];
-extern unsigned long long Timingstats[TIMING_NUM];
+extern u64 Timingstats[TIMING_NUM];
+DECLARE_PER_CPU(u64[TIMING_NUM], Timingstats_percpu);
 extern u64 Countstats[TIMING_NUM];
 DECLARE_PER_CPU(u64[TIMING_NUM], Countstats_percpu);
 extern unsigned long long read_bytes;
@@ -116,9 +117,9 @@ typedef struct timespec timing_t;
 	{if (measure_timing) { \
 		timing_t end; \
 		getrawmonotonic(&end); \
-		Timingstats[name] += \
+		this_cpu_add(Timingstats_percpu[name], \
 			(end.tv_sec - start.tv_sec) * 1000000000 + \
-			(end.tv_nsec - start.tv_nsec); \
+			(end.tv_nsec - start.tv_nsec)); \
 	} \
 	this_cpu_add(Countstats_percpu[name], 1); \
 	}
