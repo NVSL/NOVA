@@ -477,7 +477,7 @@ static unsigned long nova_alloc_blocks_in_free_list(struct super_block *sb,
 
 	free_list->num_free_blocks -= num_blocks;
 
-	alloc_steps += step;
+	NOVA_STATS_ADD(alloc_steps, step);
 
 	if (found == 0)
 		return -ENOSPC;

@@ -94,19 +94,27 @@ enum timing_category {
 	TIMING_NUM,
 };
 
+enum stats_category {
+	alloc_steps,
+	write_breaks,
+	read_bytes,
+	cow_write_bytes,
+	fast_checked_pages,
+	thorough_checked_pages,
+	fast_gc_pages,
+	thorough_gc_pages,
+
+	/* Sentinel */
+	STATS_NUM,
+};
+
 extern const char *Timingstring[TIMING_NUM];
 extern u64 Timingstats[TIMING_NUM];
 DECLARE_PER_CPU(u64[TIMING_NUM], Timingstats_percpu);
 extern u64 Countstats[TIMING_NUM];
 DECLARE_PER_CPU(u64[TIMING_NUM], Countstats_percpu);
-extern unsigned long long read_bytes;
-extern unsigned long long cow_write_bytes;
-extern unsigned long long fast_checked_pages;
-extern unsigned long long thorough_checked_pages;
-extern unsigned long fast_gc_pages;
-extern unsigned long thorough_gc_pages;
-extern unsigned long alloc_steps;
-extern unsigned long write_breaks;
+extern u64 IOstats[STATS_NUM];
+DECLARE_PER_CPU(u64[STATS_NUM], IOstats_percpu);
 
 typedef struct timespec timing_t;
 
@@ -123,4 +131,8 @@ typedef struct timespec timing_t;
 	} \
 	this_cpu_add(Countstats_percpu[name], 1); \
 	}
+
+#define NOVA_STATS_ADD(name, value) \
+	{this_cpu_add(IOstats_percpu[name], value);}
+
 

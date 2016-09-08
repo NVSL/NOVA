@@ -1859,8 +1859,8 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 	nova_free_contiguous_log_blocks(sb, pi, old_head);
 
 	sih->log_pages = sih->log_pages + blocks - checked_pages;
-	thorough_gc_pages += checked_pages - blocks;
-	thorough_checked_pages += checked_pages;
+	NOVA_STATS_ADD(thorough_gc_pages, checked_pages - blocks);
+	NOVA_STATS_ADD(thorough_checked_pages, checked_pages);
 out:
 	NOVA_END_TIMING(thorough_gc_t, gc_time);
 	return 0;
@@ -1921,7 +1921,7 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 				free_curr_page(sb, pi, curr_page, last_page,
 						curr);
 			}
-			fast_gc_pages++;
+			NOVA_STATS_ADD(fast_gc_pages, 1);
 			freed_pages++;
 		} else {
 			if (found_head == 0) {
@@ -1937,7 +1937,7 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 			break;
 	}
 
-	fast_checked_pages += checked_pages;
+	NOVA_STATS_ADD(fast_checked_pages, checked_pages);
 	checked_pages -= freed_pages;
 
 	curr = BLOCK_OFF(curr_tail);

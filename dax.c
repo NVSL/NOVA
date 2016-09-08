@@ -133,7 +133,8 @@ out:
 	if (filp)
 		file_accessed(filp);
 
-	read_bytes += copied;
+	NOVA_STATS_ADD(read_bytes, copied);
+
 	nova_dbgv("%s returned %zu\n", __func__, copied);
 	return (copied ? copied : error);
 }
@@ -447,7 +448,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 
 	ret = written;
-	write_breaks += step;
+	NOVA_STATS_ADD(write_breaks, step);
 	nova_dbgv("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
 
 	*ppos = pos;
@@ -461,7 +462,7 @@ out:
 		mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
 	NOVA_END_TIMING(cow_write_t, cow_write_time);
-	cow_write_bytes += written;
+	NOVA_STATS_ADD(cow_write_bytes, written);
 	return ret;
 }
 
