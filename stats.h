@@ -125,14 +125,14 @@ typedef struct timespec timing_t;
 	{if (measure_timing) { \
 		timing_t end; \
 		getrawmonotonic(&end); \
-		this_cpu_add(Timingstats_percpu[name], \
+		__this_cpu_add(Timingstats_percpu[name], \
 			(end.tv_sec - start.tv_sec) * 1000000000 + \
 			(end.tv_nsec - start.tv_nsec)); \
 	} \
-	this_cpu_add(Countstats_percpu[name], 1); \
+	__this_cpu_add(Countstats_percpu[name], 1); \
 	}
 
 #define NOVA_STATS_ADD(name, value) \
-	{this_cpu_add(IOstats_percpu[name], value);}
+	{__this_cpu_add(IOstats_percpu[name], value);}
 
 
