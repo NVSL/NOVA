@@ -593,7 +593,7 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 	if (pidir->log_head == 0) {
 		nova_err(sb, "Dir %lu log is NULL!\n", inode->i_ino);
 		BUG();
-        return -EINVAL;
+		return -EINVAL;
 	}
 
 	pos = ctx->pos;
@@ -612,7 +612,7 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 		if (curr_p == 0) {
 			nova_err(sb, "Dir %lu log is NULL!\n", inode->i_ino);
 			BUG();
-            return -EINVAL;
+			return -EINVAL;
 		}
 
 		addr = (void *)nova_get_block(sb, curr_p);
@@ -620,19 +620,19 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 		switch (type) {
 			case SET_ATTR:
 				curr_p += sizeof(struct nova_setattr_logentry);
-    			ctx->pos = curr_p;
+				ctx->pos = curr_p;
 				continue;
 			case LINK_CHANGE:
 				curr_p += sizeof(struct nova_link_change_entry);
-    			ctx->pos = curr_p;
+				ctx->pos = curr_p;
 				continue;
 			case DIR_LOG:
 				break;
 			default:
 				nova_dbg("%s: unknown type %d, 0x%llx\n",
 							__func__, type, curr_p);
-    			BUG();
-                return -EINVAL;
+			BUG();
+			return -EINVAL;
 		}
 
 		entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
@@ -667,7 +667,7 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 		}
 
 		curr_p += de_len;
-    	ctx->pos = curr_p;
+		ctx->pos = curr_p;
 	}
 
 out:
