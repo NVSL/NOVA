@@ -567,13 +567,36 @@ out:
 }
 #endif
 
+static u64 nova_find_next_dentry_addr(struct super_block *sb,
+	struct nova_inode_info_header *sih, u64 pos)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_file_write_entry *entry = NULL;
+	struct nova_file_write_entry *entries[1];
+	int nr_entries;
+	u64 addr = 0;
+
+	nr_entries = radix_tree_gang_lookup(&sih->tree,
+					(void **)entries, pos, 1);
+	if (nr_entries == 1) {
+		entry = entries[0];
+		addr = nova_get_addr_off(sbi, entry);
+	}
+
+	return addr;
+}
+
 static int nova_readdir(struct file *file, struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pidir;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode *child_pi;
+	struct nova_inode *prev_child_pi = NULL;
 	struct nova_dentry *entry = NULL;
+	struct nova_dentry *prev_entry = NULL;
 	unsigned short de_len;
 	u64 pi_addr;
 	unsigned long pos = 0;
@@ -597,13 +620,17 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 	}
 
 	pos = ctx->pos;
-	if (pos == pidir->log_tail)
+
+	if (pos == 0) {
+		curr_p = pidir->log_head;
+	} else if (pos == READDIR_END) {
 		goto out;
+	} else {
+		curr_p = nova_find_next_dentry_addr(sb, sih, pos);
+		if (curr_p == 0)
+			goto out;
+	}
 
-	if (pos == 0)
-		pos = pidir->log_head;
-
-	curr_p = pos;
 	while (curr_p != pidir->log_tail) {
 		if (goto_next_page(sb, curr_p)) {
 			curr_p = next_log_page(sb, curr_p);
@@ -620,11 +647,9 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 		switch (type) {
 			case SET_ATTR:
 				curr_p += sizeof(struct nova_setattr_logentry);
-				ctx->pos = curr_p;
 				continue;
 			case LINK_CHANGE:
 				curr_p += sizeof(struct nova_link_change_entry);
-				ctx->pos = curr_p;
 				continue;
 			case DIR_LOG:
 				break;
@@ -645,12 +670,13 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 		de_len = le16_to_cpu(entry->de_len);
 		if (entry->ino > 0 && entry->invalid == 0) {
 			ino = __le64_to_cpu(entry->ino);
+			pos = BKDRHash(entry->name, entry->name_len);
 
 			ret = nova_get_inode_address(sb, ino, &pi_addr, 0);
 			if (ret) {
 				nova_dbg("%s: get child inode %lu address "
 					"failed %d\n", __func__, ino, ret);
-				ctx->pos = pidir->log_tail;
+				ctx->pos = READDIR_END;
 				return ret;
 			}
 
@@ -659,19 +685,28 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 				"name_len %u, de_len %u\n",
 				(u64)ino, entry->name, entry->name_len,
 				entry->de_len);
-			if (!dir_emit(ctx, entry->name, entry->name_len,
-				ino, IF2DT(le16_to_cpu(child_pi->i_mode)))) {
+			if (prev_entry && !dir_emit(ctx, prev_entry->name,
+				prev_entry->name_len, ino,
+				IF2DT(le16_to_cpu(prev_child_pi->i_mode)))) {
 				nova_dbgv("Here: pos %llu\n", ctx->pos);
 				return 0;
 			}
+			prev_entry = entry;
+			prev_child_pi = child_pi;
 		}
-
+		ctx->pos = pos;
 		curr_p += de_len;
-		ctx->pos = curr_p;
 	}
 
+	if (prev_entry && !dir_emit(ctx, prev_entry->name,
+			prev_entry->name_len, ino,
+			IF2DT(le16_to_cpu(prev_child_pi->i_mode))))
+		return 0;
+
+	ctx->pos = READDIR_END;
 out:
 	NOVA_END_TIMING(readdir_t, readdir_time);
+	nova_dbgv("%s return\n", __func__);
 	return 0;
 }
 
