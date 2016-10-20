@@ -1454,9 +1454,15 @@ static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter,
 	struct file *filp = iocb->ki_filp;
 	struct address_space *mapping = filp->f_mapping;
 	struct inode *inode = mapping->host;
+	ssize_t ret;
+	timing_t dio_time;
 
-	return dax_do_io(iocb, inode, iter, offset, nova_dax_get_block,
+	NOVA_START_TIMING(direct_IO_t, dio_time);
+
+	ret = dax_do_io(iocb, inode, iter, offset, nova_dax_get_block,
 				NULL, DIO_LOCKING);
+	NOVA_END_TIMING(direct_IO_t, dio_time);
+	return ret;
 }
 
 static int nova_coalesce_log_pages(struct super_block *sb,
