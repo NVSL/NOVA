@@ -46,6 +46,7 @@ enum timing_category {
 	dax_read_t,
 	cow_write_t,
 	copy_to_nvmm_t,
+	dax_get_block_t,
 
 	/* Memory operations */
 	memcpy_r_nvmm_t,

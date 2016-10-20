@@ -45,6 +45,7 @@ const char *Timingstring[TIMING_NUM] =
 	"dax_read",
 	"cow_write",
 	"copy_to_nvmm",
+	"dax_get_block",
 
 	"memcpy_read_nvmm",
 	"memcpy_write_nvmm",
