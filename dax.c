@@ -279,6 +279,48 @@ int nova_reassign_file_tree(struct super_block *sb,
 	return 0;
 }
 
+static int nova_cleanup_incomplete_write(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	unsigned long blocknr, int allocated, u64 begin_tail, u64 end_tail)
+{
+	struct nova_file_write_entry *entry;
+	u64 curr_p = begin_tail;
+	size_t entry_size = sizeof(struct nova_file_write_entry);
+
+	if (blocknr > 0 && allocated > 0)
+		nova_free_data_blocks(sb, pi, blocknr, allocated);
+
+	if (begin_tail == 0 || end_tail == 0)
+		return 0;
+
+	while (curr_p != end_tail) {
+		if (is_last_entry(curr_p, entry_size))
+			curr_p = next_log_page(sb, curr_p);
+
+		if (curr_p == 0) {
+			nova_err(sb, "%s: File inode %llu log is NULL!\n",
+				__func__, pi->nova_ino);
+			return -EINVAL;
+		}
+
+		entry = (struct nova_file_write_entry *)
+					nova_get_block(sb, curr_p);
+
+		if (nova_get_entry_type(entry) != FILE_WRITE) {
+			nova_dbg("%s: entry type is not write? %d\n",
+				__func__, nova_get_entry_type(entry));
+			curr_p += entry_size;
+			continue;
+		}
+
+		blocknr = entry->block >> PAGE_SHIFT;
+		nova_free_data_blocks(sb, pi, blocknr, entry->num_pages);
+		curr_p += entry_size;
+	}
+
+	return 0;
+}
+
 ssize_t nova_cow_file_write(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos, bool need_mutex)
 {
@@ -296,14 +338,14 @@ ssize_t nova_cow_file_write(struct file *filp,
 	unsigned long total_blocks;
 	unsigned long blocknr = 0;
 	unsigned int data_bits;
-	int allocated;
+	int allocated = 0;
 	void* kmem;
 	u64 curr_entry;
 	size_t bytes;
 	long status = 0;
 	timing_t cow_write_time, memcpy_time;
 	unsigned long step = 0;
-	u64 temp_tail, begin_tail = 0;
+	u64 temp_tail = 0, begin_tail = 0;
 	u32 time;
 
 	if (len == 0)
@@ -405,7 +447,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 							&entry_data, temp_tail);
 		if (curr_entry == 0) {
 			nova_err(sb, "ERROR: append inode entry failed\n");
-			ret = -EINVAL;
+			ret = -ENOSPC;
 			goto out;
 		}
 
@@ -458,6 +500,10 @@ ssize_t nova_cow_file_write(struct file *filp,
 	}
 
 out:
+	if (ret < 0)
+		nova_cleanup_incomplete_write(sb, pi, sih, blocknr, allocated,
+						begin_tail, temp_tail);
+
 	if (need_mutex)
 		mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
@@ -486,7 +532,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_file_write_entry *entry = NULL;
 	struct nova_file_write_entry entry_data;
-	u64 temp_tail;
+	u64 temp_tail = 0;
 	u64 curr_entry;
 	u32 time;
 	unsigned int data_bits;
@@ -494,7 +540,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	unsigned long next_pgoff;
 	unsigned long blocknr = 0;
 	int num_blocks = 0;
-	int allocated;
+	int allocated = 0;
 	int ret = 0;
 
 	if (max_blocks == 0)
@@ -570,7 +616,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 						&entry_data, pi->log_tail);
 	if (curr_entry == 0) {
 		nova_err(sb, "ERROR: append inode entry failed\n");
-		ret = -EINVAL;
+		ret = -ENOSPC;
 		goto out;
 	}
 
@@ -591,8 +637,11 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 //	set_buffer_new(bh);
 
 out:
-	if (ret < 0)
+	if (ret < 0) {
+		nova_cleanup_incomplete_write(sb, pi, sih, blocknr, allocated,
+						0, temp_tail);
 		return ret;
+	}
 
 	map_bh(bh, inode->i_sb, nvmm);
 	if (num_blocks > 1)
@@ -689,7 +738,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	unsigned long blocknr = 0;
 	unsigned long total_blocks;
 	unsigned int data_bits;
-	int allocated;
+	int allocated = 0;
 	u64 curr_entry;
 	ssize_t written = 0;
 	int ret;
@@ -697,7 +746,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	size_t bytes, copied;
 	loff_t offset;
 	int status = 0;
-	u64 temp_tail, begin_tail = 0;
+	u64 temp_tail = 0, begin_tail = 0;
 	u32 time;
 	timing_t memcpy_time, copy_to_nvmm_time;
 
@@ -759,7 +808,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 						&entry_data, temp_tail);
 		if (curr_entry == 0) {
 			nova_err(sb, "ERROR: append inode entry failed\n");
-			ret = -EINVAL;
+			ret = -ENOSPC;
 			goto out;
 		}
 
@@ -799,6 +848,10 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 
 	ret = written;
 out:
+	if (ret < 0)
+		nova_cleanup_incomplete_write(sb, pi, sih, blocknr, allocated,
+						begin_tail, temp_tail);
+
 	sb_end_write(inode->i_sb);
 	NOVA_END_TIMING(copy_to_nvmm_t, copy_to_nvmm_time);
 	return ret;
