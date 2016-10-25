@@ -404,7 +404,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 						allocated, blocknr);
 
 		if (allocated <= 0) {
-			nova_err(sb, "%s alloc blocks failed!, %d\n", __func__,
+			nova_dbg("%s alloc blocks failed %d\n", __func__,
 								allocated);
 			ret = allocated;
 			goto out;
@@ -446,7 +446,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 		curr_entry = nova_append_file_write_entry(sb, pi, inode,
 							&entry_data, temp_tail);
 		if (curr_entry == 0) {
-			nova_err(sb, "ERROR: append inode entry failed\n");
+			nova_dbg("%s: append inode entry failed\n", __func__);
 			ret = -ENOSPC;
 			goto out;
 		}
@@ -593,7 +593,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	allocated = nova_new_data_blocks(sb, pi, &blocknr, num_blocks,
 						iblock, 1, 1);
 	if (allocated <= 0) {
-		nova_err(sb, "%s alloc blocks failed!, %d\n", __func__,
+		nova_dbg("%s alloc blocks failed %d\n", __func__,
 							allocated);
 		ret = allocated;
 		goto out;
@@ -615,7 +615,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	curr_entry = nova_append_file_write_entry(sb, pi, inode,
 						&entry_data, pi->log_tail);
 	if (curr_entry == 0) {
-		nova_err(sb, "ERROR: append inode entry failed\n");
+		nova_dbg("%s: append inode entry failed\n", __func__);
 		ret = -ENOSPC;
 		goto out;
 	}
@@ -770,7 +770,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 		allocated = nova_new_data_blocks(sb, pi, &blocknr, num_blocks,
 						start_blk, 0, 0);
 		if (allocated <= 0) {
-			nova_err(sb, "%s alloc blocks failed!, %d\n", __func__,
+			nova_dbg("%s alloc blocks failed %d\n", __func__,
 								allocated);
 			ret = allocated;
 			goto out;
@@ -807,7 +807,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 		curr_entry = nova_append_file_write_entry(sb, pi, inode,
 						&entry_data, temp_tail);
 		if (curr_entry == 0) {
-			nova_err(sb, "ERROR: append inode entry failed\n");
+			nova_dbg("%s: append inode entry failed\n", __func__);
 			ret = -ENOSPC;
 			goto out;
 		}
@@ -879,7 +879,7 @@ static int nova_get_nvmm_pfn(struct super_block *sb, struct nova_inode *pi,
 						pgoff, 0, 1);
 
 		if (ret <= 0) {
-			nova_err(sb, "%s alloc blocks failed!, %d\n",
+			nova_dbg("%s alloc blocks failed %d\n",
 					__func__, ret);
 			return ret;
 		}
