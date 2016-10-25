@@ -1540,9 +1540,10 @@ int nova_allocate_inode_log_pages(struct super_block *sb,
 		nova_dbg_verbose("Alloc %d log blocks @ 0x%lx\n",
 					allocated, new_inode_blocknr);
 		if (allocated <= 0) {
-			nova_err(sb, "ERROR: no inode log page available: "
-				"%d %d\n", num_pages, allocated);
-			return allocated;
+			nova_dbg("%s: no inode log page available: "
+				"%lu %d\n", __func__, num_pages, allocated);
+			/* Return whatever we have */
+			break;
 		}
 		ret_pages += allocated;
 		num_pages -= allocated;
