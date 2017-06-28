@@ -1,3 +1,7 @@
+# This Repository is Depricated
+
+Current development and releases of NOVA will be through https://github.com/NVSL/linux-nova.
+
 # NOVA: NOn-Volatile memory Accelerated log-structured file system
 
 ## Introduction
