@@ -1,4 +1,4 @@
-# This Repository is Depricated
+# This Repository is Deprecated
 
 Current development and releases of NOVA will be through https://github.com/NVSL/linux-nova.
 
